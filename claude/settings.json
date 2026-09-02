@@ -1,0 +1,127 @@
+{
+  "effortLevel": "high",
+  "theme": "auto",
+  "verbose": false,
+  "fileCheckpointingEnabled": true,
+  "cleanupPeriodDays": 90,
+  "statusLine": {
+    "type": "command",
+    "command": "~/.claude/statusline.sh"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.agents/bin/destructive-guard.py",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.agents/bin/resume-context.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/feedback-capture.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/format-hook.sh",
+            "timeout": 30,
+            "statusMessage": "Formatting…"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "reviewer|security|verifier|changelog|explorer",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.agents/bin/subagent-check.sh start",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "reviewer|security|verifier|changelog|explorer",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.agents/bin/subagent-check.sh stop",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.agents/bin/trail-check.sh",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  },
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
+  "permissions": {
+    "defaultMode": "auto",
+    "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+      "Edit",
+      "Write"
+    ],
+    "ask": [
+      "Bash(sudo:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git push --force-with-lease:*)",
+      "Bash(git commit --no-verify:*)",
+      "Bash(git config:*)",
+      "Bash(git rebase:*)",
+      "Bash(git commit --amend:*)",
+      "Edit(~/.agents/bin/**)",
+      "Edit(~/.claude/settings.json)",
+      "Edit(~/.claude/settings.local.json)",
+      "Edit(~/.claude/CLAUDE.md)",
+      "Edit(~/.claude/agents/**)",
+      "Edit(~/.claude/skills/**)",
+      "Edit(~/.claude/*.sh)",
+      "Edit(~/.gemini/**)"
+    ]
+  }
+}

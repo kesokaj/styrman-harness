@@ -8,7 +8,8 @@ description: |
   Activate whenever the user mentions mermaid, flowchart, sequence diagram, class diagram, state
   diagram, ER diagram, or gantt chart — even if they don't say "mermaid" explicitly.
   Do NOT use for non-Mermaid diagramming tools (D2, PlantUML, Graphviz).
-version: 1.5.0
+metadata:
+  version: "1.5.0"
 ---
 
 # Mermaid Diagram Syntax Guide
@@ -276,6 +277,5 @@ Before finalizing any Mermaid diagram:
 - [Sequence Examples](examples/sequence-examples.md) — API flow, auth flow patterns
 
 **Tools:**
-- [Validation Script](scripts/validate-mermaid.sh) — Basic syntax validation helper
 - **Live Editor:** https://mermaid.live/
 - **Official Docs:** https://mermaid.js.org/intro/syntax-reference.html

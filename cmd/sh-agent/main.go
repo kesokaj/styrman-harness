@@ -1,16 +1,16 @@
-// Command styrman installs, resyncs, inspects, and removes the styrman
+// Command sh-agent installs, resyncs, inspects, and removes the sh-agent
 // harness — global context, skills, and subagents — for Claude Code and the
 // Antigravity CLI.
 //
-//	styrman install [--dry-run]     deploy the repo into ~/.claude and ~/.gemini/config
-//	styrman status                  show drift between the repo and what is installed
-//	styrman diff                    unified diff of every drifted file
-//	styrman update [--check]        git fetch; pull --ff-only and reinstall when behind
-//	styrman uninstall [--dry-run]   remove exactly what install wrote
-//	styrman list                    print the skill and agent inventory
-//	styrman render                  print the assembled context file
-//	styrman adopt <name|path>       copy a skill from elsewhere into the repo
-//	styrman version
+//	sh-agent install [--dry-run]     deploy the repo into ~/.claude and ~/.gemini/config
+//	sh-agent status                  show drift between the repo and what is installed
+//	sh-agent diff                    unified diff of every drifted file
+//	sh-agent update [--check]        git fetch; pull --ff-only and reinstall when behind
+//	sh-agent uninstall [--dry-run]   remove exactly what install wrote
+//	sh-agent list                    print the skill and agent inventory
+//	sh-agent render                  print the assembled context file
+//	sh-agent adopt <name|path>       copy a skill from elsewhere into the repo
+//	sh-agent version
 package main
 
 import (
@@ -26,7 +26,7 @@ import (
 	"github.com/kesokaj/styrman-harness/internal/harness"
 )
 
-const usage = `styrman — lifecycle tool for the styrman harness
+const usage = `sh-agent — lifecycle tool for the sh-agent harness
 
 Commands:
   install [--dry-run]     deploy context, skills, and agents into ~/.claude and ~/.gemini/config (alias: sync)
@@ -40,7 +40,7 @@ Commands:
   version                 print the build version
 
 Flags accepted by every command:
-  --repo DIR    harness checkout (default: --repo, $STYRMAN_REPO, the working directory or its parents, then the last install)
+  --repo DIR    harness checkout (default: --repo, $SH_AGENT_REPO, the working directory or its parents, then the last install)
   --home DIR    install under DIR instead of $HOME (for testing)
 `
 
@@ -50,7 +50,7 @@ func main() {
 		if errors.As(err, &code) {
 			os.Exit(int(code))
 		}
-		fmt.Fprintln(os.Stderr, "styrman:", err)
+		fmt.Fprintln(os.Stderr, "sh-agent:", err)
 		os.Exit(1)
 	}
 }
@@ -89,7 +89,7 @@ func run(args []string, out io.Writer) error {
 
 	switch cmd {
 	case "version":
-		fmt.Fprintln(out, "styrman", buildVersion())
+		fmt.Fprintln(out, "sh-agent", buildVersion())
 		return nil
 	case "uninstall":
 		return harness.Uninstall(home, *dryRun, out)
@@ -158,13 +158,13 @@ func run(args []string, out io.Writer) error {
 
 	case "adopt":
 		if fs.NArg() != 1 {
-			return errors.New("usage: styrman adopt <skill-name-or-path> [--force]")
+			return errors.New("usage: sh-agent adopt <skill-name-or-path> [--force]")
 		}
 		dest, err := harness.Adopt(repo, home, fs.Arg(0), *force)
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(out, "adopted into %s\nnext: review it, run `styrman install`, then commit and push the repo\n", dest)
+		fmt.Fprintf(out, "adopted into %s\nnext: review it, run `sh-agent install`, then commit and push the repo\n", dest)
 		return nil
 	}
 	return fmt.Errorf("unknown command %q\n\n%s", cmd, usage)
@@ -183,10 +183,10 @@ func status(repo, home string, out io.Writer) error {
 		return err
 	}
 	if !found {
-		fmt.Fprintln(out, "installed  nothing — run `styrman install`")
+		fmt.Fprintln(out, "installed  nothing — run `sh-agent install`")
 		return exitCode(1)
 	}
-	fmt.Fprintf(out, "installed  %s from commit %s (%d files, manifest ~/.config/styrman/state.json)\n", st.InstalledAt, st.Commit, len(st.Files))
+	fmt.Fprintf(out, "installed  %s from commit %s (%d files, manifest ~/.config/sh-agent/state.json)\n", st.InstalledAt, st.Commit, len(st.Files))
 
 	skills, err := harness.LoadSkills(repo)
 	if err != nil {
@@ -220,7 +220,7 @@ func status(repo, home string, out io.Writer) error {
 		fmt.Fprintf(out, "drift      none — %d files match the repo\n", report.Counts["ok"])
 		return nil
 	}
-	fmt.Fprintf(out, "drift      %d missing, %d differ, %d stale — run `styrman diff`, then `styrman install`\n",
+	fmt.Fprintf(out, "drift      %d missing, %d differ, %d stale — run `sh-agent diff`, then `sh-agent install`\n",
 		report.Counts["missing"], report.Counts["differs"], report.Counts["stale"])
 	return exitCode(1)
 }
@@ -253,7 +253,7 @@ func update(repo, home string, checkOnly bool, homeFlag string, out io.Writer) e
 }
 
 // reorder moves flags in front of positional arguments so that
-// `styrman adopt my-skill --home /tmp/x` parses; the flag package stops at
+// `sh-agent adopt my-skill --home /tmp/x` parses; the flag package stops at
 // the first positional argument otherwise.
 func reorder(args []string) []string {
 	takesValue := map[string]bool{"-repo": true, "--repo": true, "-home": true, "--home": true}
@@ -298,7 +298,7 @@ func pathHint(home string, out io.Writer) error {
 			return nil
 		}
 	}
-	fmt.Fprintf(out, "note: %s is not on PATH; add it so `styrman` is available everywhere\n", bin)
+	fmt.Fprintf(out, "note: %s is not on PATH; add it so `sh-agent` is available everywhere\n", bin)
 	return nil
 }
 

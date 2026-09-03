@@ -41,3 +41,11 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
 **Decision:** The deployed file is `~/.claude/AGENTS.md` and `~/.gemini/config/rules/AGENTS.md`. `~/.claude/CLAUDE.md` and a project's `CLAUDE.md` are the single line `@AGENTS.md`. `/init-project` creates `.claude/{skills,agents,commands}` as symlinks into `.agents/`, matching what the skills.sh CLI does on its own.
 
 **Consequences:** One canonical name at every level. Claude Code's import adds one hop; it is documented to load user-level imports without prompting.
+
+## ADR-006: The binary is `sh-agent`; GCP defaults are asked for, never stored     (2026-09-03) — Accepted
+
+**Context:** The operator asked for a less repo-specific binary name and, on reviewing `context/dev-setup.md`, rejected stored GCP defaults: a placeholder region or registry name is exactly the kind of value an agent will silently assume. They also asked for zero scripts in the repo.
+
+**Decision:** The binary, its state directory (`~/.config/sh-agent`), its env var (`SH_AGENT_REPO`), and its file marker are named `sh-agent`; the repo keeps its name. The context says work is local by default and, when the user says GCP, the agent asks for project, region, Artifact Registry repository, service name, and visibility before doing anything, then records them in the project's `AGENTS.md`. The one shell script in the repo (`mermaid-syntax/scripts/validate-mermaid.sh`) was deleted along with the old hook scripts under `~/.agents/bin`.
+
+**Consequences:** ADR-002's name is superseded by this one; its content stands. The first GCP action in a new project costs one question instead of one wrong assumption. Skills that need helper code ship it as documentation, not as scripts.

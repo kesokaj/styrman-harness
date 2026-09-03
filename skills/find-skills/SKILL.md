@@ -97,13 +97,13 @@ Learn more: https://skills.sh/vercel-labs/agent-skills/react-best-practices
 This operator keeps every skill in the `styrman-harness` repo, which deploys them to both Claude Code and Antigravity. Install **into the repo**, not into an agent directory:
 
 ```bash
-cd "$(styrman status | sed -n 's/^repo  *\([^ ]*\).*/\1/p')"   # the harness checkout
+cd "$(sh-agent status | sed -n 's/^repo  *\([^ ]*\).*/\1/p')"   # the harness checkout
 npx skills add <owner/repo> -s <skill> -y      # lands in skills/<skill> via the .agents/skills symlink
-styrman install                                 # deploys to ~/.claude and ~/.gemini/config
+sh-agent install                                 # deploys to ~/.claude and ~/.gemini/config
 # then commit and push the harness repo; record provenance in skills/VENDORED.md
 ```
 
-If a skill was already installed globally with `npx skills add -g`, bring it into the repo with `styrman adopt <skill>` instead. A plain global install works too, but it is neither versioned nor deployed to Antigravity, and `styrman install` never removes it.
+If a skill was already installed globally with `npx skills add -g`, bring it into the repo with `sh-agent adopt <skill>` instead. A plain global install works too, but it is neither versioned nor deployed to Antigravity, and `sh-agent install` never removes it.
 
 ## Common Skill Categories
 

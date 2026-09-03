@@ -3,7 +3,8 @@ name: reviewer
 description: "Independent code reviewer run in an isolated context. Returns a severity-ranked review report written to the docs root under reviews/. Dispatch once per task over the whole source diff when it reaches 50 lines or 5 files, or whenever the user asks for a review. Never reviews work it authored and never edits source; the only file it creates is its own report."
 tools: Read, Grep, Glob, Bash, Write
 model: opus
-skills: review-standards
+skills:
+  - review-standards
 effort: high
 maxTurns: 40
 ---

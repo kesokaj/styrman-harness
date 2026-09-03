@@ -30,7 +30,7 @@ func Install(repo, home string, files []File, dryRun bool, out io.Writer) error 
 		switch {
 		case f.KeepForeign && readErr == nil && !IsOurs(existing) && !bytes.Equal(existing, f.Data):
 			counts["kept"]++
-			fmt.Fprintf(out, "keep    ~/%s (not written by styrman; add the line `@AGENTS.md` to it yourself)\n", f.Rel)
+			fmt.Fprintf(out, "keep    ~/%s (not written by sh-agent; add the line `@AGENTS.md` to it yourself)\n", f.Rel)
 			continue
 		case readErr == nil && bytes.Equal(existing, f.Data):
 			counts["unchanged"]++
@@ -95,7 +95,7 @@ type Entry struct {
 	State string // ok | missing | differs | foreign | stale
 }
 
-// Report is what `styrman status` prints.
+// Report is what `sh-agent status` prints.
 type Report struct {
 	Entries []Entry
 	Counts  map[string]int
@@ -162,7 +162,7 @@ func Diff(home string, files []File, out io.Writer) error {
 		if bytes.Equal(existing, f.Data) || (f.KeepForeign && !IsOurs(existing)) {
 			continue
 		}
-		tmp, err := os.CreateTemp("", "styrman-diff-*")
+		tmp, err := os.CreateTemp("", "sh-agent-diff-*")
 		if err != nil {
 			return err
 		}
@@ -192,7 +192,7 @@ func Uninstall(home string, dryRun bool, out io.Writer) error {
 		return err
 	}
 	if !found {
-		fmt.Fprintln(out, "nothing installed (no manifest at ~/.config/styrman/state.json)")
+		fmt.Fprintln(out, "nothing installed (no manifest at ~/.config/sh-agent/state.json)")
 		return nil
 	}
 	removed := 0
@@ -223,13 +223,13 @@ func Uninstall(home string, dryRun bool, out io.Writer) error {
 }
 
 // writeAtomic writes through a temp file and rename, so a half-written
-// context file is never visible and a running styrman binary can be
+// context file is never visible and a running sh-agent binary can be
 // replaced on Linux, where opening it for writing would fail with ETXTBSY.
 func writeAtomic(dest string, data []byte, mode fs.FileMode) error {
 	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(dest), ".styrman-*")
+	tmp, err := os.CreateTemp(filepath.Dir(dest), ".sh-agent-*")
 	if err != nil {
 		return err
 	}

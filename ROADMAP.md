@@ -6,7 +6,7 @@ Last reviewed: 2026-09-03
 
 ## Now
 
-Finish the 2026-09-03 rebuild verification on the operator's Mac — plan and checklist in `.agents/docs/plans/2026-09-03-rebuild.md`: confirm Antigravity loads `~/.gemini/config/rules/AGENTS.md`, the six agents, and the skills; confirm Claude Code imports `AGENTS.md`; confirm the GCP defaults.
+Finish the 2026-09-03 rebuild verification on the operator's Mac — plan and checklist in `.agents/docs/plans/2026-09-03-rebuild.md`: confirm Antigravity loads `~/.gemini/config/rules/AGENTS.md`, the six agents, and the skills; confirm Claude Code imports `AGENTS.md`. The operator chose to do this live check later; the documentation-based check is done (`.agents/docs/reviews/2026-09-03-vendor-format-check.md`).
 
 ## Next
 

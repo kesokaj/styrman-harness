@@ -11,11 +11,11 @@ import (
 	"strings"
 )
 
-// FindRepo locates the harness checkout: an explicit path, then $STYRMAN_REPO,
+// FindRepo locates the harness checkout: an explicit path, then $SH_AGENT_REPO,
 // then the working directory and its parents, then the path the last install
-// recorded — so `styrman update` works from anywhere once installed.
+// recorded — so `sh-agent update` works from anywhere once installed.
 func FindRepo(explicit, home string) (string, error) {
-	candidates := []string{explicit, os.Getenv("STYRMAN_REPO")}
+	candidates := []string{explicit, os.Getenv("SH_AGENT_REPO")}
 	if wd, err := os.Getwd(); err == nil {
 		for dir := wd; ; dir = filepath.Dir(dir) {
 			candidates = append(candidates, dir)
@@ -32,7 +32,7 @@ func FindRepo(explicit, home string) (string, error) {
 			return filepath.Abs(c)
 		}
 	}
-	return "", errors.New("harness repo not found: run from inside the checkout, pass --repo, or set STYRMAN_REPO")
+	return "", errors.New("harness repo not found: run from inside the checkout, pass --repo, or set SH_AGENT_REPO")
 }
 
 // IsRepo reports whether dir looks like the harness repo.
@@ -44,7 +44,7 @@ func IsRepo(dir string) bool {
 	return err == nil && info.IsDir()
 }
 
-// RepoInfo is the git state `styrman status` shows.
+// RepoInfo is the git state `sh-agent status` shows.
 type RepoInfo struct {
 	Branch string
 	Commit string
@@ -77,7 +77,7 @@ func Behind(repo string) (int, error) {
 // uncommitted edits to the harness is how local changes get lost.
 func Pull(repo string, out io.Writer) error {
 	if Inspect(repo).Dirty {
-		return errors.New("the harness repo has uncommitted changes; commit or stash them before `styrman update`")
+		return errors.New("the harness repo has uncommitted changes; commit or stash them before `sh-agent update`")
 	}
 	cmd := exec.Command("git", "-C", repo, "pull", "--ff-only", "--quiet")
 	cmd.Stdout, cmd.Stderr = out, out
@@ -91,13 +91,13 @@ func Pull(repo string, out io.Writer) error {
 // install, so a code change in the repo takes effect in the same update.
 func Reinstall(repo string, args []string, out io.Writer) error {
 	if _, err := exec.LookPath("go"); err != nil {
-		return errors.New("go is not on PATH; install Go to rebuild styrman")
+		return errors.New("go is not on PATH; install Go to rebuild sh-agent")
 	}
-	cmd := exec.Command("go", append([]string{"run", "./cmd/styrman", "install"}, args...)...)
+	cmd := exec.Command("go", append([]string{"run", "./cmd/sh-agent", "install"}, args...)...)
 	cmd.Dir = repo
 	cmd.Stdout, cmd.Stderr = out, out
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("go run ./cmd/styrman install: %w", err)
+		return fmt.Errorf("go run ./cmd/sh-agent install: %w", err)
 	}
 	return nil
 }

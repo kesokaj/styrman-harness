@@ -9,7 +9,7 @@ import (
 )
 
 // State is the install manifest. It is the only thing uninstall trusts: a
-// path not listed here is not styrman's to delete, whatever directory it
+// path not listed here is not sh-agent's to delete, whatever directory it
 // sits in.
 type State struct {
 	Repo        string   `json:"repo"`
@@ -19,7 +19,7 @@ type State struct {
 }
 
 func statePath(home string) string {
-	return filepath.Join(home, ".config", "styrman", "state.json")
+	return filepath.Join(home, ".config", "sh-agent", "state.json")
 }
 
 // LoadState reads the manifest. A missing file is not an error: it means
@@ -52,7 +52,7 @@ func RemoveState(home string) error {
 	if err := os.Remove(p); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	// The directory is styrman's own; drop it when empty.
+	// The directory is sh-agent's own; drop it when empty.
 	_ = os.Remove(filepath.Dir(p))
 	return nil
 }

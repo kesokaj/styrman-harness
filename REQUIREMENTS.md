@@ -16,11 +16,11 @@ The harness is context, skills, and subagents. Behaviour comes from what is writ
 
 ## R4 — One binary, stdlib only, easy on and off
 
-`styrman` is a single Go binary with no dependencies. `install` is idempotent and overwrites only files it manages; `uninstall` removes exactly what its manifest lists; `update` pulls the repo from git and reinstalls. A hand-written `~/.claude/CLAUDE.md` is never overwritten.
+`sh-agent` is a single Go binary with no dependencies. `install` is idempotent and overwrites only files it manages; `uninstall` removes exactly what its manifest lists; `update` pulls the repo from git and reinstalls. A hand-written `~/.claude/CLAUDE.md` is never overwritten.
 
 ## R5 — Hand-added skills are first class
 
-Adding a skill is: put a directory with a `SKILL.md` in `skills/` (by hand, by `npx skills add` from the repo root, or by `styrman adopt`), then `styrman install`. No registration, no manifest edits.
+Adding a skill is: put a directory with a `SKILL.md` in `skills/` (by hand, by `npx skills add` from the repo root, or by `sh-agent adopt`), then `sh-agent install`. No registration, no manifest edits.
 
 ## R6 — Development never touches the real home
 
@@ -29,7 +29,7 @@ Every test and every development run of the installer uses `--home` with a scrat
 ## Known limits
 
 - **Antigravity global rules path.** The CLI's customization root is `~/.gemini/config/`; rules there are documented for the workspace form (`.agents/rules/*.md`) and by analogy for the global one. Verified on the operator's Mac before this is relied upon (see the rebuild plan).
-- **Antigravity tool names cannot be enumerated.** An unrecognised name in an agent's `tools:` hangs the subagent, so `styrman install` fails on any tool it cannot map rather than guessing.
+- **Antigravity tool names cannot be enumerated.** An unrecognised name in an agent's `tools:` hangs the subagent, so `sh-agent install` fails on any tool it cannot map rather than guessing.
 - **Antigravity IDE is out of scope.** Only the `agy` CLI is targeted; the IDE's global paths are unverified.
 
 ## Non-goals

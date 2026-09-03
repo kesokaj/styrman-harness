@@ -1,8 +1,8 @@
 # AGENTS.md — global agent context
 
-> Follows the [agents.md](https://agents.md) standard; skills follow the [Agent Skills](https://agentskills.io) `SKILL.md` standard. Deployed by `styrman` as `~/.claude/AGENTS.md` (imported by a one-line `~/.claude/CLAUDE.md`) and `~/.gemini/config/rules/AGENTS.md`. A project's own `AGENTS.md` overrides anything here. There are no hooks, gates, or scripts behind these rules — the agent follows them because they are written here.
+> Follows the [agents.md](https://agents.md) standard; skills follow the [Agent Skills](https://agentskills.io) `SKILL.md` standard. Deployed by `sh-agent` as `~/.claude/AGENTS.md` (imported by a one-line `~/.claude/CLAUDE.md`) and `~/.gemini/config/rules/AGENTS.md`. A project's own `AGENTS.md` overrides anything here. There are no hooks, gates, or scripts behind these rules — the agent follows them because they are written here.
 
-Operator: fullstack/infra engineer — Go + TypeScript, macOS (Apple Silicon) or Linux, deploying only to GCP. Details are under **Environment & Stack** below.
+Operator: fullstack/infra engineer — Go + TypeScript, macOS (Apple Silicon) or Linux. Work is local by default; GCP is the only cloud, used when the user says so. Details are under **Environment & Stack** below.
 
 ## Resume protocol — first action in any existing project
 
@@ -68,4 +68,4 @@ Every artifact under `docs/` starts with YAML frontmatter `owner:` (the agent na
 
 `/init-project` scaffold a project · `/handoff` session snapshot · `/audit` full audit · `/research` compare options and spec · `/preflight` release gate · `/retro` propose harness improvements · `/distill` turn a repeated pattern into a skill · `/grill-me` stress-test a plan.
 
-The harness itself is the `styrman-harness` repo, managed by the `styrman` binary: `styrman status` shows what is installed and whether it drifted, `styrman update` pulls the repo from git and reinstalls, `styrman list` prints the inventory that ends this file.
+The harness itself is the `styrman-harness` repo, managed by the `sh-agent` binary: `sh-agent status` shows what is installed and whether it drifted, `sh-agent update` pulls the repo from git and reinstalls, `sh-agent list` prints the inventory that ends this file.

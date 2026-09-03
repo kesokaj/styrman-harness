@@ -35,13 +35,14 @@ func newRepo(t *testing.T) string {
 }
 
 func TestParseFrontmatter(t *testing.T) {
-	front := "name: x\ndescription: |\n  line one\n  line two\nquoted: \"a: b\"\nmetadata:\n  version: \"1.2\"\n  author: me\ntools: [Read, Grep]\nplain: first\n  second\nempty:\n"
+	front := "name: x\ndescription: |\n  line one\n  line two\nquoted: \"a: b\"\nmetadata:\n  version: \"1.2\"\n  author: me\ntools: [Read, Grep]\nskills:\n  - alpha\n  - beta\nplain: first\n  second\nempty:\n"
 	fm := Parse(front)
 	want := map[string]string{
 		"name":        "x",
 		"description": "line one line two",
 		"quoted":      "a: b",
 		"tools":       "[Read, Grep]",
+		"skills":      "[alpha, beta]",
 		"plain":       "first second",
 		"empty":       "",
 	}
@@ -141,7 +142,7 @@ func TestInventoryAndRender(t *testing.T) {
 func TestInstallStatusResyncUninstall(t *testing.T) {
 	repo := newRepo(t)
 	home := t.TempDir()
-	self := []byte("#!/bin/sh\necho styrman\n")
+	self := []byte("#!/bin/sh\necho sh-agent\n")
 
 	// A CLAUDE.md the operator wrote must survive an install.
 	claudeMD := filepath.Join(home, ClaudeRoot, "CLAUDE.md")
@@ -169,8 +170,8 @@ func TestInstallStatusResyncUninstall(t *testing.T) {
 		".gemini/config/rules/AGENTS.md",
 		".gemini/config/skills/alpha/SKILL.md",
 		".gemini/config/agents/reviewer/agent.md",
-		".local/bin/styrman",
-		".config/styrman/state.json",
+		".local/bin/sh-agent",
+		".config/sh-agent/state.json",
 	} {
 		if _, err := os.Stat(filepath.Join(home, rel)); err != nil {
 			t.Errorf("expected %s after install: %v", rel, err)
@@ -250,7 +251,7 @@ func TestInstallStatusResyncUninstall(t *testing.T) {
 	if err := Uninstall(home, false, &out); err != nil {
 		t.Fatal(err)
 	}
-	for _, rel := range []string{".claude/AGENTS.md", ".claude/skills", ".claude/agents", ".gemini/config/skills", ".gemini/config/rules", ".local/bin/styrman", ".config/styrman"} {
+	for _, rel := range []string{".claude/AGENTS.md", ".claude/skills", ".claude/agents", ".gemini/config/skills", ".gemini/config/rules", ".local/bin/sh-agent", ".config/sh-agent"} {
 		if _, err := os.Lstat(filepath.Join(home, rel)); err == nil {
 			t.Errorf("%s should be gone after uninstall", rel)
 		}

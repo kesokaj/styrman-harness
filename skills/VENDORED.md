@@ -38,7 +38,7 @@ Notes:
   optional paid UIZZE MCP is NOT configured — the free playbooks work standalone.
 - To add a skill: run `npx skills add <owner/repo> -s <skill> -y` from the repo root (it lands
   in `skills/` through the `.agents/skills` symlink), or copy any directory holding a `SKILL.md`
-  into `skills/`, then `styrman install`. Add a row above. `styrman install` deploys exactly
+  into `skills/`, then `sh-agent install`. Add a row above. `sh-agent install` deploys exactly
   the repo's skills and removes only what it installed itself, so a skill installed by hand
   into `~/.claude/skills` survives but is neither versioned nor deployed to Antigravity —
-  `styrman adopt <skill>` moves it in here.
+  `sh-agent adopt <skill>` moves it in here.

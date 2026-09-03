@@ -40,7 +40,7 @@ Read the current conversation transcript, plus any entries in the global feedbac
 
 ## Step 2: Classify Findings
 
-Target files live in the harness repo. Find it with `styrman status` (first line) or `$STYRMAN_REPO`. `context/AGENTS.md` and `context/dev-setup.md` are assembled by `styrman install` into `~/.claude/AGENTS.md` and `~/.gemini/config/rules/AGENTS.md`.
+Target files live in the harness repo. Find it with `sh-agent status` (first line) or `$SH_AGENT_REPO`. `context/AGENTS.md` and `context/dev-setup.md` are assembled by `sh-agent install` into `~/.claude/AGENTS.md` and `~/.gemini/config/rules/AGENTS.md`.
 
 | Category | Target File |
 |---|---|
@@ -128,7 +128,7 @@ Show the user:
 
 If the user approves specific proposals:
 - Apply the changes to the target files in the harness repo
-- Run `styrman install --dry-run` to see what would be deployed, then `styrman install`
+- Run `sh-agent install --dry-run` to see what would be deployed, then `sh-agent install`
 - Commit with message `harness: apply retro proposals from YYYY-MM-DD` and push, per the global git workflow
 
 If the user rejects proposals:

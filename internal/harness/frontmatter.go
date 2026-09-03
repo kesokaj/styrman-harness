@@ -1,4 +1,4 @@
-// Package harness installs the styrman harness (global context, skills,
+// Package harness installs the sh-agent harness (global context, skills,
 // subagents) into Claude Code and the Antigravity CLI, and reports drift
 // between the repo and what is deployed.
 package harness
@@ -60,6 +60,14 @@ func Parse(front string) Frontmatter {
 		switch {
 		case isBlockIndicator(val):
 			fm[key] = strings.Join(cont, " ")
+		case val == "" && len(cont) > 0 && strings.HasPrefix(cont[0], "- "):
+			// A block list such as `skills:\n  - a\n  - b`, normalised to the
+			// flow form so SplitList reads both spellings the same way.
+			var items []string
+			for _, c := range cont {
+				items = append(items, unquote(strings.TrimSpace(strings.TrimPrefix(c, "- "))))
+			}
+			fm[key] = "[" + strings.Join(items, ", ") + "]"
 		case val == "" && len(cont) > 0 && strings.Contains(cont[0], ": "):
 			// A nested map such as `metadata:`. Not needed; skipped whole.
 		case len(cont) > 0:

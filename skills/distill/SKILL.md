@@ -128,14 +128,14 @@ mkdir -p .agents/skills/<name>
 
 ### Global skill
 ```bash
-# Create in the harness repo (find it with `styrman status`), then deploy
+# Create in the harness repo (find it with `sh-agent status`), then deploy
 mkdir -p <harness-repo>/skills/<name>
 # Write SKILL.md
-styrman install          # deploys to both CLIs
+sh-agent install          # deploys to both CLIs
 # then commit and push the harness repo
 ```
 
-If you drafted it project-locally first, `styrman adopt <name>` copies it from `.agents/skills/<name>` into the harness repo.
+If you drafted it project-locally first, `sh-agent adopt <name>` copies it from `.agents/skills/<name>` into the harness repo.
 
 After installation:
 - Verify the skill YAML frontmatter is valid

@@ -4,14 +4,14 @@ Project rules for this repo. They override the global context, which this repo i
 
 ## What this repo is
 
-The agent harness: one global context (agents.md standard), 28 skills (Agent Skills `SKILL.md` standard), six subagents, and `styrman`, the Go binary that installs them into Claude Code and the Antigravity CLI. No hooks, no gates, no CI.
+The agent harness: one global context (agents.md standard), 28 skills (Agent Skills `SKILL.md` standard), six subagents, and `sh-agent`, the Go binary that installs them into Claude Code and the Antigravity CLI. No hooks, no gates, no CI.
 
 ## Setup commands
 
 ```bash
 gofmt -l . && go vet ./... && go test -race ./...     # before any completion claim
-go run ./cmd/styrman install --home /tmp/styrman-test  # exercise the installer against a scratch home
-go run ./cmd/styrman list                              # sanity-check skills and agents parse
+go run ./cmd/sh-agent install --home /tmp/sh-agent-test  # exercise the installer against a scratch home
+go run ./cmd/sh-agent list                              # sanity-check skills and agents parse
 ```
 
 ## Layout
@@ -21,11 +21,11 @@ context/AGENTS.md      the global context — single source, deployed to both ve
 context/dev-setup.md   environment, stack, GCP defaults — appended to the context at install
 agents/*.md            subagents in Claude Code format; Antigravity's agent.md is derived at install
 skills/<name>/         skills; .agents/skills is a symlink here so `npx skills add` lands in skills/
-cmd/styrman, internal/harness   the binary and its tests
+cmd/sh-agent, internal/harness   the binary and its tests
 .agents/docs/          this repo's own trail (plans, changes, ADRs, reviews, testing)
 ```
 
-Nothing generated is committed. The deployed files are assembled by `styrman install`.
+Nothing generated is committed. The deployed files are assembled by `sh-agent install`.
 
 ## Rules for working here
 
@@ -39,7 +39,7 @@ Nothing generated is committed. The deployed files are assembled by `styrman ins
 
 ## Testing
 
-There is no test framework beyond `go test`. A change to `context/`, `agents/`, or `skills/` is verified by `go run ./cmd/styrman install --home /tmp/x` succeeding and `go run ./cmd/styrman status --home /tmp/x` reporting no drift.
+There is no test framework beyond `go test`. A change to `context/`, `agents/`, or `skills/` is verified by `go run ./cmd/sh-agent install --home /tmp/x` succeeding and `go run ./cmd/sh-agent status --home /tmp/x` reporting no drift.
 
 ## Key files
 

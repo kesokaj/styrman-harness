@@ -14,7 +14,7 @@ import (
 const (
 	ClaudeRoot = ".claude"
 	AgyRoot    = ".gemini/config"
-	BinPath    = ".local/bin/styrman"
+	BinPath    = ".local/bin/sh-agent"
 )
 
 // File is one path the install produces, relative to $HOME.
@@ -24,13 +24,13 @@ type File struct {
 	Mode fs.FileMode
 
 	// KeepForeign marks a file the operator may already own. If it exists
-	// without the styrman marker the installer leaves it alone and says so,
+	// without the sh-agent marker the installer leaves it alone and says so,
 	// rather than overwriting a hand-written CLAUDE.md.
 	KeepForeign bool
 }
 
 // Plan computes every file the install writes. selfExe is the running binary,
-// copied to ~/.local/bin so `styrman update` works from any directory; pass
+// copied to ~/.local/bin so `sh-agent update` works from any directory; pass
 // nil to skip it.
 func Plan(repo string, selfExe []byte) ([]File, error) {
 	skills, err := LoadSkills(repo)
@@ -110,7 +110,7 @@ func Plan(repo string, selfExe []byte) ([]File, error) {
 	return files, nil
 }
 
-// IsOurs reports whether deployed content was written by styrman.
+// IsOurs reports whether deployed content was written by sh-agent.
 func IsOurs(data []byte) bool {
 	return strings.HasPrefix(string(data), Marker)
 }

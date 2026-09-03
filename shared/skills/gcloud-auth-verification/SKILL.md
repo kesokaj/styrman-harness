@@ -1,8 +1,6 @@
 ---
 name: gcloud-auth-verification
-description: Guidelines for identifying and resolving missing Google Cloud authentication
-  and Application Default Credentials (ADC). Use this skill if `gcloud`, `bq`, `dataform`,
-  or Python libraries return authentication errors.
+description: Guidelines for identifying and resolving missing Google Cloud authentication and Application Default Credentials (ADC). Use if gcloud, bq, dataform, or client libraries return auth errors. Do NOT use for general GCP project configuration (use gcloud-setup) or GKE management (use gke-basics).
 license: Apache-2.0
 metadata:
   version: v1

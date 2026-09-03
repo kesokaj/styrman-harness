@@ -130,3 +130,29 @@ func TestFreshnessIsNotFooledByADateMatch(t *testing.T) {
 		t.Errorf("an unrecorded second commit passed:\n%s", joined(f))
 	}
 }
+
+func TestCheckFreshnessDocOnlyCommit(t *testing.T) {
+	proj := newRepo(t)
+	// Seed a recorded change so a baseline changelog entry exists.
+	write(t, filepath.Join(proj.Root, "main.go"), "package main\n")
+	write(t, filepath.Join(proj.Docs, "changes", "first.md"),
+		"---\nowner: changelog\ndate: "+Today()+"\nscope: "+proj.Scope()+"\n---\n")
+	commit(t, proj.Root, "first commit, recorded")
+
+	if f := proj.CheckFreshness(); f.Stale {
+		t.Fatalf("first commit reported stale:\n%s", joined(f))
+	}
+
+	// Now commit only a markdown documentation file outside sourceGlobs.
+	write(t, filepath.Join(proj.Root, "notes.md"), "# Some notes\n")
+	commit(t, proj.Root, "add doc file only")
+
+	// CheckFreshness should not report STALE on an empty scope when HEAD has no source files.
+	f := proj.CheckFreshness()
+	if f.Stale {
+		t.Errorf("a doc-only commit with no source changes was reported stale:\n%s", joined(f))
+	}
+	if !strings.Contains(joined(f), "no source changes in current state") {
+		t.Errorf("expected explanation that no source changes exist:\n%s", joined(f))
+	}
+}

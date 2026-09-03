@@ -229,6 +229,16 @@ func (p Project) OwesSecurity(changed []string) bool {
 	return false
 }
 
+// TouchesDependencyManifest reports whether any changed path is a dependency manifest.
+func (p Project) TouchesDependencyManifest(changed []string) bool {
+	for _, rel := range changed {
+		if sourceNames[path.Base(rel)] && isDependencyManifest(path.Base(rel)) {
+			return true
+		}
+	}
+	return false
+}
+
 func isDependencyManifest(base string) bool {
 	switch base {
 	case "go.mod", "go.sum", "package.json", "package-lock.json", "pnpm-lock.yaml",

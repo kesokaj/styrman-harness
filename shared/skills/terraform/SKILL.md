@@ -1,6 +1,6 @@
 ---
 name: terraform
-description: Use when working with Terraform or OpenTofu - creating modules, writing tests (native test framework, Terratest), setting up CI/CD pipelines, reviewing configurations, choosing between testing approaches, debugging state issues, implementing security scanning (trivy, checkov), or making infrastructure-as-code architecture decisions
+description: Use when working with Terraform or OpenTofu - creating modules, writing tests, CI/CD pipelines, reviewing configurations, debugging state, or IaC architecture decisions. Do NOT use for Kubernetes pod management (use gke-basics), container building (use docker), or direct gcloud CLI calls (use gcloud-setup).
 license: Apache-2.0
 metadata:
   author: Anton Babenko

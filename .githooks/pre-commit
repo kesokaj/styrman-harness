@@ -1,0 +1,25 @@
+#!/bin/sh
+# Native Git Pre-Commit Hook (Defense-in-Depth for styrman-harness)
+# Intercepts all git commit attempts regardless of caller (Antigravity IDE,
+# Claude Code CLI, Antigravity CLI, or terminal) and verifies that no
+# credential-shaped files are staged.
+
+if command -v harness >/dev/null 2>&1; then
+  HARNESS_BIN="harness"
+elif [ -x "$HOME/.agents/bin/harness" ]; then
+  HARNESS_BIN="$HOME/.agents/bin/harness"
+else
+  exit 0
+fi
+
+DIR="$(pwd)"
+PAYLOAD="{\"cwd\":\"$DIR\",\"tool_input\":{\"command\":\"git commit\"}}"
+DECISION=$(printf '%s' "$PAYLOAD" | "$HARNESS_BIN" hook pretooluse 2>/dev/null)
+
+if echo "$DECISION" | grep -q '"decision":"deny"'; then
+  REASON=$(echo "$DECISION" | sed -n 's/.*"reason":"\([^"]*\)".*/\1/p')
+  echo "[pre-commit hook] $REASON" >&2
+  exit 1
+fi
+
+exit 0

@@ -1,6 +1,6 @@
 ---
 name: bash
-description: "Bash and shell scripting expert. Use when writing, reviewing, or debugging Bash/Zsh scripts, automating tasks with shell commands, or using CLI tools like jq, rg, fd, fzf, yq. Activate even for one-liner shell questions or Makefile targets."
+description: "Bash and shell scripting expert. Use when writing, reviewing, or debugging Bash/Zsh scripts, automating tasks with shell commands, or using CLI tools like jq, rg, fd, fzf, yq. Do NOT use for general application backend code (use golang) or frontend code (use frontend/typescript)."
 allowed-tools: Bash
 ---
 

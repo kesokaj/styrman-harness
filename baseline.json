@@ -1,0 +1,90 @@
+{
+  "timestamp": "2026-09-03T13:37:00+02:00",
+  "harness": "styrman-harness",
+  "targets": [
+    "claude-code",
+    "google-antigravity"
+  ],
+  "turn_zero_tokens": {
+    "claude_code": {
+      "context_constitution": 3048,
+      "skills_metadata": 2773,
+      "subagents_metadata": 1200,
+      "tools_definitions": 1850,
+      "total_fixed_overhead": 8871
+    },
+    "antigravity": {
+      "context_constitution": 3048,
+      "skills_metadata": 2773,
+      "subagents_metadata": 1100,
+      "tools_definitions": 2100,
+      "total_fixed_overhead": 9021
+    },
+    "resume_protocol_cold_start": {
+      "requirements": 2161,
+      "roadmap": 176,
+      "todo": 195,
+      "decisions": 2785,
+      "recent_changes": 1800,
+      "total_resumability_context": 7117
+    }
+  },
+  "skills": {
+    "total_count": 28,
+    "metadata_tokens": 2773,
+    "body_tokens": 30477,
+    "reference_asset_tokens": 175350,
+    "skills_with_negative_triggers": 15,
+    "skills_missing_negative_triggers": 13,
+    "spec_layout_violations": [
+      "codebase-design (root markdown files instead of references/)",
+      "anti-ui-slop (reference/ instead of references/)",
+      "anti-ui-slop (upstream packaging metadata noise)",
+      "anti-ui-slop, codebase-design, grill-me, grilling (extraneous agents/openai.yaml)"
+    ]
+  },
+  "subagents": {
+    "count": 6,
+    "names": ["changelog", "documentation", "explorer", "reviewer", "security", "verifier"],
+    "total_prompt_tokens": 7005,
+    "models": {
+      "changelog": {"claude": "haiku", "antigravity": "flash"},
+      "documentation": {"claude": "sonnet", "antigravity": "inherit"},
+      "explorer": {"claude": "sonnet", "antigravity": "inherit"},
+      "reviewer": {"claude": "opus", "antigravity": "pro"},
+      "security": {"claude": "opus", "antigravity": "pro"},
+      "verifier": {"claude": "sonnet", "antigravity": "inherit"}
+    }
+  },
+  "performance": {
+    "test_suite_race": {
+      "status": "PASS",
+      "dispatch_s": 10.956,
+      "gate_s": 2.270,
+      "hookio_s": 1.801,
+      "install_s": 2.294,
+      "trail_s": 6.502,
+      "total_wall_clock_s": 23.823
+    },
+    "go_vet": {
+      "status": "PASS",
+      "findings": 0
+    },
+    "gofmt": {
+      "status": "PASS"
+    },
+    "harness_binary_check_latency_s": 0.902,
+    "harness_doctor": {
+      "clean_scratch_home_checks_passed": 10,
+      "clean_scratch_home_checks_total": 10
+    }
+  },
+  "active_bugs_detected": [
+    {
+      "id": "BUG-01",
+      "component": "internal/trail/check.go",
+      "severity": "HIGH",
+      "description": "CheckFreshness fails with STALE ('an entry must declare scope: ') when HEAD touches only non-source files because p.Scope() returns empty string and is misclassified as uncovered work."
+    }
+  ]
+}

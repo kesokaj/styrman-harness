@@ -1,6 +1,6 @@
 ---
 name: init-project
-description: Scaffold a new project with the standard agent directory structure, AGENTS.md, REQUIREMENTS.md, TODO.md, and ROADMAP.md.
+description: Scaffold a new project with the standard agent directory structure, AGENTS.md, REQUIREMENTS.md, TODO.md, and ROADMAP.md. Use when starting a new repo or running /init-project. Do NOT use on an already-initialized project with an existing trail.
 disable-model-invocation: true
 ---
 

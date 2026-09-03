@@ -1,6 +1,6 @@
 ---
 name: retro
-description: Session retrospective — analyze corrections and propose harness improvements.
+description: Session retrospective — analyze corrections and propose harness improvements. Use when the user runs /retro. Do NOT use for ordinary task summaries or routine changelog updates.
 disable-model-invocation: true
 ---
 

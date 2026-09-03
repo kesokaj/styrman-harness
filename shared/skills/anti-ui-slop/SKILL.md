@@ -40,12 +40,12 @@ Read the brief, existing UI, components, tokens, and constraints before designin
 
 Choose at most one file for the current request:
 
-- New interface or major redesign: `reference/new-work.md`
-- Product or dashboard work: `reference/operate.md`
-- Refinement and polish: `reference/polish.md`
-- Simplification or distillation: `reference/distill.md`
-- Explicit audit: `reference/audit.md`
-- Native iOS work: `reference/ios.md`
+- New interface or major redesign: `references/new-work.md`
+- Product or dashboard work: `references/operate.md`
+- Refinement and polish: `references/polish.md`
+- Simplification or distillation: `references/distill.md`
+- Explicit audit: `references/audit.md`
+- Native iOS work: `references/ios.md`
 
 Do not load a second playbook. Apply judgment rather than treating its examples as a checklist.
 

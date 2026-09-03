@@ -2,8 +2,8 @@
 name: skill-repair
 description: |
   Use this to fix and re-install agent skills that have failed installation.
-  This skill provides the necessary context and permissions to surgically update
-  the `manifest.json` after a fix has been applied.
+  Provides context to surgically update `manifest.json` after fixes.
+  Do NOT use for discovering new skills (use find-skills) or creating new skills (use distill).
 license: Apache-2.0
 metadata:
   version: v1

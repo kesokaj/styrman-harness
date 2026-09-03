@@ -18,6 +18,10 @@ type Config struct {
 	// ReviewFiles is the changed-file count at or above which the reviewer row
 	// fires regardless of line count — breadth is its own risk.
 	ReviewFiles int `json:"reviewFiles"`
+	// SecurityLines is the line count at or above which the security row fires
+	// for non-dependency security-sensitive changes. Below it, security criteria
+	// are evaluated inside the reviewer pass.
+	SecurityLines int `json:"securityLines"`
 	// DispatchTimeout caps a single dispatched row, in seconds.
 	DispatchTimeout int `json:"dispatchTimeoutSeconds"`
 	// SourceGlobs declare paths that count as source even when the default
@@ -30,7 +34,7 @@ type Config struct {
 // catch what a solo operator's own reading misses, and below these thresholds
 // the operator's own reading is cheaper and just as good.
 func DefaultConfig() Config {
-	return Config{ReviewLines: 50, ReviewFiles: 5, DispatchTimeout: 900}
+	return Config{ReviewLines: 50, ReviewFiles: 5, SecurityLines: 150, DispatchTimeout: 900}
 }
 
 // LoadConfig reads .agents/harness.json from the project root, falling back to
@@ -54,6 +58,9 @@ func LoadConfig(root string) (Config, error) {
 	}
 	if cfg.ReviewFiles <= 0 {
 		cfg.ReviewFiles = DefaultConfig().ReviewFiles
+	}
+	if cfg.SecurityLines <= 0 {
+		cfg.SecurityLines = DefaultConfig().SecurityLines
 	}
 	if cfg.DispatchTimeout <= 0 {
 		cfg.DispatchTimeout = DefaultConfig().DispatchTimeout
@@ -147,7 +154,11 @@ func (p Project) Owed(cfg Config, day string) Report {
 	}
 
 	if p.OwesSecurity(rep.Changed) {
-		add(RowSecurity, "a changed path touches auth, crypto, secrets, input parsing, or dependencies")
+		if cfg.SecurityLines > 0 && rep.Lines < cfg.SecurityLines && !p.TouchesDependencyManifest(rep.Changed) {
+			skip(RowSecurity, fmt.Sprintf("%d lines is below the dedicated security threshold (%d lines) — security criteria evaluated in the reviewer pass", rep.Lines, cfg.SecurityLines))
+		} else {
+			add(RowSecurity, "a changed path touches auth, crypto, secrets, input parsing, or dependencies")
+		}
 	} else {
 		skip(RowSecurity, "no changed path touches the security surface")
 	}

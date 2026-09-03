@@ -8,8 +8,10 @@ import (
 	"strings"
 )
 
-// modelMap translates Claude model aliases to Antigravity tiers. Anything
-// unlisted is omitted, which agy reads as "inherit".
+// modelMap translates Claude model aliases to Antigravity tiers.
+// Claude 'opus' maps to 'pro' (deep reasoning) and 'haiku' maps to 'flash' (fast logging).
+// Anything unlisted (such as 'sonnet') is omitted, which Antigravity reads as 'inherit'
+// (inheriting the active caller's model tier).
 var modelMap = map[string]string{"opus": "pro", "haiku": "flash"}
 
 // toolMap translates Claude tool names to agy ones. An unmapped tool is an

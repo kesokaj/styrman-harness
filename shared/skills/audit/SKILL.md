@@ -1,6 +1,6 @@
 ---
 name: audit
-description: Perform a comprehensive audit of a directory or the entire project.
+description: Perform a comprehensive audit of a directory or the entire project. Use when the user runs /audit. Do NOT use for routine code review (use reviewer or /code-review) or unit testing (use verifier).
 disable-model-invocation: true
 argument-hint: [directory]
 ---

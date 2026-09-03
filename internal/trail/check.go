@@ -55,6 +55,8 @@ func (p Project) CheckFreshness() Freshness {
 	// wrong here. This report exists to say whether the trail covers the code as
 	// it stands, so inheriting the exception made it print OK for a dirty tree no
 	// entry covered, contradicting its own contract.
+	dirty := p.DirtySource()
+	headSource := p.HeadSourceToday()
 	scope := p.Scope()
 	covered := scope != "" && p.HasArtifact(RowChangelog, scope)
 	switch {
@@ -62,6 +64,8 @@ func (p Project) CheckFreshness() Freshness {
 		f.note("commits: none yet — HEAD coverage vacuously OK")
 	case covered:
 		f.note("OK: a changelog entry covers the current change set (HEAD %s)", head)
+	case len(dirty) == 0 && len(headSource) == 0:
+		f.note("OK: no source changes in current state (HEAD %s has no source changes)", head)
 	case newest == "":
 		f.fail("HEAD was committed %s and no changelog entry exists", head)
 	default:

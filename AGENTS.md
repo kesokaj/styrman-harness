@@ -4,7 +4,7 @@ Project rules for this repo. They override the global context, which this repo i
 
 ## What this repo is
 
-The agent harness: one global context (agents.md standard), 30 skills (Agent Skills `SKILL.md` standard), seven subagents, and `sh-agent`, the Go binary that installs them into Claude Code and the Antigravity CLI. No hooks, no gates, no CI.
+The agent harness: one global context (agents.md standard), 28 skills (Agent Skills `SKILL.md` standard), seven subagents, and `sh-agent`, the Go binary that installs them into Claude Code and the Antigravity CLI. No hooks, no gates, no CI.
 
 ## Setup commands
 
@@ -42,7 +42,7 @@ Nothing generated is committed. The deployed files are assembled by `sh-agent in
 
 ## Testing
 
-There is no test framework beyond `go test`. A change to `context/`, `agents/`, or `skills/` is verified by `go run ./cmd/sh-agent install --home /tmp/x` succeeding and `go run ./cmd/sh-agent status --home /tmp/x` reporting no drift.
+There is no test framework beyond `go test`. A change to `context/`, `agents/`, or `skills/` is verified by `go run ./cmd/sh-agent install --home /tmp/x` succeeding and `go run ./cmd/sh-agent status --home /tmp/x` reporting no drift, then by one start of each CLI in the sandbox (`.agents/docs/testing/2026-09-03-verify-sandbox.md`) with its log grepped for parse errors. A verification log states what it did not exercise; "complete" or "all skills" is said only after the full matrix in `.agents/docs/testing/skill-matrix.md` has run.
 
 ## Key files
 

@@ -41,7 +41,7 @@ git diff <base>..HEAD --stat
 
 Untracked or modified files **under `<docs-root>`** need no commit of their own — they ride along in the release commit (Step 6).
 
-**Base ref:** the user-given ref when provided; otherwise the last tag; if no tag exists, the base recorded in the `Range reviewed:` line of the newest `reviews/*-preflight-*` report; if there is none either, this is the first release — ask for a base ref.
+**Base ref:** the user-given ref when provided; otherwise the last tag; if no tag exists, the base recorded in the `Range reviewed:` line of the newest `reviews/*-preflight-*` report (only preflight reports count; a line ending in `..worktree` names its base before the dots); if there is none either, this is the first release — ask for a base ref, and in an unattended run take the root commit (`git rev-list --max-parents=0 HEAD`) and say so in the report.
 
 ## Step 2: Review the release diff — reviewer, security, verifier
 

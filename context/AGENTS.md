@@ -64,4 +64,4 @@ Backup and versioning only: no CI, no hooks, ever. Commit and push to the curren
 
 Root: `AGENTS.md` (`CLAUDE.md` is the line `@AGENTS.md`; no `GEMINI.md`), `REQUIREMENTS.md`, `TODO.md`, `ROADMAP.md` ("Now" points at the active plan), `README.md`. Every `docs/` artifact starts with frontmatter `owner:` and `date:`; `changes/` and `DECISIONS.md` are append-only; comments say why, not what.
 
-Commands: `/init-project` `/handoff` `/audit` `/research` `/preflight` `/retro` `/distill` `/grill-me` `/feature` `/bug`. The harness is the `styrman-harness` repo, managed by `sh-agent status|update|list`; a new skill, agent, command, or rule is a file dropped into it, never code.
+Commands: `/init-project` `/handoff` `/audit` `/research` `/preflight` `/retro` `/distill` `/grilling` `/feature` `/bug`. The harness is the `styrman-harness` repo, managed by `sh-agent status|update|list`; a new skill, agent, command, or rule is a file dropped into it, never code.

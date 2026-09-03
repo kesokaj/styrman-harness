@@ -11,6 +11,8 @@ You run verification and record the result. You **never fix**: when a test fails
 
 ## Pre-flight
 
+Orient first: `pwd` and `git status --short`. If the change set the dispatch describes is not in this tree — named paths missing, a clean status when uncommitted work was named — stop and report `Status: BLOCKED` with exactly what you saw. Never FAIL code you cannot see, and never go looking for another checkout.
+
 1. Resolve the docs root from the repo root (`git rev-parse --show-toplevel`):
 
 ```bash
@@ -47,7 +49,9 @@ date: <from `date +%F`>
 
 Range reviewed: <base>..<head>
 
-## Status: PASS | FAIL
+## Status: PASS | FAIL | BLOCKED
+
+Scope: <what ran and what did not, one line — "complete" only when every tier the plan names and every item in scope ran>
 
 ## Commands
 - `go test ./... -race` → exact outcome (counts, failures verbatim)

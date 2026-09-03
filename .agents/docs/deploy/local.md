@@ -30,6 +30,10 @@ Nothing to configure. `--repo DIR` overrides where the checkout is; `$SH_AGENT_R
 - `sh-agent render | head -3` prints the assembled context.
 - Start each CLI once and check it read the files: Claude Code `/memory` lists `~/.claude/CLAUDE.md` importing `AGENTS.md`, `/skills` and `/agents` list the harness entries; Antigravity `/skills` and `/agents` do the same, and `grep 'Failed to parse' ~/.gemini/antigravity-cli/log/cli-*.log` is empty (BUG-004).
 
+## First session after install
+
+Claude Code asks once per session before the first read or write under `~/.config/sh-agent/` (feedback log, proposals, global handoffs), because it is outside the project. Approve it, or add the directory to `permissions.additionalDirectories` in `~/.claude/settings.json` yourself — the installer never edits vendor settings (ADR-010). Antigravity prompts the same way for paths outside the workspace.
+
 ## Roll back
 
 `sh-agent uninstall` removes exactly the files the manifest lists. To return to an earlier harness commit: `git checkout <commit> && go run ./cmd/sh-agent install`.

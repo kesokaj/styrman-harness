@@ -13,6 +13,8 @@ sh-agent status                   # should end with "drift none"
 
 Make sure `~/.local/bin` is on your `PATH`. Requires Go 1.24+ and git; nothing else.
 
+Harness state (feedback log, retro proposals, global handoffs) lives in `~/.config/sh-agent/`, outside any project, so Claude Code asks once per session before the first read or write there. To stop the prompt, add the directory yourself to `permissions.additionalDirectories` in `~/.claude/settings.json`; the installer never touches vendor settings (ADR-010).
+
 ## Daily commands
 
 | Command | What it does |

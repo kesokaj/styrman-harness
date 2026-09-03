@@ -1,6 +1,9 @@
 # Build output. The binary is built at install time, never committed.
 /harness
 /dist/
+/bin/
 
 # Per-dispatch cost log: machine-local measurement, not shared state.
 .agents/docs/testing/dispatch-ledger.jsonl
+.agents/docs/evals/eval-ledger.jsonl
+.agents/eval-config.json

@@ -60,7 +60,7 @@ Every project keeps its agent-facing material under `.agents/`, written so a zer
     └── reviews/        # review, security, audit, and preflight reports
 ```
 
-Root files: `AGENTS.md` (project rules and commands; `CLAUDE.md` is the single line `@AGENTS.md`), `REQUIREMENTS.md` (non-negotiables), `TODO.md` (deferred items), `ROADMAP.md` (Now / Next / Later), `README.md`. Claude Code discovers project skills and agents through `.claude/skills` and `.claude/agents`, which `/init-project` creates as symlinks into `.agents/`.
+Root files: `AGENTS.md` (project rules and commands; `CLAUDE.md` is the single line `@AGENTS.md`), `REQUIREMENTS.md` (non-negotiables), `TODO.md` (deferred items), `ROADMAP.md` (Now / Next / Later), `README.md`. Claude Code discovers project skills, agents, commands, and rules through `.claude/{skills,agents,commands,rules}`, which `/init-project` creates as symlinks into `.agents/`.
 
 Every artifact under `docs/` starts with YAML frontmatter `owner:` (the agent name, or `main`) and `date:` (from `date +%F`). Filenames are free but dated. Comments in code explain *why*, not *what*.
 
@@ -68,4 +68,4 @@ Every artifact under `docs/` starts with YAML frontmatter `owner:` (the agent na
 
 `/init-project` scaffold a project · `/handoff` session snapshot · `/audit` full audit · `/research` compare options and spec · `/preflight` release gate · `/retro` propose harness improvements · `/distill` turn a repeated pattern into a skill · `/grill-me` stress-test a plan.
 
-The harness itself is the `styrman-harness` repo, managed by the `sh-agent` binary: `sh-agent status` shows what is installed and whether it drifted, `sh-agent update` pulls the repo from git and reinstalls, `sh-agent list` prints the inventory that ends this file.
+The harness itself is the `styrman-harness` repo, managed by the `sh-agent` binary: `sh-agent status` shows what is installed and whether it drifted, `sh-agent update` pulls the repo from git and reinstalls, `sh-agent list` prints the inventory that ends this file. A new skill, agent, command, or rule is a file dropped into the repo's `skills/`, `agents/`, `commands/`, or `rules/` — never code.

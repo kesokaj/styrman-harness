@@ -21,6 +21,7 @@ context/AGENTS.md      the global context — single source, deployed to both ve
 context/dev-setup.md   environment, stack, GCP defaults — appended to the context at install
 agents/*.md            subagents in Claude Code format; Antigravity's agent.md is derived at install
 skills/<name>/         skills; .agents/skills is a symlink here so `npx skills add` lands in skills/
+commands/, rules/      markdown prompts invoked as /name, and extra rules; both deploy to both vendors verbatim
 cmd/sh-agent, internal/harness   the binary and its tests
 .agents/docs/          this repo's own trail (plans, changes, ADRs, reviews, testing)
 ```
@@ -33,6 +34,7 @@ Nothing generated is committed. The deployed files are assembled by `sh-agent in
 - Adding a tool to an agent's `tools:` list means adding it to `toolMap` in `internal/harness/derive.go`. An unmapped tool fails the install on purpose: Antigravity hangs a subagent that names a tool it does not recognise.
 - Agent `description:` values are one line, double-quoted if they contain a colon, and free of the words "dispatch prompt" or "harness binary" — there is no binary behind them anymore.
 - Every skill directory needs a `SKILL.md` with a `description`; the installer refuses one without it.
+- Adding a skill, agent, command, or rule is a file drop — never a code change. If a new kind of customization needs code, that is a design question, not a quick patch.
 - Third-party skills are vendored verbatim and listed in `skills/VENDORED.md`; never edit them in place — fork into a differently named skill.
 - Stdlib only in the Go code. The binary is a file copier with a manifest; it does not need a dependency.
 - Commit and push after each task, per the global git workflow. This repo is on `main`.

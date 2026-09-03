@@ -30,6 +30,8 @@ func newRepo(t *testing.T) string {
 	write("skills/alpha/references/notes.md", "notes\n")
 	write("skills/beta/SKILL.md", "---\nname: beta\ndescription: \"Beta: slash only\"\ndisable-model-invocation: true\n---\nbody\n")
 	write("skills/VENDORED.md", "not a skill\n")
+	write("commands/deploy.md", "---\ndescription: Deploy the thing\n---\nSteps\n")
+	write("rules/go-style.md", "# Go style\n\nUse slog.\n")
 	write("agents/reviewer.md", "---\nname: reviewer\ndescription: Reviews diffs\ntools: Read, Grep, Bash\nmodel: opus\nskills: review-standards\neffort: high\n---\nLoad ~/.claude/skills/review-standards first.\n")
 	return repo
 }
@@ -120,11 +122,17 @@ func TestInventoryAndRender(t *testing.T) {
 	if !skills[1].SlashOnly || skills[0].SlashOnly {
 		t.Errorf("SlashOnly wrong: %+v", skills)
 	}
-	agents, err := LoadAgents(repo)
+	inv, err := LoadInventory(repo)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx, err := RenderContext(repo, skills, agents)
+	if len(inv.Commands) != 1 || inv.Commands[0].Name != "deploy" || inv.Commands[0].Description != "Deploy the thing" {
+		t.Errorf("commands = %+v", inv.Commands)
+	}
+	if len(inv.Rules) != 1 || inv.Rules[0].Description != "Go style" {
+		t.Errorf("rules = %+v", inv.Rules)
+	}
+	ctx, err := RenderContext(repo, inv)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +140,7 @@ func TestInventoryAndRender(t *testing.T) {
 	if !strings.HasPrefix(s, Marker+"\n# AGENTS.md") {
 		t.Errorf("context should start with the marker and AGENTS.md:\n%s", s[:80])
 	}
-	for _, want := range []string{"## Environment & Stack", "| `alpha` | auto |", "| `beta` | `/beta` |", "| `reviewer` | opus |", "Beta\\: slash only"} {
+	for _, want := range []string{"## Environment & Stack", "| `alpha` | auto |", "| `beta` | `/beta` |", "| `reviewer` | opus |", "| `/deploy` |", "| `go-style` |", "Beta\\: slash only"} {
 		if !strings.Contains(s, want) && !strings.Contains(s, strings.ReplaceAll(want, "\\:", ":")) {
 			t.Errorf("context missing %q", want)
 		}
@@ -170,6 +178,10 @@ func TestInstallStatusResyncUninstall(t *testing.T) {
 		".gemini/config/rules/AGENTS.md",
 		".gemini/config/skills/alpha/SKILL.md",
 		".gemini/config/agents/reviewer/agent.md",
+		".claude/commands/deploy.md",
+		".gemini/config/workflows/deploy.md",
+		".claude/rules/go-style.md",
+		".gemini/config/rules/go-style.md",
 		".local/bin/sh-agent",
 		".config/sh-agent/state.json",
 	} {

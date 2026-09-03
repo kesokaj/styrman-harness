@@ -18,9 +18,9 @@ The harness is context, skills, and subagents. Behaviour comes from what is writ
 
 `sh-agent` is a single Go binary with no dependencies. `install` is idempotent and overwrites only files it manages; `uninstall` removes exactly what its manifest lists; `update` pulls the repo from git and reinstalls. A hand-written `~/.claude/CLAUDE.md` is never overwritten.
 
-## R5 — Hand-added skills are first class
+## R5 — Hand-added customizations are first class
 
-Adding a skill is: put a directory with a `SKILL.md` in `skills/` (by hand, by `npx skills add` from the repo root, or by `sh-agent adopt`), then `sh-agent install`. No registration, no manifest edits.
+Adding a skill, subagent, command, or rule is: put the file in `skills/`, `agents/`, `commands/`, or `rules/` (by hand, by `npx skills add` from the repo root, or by `sh-agent adopt`), then `sh-agent install`. No registration, no manifest edits, no code. The installer maps each directory to its place under both vendors.
 
 ## R6 — Development never touches the real home
 

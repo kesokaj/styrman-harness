@@ -29,19 +29,25 @@ type File struct {
 	KeepForeign bool
 }
 
-// Plan computes every file the install writes. selfExe is the running binary,
-// copied to ~/.local/bin so `sh-agent update` works from any directory; pass
-// nil to skip it.
+// Plan computes every file the install writes. Each repo directory maps to
+// one place per vendor, so a file dropped into the repo deploys without a
+// code change:
+//
+//	context/*.md          → .claude/AGENTS.md (+ CLAUDE.md stub), .gemini/config/rules/AGENTS.md
+//	skills/<name>/**      → .claude/skills/<name>/**,   .gemini/config/skills/<name>/**
+//	agents/<name>.md      → .claude/agents/<name>.md,   .gemini/config/agents/<name>/agent.md (derived)
+//	commands/<name>.md    → .claude/commands/<name>.md, .gemini/config/workflows/<name>.md
+//	workflows/<name>.md   → same as commands/
+//	rules/<name>.md       → .claude/rules/<name>.md,    .gemini/config/rules/<name>.md
+//
+// selfExe is the running binary, copied to ~/.local/bin so `sh-agent update`
+// works from any directory; pass nil to skip it.
 func Plan(repo string, selfExe []byte) ([]File, error) {
-	skills, err := LoadSkills(repo)
+	inv, err := LoadInventory(repo)
 	if err != nil {
 		return nil, err
 	}
-	agents, err := LoadAgents(repo)
-	if err != nil {
-		return nil, err
-	}
-	context, err := RenderContext(repo, skills, agents)
+	context, err := RenderContext(repo, inv)
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +58,7 @@ func Plan(repo string, selfExe []byte) ([]File, error) {
 		{Rel: filepath.Join(AgyRoot, "rules", "AGENTS.md"), Data: context, Mode: 0o644},
 	}
 
-	for _, s := range skills {
+	for _, s := range inv.Skills {
 		err := filepath.WalkDir(s.Dir, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
@@ -86,7 +92,7 @@ func Plan(repo string, selfExe []byte) ([]File, error) {
 		}
 	}
 
-	for _, a := range agents {
+	for _, a := range inv.Agents {
 		derived, err := DeriveAgy(a)
 		if err != nil {
 			return nil, err
@@ -97,6 +103,23 @@ func Plan(repo string, selfExe []byte) ([]File, error) {
 		)
 	}
 
+	// A command is a markdown prompt invoked as /name on both vendors: Claude
+	// Code calls it a command, Antigravity a workflow. Copied verbatim; both
+	// ignore frontmatter keys they do not know.
+	for _, c := range inv.Commands {
+		files = append(files,
+			File{Rel: filepath.Join(ClaudeRoot, "commands", c.Name+".md"), Data: c.Raw, Mode: 0o644},
+			File{Rel: filepath.Join(AgyRoot, "workflows", c.Name+".md"), Data: c.Raw, Mode: 0o644},
+		)
+	}
+
+	for _, r := range inv.Rules {
+		files = append(files,
+			File{Rel: filepath.Join(ClaudeRoot, "rules", r.Name+".md"), Data: r.Raw, Mode: 0o644},
+			File{Rel: filepath.Join(AgyRoot, "rules", r.Name+".md"), Data: r.Raw, Mode: 0o644},
+		)
+	}
+
 	if selfExe != nil {
 		files = append(files, File{Rel: BinPath, Data: selfExe, Mode: 0o755})
 	}
@@ -104,7 +127,7 @@ func Plan(repo string, selfExe []byte) ([]File, error) {
 	sort.Slice(files, func(i, j int) bool { return files[i].Rel < files[j].Rel })
 	for i := 1; i < len(files); i++ {
 		if files[i].Rel == files[i-1].Rel {
-			return nil, fmt.Errorf("two sources map to %s", files[i].Rel)
+			return nil, fmt.Errorf("two sources map to ~/%s (a rule may not be named AGENTS.md)", files[i].Rel)
 		}
 	}
 	return files, nil

@@ -49,7 +49,21 @@ sh-agent update      # fetches, pulls, rebuilds, reinstalls
 
 An existing `~/.claude/CLAUDE.md` that sh-agent did not write is left alone; add the line `@AGENTS.md` to it yourself.
 
-## Adding a skill by hand
+## Adding things by hand — no code
+
+Every customization is a file in a directory. Drop it in, run `sh-agent install`, commit. Nothing to register.
+
+| Put it in | What it is | Claude Code gets | Antigravity gets |
+|---|---|---|---|
+| `skills/<name>/SKILL.md` | a skill (Agent Skills standard); add `disable-model-invocation: true` for a `/name` command | `~/.claude/skills/<name>/` | `~/.gemini/config/skills/<name>/` |
+| `agents/<name>.md` | a subagent in Claude Code format (`name`, `description`, `tools`, `model`, …) | `~/.claude/agents/<name>.md` | `~/.gemini/config/agents/<name>/agent.md`, tools and model translated |
+| `commands/<name>.md` (or `workflows/`) | a plain markdown prompt invoked as `/name`; frontmatter `description` optional | `~/.claude/commands/<name>.md` | `~/.gemini/config/workflows/<name>.md` |
+| `rules/<name>.md` | an always-on or path-scoped rule (Claude: `paths:` frontmatter; Antigravity: `trigger: glob` + `globs:`; both ignore the other's keys) | `~/.claude/rules/<name>.md` | `~/.gemini/config/rules/<name>.md` |
+| `context/<name>.md` | more global context, appended after `AGENTS.md` | part of `~/.claude/AGENTS.md` | part of `~/.gemini/config/rules/AGENTS.md` |
+
+A skill with `disable-model-invocation: true` is the portable way to write a command: both vendors run it as `/name` without translation. Prefer it over `commands/` for anything new.
+
+### From skills.sh
 
 Any directory with a `SKILL.md` dropped into `skills/` is a skill. From [skills.sh](https://skills.sh):
 
@@ -65,9 +79,11 @@ Record third-party provenance in `skills/VENDORED.md`. A skill you already insta
 ## Layout
 
 ```
-context/     AGENTS.md (the global context) and dev-setup.md (environment, stack, GCP defaults)
+context/     AGENTS.md (the global context) and dev-setup.md (environment, stack, GCP rule)
 agents/      six subagents in Claude Code format — the single source; Antigravity's flavour is derived
-skills/      28 skills, each a directory with SKILL.md (+ references/, assets/, scripts/)
+skills/      28 skills, each a directory with SKILL.md (+ references/, assets/)
+commands/    markdown prompts invoked as /name (empty; prefer skills)
+rules/       extra always-on or path-scoped rules (empty)
 cmd/sh-agent  the binary; internal/harness is its logic and tests
 .agents/     this repo's own trail (docs/) and a skills -> ../skills symlink for the skills CLI
 ```

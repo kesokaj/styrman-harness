@@ -67,13 +67,14 @@ Antigravity reads `.agents/` natively (rules, skills, agents). `workflows/` is k
 
 ## Step 5: Claude Code discovery — symlinks
 
-Claude Code reads `.claude/` for project skills, agents, and commands. Point it at the real tree instead of duplicating it:
+Claude Code reads `.claude/` for project skills, agents, commands, and rules. Point it at the real tree instead of duplicating it:
 
 ```bash
 mkdir -p .claude
 ln -sfn ../.agents/skills   .claude/skills
 ln -sfn ../.agents/agents   .claude/agents
 ln -sfn ../.agents/commands .claude/commands
+ln -sfn ../.agents/rules    .claude/rules
 ls -la .claude
 ```
 

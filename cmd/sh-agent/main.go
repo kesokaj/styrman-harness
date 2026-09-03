@@ -129,27 +129,19 @@ func run(args []string, out io.Writer) error {
 		return update(repo, home, *check, *homeFlag, out)
 
 	case "list":
-		skills, err := harness.LoadSkills(repo)
+		inv, err := harness.LoadInventory(repo)
 		if err != nil {
 			return err
 		}
-		agents, err := harness.LoadAgents(repo)
-		if err != nil {
-			return err
-		}
-		fmt.Fprint(out, harness.RenderInventory(skills, agents))
+		fmt.Fprint(out, harness.RenderInventory(inv))
 		return nil
 
 	case "render":
-		skills, err := harness.LoadSkills(repo)
+		inv, err := harness.LoadInventory(repo)
 		if err != nil {
 			return err
 		}
-		agents, err := harness.LoadAgents(repo)
-		if err != nil {
-			return err
-		}
-		data, err := harness.RenderContext(repo, skills, agents)
+		data, err := harness.RenderContext(repo, inv)
 		if err != nil {
 			return err
 		}
@@ -188,17 +180,13 @@ func status(repo, home string, out io.Writer) error {
 	}
 	fmt.Fprintf(out, "installed  %s from commit %s (%d files, manifest ~/.config/sh-agent/state.json)\n", st.InstalledAt, st.Commit, len(st.Files))
 
-	skills, err := harness.LoadSkills(repo)
+	inv, err := harness.LoadInventory(repo)
 	if err != nil {
 		return err
 	}
-	agents, err := harness.LoadAgents(repo)
-	if err != nil {
-		return err
-	}
-	fmt.Fprintf(out, "repo has   %d skills, %d agents\n", len(skills), len(agents))
-	fmt.Fprintf(out, "claude     ~/%s  (AGENTS.md, CLAUDE.md, skills/, agents/)\n", harness.ClaudeRoot)
-	fmt.Fprintf(out, "agy        ~/%s  (rules/AGENTS.md, skills/, agents/)\n", harness.AgyRoot)
+	fmt.Fprintf(out, "repo has   %d skills, %d agents, %d commands, %d rules\n", len(inv.Skills), len(inv.Agents), len(inv.Commands), len(inv.Rules))
+	fmt.Fprintf(out, "claude     ~/%s  (AGENTS.md, CLAUDE.md, skills/, agents/, commands/, rules/)\n", harness.ClaudeRoot)
+	fmt.Fprintf(out, "agy        ~/%s  (rules/AGENTS.md, skills/, agents/, workflows/, rules/)\n", harness.AgyRoot)
 
 	files, err := harness.Plan(repo, nil)
 	if err != nil {

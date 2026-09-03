@@ -30,7 +30,7 @@ Do NOT suggest `/retro` if the session was smooth and correction-free.
 
 ## Step 1: Read the Session Transcript and Feedback Log
 
-Read the current conversation transcript, plus any entries in the global feedback log (`~/.agents/feedback/log.jsonl`) from this session — the `feedback` skill writes there; deduplicate overlapping entries. Scan for:
+Read the current conversation transcript, plus any entries in the global feedback log (`~/.config/sh-agent/feedback.jsonl`) from this session — the `feedback` skill writes there; deduplicate overlapping entries. Scan for:
 
 1. **Explicit corrections** — User said "no", "wrong", "don't do that", "actually we…"
 2. **Re-stated preferences** — User repeated a rule that already exists in the global context (`context/AGENTS.md` or `context/dev-setup.md` in the harness repo) or a skill
@@ -74,10 +74,10 @@ For each finding, draft a **specific, minimal change**:
 If not `--dry-run`, write the proposals to the global proposals directory (works from any project — proposals are always about the global harness):
 
 ```
-~/.agents/proposals/YYYY-MM-DD-retro.md
+~/.config/sh-agent/proposals/YYYY-MM-DD-retro.md
 ```
 
-If the directory does not exist, create it first (`mkdir -p ~/.agents/proposals`). The date comes from `date +%F`.
+If the directory does not exist, create it first (`mkdir -p ~/.config/sh-agent/proposals`). The date comes from `date +%F`.
 
 Use this format:
 
@@ -116,7 +116,7 @@ Session ID: <conversation-id>
 
 ## Feedback Log Entries
 
-<List any entries in ~/.agents/feedback/log.jsonl from this session>
+<List any entries in ~/.config/sh-agent/feedback.jsonl from this session>
 ```
 
 ## Step 5: Present to User
@@ -124,7 +124,7 @@ Session ID: <conversation-id>
 Show the user:
 1. How many findings were identified
 2. A summary table of proposals
-3. Ask: *"Review the proposal file at `~/.agents/proposals/YYYY-MM-DD-retro.md`. Want me to apply any of these changes?"*
+3. Ask: *"Review the proposal file at `~/.config/sh-agent/proposals/YYYY-MM-DD-retro.md`. Want me to apply any of these changes?"*
 
 If the user approves specific proposals:
 - Apply the changes to the target files in the harness repo

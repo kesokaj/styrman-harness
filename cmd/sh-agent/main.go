@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"strings"
+	"time"
 
 	"github.com/kesokaj/styrman-harness/internal/harness"
 )
@@ -179,6 +180,16 @@ func status(repo, home string, out io.Writer) error {
 		return exitCode(1)
 	}
 	fmt.Fprintf(out, "installed  %s from commit %s (%d files, manifest ~/.config/sh-agent/state.json)\n", st.InstalledAt, st.Commit, len(st.Files))
+	if last, ok := harness.LastRetro(home); ok {
+		days := int(time.Since(last).Hours() / 24)
+		hint := ""
+		if days > 14 {
+			hint = " — past 14 days, run /retro at the end of the next session"
+		}
+		fmt.Fprintf(out, "retro      last proposal %s (%d days ago)%s\n", last.Format("2006-01-02"), days, hint)
+	} else {
+		fmt.Fprintln(out, "retro      none yet — run /retro at the end of a session with corrections")
+	}
 
 	inv, err := harness.LoadInventory(repo)
 	if err != nil {

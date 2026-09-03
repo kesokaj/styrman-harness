@@ -14,7 +14,7 @@ Analyze the current session (or multiple recent sessions) to detect repeated pat
 ```
 /distill                     # Analyze current session, propose project-specific skill
 /distill --global            # Propose as a global harness skill instead
-/distill --from-log          # Also scan ~/.agents/feedback/log.jsonl for cross-session patterns
+/distill --from-log          # Also scan ~/.config/sh-agent/feedback.jsonl for cross-session patterns
 ```
 
 ## When to Suggest
@@ -144,7 +144,7 @@ After installation:
 
 ## Step 6: Log the Extraction
 
-Append an entry to `~/.agents/feedback/log.jsonl` (create the directory with `mkdir -p ~/.agents/feedback` if it does not exist):
+Append an entry to `~/.config/sh-agent/feedback.jsonl` (create the directory with `mkdir -p ~/.config/sh-agent` if it does not exist):
 
 ```json
 {

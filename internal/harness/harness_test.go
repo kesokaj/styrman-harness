@@ -415,3 +415,20 @@ func TestBehindAndPull(t *testing.T) {
 		t.Errorf("after pull behind = %d", n)
 	}
 }
+
+func TestLastRetro(t *testing.T) {
+	home := t.TempDir()
+	if _, ok := LastRetro(home); ok {
+		t.Fatal("no proposals yet")
+	}
+	dir := filepath.Join(home, ".config", "sh-agent", "proposals")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "2026-09-03-retro.md"), []byte("# retro\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := LastRetro(home); !ok {
+		t.Fatal("proposal should be found")
+	}
+}

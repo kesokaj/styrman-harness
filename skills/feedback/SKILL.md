@@ -10,7 +10,7 @@ description: |
 
 ## Purpose
 
-Silently log user corrections and preference signals to the **global** log at `~/.agents/feedback/log.jsonl` so the `/retro` workflow has structured data to analyze. One log for all projects — each entry carries a `project` field, which is what lets `/retro` and `/distill --from-log` spot cross-project patterns.
+Silently log user corrections and preference signals to the **global** log at `~/.config/sh-agent/feedback.jsonl` so the `/retro` workflow has structured data to analyze. One log for all projects — each entry carries a `project` field, which is what lets `/retro` and `/distill --from-log` spot cross-project patterns.
 
 This skill is **passive**. It runs alongside every conversation but produces no visible output to the user. The user should not notice this skill is active.
 
@@ -35,7 +35,7 @@ Append an entry when ANY of these occur:
 
 ## Log Format
 
-Append one JSON object per line to `~/.agents/feedback/log.jsonl`. If the directory does not exist, create it first (`mkdir -p ~/.agents/feedback`).
+Append one JSON object per line to `~/.config/sh-agent/feedback.jsonl`. If the directory does not exist, create it first (`mkdir -p ~/.config/sh-agent`).
 
 ```json
 {

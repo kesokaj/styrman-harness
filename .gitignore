@@ -10,3 +10,7 @@
 
 # Per-project subagent memory.
 .claude/agent-memory/
+
+# Agent scratch space: generated and temporary files, never committed.
+.agents/scratch/*
+!.agents/scratch/.gitkeep

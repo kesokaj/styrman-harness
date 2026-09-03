@@ -26,6 +26,10 @@ Adding a skill, subagent, command, or rule is: put the file in `skills/`, `agent
 
 Every test and every development run of the installer uses `--home` with a scratch directory. Deploying to the operator's real `$HOME` is the operator's action.
 
+## R7 — Projects remember and stay resumable
+
+Every project keeps its scratch in `.agents/scratch/` (gitignored), its failures as numbered records in `.agents/docs/bugs/`, and its progress in plan files with task checkboxes, so a zero-context session can resume and does not repeat a mistake. The harness's own state (manifest, feedback log, retro proposals) lives in `~/.config/sh-agent/` and nowhere else.
+
 ## Known limits
 
 - **Antigravity global rules path.** The CLI's customization root is `~/.gemini/config/`; rules there are documented for the workspace form (`.agents/rules/*.md`) and by analogy for the global one. Verified on the operator's Mac before this is relied upon (see the rebuild plan).

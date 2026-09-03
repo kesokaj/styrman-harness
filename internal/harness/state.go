@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 // State is the install manifest. It is the only thing uninstall trusts: a
@@ -55,4 +56,18 @@ func RemoveState(home string) error {
 	// The directory is sh-agent's own; drop it when empty.
 	_ = os.Remove(filepath.Dir(p))
 	return nil
+}
+
+// LastRetro returns when the newest /retro proposal was written. The retro
+// skill writes to ~/.config/sh-agent/proposals/, so this is the harness's
+// only view of whether the learning loop is being run.
+func LastRetro(home string) (time.Time, bool) {
+	paths, _ := filepath.Glob(filepath.Join(home, ".config", "sh-agent", "proposals", "*.md"))
+	var newest time.Time
+	for _, p := range paths {
+		if info, err := os.Stat(p); err == nil && info.ModTime().After(newest) {
+			newest = info.ModTime()
+		}
+	}
+	return newest, !newest.IsZero()
 }

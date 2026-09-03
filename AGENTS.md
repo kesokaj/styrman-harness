@@ -4,7 +4,7 @@ Project rules for this repo. They override the global context, which this repo i
 
 ## What this repo is
 
-The agent harness: one global context (agents.md standard), 28 skills (Agent Skills `SKILL.md` standard), six subagents, and `sh-agent`, the Go binary that installs them into Claude Code and the Antigravity CLI. No hooks, no gates, no CI.
+The agent harness: one global context (agents.md standard), 28 skills (Agent Skills `SKILL.md` standard), seven subagents, and `sh-agent`, the Go binary that installs them into Claude Code and the Antigravity CLI. No hooks, no gates, no CI.
 
 ## Setup commands
 
@@ -23,7 +23,8 @@ agents/*.md            subagents in Claude Code format; Antigravity's agent.md i
 skills/<name>/         skills; .agents/skills is a symlink here so `npx skills add` lands in skills/
 commands/, rules/      markdown prompts invoked as /name, and extra rules; both deploy to both vendors verbatim
 cmd/sh-agent, internal/harness   the binary and its tests
-.agents/docs/          this repo's own trail (plans, changes, ADRs, reviews, testing)
+.agents/docs/          this repo's own trail (plans, changes, ADRs, reviews, testing, bugs/INDEX.md)
+.agents/scratch/       gitignored scratch space; every generated or temporary file goes here, never /tmp
 ```
 
 Nothing generated is committed. The deployed files are assembled by `sh-agent install`.

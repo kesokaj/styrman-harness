@@ -17,7 +17,7 @@ Write a structured handoff document summarising the current conversation so a fr
 
 ```
 /handoff                     # Handoff saved to project <docs-root>/handoffs/
-/handoff --global            # Handoff saved to ~/.agents/handoffs/ (cross-project)
+/handoff --global            # Handoff saved to ~/.config/sh-agent/handoffs/ (cross-project)
 /handoff fix the auth bug    # Tailor the handoff toward the next session's focus
 ```
 
@@ -29,7 +29,7 @@ Read the conversation transcript and identify:
 2. **What got done** — Completed changes, files modified, commands run
 3. **What's still open** — Unfinished work, known issues, blocked items
 4. **Key decisions** — Architecture choices, trade-offs made, rejected alternatives
-5. **Corrections** — Only what the user actually corrected, each backed by a `~/.agents/feedback/log.jsonl` entry (quote the user's words and the entry's timestamp). Anything the agent inferred is not a correction: it goes under `## Agent notes (unverified)`, never into Corrections — the Resume Protocol gives the newest handoff the win on conflict, so an inferred rule here silently outranks the global context
+5. **Corrections** — Only what the user actually corrected, each backed by a `~/.config/sh-agent/feedback.jsonl` entry (quote the user's words and the entry's timestamp). Anything the agent inferred is not a correction: it goes under `## Agent notes (unverified)`, never into Corrections — the Resume Protocol gives the newest handoff the win on conflict, so an inferred rule here silently outranks the global context
 6. **Environment state** — Running processes, branches checked out, pending commits, dirty working tree
 
 ## Step 2: Identify Relevant Artifacts
@@ -45,7 +45,7 @@ Do NOT duplicate content that already exists elsewhere. Instead, reference these
 | Testing guides | `.agents/docs/testing/<app>/` |
 | Deferred work | `TODO.md` |
 | Requirements | `REQUIREMENTS.md` |
-| Retro proposals | `~/.agents/proposals/` |
+| Retro proposals | `~/.config/sh-agent/proposals/` |
 | Commits | Reference by short SHA |
 | PRs / Issues | Reference by `#number` or URL |
 
@@ -168,8 +168,8 @@ Reading side: the Resume Protocol in the global context tells every fresh sessio
 For cross-project handoffs or when the work spans multiple repos:
 
 ```bash
-mkdir -p ~/.agents/handoffs
-# Save as: ~/.agents/handoffs/YYYY-MM-DD-<topic>.md
+mkdir -p ~/.config/sh-agent/handoffs
+# Save as: ~/.config/sh-agent/handoffs/YYYY-MM-DD-<topic>.md
 ```
 
 ## Step 7: Report to User
@@ -184,5 +184,5 @@ After saving, tell the user:
 
 - The `/retro` workflow captures corrections and proposes harness improvements
 - The `/distill` workflow captures repeated patterns as reusable skills
-- The `feedback` skill passively logs corrections to `~/.agents/feedback/log.jsonl`
+- The `feedback` skill passively logs corrections to `~/.config/sh-agent/feedback.jsonl`
 - The `changelog` subagent writes `.agents/docs/changes/` entries — reference these, don't duplicate them

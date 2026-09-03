@@ -59,11 +59,12 @@ That yields:
 ```
 .agents/
 ├── rules/  skills/  agents/  workflows/  commands/   # project-level customizations
+├── scratch/        # gitignored: every generated or temporary file the agent produces
 └── docs/
-    ├── changes/  architecture/DECISIONS.md  specs/  testing/  plans/  handoffs/  reviews/
+    ├── changes/  architecture/DECISIONS.md  specs/  testing/  plans/  bugs/INDEX.md  handoffs/  reviews/
 ```
 
-Antigravity reads `.agents/` natively (rules, skills, agents). `workflows/` is kept for older Antigravity versions; new slash commands are skills.
+Antigravity reads `.agents/` natively (rules, skills, agents). `workflows/` is kept for older Antigravity versions; new slash commands are skills. `docs/bugs/INDEX.md` starts empty and is the project's memory of what went wrong; `scratch/` is where every generated or temporary file goes.
 
 ## Step 5: Claude Code discovery — symlinks
 
@@ -86,6 +87,8 @@ ls -la .claude
 ```
 .DS_Store
 .claude/agent-memory/
+.agents/scratch/*
+!.agents/scratch/.gitkeep
 ```
 
 ## Step 7: Summary, commit, push

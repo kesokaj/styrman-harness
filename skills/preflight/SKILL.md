@@ -1,7 +1,7 @@
 ---
 name: preflight
 description: Release gate and release path. Run whenever the user asks to ship, release, deploy, tag, or cut a new version ("ship it", "deploy v1.4", "new version", "release this"). Brings uncommitted work through the Definition of Done, dispatches the reviewer and security agents over the release diff, writes a SHIP / NO-SHIP report, and on SHIP commits, tags, pushes, and deploys. Do NOT use for ordinary commits or for reviewing a diff (use the reviewer agent or the vendor's built-in review command).
-argument-hint: [version or base ref]
+argument-hint: "[version or base ref]"
 ---
 
 # Preflight — Release Gate
@@ -62,7 +62,7 @@ Check by inspection and record each as pass or finding:
 
 ## Step 4: Docs freshness
 
-Confirm `README.md` and `<docs-root>/specs/` reflect the release diff (interfaces, behavior, deployment). If they do not, dispatch the `documentation` agent and record the gap as a finding.
+Confirm `README.md`, `<docs-root>/specs/`, and `<docs-root>/deploy/` reflect the release diff (interfaces, behavior, deployment). If they do not, dispatch the `documentation` agent and record the gap as a finding.
 
 ## Step 5: Write the merged gate report
 
@@ -84,7 +84,7 @@ Never restate a failure as success. Any blocking finding from Steps 2–4 means 
   2. Bump the version **only where the repo already tracks one** (do not introduce version tracking).
   3. Commit the gate artifacts (gate report, verification logs, reviews), the changelog entry, and the version bump together as a single release commit — re-running the Step 1 secret scan on the staged diff first, never pushing on a hit — and tag **that** commit.
   4. Push the branch and the tag — a plain push, never `--force`. If the project's `AGENTS.md` asks for a confirmation before deploy, ask once here; otherwise the user's ship request is the approval.
-  5. Deploy via the project's documented deploy path (`cloud-run-deploy`, or the procedure in `AGENTS.md` / `<docs-root>/specs/`): build for `linux/amd64`, push to Artifact Registry, deploy, then verify the live revision (health check, logs) and report the revision and URL. If no deploy path — or no rollback procedure for it — is documented, stop after the push and say exactly what is missing.
+  5. Deploy via the project's deploy guide — `<docs-root>/deploy/gcp.md` (its recorded defaults plus the `cloud-run-deploy` skill), `remote.md` for a box reached over SSH, or `local.md` when the project is local-only: build for `linux/amd64`, push to Artifact Registry, deploy, then verify the live revision (health check, logs) and report the revision and URL. If no deploy path — or no rollback procedure for it — is documented, stop after the push and say exactly what is missing.
   6. If deploy verification fails, roll back per the deploy path's documented rollback procedure (`cloud-run-deploy` has one); if the path documents none, report the failed deploy and the last good revision and stop — never improvise a rollback, and never report it as a shipped release.
 
   The tagged commit is the gated tree plus its records — nothing else rides along.

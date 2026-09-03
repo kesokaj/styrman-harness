@@ -64,6 +64,53 @@ func TestParseFrontmatter(t *testing.T) {
 	}
 }
 
+func TestLintRejectsUnquotedComment(t *testing.T) {
+	// A plain scalar with " #" is a YAML comment start: strict parsers
+	// truncate it or, inside a flow sequence, fail the whole file. The
+	// Antigravity CLI dropped the `bug` and `feature` skills that way.
+	bad := []string{
+		"name: x\nargument-hint: [feature description or #issue]\n",
+		"name: x\ndescription: fixes #1 and #2\n",
+		"name: x\ndescription: #comment only\n",
+		"name: x\ndescription: first line\n  wraps with #issue\n",
+		"name: x\ndescription: value\t#tab-comment\n",
+		"name: x\ndescription: \"quoted\" # trailing\n",
+	}
+	for _, front := range bad {
+		if err := Lint(front); err == nil {
+			t.Errorf("Lint accepted %q", front)
+		} else if !strings.Contains(err.Error(), "#") {
+			t.Errorf("error should name the marker: %v", err)
+		}
+	}
+	good := []string{
+		"name: x\nargument-hint: \"[feature description or #issue]\"\n",
+		"name: x\nargument-hint: '[#issue]'\n",
+		"name: x\ndescription: |\n  a #b\n  c #d\nmetadata:\n  tag: \"#1\"\n",
+		"name: x\ntools: [Read, Grep]\ncolor: \"#ff0000\"\n",
+	}
+	for _, front := range good {
+		if err := Lint(front); err != nil {
+			t.Errorf("Lint rejected %q: %v", front, err)
+		}
+	}
+}
+
+func TestLoadSkillsRejectsUnquotedComment(t *testing.T) {
+	repo := newRepo(t)
+	p := filepath.Join(repo, "skills", "gamma", "SKILL.md")
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte("---\nname: gamma\ndescription: Gamma\nargument-hint: [topic or #issue]\n---\nbody\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := LoadSkills(repo)
+	if err == nil || !strings.Contains(err.Error(), "gamma") || !strings.Contains(err.Error(), "argument-hint") {
+		t.Fatalf("LoadSkills should name the skill and the key, got %v", err)
+	}
+}
+
 func TestSplitRejectsMissingFrontmatter(t *testing.T) {
 	if _, _, err := Split("# no frontmatter\n"); err == nil {
 		t.Fatal("expected an error")

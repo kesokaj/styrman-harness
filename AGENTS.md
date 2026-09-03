@@ -23,7 +23,7 @@ agents/*.md            subagents in Claude Code format; Antigravity's agent.md i
 skills/<name>/         skills; .agents/skills is a symlink here so `npx skills add` lands in skills/
 commands/, rules/      markdown prompts invoked as /name, and extra rules; both deploy to both vendors verbatim
 cmd/sh-agent, internal/harness   the binary and its tests
-.agents/docs/          this repo's own trail (plans, changes, ADRs, reviews, testing, bugs/INDEX.md)
+.agents/docs/          this repo's own trail (plans, changes, ADRs, reviews, testing, deploy/{local,remote,gcp}.md, bugs/INDEX.md)
 .agents/scratch/       gitignored scratch space; every generated or temporary file goes here, never /tmp
 ```
 

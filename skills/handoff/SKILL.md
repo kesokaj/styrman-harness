@@ -43,6 +43,7 @@ Do NOT duplicate content that already exists elsewhere. Instead, reference these
 | Specs | `.agents/docs/specs/<app>/` |
 | Implementation plans | `.agents/docs/plans/` |
 | Testing guides | `.agents/docs/testing/<app>/` |
+| Deploy guides | `.agents/docs/deploy/{local,remote,gcp}.md` |
 | Deferred work | `TODO.md` |
 | Requirements | `REQUIREMENTS.md` |
 | Retro proposals | `~/.config/sh-agent/proposals/` |

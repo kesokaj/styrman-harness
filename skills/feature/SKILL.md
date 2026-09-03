@@ -1,7 +1,7 @@
 ---
 name: feature
 description: "Workflow for feature work: any new behavior, new surface, or change that raises a design question. Use automatically whenever the user asks to build, add, implement, extend, or design something that is more than a one-sitting task, and whenever an implementation needs interfaces or a schema decided first; also invoked as /feature. Scope confirmation, plan file with phases and task checkboxes, cold-reader check of the plan before any code, one phase per checkpoint, e2e before done. Do NOT use for trivial edits, one-sitting tasks with no design question, or bug fixes (use the bug skill)."
-argument-hint: [feature description or #issue]
+argument-hint: "[feature description or #issue]"
 ---
 
 # Feature workflow

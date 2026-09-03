@@ -29,7 +29,7 @@ done
 echo "$ASSETS"
 ```
 
-If none exists, say so and stop — do not improvise the templates from memory.
+If none exists, say so and stop — do not improvise the templates from memory. The templates live outside the project, so reading them may take one permission approval; a headless run passes the skill directory explicitly (`--add-dir` on Claude Code, a `read_file` allow-rule on Antigravity).
 
 ## Step 3: Root files
 
@@ -41,7 +41,7 @@ for f in AGENTS.md REQUIREMENTS.md TODO.md ROADMAP.md CLAUDE.md; do
 done
 ```
 
-- `AGENTS.md` — ask the user for a one-paragraph project overview, the build/run/test commands, and the deploy target (Cloud Run service name and region) and fill the sections. Only list standards that **differ** from the global context; delete the section if nothing differs.
+- `AGENTS.md` — ask the user for a one-paragraph project overview, the build/run/test commands, and the deploy target (none, a remote box, or GCP) and fill the sections; `## Deploy` names the targets that exist and points at `.agents/docs/deploy/`. Only list standards that **differ** from the global context; delete the section if nothing differs.
 - `CLAUDE.md` — stays the single line `@AGENTS.md`, so Claude Code reads the agents.md file.
 - `REQUIREMENTS.md` — leave the tables for the user; note that agents never edit it.
 - `ROADMAP.md` — set `Last reviewed:` from `date +%F`, never memory.
@@ -61,10 +61,10 @@ That yields:
 ├── rules/  skills/  agents/  workflows/  commands/   # project-level customizations
 ├── scratch/        # gitignored: every generated or temporary file the agent produces
 └── docs/
-    ├── changes/  architecture/DECISIONS.md  specs/  testing/  plans/  bugs/INDEX.md  handoffs/  reviews/
+    ├── changes/  architecture/DECISIONS.md  specs/  testing/  deploy/{local,remote,gcp}.md  plans/  bugs/INDEX.md  handoffs/  reviews/
 ```
 
-Antigravity reads `.agents/` natively (rules, skills, agents). `workflows/` is kept for older Antigravity versions; new slash commands are skills. `docs/bugs/INDEX.md` starts empty and is the project's memory of what went wrong; `scratch/` is where every generated or temporary file goes.
+Antigravity reads `.agents/` natively (rules, skills, agents). `workflows/` is kept for older Antigravity versions; new slash commands are skills. `docs/bugs/INDEX.md` starts empty and is the project's memory of what went wrong; `scratch/` is where every generated or temporary file goes. `docs/deploy/` holds the three deploy guides: fill `local.md` now from the build/run/test answers and set its `date:` from `date +%F`; `remote.md` and `gcp.md` keep their *Not applicable yet* line until the user names a target — the GCP guide is where the defaults the global context asks for get recorded, never invented.
 
 ## Step 5: Claude Code discovery — symlinks
 
@@ -79,6 +79,8 @@ ln -sfn ../.agents/rules    .claude/rules
 ls -la .claude
 ```
 
+Claude Code guards writes under `.claude/` and may refuse the `mkdir` and `ln` calls in a headless or restricted session. If it does, report the four lines for the user to run instead of skipping the step silently; without the symlinks Claude Code sees no project-level skills, agents, commands, or rules.
+
 ## Step 6: README and .gitignore
 
 - If no `README.md` exists, create a short one from the project overview: name, quick start (the real commands), architecture in three lines, deploy path.
@@ -87,6 +89,7 @@ ls -la .claude
 ```
 .DS_Store
 .claude/agent-memory/
+.claude/worktrees/
 .agents/scratch/*
 !.agents/scratch/.gitkeep
 ```

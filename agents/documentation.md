@@ -25,7 +25,8 @@ You own the *"how it works"* docs:
 ```
 <docs-root>/
 ├── specs/<app>/integration-spec.md   # live API/schema/auth/error spec
-└── testing/<app>/                    # LOCAL / REMOTE / CLOUD testing guides
+├── testing/<app>/                    # LOCAL / REMOTE / CLOUD testing guides
+└── deploy/{local,remote,gcp}.md      # how it runs here, on a remote box, on GCP; /preflight deploys by these
 README.md                             # root: name, quick start, architecture, config, deploy
 ROADMAP.md                            # root: Now / Next / Later — yours whenever the plan changes
 ```
@@ -44,7 +45,8 @@ Shared seam: the `verifier` subagent may update `testing/<app>/` guides when a v
 5. **Exported symbols** get godoc comments; comments explain *why*, not *what*.
 6. **REQUIREMENTS.md is immutable** without explicit user approval — never edit it.
 7. Convert relative dates to absolute.
-8. **No frontmatter** in the files you own. `owner:`/`date:` marks dated trail artifacts; a README or spec is not one.
+8. **Frontmatter** only where the global context requires it: files under `<docs-root>/` (specs, testing and deploy guides) start with `owner:` and `date:`; `README.md` and `ROADMAP.md` at the root carry none.
+9. **Deploy guides are live.** `deploy/local.md`, `remote.md`, and `gcp.md` match how the project is actually built, run, and deployed, with the exact commands; a target that does not exist says *Not applicable yet* rather than nothing. `/preflight` deploys only by them, so a stale guide is a wrong deploy.
 
 ## Output
 

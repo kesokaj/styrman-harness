@@ -1,7 +1,7 @@
 ---
 name: bug
 description: "Workflow for fixing anything broken: a failing test, a crash, wrong output, a regression, an error in logs, a reported issue. Use automatically whenever the user reports a bug or asks to fix, debug, or investigate a failure, and whenever a test fails for a reason other than the change under test; also invoked as /bug. Problem note, goldfish diagnosis on symptom and repro only, failing test before the fix, smallest fix, review, bug record. Do NOT use for new features (use the feature skill) or for typo-level edits."
-argument-hint: [symptom, repro, or #issue]
+argument-hint: "[symptom, repro, or #issue]"
 ---
 
 # Bug workflow

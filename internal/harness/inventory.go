@@ -89,6 +89,9 @@ func LoadSkills(repo string) ([]Skill, error) {
 		if err != nil {
 			return nil, fmt.Errorf("skill %s: %w", e.Name(), err)
 		}
+		if err := Lint(front); err != nil {
+			return nil, fmt.Errorf("skill %s: %w", e.Name(), err)
+		}
 		fm := Parse(front)
 		name := fm["name"]
 		if name == "" {
@@ -122,6 +125,9 @@ func LoadAgents(repo string) ([]Agent, error) {
 		}
 		front, body, err := Split(string(raw))
 		if err != nil {
+			return nil, fmt.Errorf("agent %s: %w", filepath.Base(p), err)
+		}
+		if err := Lint(front); err != nil {
 			return nil, fmt.Errorf("agent %s: %w", filepath.Base(p), err)
 		}
 		fm := Parse(front)
@@ -161,6 +167,9 @@ func LoadDocs(repo string, dirs ...string) ([]Doc, error) {
 			desc := ""
 			text := string(raw)
 			if front, body, err := Split(text); err == nil {
+				if err := Lint(front); err != nil {
+					return nil, fmt.Errorf("%s: %w", p, err)
+				}
 				desc = Parse(front)["description"]
 				text = body
 			}

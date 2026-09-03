@@ -18,8 +18,11 @@ Registry only when explicitly requested.
 
 ## Pre-flight
 
-1. **Project:** `gcloud config get project`. If unset, check `.env` for a project ID
-   and confirm with the user. Never guess a project.
+1. **Defaults:** read the project's `docs/deploy/gcp.md` (`.agents/docs/` or `docs/`):
+   project ID, region, Artifact Registry repo, service name, visibility. If it is
+   missing or empty, ask the user for all five and write them there before anything
+   else. Never guess a project; `gcloud config get project` and `.env` are
+   cross-checks, not sources.
 2. **Auth:** if any gcloud/docker-push command fails with a credential error, stop and
    apply the `gcloud-auth-verification` skill.
 3. **Colima:** `colima status || colima start`.

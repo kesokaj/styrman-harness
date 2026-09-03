@@ -2,7 +2,7 @@
 name: distill
 description: Detect repeated patterns or domain knowledge in the session and distill them into a reusable skill. Use when the user runs /distill. Do NOT use for ordinary refactoring, documentation updates, or code reviews.
 disable-model-invocation: true
-argument-hint: [--from-log]
+argument-hint: "[--from-log]"
 ---
 
 # Distill Skill from Session

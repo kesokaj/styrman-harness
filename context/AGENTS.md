@@ -14,7 +14,7 @@ Checkpoints are what resume reads, written at fixed moments: after every plan ph
 
 1. **Tests and verification:** `verifier` runs the project's commands and every tier the plan names and writes the log in `testing/`. Changed code without a covering test is a FAIL, reported, never hidden.
 2. **Review:** `reviewer` for 50+ lines or 5+ files, given the diff only, never the intent; below that read the diff yourself and say so in the changelog. `security` whenever auth, crypto, secrets, IAM, input parsing, or dependencies are touched. Findings are fixed or rebutted in writing; three rounds without convergence means stop and ask the user.
-3. **Docs:** `documentation` when behavior, interfaces, or the plan changed.
+3. **Docs:** `documentation` when behavior, interfaces, the plan, or a deploy path changed. `docs/deploy/{local,remote,gcp}.md` are the deploy guides: how the project runs here, on a remote box, and on GCP; `/preflight` deploys only by them.
 4. **Records:** `changelog` writes the entry and names the agents dispatched; `bugs` records anything that went wrong; tick the plan.
 5. **Commit and push.**
 
@@ -59,7 +59,7 @@ Backup and versioning only: no CI, no hooks, ever. Commit and push to the curren
 .agents/
 ├── rules/ skills/ agents/ workflows/ commands/     # project-level customizations
 ├── scratch/                                        # gitignored temporary and generated files
-└── docs/ changes/ architecture/DECISIONS.md specs/<app>/ testing/ plans/ bugs/INDEX.md handoffs/ reviews/
+└── docs/ changes/ architecture/DECISIONS.md specs/<app>/ testing/ deploy/{local,remote,gcp}.md plans/ bugs/INDEX.md handoffs/ reviews/
 ```
 
 Root: `AGENTS.md` (`CLAUDE.md` is the line `@AGENTS.md`; no `GEMINI.md`), `REQUIREMENTS.md`, `TODO.md`, `ROADMAP.md` ("Now" points at the active plan), `README.md`. Every `docs/` artifact starts with frontmatter `owner:` and `date:`; `changes/` and `DECISIONS.md` are append-only; comments say why, not what.

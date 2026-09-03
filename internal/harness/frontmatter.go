@@ -5,6 +5,7 @@ package harness
 
 import (
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 )
@@ -32,20 +33,23 @@ func Split(text string) (front, body string, err error) {
 	return "", "", errors.New("unterminated YAML frontmatter block")
 }
 
-// Parse reads the top-level keys of a frontmatter block.
-func Parse(front string) Frontmatter {
-	fm := Frontmatter{}
+// entry is one top-level key of a frontmatter block: the value on the key
+// line and the indented lines that continue it (a block scalar, a nested
+// map, a block list, or a plain scalar that wraps).
+type entry struct {
+	key, val string
+	cont     []string
+}
+
+func entries(front string) []entry {
+	var out []entry
 	lines := strings.Split(front, "\n")
 	for i := 0; i < len(lines); i++ {
 		m := keyLine.FindStringSubmatch(strings.TrimRight(lines[i], "\r"))
 		if m == nil {
 			continue
 		}
-		key, val := m[1], strings.TrimSpace(m[2])
-
-		// Indented or blank lines after a key belong to it: a block scalar,
-		// a nested map, or a plain scalar that wraps.
-		var cont []string
+		e := entry{key: m[1], val: strings.TrimSpace(m[2])}
 		j := i + 1
 		for ; j < len(lines); j++ {
 			l := strings.TrimRight(lines[j], "\r")
@@ -53,10 +57,20 @@ func Parse(front string) Frontmatter {
 				break
 			}
 			if t := strings.TrimSpace(l); t != "" {
-				cont = append(cont, t)
+				e.cont = append(e.cont, t)
 			}
 		}
+		out = append(out, e)
+		i = j - 1
+	}
+	return out
+}
 
+// Parse reads the top-level keys of a frontmatter block.
+func Parse(front string) Frontmatter {
+	fm := Frontmatter{}
+	for _, e := range entries(front) {
+		key, val, cont := e.key, e.val, e.cont
 		switch {
 		case isBlockIndicator(val):
 			fm[key] = strings.Join(cont, " ")
@@ -75,9 +89,37 @@ func Parse(front string) Frontmatter {
 		default:
 			fm[key] = unquote(val)
 		}
-		i = j - 1
 	}
 	return fm
+}
+
+// Lint rejects what this lenient parser would read differently from a
+// strict YAML parser: a plain (unquoted, non-block) scalar starting with "#"
+// or containing "#" after a space or tab. YAML reads that as a comment, so a strict parser
+// truncates the value or, inside a flow sequence, fails the whole file —
+// which is how the Antigravity CLI silently dropped two skills. Quoting the
+// value fixes it for every reader.
+func Lint(front string) error {
+	for _, e := range entries(front) {
+		val := e.val
+		if isBlockIndicator(val) || isQuoted(val) {
+			continue
+		}
+		if val == "" && len(e.cont) > 0 && strings.Contains(e.cont[0], ": ") {
+			continue // nested map; its own keys are the vendor's business
+		}
+		lines := append([]string{val}, e.cont...)
+		for _, l := range lines {
+			if strings.HasPrefix(l, "#") || strings.Contains(l, " #") || strings.Contains(l, "\t#") {
+				return fmt.Errorf("frontmatter key %q: unquoted value contains \"#\", which YAML reads as a comment; quote the value", e.key)
+			}
+		}
+	}
+	return nil
+}
+
+func isQuoted(v string) bool {
+	return len(v) >= 2 && ((v[0] == '"' && v[len(v)-1] == '"') || (v[0] == '\'' && v[len(v)-1] == '\''))
 }
 
 func isBlockIndicator(v string) bool {

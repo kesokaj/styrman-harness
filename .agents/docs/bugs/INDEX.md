@@ -6,3 +6,6 @@
 |---|---|---|---|---|---|
 | BUG-001 | 2026-09-03 | installer/status | fixed | `status` reported the installed binary as stale right after `install` | status and diff plan without the binary; exclude `BinPath` from stale checks and test it |
 | BUG-002 | 2026-09-03 | cli/flags | fixed | `sh-agent adopt <path> --home DIR` failed with a usage error | Go's flag package stops at the first positional; reorder flags ahead of positionals before parsing |
+| BUG-003 | 2026-09-03 | context | fixed | `dev-setup.md` still sent scratch to `/tmp` after the hard rule moved it to `.agents/scratch/`; Claude flagged the contradiction | when a rule moves, grep every context file for the old wording before deploying |
+| BUG-004 | 2026-09-03 | skills/frontmatter | fixed | Antigravity dropped `bug` and `feature`: unquoted `argument-hint: [… #issue]` failed its YAML parser; Claude Code was lenient | installer lints frontmatter for unquoted `#`; after a frontmatter change run each CLI once in the sandbox and grep its log |
+| BUG-005 | 2026-09-03 | agents/verifier | fixed | `isolation: worktree` put the verifier in a fresh worktree at HEAD, blind to the uncommitted change it was asked to verify | a Claude-only agent key is not free; after any agent frontmatter change, dispatch it once in the sandbox on uncommitted work |

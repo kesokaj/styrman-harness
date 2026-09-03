@@ -2,7 +2,7 @@
 name: audit
 description: Perform a comprehensive audit of a directory or the entire project. Use when the user runs /audit. Do NOT use for routine code review (use the reviewer agent or the vendor's built-in review command) or for running tests alone (use the verifier agent).
 disable-model-invocation: true
-argument-hint: [directory]
+argument-hint: "[directory]"
 ---
 
 # Audit Workflow

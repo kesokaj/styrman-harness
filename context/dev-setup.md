@@ -1,7 +1,7 @@
 ## Environment & Stack
 
-- **Local by default.** Build, run, and test on the machine in front of you. Nothing goes to a cloud unless the user says so.
-- **GCP is the only cloud.** When the user says to use GCP, deploy, or push an image, **ask for the defaults before doing anything**: project ID, region, Artifact Registry repository, service name, and whether the service is public. Never assume or invent them, and never fall back to a value from another project. Once given, write them into the project's `AGENTS.md` so the next session does not ask again. Never suggest another cloud provider.
+- **Local by default.** Build, run, and test on the machine in front of you, the way the project's `docs/deploy/local.md` says. Nothing goes to a cloud unless the user says so.
+- **GCP is the only cloud.** When the user says to use GCP, deploy, or push an image, **ask for the defaults before doing anything**: project ID, region, Artifact Registry repository, service name, and whether the service is public. Never assume or invent them, and never fall back to a value from another project. Once given, record them in the project's `docs/deploy/gcp.md` (its `AGENTS.md` Deploy section points there) so the next session does not ask again. Never suggest another cloud provider.
 - **Backend: Go** (`golang` skill). Layout `cmd/<app>/` + `internal/`; `log/slog` JSON logging; stdlib first, every dependency justified.
 - **Frontend: TanStack Start + TypeScript + Tailwind**, fully contained in one `web/` or `ui/` directory inside the Go project (`frontend`, `typescript` skills). Shipped JS runs on plain V8 — no Node-only APIs outside the server entry.
 - **Machines:** development happens on macOS (Apple Silicon) with Docker via **Colima**; Linux boxes use plain Docker. Remote boxes or VMs only on explicit request — ask for access details, never assume them.
@@ -10,4 +10,3 @@
 - **Images live in GCP Artifact Registry:** `${REGION}-docker.pkg.dev/${PROJECT}/${REPO}/${SERVICE}:${GIT_SHA}`, tagged with the git short SHA (`latest` only as a convenience alias). GitHub Container Registry only on explicit request.
 - **Compute:** Cloud Run first (`cloud-run-deploy` skill); GKE (`gke-basics`) or Compute Engine when Cloud Run does not fit. Infrastructure as code with Terraform (`terraform` skill) when it is more than one service.
 - **Auth:** `gcloud auth login` and `gcloud auth application-default login`; `gcloud auth configure-docker ${REGION}-docker.pkg.dev` once per machine and region (`gcloud-setup`, `gcloud-auth-verification` skills). Secrets reach Cloud Run through Secret Manager (`--set-secrets`), never `--set-env-vars`.
-- **Scratch:** disposable work goes under the CLI's own scratchpad (`/tmp/claude-<uid>/`, `/tmp/agy-<uid>/`) or `$TMPDIR`, never in the repo.

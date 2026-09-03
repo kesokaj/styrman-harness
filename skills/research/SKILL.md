@@ -2,7 +2,7 @@
 name: research
 description: Research a topic, compare alternatives, and optionally build a full spec with implementation plan. Use when the user runs /research. Do NOT use for quick single-file code lookups or simple grep searches.
 disable-model-invocation: true
-argument-hint: [topic]
+argument-hint: "[topic]"
 ---
 
 # Research & Spec Workflow

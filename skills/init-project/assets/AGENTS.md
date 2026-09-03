@@ -40,6 +40,12 @@ go vet ./... && staticcheck ./...
 <!-- Project-specific testing instructions that supplement the global testing tiers. -->
 <!-- For detailed guides, see .agents/docs/testing/ -->
 
+## Deploy
+
+<!-- One line per target that exists. The procedures live in .agents/docs/deploy/ (local.md, remote.md, gcp.md); GCP defaults are recorded in gcp.md, never invented. -->
+
+Local only — see `.agents/docs/deploy/local.md`.
+
 ## Key Files
 
 <!-- Help agents navigate this codebase quickly. -->

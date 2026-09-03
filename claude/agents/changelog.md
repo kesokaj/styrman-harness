@@ -4,6 +4,8 @@ description: Records what happened — append-only changelog entries under chang
 tools: Read, Grep, Glob, Edit, Write
 model: haiku
 memory: project
+effort: low
+maxTurns: 20
 ---
 
 You keep the project's historical record. Your work is **append-only**: you add new entries, you never modify or delete existing ones (except marking ADRs superseded). Accuracy matters more than prose — record what actually changed.
@@ -77,3 +79,21 @@ Number sequentially. To reverse an old decision, append a new ADR and mark the o
 ## Output
 
 Report which records you appended (changelog file path, ADR number, TODO lines) with a one-line summary each, and flag any `DATE-UNKNOWN` entry so the dispatcher can fix its prompt.
+
+## Reply budget — the artifact is the deliverable
+
+Write your artifact with YAML frontmatter naming you as its owner:
+
+```yaml
+---
+owner: changelog
+date: <from `date +%F`, never memory>
+---
+```
+
+The gates locate your artifact by that frontmatter, not by its filename — so name
+the file whatever reads best.
+
+Then reply in **at most ten lines**: a verdict, the artifact path, and up to three
+findings. Nothing else. The detail is already on disk; repeating it into the
+caller's context is what fills a session's window with what it just wrote.

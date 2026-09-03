@@ -1,28 +1,30 @@
 # Global Agent Constitution
 
-> Follows the [agents.md](https://agents.md) standard; skills follow the SKILL.md standard. Deployed verbatim as `~/.claude/CLAUDE.md` and `~/.gemini/GEMINI.md`; project `AGENTS.md` overrides it. Determinism lives in the `.agents/` artifact contract and its shell gates (`trail-check`, `resume-context`) — never in model memory.
+> Follows the [agents.md](https://agents.md) standard; skills follow the SKILL.md standard. Deployed verbatim as `~/.claude/CLAUDE.md` and `~/.gemini/GEMINI.md`; project `AGENTS.md` overrides it. Determinism lives in the `.agents/` artifact contract and the `harness` binary that gates it (`harness dispatch`, `harness doctor`, `harness hook …`) — never in model memory.
 
 Operator: fullstack/infra engineer — Go + TypeScript, macOS (Apple Silicon) or Linux, deploying to GCP.
 
 ## Resume Protocol — first action in any existing project
 
-Read, in order (`resume-context` prints this order): `AGENTS.md` → `REQUIREMENTS.md` → `ROADMAP.md` → `TODO.md` (open items) → newest `.agents/docs/handoffs/` → `.agents/docs/architecture/DECISIONS.md` (the `resume-context` index line gives the count and the three newest titles; `grep '^## ADR'` for older ones — never read the whole file) → the three newest `.agents/docs/changes/` entries (`resume-context` names them; open a body only when its index line does not answer). Then state current status and next step before any edit. On conflict, the newest handoff wins. Name any missing or empty file before proceeding; if the trail cannot answer where work left off, say so and ask — or offer `/init-project`. Never guess intent.
+Read, in order (`harness resume` prints this order): `AGENTS.md` → `REQUIREMENTS.md` → `ROADMAP.md` → `TODO.md` (open items) → newest `.agents/docs/handoffs/` → `.agents/docs/architecture/DECISIONS.md` (the `harness resume` index line gives the count and the three newest titles; `grep '^## ADR'` for older ones — never read the whole file) → the three newest `.agents/docs/changes/` entries (`harness resume` names them; open a body only when its index line does not answer). Then state current status and next step before any edit. On conflict, the newest handoff wins. Name any missing or empty file before proceeding; if the trail cannot answer where work left off, say so and ask — or offer `/init-project`. Never guess intent.
 
 ## Definition of Done — dispatch is the only compliant path
 
-A task is DONE only when every triggered row below has run and its artifact exists on disk. Rows come due at latest when a session ends with source changed — never claiming "done" does not waive them (the shell gates flag it). Producing another owner's artifact inline is a violation even when the content is correct — the one exception is saving a `/code-review` run's findings under the reviewer row below (prepend the `Source:` and `Scope:` lines, change nothing else). Never self-review, self-verify, or self-audit. Nothing of record lives only in chat. Rows fire at commit boundaries: batch a session's related edits into one commit and run each owed row once over that commit's whole diff — never per edit or per task; a report whose `Scope:` line already covers a commit is not re-run. Committing is the agent's job (Release Ownership), so a session should not end with uncommitted source; the gate treats one that does as owing the rows then. The shell gate is a coarse, day-grained backstop for these rows, not their definition.
+A task is DONE only when every **due** row below has run and its artifact exists on disk. `harness dispatch` computes what is due from the diff and runs it — that computation is the contract, not a judgement call. Never self-review, self-verify, or self-audit; producing another owner's artifact inline is a violation even when the content is correct. Nothing of record lives only in chat. Rows fire at commit boundaries: batch a session's related edits into one commit and run each due row once over that commit's whole diff — never per edit or per task. Committing is the agent's job (Release Ownership), so a session should not end with uncommitted source.
 
-| Artifact (under `.agents/docs/`) | Owner | Fires when |
-|---|---|---|
-| review report in `reviews/` — from `reviewer`, or a `/code-review` run saved to `reviews/$(date +%F)-review-<slug>.md` with only two lines prepended — `Source: /code-review <level>` and `Scope: <base>..<head>` — and nothing else changed; the main agent may not summarise, re-rank, or triage it | `reviewer` (or `/code-review`) | once per commit whose diff touches tracked source files |
-| verification log in `testing/` | `verifier` | before any completion claim or commit — local tier first: tests + ARM64/AMD64 image builds per `testing/<app>/` (updated when steps change); changed code without covering tests = FAIL (a `testing/<app>/` guide that declares no test framework substitutes its listed smoke checks) |
-| `changes/$(date +%F)-<slug>.md` | `changelog` | once per commit (one entry may cover a session's related commits) |
-| README / spec / `ROADMAP.md` updates | `documentation` | behavior, interfaces, or plan changed |
-| security findings in `reviews/` | `security` | auth, crypto, secrets, input parsing, or dependencies touched |
-| recon brief in `plans/` (only its summary enters main context) | `explorer` | survey spanning 10+ files |
-| snapshot in `handoffs/` | main agent, via `/handoff` | session ends mid-task — records the remainder; never a substitute for rows already due |
+Rows split by purpose, and the two halves are not owed alike. **Resumability** rows always fire: they are what lets a zero-context agent pick the work up again, and they cost almost nothing. **Accountability** rows fire *in proportion to the change* — they are re-derivable from the diff, and running all of them on a three-line edit spends model time for no benefit. Thresholds live in `.agents/harness.json` (`reviewLines`, `reviewFiles`; defaults 50 lines / 5 files).
 
-`/audit` and review output land in `reviews/` — never chat-only. Owned docs land in the same commit as the code they describe: the owning agent runs before the commit closes. Proportionality: a docs-only or non-functional change of ≤10 lines needs only the changelog row and may be edited inline.
+| Artifact (under `.agents/docs/`) | Owner | Kind | Fires when |
+|---|---|---|---|
+| `changes/` entry | `changelog` | resumability | every commit touching source |
+| verification log in `testing/` | `harness dispatch` runs the project's own commands; the `verifier` agent is spent only to explain a failure | resumability | every commit touching source — changed code without covering tests = FAIL |
+| review report in `reviews/` — from `reviewer`, or a `/code-review` run saved with only `Source:` and `Scope:` lines prepended and nothing else changed | `reviewer` (or `/code-review`) | accountability | diff ≥ `reviewLines` or ≥ `reviewFiles`; below that, read it yourself or run `/code-review` |
+| security findings in `reviews/` | `security` | accountability | a changed path touches auth, crypto, secrets, input parsing, or dependencies |
+| README / spec / `ROADMAP.md` updates | `documentation` | accountability | behavior, interfaces, or plan changed |
+| recon brief in `plans/` (only its summary enters main context) | `explorer` | — | survey spanning 10+ files |
+| snapshot in `handoffs/` | main agent, via `/handoff` | resumability | session ends mid-task — never a substitute for rows already due |
+
+Every artifact carries frontmatter `owner:` and `date:`; that is how the gates find it, so filenames are free. Every dispatched agent answers in **at most ten lines** — verdict, artifact path, up to three findings — because the detail already lives in the artifact and repeating it into the caller's context is how a harness fills its own window with what it just wrote to disk. A docs-only or non-functional change of ≤10 lines needs only the changelog row and may be edited inline.
 
 ## Skill vs Subagent
 
@@ -32,7 +34,7 @@ SKILL = knowledge the main thread loads while doing the work (standards, syntax,
 
 - **GCP only.** Never suggest or use another cloud provider.
 - Compute: Docker (Colima on macOS, plain Docker on Linux), Cloud Run, GKE, Compute Engine. Images are built locally and pushed to GCP Artifact Registry (GHCR only on explicit request). Remote boxes/VMs only on request — ask for access details, never assume them.
-- Scratch: disposable work goes under `/tmp/claude-<uid>/` (Claude Code's own scratchpad root) or `/tmp/agy-<uid>/`, or their `$TMPDIR` equivalents. Destructive commands confined there run without asking — Claude Code enforces this with the `destructive-guard` hook, which trusts a root only while it is a real directory owned by you — and anywhere else they ask first.
+- Scratch: disposable work goes under `/tmp/claude-<uid>/` or `/tmp/agy-<uid>/` (the CLIs' own scratchpad roots), or their `$TMPDIR` equivalents. The agent runs inside an isolated microVM, so local destructive commands are not gated — the isolation already covers them. What *leaves* the VM is gated: `harness hook pretooluse` refuses to stage or commit a credential-shaped path, because a secret pushed to a remote is the one mistake isolation cannot undo.
 - Backend: Go (`golang` skill). Frontend: TanStack Start + TypeScript + Tailwind in one `web/` or `ui/` dir (`frontend`, `typescript` skills); shipped JS runs on plain V8 — no Node-only APIs outside the server entry.
 
 ## Hard Rules
@@ -61,7 +63,8 @@ Append-only: `changes/` and `architecture/DECISIONS.md` (ADRs). Plans in `plans/
 
 ## Commands & Learning Loop
 
-- Global: `/preflight` — the release gate and release path: owed DoD rows for uncommitted work → commit → reviewer + security + verifier → trail freshness (newest `changes/` entry covers `HEAD`) → tag → push → deploy. The agent runs it itself on any ship/deploy/release request; no version ships without it. Plus `/audit` `/research` `/retro` `/distill` `/init-project` `/handoff`.
+- Global: `/preflight` — the release gate and release path: `harness dispatch` for the due rows → commit → trail freshness (newest `changes/` entry covers `HEAD`) → tag → push → deploy. The agent runs it itself on any ship/deploy/release request; no version ships without it. Plus `/audit` `/research` `/retro` `/distill` `/init-project` `/handoff`.
+- Binary: `harness dispatch` runs the due rows (add `--dry-run` to see them first); `harness doctor` reports drift between the harness repo and what is deployed; `harness install` deploys it. Per-dispatch cost lands in `.agents/docs/testing/dispatch-ledger.jsonl` — read it before assuming a row is worth its price.
 - Corrections log to `~/.agents/feedback/log.jsonl`; `/retro` emits review-gated proposals in `~/.agents/proposals/` — nothing auto-applies.
 - Plan mode (or a `grilling` interrogation) before large features — settle scope, edge cases, success criteria first. Trivial tasks: just act.
 
@@ -71,4 +74,4 @@ Lead with what is broken; state severity and confidence; never restate a failure
 
 ## Vendor Note (the one real difference)
 
-Both CLIs honor this file and the same `.agents/` contract. Discovery differs: Antigravity reads `.agents/` directly; Claude Code reads `.claude/` for project skills/commands — mirror or symlink. The shell gates run as hooks on Claude Code and as skill steps on Antigravity; the contract they check is identical.
+Both CLIs honor this file and the same `.agents/` contract. Discovery differs: Antigravity reads `.agents/` directly; Claude Code reads `.claude/` for project skills/commands — mirror it. One `harness` binary serves both: Claude Code calls it from `settings.json` hooks, Antigravity from the harness plugin's `hooks.json`, and the contract they check is identical. Antigravity loads a plugin only after `agy plugin install` — copying the files into place is not enough.

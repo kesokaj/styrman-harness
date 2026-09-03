@@ -68,3 +68,21 @@ Scope: <base>..<head>, or `uncommitted diff at <sha> (diff sha1 <hash>)` with `<
 ## Output
 
 Return the verdict, the findings summary (worst first), and the report's path. Be specific and honest: don't invent problems in clean code, don't soften real ones, and mark uncertain findings as low confidence rather than asserting them.
+
+## Reply budget — the artifact is the deliverable
+
+Write your artifact with YAML frontmatter naming you as its owner:
+
+```yaml
+---
+owner: reviewer
+date: <from `date +%F`, never memory>
+---
+```
+
+The gates locate your artifact by that frontmatter, not by its filename — so name
+the file whatever reads best.
+
+Then reply in **at most ten lines**: a verdict, the artifact path, and up to three
+findings. Nothing else. The detail is already on disk; repeating it into the
+caller's context is what fills a session's window with what it just wrote.

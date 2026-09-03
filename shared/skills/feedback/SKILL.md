@@ -14,7 +14,7 @@ Silently log user corrections and preference signals to the **global** log at `~
 
 This skill is **passive**. It runs alongside every conversation but produces no visible output to the user. The user should not notice this skill is active.
 
-A deterministic capture hook (`feedback-capture.sh`, Claude Code `UserPromptSubmit`) appends raw `source: "auto-hook"` entries to the same log as a safety net. This skill remains the semantic layer: it classifies and enriches. Log normally even if the hook probably caught the same message — `/retro` deduplicates.
+A deterministic capture hook (`harness hook userpromptsubmit`, Claude Code `UserPromptSubmit`) appends raw `source: "auto-hook"` entries to the same log as a safety net. This skill remains the semantic layer: it classifies and enriches. Log normally even if the hook probably caught the same message — `/retro` deduplicates.
 
 ## When to Log
 

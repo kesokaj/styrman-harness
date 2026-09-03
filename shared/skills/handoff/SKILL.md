@@ -13,7 +13,7 @@ argument-hint: "What will the next session focus on?"
 
 Write a structured handoff document summarising the current conversation so a fresh agent can continue the work without re-reading the full chat history.
 
-On Antigravity, first run `~/.agents/bin/resume-context.sh`. Then on either vendor run `~/.agents/bin/trail-check.sh --check` for a trail-freshness report (Claude Code's SessionStart hook already ran resume-context, but not the check).
+On Antigravity, first run `harness resume`. Then on either vendor run `harness check` for a trail-freshness report (Claude Code's SessionStart hook already ran the resume block, but not the check).
 
 ## Usage
 
@@ -163,7 +163,7 @@ mkdir -p "$DOCS_ROOT/handoffs"
 
 Handoffs are dated and **immutable** — never overwrite a previous handoff; a new session gets a new file.
 
-Reading side: on Claude Code, `resume-context.sh` surfaces the newest handoff at session start; on Antigravity, the Resume Protocol in `GEMINI.md` instructs fresh sessions to read it.
+Reading side: on Claude Code, `harness resume` surfaces the newest handoff at session start; on Antigravity, the Resume Protocol in `GEMINI.md` instructs fresh sessions to read it.
 
 ### Global (`--global`)
 

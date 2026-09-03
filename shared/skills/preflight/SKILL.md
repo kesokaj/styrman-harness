@@ -24,7 +24,7 @@ mkdir -p "$DOCS_ROOT/reviews"
 
 All dates come from `date +%F` — never from memory.
 
-On Antigravity, first run `~/.agents/bin/resume-context.sh`. Then on either vendor run `~/.agents/bin/trail-check.sh --check` for a trail-freshness report (Claude Code's SessionStart hook already ran resume-context, but not the check).
+On Antigravity, first run `harness resume`. Then on either vendor run `harness check` for a trail-freshness report (Claude Code's SessionStart hook already ran the resume block, but not the check).
 
 ## Usage
 
@@ -57,7 +57,7 @@ Never self-review, self-verify, or self-audit. Dispatch all three at once and wa
 
 ## Step 3: Trail Freshness
 
-Run `~/.agents/bin/trail-check.sh --check`. Its failing checks: the newest `changes/` entry covers `HEAD`, and no wrong-dated filenames — any of those is a finding in the gate report. It also reports whether `ROADMAP.md`/`TODO.md` have been touched since `HEAD`, but that is **report-only** (`note:` lines) — mention lag in the report; it is not by itself a violation.
+Run `harness check`. Its failing checks: the newest `changes/` entry covers `HEAD`, and no wrong-dated filenames — any of those is a finding in the gate report. It also reports whether `ROADMAP.md`/`TODO.md` have been touched since `HEAD`, but that is **report-only** (`note:` lines) — mention lag in the report; it is not by itself a violation.
 
 ## Step 4: Docs Freshness
 

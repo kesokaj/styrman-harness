@@ -19,7 +19,7 @@ If no directory is specified, audit the entire project.
 
 **Docs root** (`<docs-root>` below): `.agents/docs` if it exists, else `docs/` if it exists, else create `.agents/docs`.
 
-On Antigravity, first run `~/.agents/bin/resume-context.sh`. Then on either vendor run `~/.agents/bin/trail-check.sh --check` for a trail-freshness report (Claude Code's SessionStart hook already ran resume-context, but not the check).
+On Antigravity, first run `harness resume`. Then on either vendor run `harness check` for a trail-freshness report (Claude Code's SessionStart hook already ran the resume block, but not the check).
 
 ## Steps
 

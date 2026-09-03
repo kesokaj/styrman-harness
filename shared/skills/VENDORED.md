@@ -12,6 +12,20 @@ vendored content in place (fork it into a differently-named skill instead).
 | find-skills | github.com/vercel-labs/skills (`skills/find-skills`) | 435076e | MIT | 2026-08-31 | `npx skills add vercel-labs/skills -s find-skills` |
 | anti-ui-slop | uizze.com `.well-known/skills` (agentskills discovery v0.2.0), v1.2.13 | sha256:c3dc1a03…09bc08 (digest verified) | MIT | 2026-08-31 | re-fetch archive from `https://uizze.com/.well-known/skills/index.json` |
 
+## Provenance unconfirmed — needs the operator
+
+These four carry third-party `license` / `author` / `publisher` frontmatter but were
+never recorded above, and none pins a source commit. Until each row is completed they
+are third-party content of unverified origin, which is a licensing gap rather than a
+formatting one. Do not redistribute this repo until they are resolved.
+
+| Skill | Frontmatter claims | Missing |
+|-------|--------------------|---------|
+| gcloud-auth-verification | Google | source, pin, license text, vendored date |
+| gke-basics | Google | source, pin, license text, vendored date |
+| skill-repair | — (third-party frontmatter present) | source, pin, license, vendored date |
+| terraform | Anton Babenko | source, pin, license text, vendored date |
+
 Notes:
 - `grill-me` is a user-invocable launcher (`disable-model-invocation: true`) whose engine is
   the `grilling` skill — they ship as a pair. Its body invokes the Claude-Code-specific
@@ -19,4 +33,5 @@ Notes:
 - `anti-ui-slop` includes its own LICENSE/NOTICE/MANIFEST from the upstream archive; the
   optional paid UIZZE MCP is NOT configured — the free playbooks work standalone.
 - Installing skills with `npx skills add -g` writes directly into agent dirs and will be
-  wiped by the harness deploy (`rsync --delete`). To keep a skill, vendor it here.
+  wiped by the harness deploy — `harness install` mirrors this directory and prunes
+  anything the repo does not have. To keep a skill, vendor it here.

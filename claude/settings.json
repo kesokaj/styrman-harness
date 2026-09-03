@@ -4,9 +4,11 @@
   "verbose": false,
   "fileCheckpointingEnabled": true,
   "cleanupPeriodDays": 90,
+  "promptCacheTtl": "1h",
+  "subagentPromptCacheTtl": "1h",
   "statusLine": {
     "type": "command",
-    "command": "~/.claude/statusline.sh"
+    "command": "$HOME/.agents/bin/harness hook statusline"
   },
   "hooks": {
     "PreToolUse": [
@@ -15,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.agents/bin/destructive-guard.py",
+            "command": "$HOME/.agents/bin/harness hook pretooluse",
             "timeout": 10
           }
         ]
@@ -26,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.agents/bin/resume-context.sh",
+            "command": "$HOME/.agents/bin/harness hook sessionstart",
             "timeout": 10
           }
         ]
@@ -37,8 +39,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/.claude/feedback-capture.sh",
-            "timeout": 5
+            "command": "$HOME/.agents/bin/harness hook userpromptsubmit",
+            "timeout": 10
           }
         ]
       }
@@ -49,7 +51,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/.claude/format-hook.sh",
+            "command": "$HOME/.agents/bin/harness hook posttooluse",
             "timeout": 30,
             "statusMessage": "Formatting…"
           }
@@ -62,7 +64,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.agents/bin/subagent-check.sh start",
+            "command": "$HOME/.agents/bin/harness hook subagentstart",
             "timeout": 5
           }
         ]
@@ -74,7 +76,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.agents/bin/subagent-check.sh stop",
+            "command": "$HOME/.agents/bin/harness hook subagentstop",
             "timeout": 10
           }
         ]
@@ -85,7 +87,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.agents/bin/trail-check.sh",
+            "command": "$HOME/.agents/bin/harness hook stop",
             "timeout": 15
           }
         ]
@@ -120,7 +122,6 @@
       "Edit(~/.claude/CLAUDE.md)",
       "Edit(~/.claude/agents/**)",
       "Edit(~/.claude/skills/**)",
-      "Edit(~/.claude/*.sh)",
       "Edit(~/.gemini/**)"
     ]
   }

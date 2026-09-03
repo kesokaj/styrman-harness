@@ -1,0 +1,25 @@
+## Environment & Stack
+
+- **GCP only.** Never suggest or use another cloud provider.
+- **Backend: Go** (`golang` skill). Layout `cmd/<app>/` + `internal/`; `log/slog` JSON logging; stdlib first, every dependency justified.
+- **Frontend: TanStack Start + TypeScript + Tailwind**, fully contained in one `web/` or `ui/` directory inside the Go project (`frontend`, `typescript` skills). Shipped JS runs on plain V8 — no Node-only APIs outside the server entry.
+- **Machines:** development happens on macOS (Apple Silicon) with Docker via **Colima**; Linux boxes use plain Docker. Remote boxes or VMs only on explicit request — ask for access details, never assume them.
+- **Test locally first.** `colima status || colima start`, then the project's tests and a native (arm64) `docker build` + `docker run` smoke test before anything goes to Google.
+- **Build for Google as amd64, always.** `docker buildx build --platform linux/amd64 --load …`. An arm64 image on Cloud Run fails with `exec format error`. The arm64 build is for local testing only.
+- **Images live in GCP Artifact Registry:** `${REGION}-docker.pkg.dev/${PROJECT}/${REPO}/${SERVICE}:${GIT_SHA}`. GitHub Container Registry only on explicit request.
+- **Compute:** Cloud Run first (`cloud-run-deploy` skill); GKE (`gke-basics`) or Compute Engine when Cloud Run does not fit. Infrastructure as code with Terraform (`terraform` skill) when it is more than one service.
+- **Auth:** `gcloud auth login` and `gcloud auth application-default login`; `gcloud auth configure-docker ${REGION}-docker.pkg.dev` once per machine and region (`gcloud-setup`, `gcloud-auth-verification` skills).
+- **Scratch:** disposable work goes under the CLI's own scratchpad (`/tmp/claude-<uid>/`, `/tmp/agy-<uid>/`) or `$TMPDIR`, never in the repo.
+
+### GCP defaults
+
+Placeholders marked `TODO` are to be confirmed by the operator; until then, ask before relying on them.
+
+| Setting | Default | Notes |
+|---|---|---|
+| Region | `europe-north1` (TODO confirm) | Artifact Registry repo and Cloud Run service live in the same region |
+| Project | `gcloud config get project`, else `.env`, else ask | Never guess a project ID |
+| Artifact Registry repo | `<project>-images` (TODO confirm) | One Docker-format repo per project; create with `gcloud artifacts repositories create` |
+| Image tag | git short SHA; `latest` only as a convenience alias | Rollbacks and audits need immutable tags |
+| Cloud Run flags | `--platform managed --port 8080`; IAM-gated unless told public | `--set-secrets` for credentials, never `--set-env-vars`; `--min-instances > 0` only with approval |
+| Health check | `GET /healthz` on `$PORT`, bound to `0.0.0.0` | A deploy is done only after the curl succeeds and the logs are clean |

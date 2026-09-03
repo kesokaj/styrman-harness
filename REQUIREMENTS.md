@@ -1,0 +1,40 @@
+# Requirements — styrman-harness
+
+> Immutable without the operator's explicit approval. Agents never edit this file.
+
+## R1 — One source, two vendors
+
+`context/AGENTS.md` (plus `context/*.md`) is the single global context, deployed to Claude Code and the Antigravity CLI. Subagents are authored once in Claude Code format under `agents/`; the Antigravity flavour is derived at install time. Nothing generated is committed.
+
+## R2 — Standards, not vendor formats
+
+The context follows the agents.md standard and is named `AGENTS.md` at every level (`~/.claude/CLAUDE.md` and a project's `CLAUDE.md` are one-line imports). Skills follow the Agent Skills `SKILL.md` standard so that anything from skills.sh or any other source drops into `skills/` unchanged.
+
+## R3 — No hooks, no gates, no CI
+
+The harness is context, skills, and subagents. Behaviour comes from what is written in them, not from lifecycle hooks, commit gates, or pipelines. Git is backup and versioning only.
+
+## R4 — One binary, stdlib only, easy on and off
+
+`styrman` is a single Go binary with no dependencies. `install` is idempotent and overwrites only files it manages; `uninstall` removes exactly what its manifest lists; `update` pulls the repo from git and reinstalls. A hand-written `~/.claude/CLAUDE.md` is never overwritten.
+
+## R5 — Hand-added skills are first class
+
+Adding a skill is: put a directory with a `SKILL.md` in `skills/` (by hand, by `npx skills add` from the repo root, or by `styrman adopt`), then `styrman install`. No registration, no manifest edits.
+
+## R6 — Development never touches the real home
+
+Every test and every development run of the installer uses `--home` with a scratch directory. Deploying to the operator's real `$HOME` is the operator's action.
+
+## Known limits
+
+- **Antigravity global rules path.** The CLI's customization root is `~/.gemini/config/`; rules there are documented for the workspace form (`.agents/rules/*.md`) and by analogy for the global one. Verified on the operator's Mac before this is relied upon (see the rebuild plan).
+- **Antigravity tool names cannot be enumerated.** An unrecognised name in an agent's `tools:` hangs the subagent, so `styrman install` fails on any tool it cannot map rather than guessing.
+- **Antigravity IDE is out of scope.** Only the `agy` CLI is targeted; the IDE's global paths are unverified.
+
+## Non-goals
+
+- Hooks of any kind, on either vendor.
+- Plugin or marketplace packaging on either vendor: both namespace skills and agents, which would rename all of them.
+- Editing `settings.json` or any vendor setting: the harness is files in the customization directories, nothing else.
+- Symlinking the vendor directories to one shared store: neither CLI documents reading the other's directory, and a copy has no dangling-symlink failure mode.

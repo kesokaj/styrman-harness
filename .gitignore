@@ -1,0 +1,12 @@
+# macOS
+.DS_Store
+
+# Build output of `go build -o styrman ./cmd/styrman`; the binary is never committed.
+/styrman
+
+# Claude Code's view of the repo's own skills, created by `npx skills add` (symlinks into .agents/skills).
+/.claude/
+/agent/
+
+# Per-project subagent memory.
+.claude/agent-memory/

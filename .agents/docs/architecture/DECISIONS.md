@@ -147,3 +147,32 @@ immediately found that `exec.CommandContext` cancellation does not bound wall ti
 a one-second timeout took thirty seconds, because `Output()` waits for inherited pipes
 to close; fixed with `WaitDelay`. The stub tests the harness's side of the contract,
 not the vendors': a vendor changing its envelope would still only surface in use.
+
+## ADR-009: The changelog row is scoped to a task, not to a code state     (2026-09-03) — Accepted
+
+**Operator approval:** `REQUIREMENTS.md` is immutable without the operator's explicit
+approval. R7 was rewritten twice on 2026-09-03 — once for scope-based coverage, once for
+this narrative distinction. The operator was asked directly and chose "Approve both
+changes"; this note exists because a review correctly observed that the approval left no
+trace on disk, and an approval nobody can find is indistinguishable from one never given.
+
+**Context:** ADR-007 made every row satisfied by a byte-exact `changeset:<digest>`. That is
+right for rows recording a property of the code — a review of the old code is not a review
+of the new code — but wrong for the changelog. A digest moves on every edit, so on a
+working tree the entry was stale the moment it was written, and the changelog agent's own
+anti-duplication rule then declined to write another. Observed with three valid entries on
+disk and the row still failing.
+
+**Decision:** Distinguish narrative rows from code-state rows. The changelog is the only
+narrative row: it records what was done and why, a human-meaningful unit that does not stop
+being true because a line moved. While the working tree is dirty, the changelog row is
+satisfied by any entry from today that declares some scope. At a commit the tree is clean,
+the exception lapses, and the entry must cover HEAD's scope exactly.
+
+**Consequences:** The changelog stops being re-dispatched on every keystroke — the "agents
+working for no benefit" cost the whole redesign exists to remove. The original bug stays
+fixed, because it was about commits: a second commit on the same day still owes an entry,
+and the blocking gate fires only at that boundary, where the exception does not apply. The
+exception still requires a properly-formed artifact, so "an artifact without a scope covers
+nothing" is untouched. Accountability rows are deliberately excluded: reviewer, security and
+verifier re-run whenever the code moves, which is the point of them.

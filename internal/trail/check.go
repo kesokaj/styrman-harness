@@ -48,26 +48,25 @@ func (p Project) CheckFreshness() Freshness {
 		return f
 	}
 
-	// Same computation the gate and the dispatcher use — a freshness report that
-	// disagreed with the gate would send the operator chasing a scope the gate
-	// will not accept.
 	head, newest := p.HeadDate(), p.NewestChangeDate()
-	cfg, _ := LoadConfig(p.Root)
-	rep := p.Owed(cfg, Today())
-	changelogDue := false
-	for _, due := range rep.Due {
-		changelogDue = changelogDue || due.Row == RowChangelog
-	}
+	// Coverage is asked directly rather than read off Owed(). Owed carries the
+	// narrative exception, which deliberately lets an in-progress changelog entry
+	// stand while the tree moves — appropriate for deciding what to dispatch, and
+	// wrong here. This report exists to say whether the trail covers the code as
+	// it stands, so inheriting the exception made it print OK for a dirty tree no
+	// entry covered, contradicting its own contract.
+	scope := p.Scope()
+	covered := scope != "" && p.HasArtifact(RowChangelog, scope)
 	switch {
 	case head == "":
 		f.note("commits: none yet — HEAD coverage vacuously OK")
-	case !changelogDue:
+	case covered:
 		f.note("OK: a changelog entry covers the current change set (HEAD %s)", head)
 	case newest == "":
 		f.fail("HEAD was committed %s and no changelog entry exists", head)
 	default:
 		f.fail("no changelog entry covers the current change set (HEAD %s, newest entry %s) — "+
-			"an entry must declare `scope: %s`", head, newest, rep.Scope)
+			"an entry must declare `scope: %s`", head, newest, scope)
 	}
 
 	today := Today()

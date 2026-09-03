@@ -8,6 +8,10 @@ import (
 	"sort"
 )
 
+// scopePrefix is the form this binary produces. Anything else is from a
+// superseded mechanism and must not satisfy a row.
+const scopePrefix = "changeset:"
+
 // Scope identifies *what* a change set is, so an artifact can record what it
 // covered rather than merely when it was written.
 //
@@ -36,7 +40,7 @@ func (p Project) Scope() string {
 	if len(files) == 0 {
 		return ""
 	}
-	return "changeset:" + p.digestOf(files)
+	return scopePrefix + p.digestOf(files)
 }
 
 // digestOf fingerprints a set of source files by path and content.

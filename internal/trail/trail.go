@@ -51,6 +51,19 @@ func (r Row) Class() string {
 // accountability — they are re-derivable from the diff and fire proportionally.
 func (r Row) Resumability() bool { return r == RowChangelog }
 
+// NarrativeRow reports whether this row records a task rather than a code state.
+//
+// The changelog is the only one. It describes what was done and why — a
+// human-meaningful unit that does not change because a line moved. Every other
+// row records a property of the code: a review, a test run, a security pass, all
+// of which genuinely stop being true the moment the code changes.
+//
+// Holding the changelog to a byte-exact scope made it unsatisfiable on a working
+// tree: the entry was stale as soon as it was written, and the changelog agent's
+// own anti-duplication rule then declined to write another. Observed with three
+// valid entries already on disk and the row still failing.
+func (r Row) NarrativeRow() bool { return r == RowChangelog }
+
 // Project is a resolved harness project: a git work tree whose docs root has
 // opted into the trail contract.
 type Project struct {
@@ -217,3 +230,54 @@ func readFrontmatter(path string) (Artifact, bool) {
 // Today is the current date in the trail's YYYY-MM-DD form. Every date in the
 // contract comes from the system clock, never from a model.
 func Today() string { return time.Now().Format("2006-01-02") }
+
+// hasInProgressEntry reports whether a row has an entry that plausibly belongs
+// to the work currently in progress.
+//
+// Two conditions, and both are load-bearing. The entry must be uncommitted
+// relative to HEAD — an entry written for work in progress has by definition not
+// been committed yet, which is what distinguishes it from a finished task's
+// record. And its scope must be in the form this binary produces, so an entry
+// carrying a scope from a superseded mechanism cannot satisfy anything.
+//
+// The first version of this check asked only whether the scope was non-empty.
+// That was a date match wearing a scope check: any of today's entries satisfied
+// any of today's work, and on this repo's own trail the row was reported
+// satisfied by an entry scoped `worktree:9366002f2d81` — a form the binary had
+// already stopped producing.
+func (p Project) hasInProgressEntry(row Row, day string) bool {
+	uncommitted := p.uncommittedArtifacts(row.Class())
+	for _, a := range p.Artifacts(row.Class()) {
+		if a.Owner != row || a.Date != day {
+			continue
+		}
+		if !strings.HasPrefix(a.Scope, scopePrefix) {
+			continue
+		}
+		if uncommitted[filepath.Base(a.Path)] {
+			return true
+		}
+	}
+	return false
+}
+
+// uncommittedArtifacts names the files in a docs-root class that git does not
+// yet have committed.
+func (p Project) uncommittedArtifacts(class string) map[string]bool {
+	out := map[string]bool{}
+	if class == "" {
+		return out
+	}
+	status, err := git(p.Root, "status", "--porcelain", "-uall", "--",
+		filepath.Join(p.Docs, class))
+	if err != nil {
+		return out
+	}
+	for _, line := range strings.Split(status, "\n") {
+		if len(line) < 4 {
+			continue
+		}
+		out[filepath.Base(strings.Trim(line[3:], `"`))] = true
+	}
+	return out
+}

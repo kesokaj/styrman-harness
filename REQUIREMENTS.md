@@ -77,6 +77,12 @@ from untracked to tracked without altering a byte on disk, so the digest is iden
 either side. An artifact with no scope covers nothing, so one written before the
 mechanism existed cannot silently satisfy a row.
 
+Rows scoped to a code state — reviewer, security, verifier — re-owe whenever the code
+moves, which is the point of them. The changelog is scoped to a *task* instead: while work
+is in progress, today's entry stands, because a narrative does not stop being true because
+a line moved. At a commit the tree is clean and the entry must cover HEAD exactly. See
+ADR-009.
+
 Coverage decides the blocking gate too, not just the dispatcher. Deciding it by date
 there would have left the harness's one blocking gate with the very bug this replaced:
 two commits on one day, only the first with a changelog, and both dates reading "today".
@@ -140,4 +146,7 @@ Accepted, not outstanding. Each was investigated and left as it is for the reaso
 - Agent Plugins 1.0. Its v1 covers Skills and MCP only; hooks, agents and rules —
   most of this harness — are out of scope.
 - Sandbox settings. The microVM already provides isolation.
+- Workflow-tool orchestration for `/preflight`. It is Claude Code only, and the
+  shell-driven dispatcher works on both vendors; the trade only shifts if Antigravity
+  gains an equivalent.
 - A dispatcher *agent*. Orchestration is a computation, not a judgement call.

@@ -105,10 +105,21 @@ func (p Project) Owed(cfg Config, day string) Report {
 	}
 	rep.Scope = p.Scope()
 
-	// A row is satisfied by an artifact that covers THIS change set, not by one
-	// that merely shares its date.
+	// A row is satisfied by an artifact covering THIS change set, not by one that
+	// merely shares its date — with one stated exception.
+	//
+	// A narrative row records a task, not a code state, and a task does not
+	// change because a line moved. While work is still in progress the narrative
+	// is unfinished, so today's entry stands. At the commit boundary the tree is
+	// clean and the exception lapses: the scope is then HEAD's own, stable, and
+	// the entry must cover it exactly. That is the boundary the blocking gate
+	// fires at, so nothing is weakened where it counts.
+	dirty := len(p.DirtySource()) > 0
 	add := func(row Row, reason string) {
 		if p.HasArtifact(row, rep.Scope) {
+			return
+		}
+		if row.NarrativeRow() && dirty && p.hasInProgressEntry(row, day) {
 			return
 		}
 		rep.Due = append(rep.Due, Due{Row: row, Reason: reason})

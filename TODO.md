@@ -4,13 +4,19 @@ Open items. Closed work lives in `.agents/docs/changes/`.
 
 ## Needs the operator
 
-- [ ] Deploy the Go harness by hand and confirm `harness doctor` passes.
-      Until then the deployed harness is the pre-Go generation.
+- [x] ~~Deploy the Go harness and confirm `harness doctor` passes.~~ Done
+      2026-09-03: `./setup.sh` run on this machine, doctor 10/10. The install
+      itself found three bugs (see `changes/`), all fixed in `7f57359`.
+- [x] ~~Decide whether the agy plugin registered during research should stay.~~
+      Moot: `harness install` now manages the registration itself.
 - [ ] Record provenance for `gcloud-auth-verification`, `gke-basics`, `skill-repair`
       and `terraform` in `shared/skills/VENDORED.md` — each carries third-party
-      `license`/`author` frontmatter but is unlisted. Licensing gap.
-- [ ] Decide whether the agy plugin registered during research
-      (`agy plugin uninstall harness` to revert) should stay.
+      `license`/`author` frontmatter but is unlisted. Licensing gap; only the
+      operator knows how they were obtained.
+- [ ] Decide the coverage model (see "Contract vs implementation" below). It is
+      the largest open design question and it hid owed rows five times on
+      2026-09-03 alone.
+- [ ] Push. Three commits are local-only; nothing has been published.
 
 ## Deferred, with reasons
 
@@ -18,8 +24,10 @@ Open items. Closed work lives in `.agents/docs/changes/`.
       current machine. Confirm whether the IDE needs `agy plugin install` too.
 - [ ] `disableBundledSkills`: several harness skills duplicate Claude Code built-ins.
       Needs a per-skill judgement, not a blanket setting.
-- [ ] No integration test drives a real `claude -p` / `agy -p` dispatch; the dispatcher
-      is unit-tested but its CLI contract is only covered by hand.
+- [ ] No *automated* integration test drives a real `claude -p` / `agy -p` dispatch.
+      Verified by hand on 2026-09-03 — a scratch repo dispatched `changelog` and
+      `security` as real subagents and wrote correct frontmatter — but nothing
+      in CI covers the CLI contract, and CI has no credentials to run it.
 - [ ] `harness doctor` cannot validate agy tool names — agy exposes no way to
       enumerate them. `agy plugin validate` is the closest available check.
 

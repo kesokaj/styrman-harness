@@ -1,6 +1,6 @@
 # styrman-harness
 
-A personal agent harness for **Claude Code** and the **Antigravity CLI** (`agy`): one global context file in the [agents.md](https://agents.md) standard, 28 skills in the [Agent Skills](https://agentskills.io) `SKILL.md` standard, seven subagents, and `sh-agent` — a small Go binary that installs, resyncs, inspects, and removes all of it. No hooks, no gates, no CI.
+A personal agent harness for **Claude Code** and the **Antigravity CLI** (`agy`): one global context file in the [agents.md](https://agents.md) standard, 30 skills in the [Agent Skills](https://agentskills.io) `SKILL.md` standard, seven subagents, and `sh-agent` — a small Go binary that installs, resyncs, inspects, and removes all of it. No hooks, no gates, no CI.
 
 ## Install
 
@@ -41,7 +41,7 @@ sh-agent update      # fetches, pulls, rebuilds, reinstalls
 
 | Source in this repo | Claude Code | Antigravity CLI |
 |---|---|---|
-| `context/AGENTS.md` + `context/dev-setup.md` + generated inventory | `~/.claude/AGENTS.md`, imported by a one-line `~/.claude/CLAUDE.md` (`@AGENTS.md`) | `~/.gemini/config/rules/AGENTS.md` |
+| `context/AGENTS.md` + `context/dev-setup.md` + generated inventory (names only; `sh-agent list` has the descriptions) | `~/.claude/AGENTS.md`, imported by a one-line `~/.claude/CLAUDE.md` (`@AGENTS.md`) | `~/.gemini/config/rules/AGENTS.md` |
 | `skills/<name>/` | `~/.claude/skills/<name>/` | `~/.gemini/config/skills/<name>/` |
 | `agents/<name>.md` (Claude format) | `~/.claude/agents/<name>.md` | `~/.gemini/config/agents/<name>/agent.md` (tool and model names translated at install) |
 | the binary | `~/.local/bin/sh-agent` | same |
@@ -81,7 +81,7 @@ Record third-party provenance in `skills/VENDORED.md`. A skill you already insta
 ```
 context/     AGENTS.md (the global context) and dev-setup.md (environment, stack, GCP rule)
 agents/      seven subagents in Claude Code format — the single source; Antigravity's flavour is derived
-skills/      28 skills, each a directory with SKILL.md (+ references/, assets/)
+skills/      30 skills, each a directory with SKILL.md (+ references/, assets/); `feature` and `bug` are the work protocols and load themselves
 commands/    markdown prompts invoked as /name (empty; prefer skills)
 rules/       extra always-on or path-scoped rules (empty)
 cmd/sh-agent  the binary; internal/harness is its logic and tests

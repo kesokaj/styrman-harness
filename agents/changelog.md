@@ -55,6 +55,9 @@ task | bugfix
 ## Files changed
 - path/to/file.go — what changed
 
+## Agents dispatched
+verifier, reviewer, … — or "none" (this is how dispatch cost gets counted)
+
 ## Verification
 How it was tested / how to confirm it works (link the testing/ log when one exists).
 

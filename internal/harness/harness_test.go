@@ -140,9 +140,18 @@ func TestInventoryAndRender(t *testing.T) {
 	if !strings.HasPrefix(s, Marker+"\n# AGENTS.md") {
 		t.Errorf("context should start with the marker and AGENTS.md:\n%s", s[:80])
 	}
-	for _, want := range []string{"## Environment & Stack", "| `alpha` | auto |", "| `beta` | `/beta` |", "| `reviewer` | opus |", "| `/deploy` |", "| `go-style` |", "Beta\\: slash only"} {
-		if !strings.Contains(s, want) && !strings.Contains(s, strings.ReplaceAll(want, "\\:", ":")) {
+	for _, want := range []string{"## Environment & Stack", "`alpha`", "`/beta`", "`reviewer` (opus)", "`/deploy`", "`go-style`"} {
+		if !strings.Contains(s, want) {
 			t.Errorf("context missing %q", want)
+		}
+	}
+	if strings.Contains(s, "Alpha does things") {
+		t.Errorf("deployed context should carry names only, not descriptions")
+	}
+	full := RenderInventory(inv)
+	for _, want := range []string{"| `alpha` | auto |", "| `beta` | `/beta` |", "| `reviewer` | opus |", "| `/deploy` |", "| `go-style` |", "Beta: slash only"} {
+		if !strings.Contains(full, want) {
+			t.Errorf("full inventory missing %q", want)
 		}
 	}
 }

@@ -87,11 +87,18 @@ Write your artifact with YAML frontmatter naming you as its owner:
 ---
 owner: changelog
 date: <from `date +%F`, never memory>
+scope: <the scope string from your dispatch prompt, copied verbatim>
 ---
 ```
 
 The gates locate your artifact by that frontmatter, not by its filename — so name
 the file whatever reads best.
+
+`scope` is what tells your artifact apart from one written for different work. It
+identifies the exact change set you covered, so a later change stops being covered
+by your report the moment the tree moves on. Copy it exactly as the dispatch prompt
+gave it; if no scope was given, omit the key rather than inventing one — a wrong
+scope silently satisfies a row it has nothing to do with.
 
 Then reply in **at most ten lines**: a verdict, the artifact path, and up to three
 findings. Nothing else. The detail is already on disk; repeating it into the

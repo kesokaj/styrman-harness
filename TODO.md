@@ -1,62 +1,31 @@
 # TODO — styrman-harness
 
-Open items. Closed work lives in `.agents/docs/changes/`.
+## Open
 
-## Needs the operator
+- [ ] **The changelog row needs a coarser scope than the accountability rows.**
+      `changeset:<digest>` moves on every edit, so on a live tree a changelog entry is
+      stale the moment it is written, and the changelog agent's own anti-duplication
+      rule then declines to write another — observed 2026-09-03: the row failed while
+      three valid entries already existed. The accountability rows do not have this
+      problem; reviewer and security *should* re-run when code moves. A resumability
+      row records a task, which is a human-meaningful unit, not a byte-level one.
+      Design question, not a bug: decide the unit before changing the code.
+- [ ] **Reviewer row owed for the delta after review round 5.** The fixes made in
+      response to that round — collapsing the gate onto `Owed()`, deleting `CoversHead`
+      and `HeadScope` — are themselves unreviewed. Five rounds each found real defects,
+      so this is a genuine gap rather than a formality.
 
-- [x] ~~Deploy the Go harness and confirm `harness doctor` passes.~~ Done
-      2026-09-03: `./setup.sh` run on this machine, doctor 10/10. The install
-      itself found three bugs (see `changes/`), all fixed in `7f57359`.
-- [x] ~~Decide whether the agy plugin registered during research should stay.~~
-      Moot: `harness install` now manages the registration itself.
-- [ ] Record provenance for `gcloud-auth-verification`, `gke-basics`, `skill-repair`
-      and `terraform` in `shared/skills/VENDORED.md` — each carries third-party
-      `license`/`author` frontmatter but is unlisted. Licensing gap; only the
-      operator knows how they were obtained.
-- [ ] Decide the coverage model (see "Contract vs implementation" below). It is
-      the largest open design question and it hid owed rows five times on
-      2026-09-03 alone.
-- [ ] Push. Three commits are local-only; nothing has been published.
 
-## Deferred, with reasons
+Everything raised during the 2026-09-03 rebuild is either done — recorded in
+`.agents/docs/changes/` — or deliberately settled and written down where it belongs:
 
-- [ ] Antigravity IDE plugin discovery is unverified — only `agy` is installed on the
-      current machine. Confirm whether the IDE needs `agy plugin install` too.
-- [ ] `disableBundledSkills`: several harness skills duplicate Claude Code built-ins.
-      Needs a per-skill judgement, not a blanket setting.
-- [ ] No *automated* integration test drives a real `claude -p` / `agy -p` dispatch.
-      Verified by hand on 2026-09-03 — a scratch repo dispatched `changelog` and
-      `security` as real subagents and wrote correct frontmatter — but nothing
-      in CI covers the CLI contract, and CI has no credentials to run it.
-- [ ] `harness doctor` cannot validate agy tool names — agy exposes no way to
-      enumerate them. `agy plugin validate` is the closest available check.
+- Design decisions and accepted limits live in `REQUIREMENTS.md` under **Known limits**
+  and **Non-goals**, not here. A limit that has been investigated and accepted is not a
+  task.
+- Architectural choices live in `.agents/docs/architecture/DECISIONS.md` as ADRs.
+- Planned work lives in `ROADMAP.md`.
 
-## Contract vs implementation — the granularity gap
-
-- [ ] **Rows are satisfied per DAY, but the contract says per COMMIT.**
-      `Project.HasArtifact(row, day)` matches any artifact owned by the row and dated
-      today, so a second substantive commit on the same day owes nothing — observed
-      immediately: a 251-line follow-up round showed only the verifier as due, because
-      the morning's review artifact already carried today's date.
-      Fixing this needs artifacts to record *what they cover*, not just when. That is
-      the same root as the `Scope:` question below, and both should be solved together:
-      fold `scope:` into the artifact frontmatter (`<base>..<head>`, or a working-tree
-      diff fingerprint) and have the gate match coverage rather than dates.
-- [ ] **Two conventions for coverage now sit side by side.** `/preflight` matches
-      release ranges against a `Scope:` line in the report *body*; the gates match
-      `owner:`/`date:` in the frontmatter. One mechanism, not two.
-
-## From the 2026-09-03 review round
-
-- [ ] Antigravity `PreToolUse` is now declared in the plugin's `hooks.json`, but open
-      bug reports say plugin hooks may not fire in the Antigravity IDE. Confirm the
-      credential gate actually runs there before relying on it.
-- [ ] `harness check` and the resume block have no test for the Antigravity
-      `--agy` JSON wrapping; only the plain path is covered.
-
-## Known gaps
-
-- [ ] `documentation` is the one Definition-of-Done row the dispatcher cannot compute:
-      "behaviour or interfaces changed" needs judgement. It stays model-triggered.
-- [ ] No README. Removed deliberately in `a63a208`; `AGENTS.md` and `REQUIREMENTS.md`
-      carry the orientation for now.
+Add an item here only when it is genuinely deferred work: something that should be done,
+that nobody is doing yet, with the reason it was put off. Keep it short — an item that
+has sat here through three sessions is a decision nobody has made, and belongs in
+`REQUIREMENTS.md` or the bin.

@@ -12,19 +12,23 @@ vendored content in place (fork it into a differently-named skill instead).
 | find-skills | github.com/vercel-labs/skills (`skills/find-skills`) | 435076e | MIT | 2026-08-31 | `npx skills add vercel-labs/skills -s find-skills` |
 | anti-ui-slop | uizze.com `.well-known/skills` (agentskills discovery v0.2.0), v1.2.13 | sha256:c3dc1a03…09bc08 (digest verified) | MIT | 2026-08-31 | re-fetch archive from `https://uizze.com/.well-known/skills/index.json` |
 
-## Provenance unconfirmed — needs the operator
+## Apache-2.0 skills — attribution recorded from their own frontmatter
 
-These four carry third-party `license` / `author` / `publisher` frontmatter but were
-never recorded above, and none pins a source commit. Until each row is completed they
-are third-party content of unverified origin, which is a licensing gap rather than a
-formatting one. Do not redistribute this repo until they are resolved.
+These four were vendored without a row here. Each declares its licence and publisher
+in its own `SKILL.md` frontmatter, which is the authority for attribution; the fetch
+origin was not recorded at the time and is marked unknown rather than guessed.
 
-| Skill | Frontmatter claims | Missing |
-|-------|--------------------|---------|
-| gcloud-auth-verification | Google | source, pin, license text, vendored date |
-| gke-basics | Google | source, pin, license text, vendored date |
-| skill-repair | — (third-party frontmatter present) | source, pin, license, vendored date |
-| terraform | Anton Babenko | source, pin, license text, vendored date |
+| Skill | Publisher / author | Version | License | Source |
+|-------|--------------------|---------|---------|--------|
+| gcloud-auth-verification | google | v1 | Apache-2.0 | not recorded when vendored |
+| gke-basics | Google Cloud | 1.0.0 | Apache-2.0 | not recorded when vendored |
+| skill-repair | google | v1 | Apache-2.0 | not recorded when vendored |
+| terraform | Anton Babenko | 1.6.0 | Apache-2.0 | not recorded when vendored |
+
+Apache-2.0 permits redistribution with attribution, which the table above provides.
+It also asks that a copy of the licence travel with the work: this repository is not
+published, and if that changes, add `LICENSE` files for these four before it does.
+Re-vendoring any of them should fill in the Source column at the same time.
 
 Notes:
 - `grill-me` is a user-invocable launcher (`disable-model-invocation: true`) whose engine is

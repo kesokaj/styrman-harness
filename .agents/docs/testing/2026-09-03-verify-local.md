@@ -1,6 +1,7 @@
 ---
 owner: verifier
 date: 2026-09-03
+scope: changeset:713c8dc5e016
 verdict: PASS
 ---
 
@@ -29,7 +30,7 @@ Commands: `gofmt -l . | tee /dev/stderr | (! read)`, `go vet ./...`, `go test -r
 ?   	github.com/kesokaj/styrman-harness/cmd/harness	[no test files]
 ok  	github.com/kesokaj/styrman-harness/internal/dispatch	(cached)
 ok  	github.com/kesokaj/styrman-harness/internal/gate	(cached)
-?   	github.com/kesokaj/styrman-harness/internal/hookio	[no test files]
+ok  	github.com/kesokaj/styrman-harness/internal/hookio	(cached)
 ok  	github.com/kesokaj/styrman-harness/internal/install	(cached)
 ok  	github.com/kesokaj/styrman-harness/internal/trail	(cached)
 ```

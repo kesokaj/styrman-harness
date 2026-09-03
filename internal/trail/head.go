@@ -30,19 +30,3 @@ func (p Project) NewestChangeDate() string {
 	sort.Strings(dates)
 	return dates[len(dates)-1]
 }
-
-// CoversHead reports whether the changelog trail covers the last commit. This
-// is the commit-boundary check: work in progress is nobody's emergency, but a
-// commit that no changelog entry describes is a trail that has fallen behind
-// the code.
-func (p Project) CoversHead() (ok bool, head, newest string) {
-	head = p.HeadDate()
-	newest = p.NewestChangeDate()
-	if head == "" {
-		return true, head, newest // no commits yet: vacuously covered
-	}
-	if newest == "" {
-		return false, head, newest
-	}
-	return newest >= head, head, newest
-}

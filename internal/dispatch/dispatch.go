@@ -85,11 +85,30 @@ func Run(args []string) error {
 		return err
 	}
 
-	results := runRows(proj, cfg, cli, rows, day)
+	results := runRows(proj, cfg, cli, rows, day, report.Scope)
+
+	// The rows were written against the scope captured before they ran. If the
+	// tree moved while they ran, every artifact now carries a scope no gate will
+	// ask for again — they are stale the moment they land, and reporting the run
+	// green would hide that completely.
+	if after := proj.Scope(); after != report.Scope {
+		fmt.Fprintf(os.Stderr,
+			"\nINVALIDATED: the working tree changed while the rows ran (%s -> %s).\n"+
+				"The artifacts just written cover the old change set and satisfy nothing.\n"+
+				"Re-run `harness dispatch` on a tree that is not moving.\n",
+			report.Scope, after)
+	}
+
 	if err := appendLedger(proj, results, day); err != nil {
 		fmt.Fprintln(os.Stderr, "warning: ledger:", err)
 	}
-	return present(results, *asJSON)
+	if err := present(results, *asJSON); err != nil {
+		return err
+	}
+	if after := proj.Scope(); after != report.Scope {
+		return fmt.Errorf("run invalidated: tree changed from %s to %s", report.Scope, after)
+	}
+	return nil
 }
 
 // selectRows narrows the owed rows to those named in --only. Naming a row that
@@ -127,13 +146,13 @@ func selectRows(owed []trail.Row, only string) ([]trail.Row, error) {
 // runRows executes the owed rows concurrently. The verifier goes first and
 // alone: it is the cheapest row and the one most likely to make the rest moot,
 // since there is no point reviewing code whose tests do not pass.
-func runRows(proj trail.Project, cfg trail.Config, cli cliTool, rows []trail.Row, day string) []Result {
+func runRows(proj trail.Project, cfg trail.Config, cli cliTool, rows []trail.Row, day, scope string) []Result {
 	var results []Result
 	remaining := rows
 
 	if len(rows) > 0 && rows[0] == trail.RowVerifier {
 		remaining = rows[1:]
-		res := runVerifier(proj, cfg, cli, day)
+		res := runVerifier(proj, cfg, cli, day, scope)
 		results = append(results, res)
 		if !res.OK {
 			// Tests failed. Reviewing and recording work that does not build
@@ -156,7 +175,7 @@ func runRows(proj trail.Project, cfg trail.Config, cli cliTool, rows []trail.Row
 		wg.Add(1)
 		go func(row trail.Row) {
 			defer wg.Done()
-			res := runAgentRow(proj, cfg, cli, row, day)
+			res := runAgentRow(proj, cfg, cli, row, day, scope)
 			mu.Lock()
 			results = append(results, res)
 			mu.Unlock()
@@ -171,13 +190,13 @@ func runRows(proj trail.Project, cfg trail.Config, cli cliTool, rows []trail.Row
 // runAgentRow dispatches one row to a subagent headlessly. extra carries
 // material the agent cannot obtain for itself — the verification row's captured
 // failure output, for instance.
-func runAgentRow(proj trail.Project, cfg trail.Config, cli cliTool, row trail.Row, day string, extra ...string) Result {
+func runAgentRow(proj trail.Project, cfg trail.Config, cli cliTool, row trail.Row, day, scope string, extra ...string) Result {
 	start := time.Now()
 	ctx, cancel := context.WithTimeout(context.Background(),
 		time.Duration(cfg.DispatchTimeout)*time.Second)
 	defer cancel()
 
-	prompt := rowPrompt(proj, row, day)
+	prompt := rowPrompt(proj, row, day, scope)
 	for _, e := range extra {
 		if strings.TrimSpace(e) != "" {
 			prompt += "\n\nWhat already ran, and its output:\n" + e
@@ -198,9 +217,9 @@ func runAgentRow(proj trail.Project, cfg trail.Config, cli cliTool, row trail.Ro
 
 	// The row is satisfied by its artifact existing, not by what the agent
 	// said about it. Chat is not the record.
-	if proj.HasArtifact(row, day) {
+	if proj.HasArtifact(row, scope) {
 		res.OK = true
-		res.Artifact = artifactPath(proj, row, day)
+		res.Artifact = artifactPath(proj, row, scope)
 		res.Detail = "artifact written"
 		return res
 	}
@@ -208,9 +227,9 @@ func runAgentRow(proj trail.Project, cfg trail.Config, cli cliTool, row trail.Ro
 	return res
 }
 
-func artifactPath(proj trail.Project, row trail.Row, day string) string {
+func artifactPath(proj trail.Project, row trail.Row, scope string) string {
 	for _, a := range proj.Artifacts(row.Class()) {
-		if a.Owner == row && a.Date == day {
+		if a.Owner == row && proj.Covers(a, scope) {
 			rel, err := filepath.Rel(proj.Root, a.Path)
 			if err != nil {
 				return a.Path
@@ -225,10 +244,12 @@ func artifactPath(proj trail.Project, row trail.Row, day string) string {
 // instruction to keep the reply short: the detail belongs in the artifact, and
 // repeating it into the caller's context is how a harness fills its own window
 // with things it has already written to disk.
-func rowPrompt(proj trail.Project, row trail.Row, day string) string {
+func rowPrompt(proj trail.Project, row trail.Row, day, scope string) string {
 	base := fmt.Sprintf(
-		"Today is %s. Write your artifact to %s/%s/ with YAML frontmatter containing `owner: %s` and `date: %s`.",
-		day, proj.DocsRel(), row.Class(), row, day)
+		"Today is %s. Write your artifact to %s/%s/ with YAML frontmatter containing exactly these three keys: "+
+			"`owner: %s`, `date: %s`, and `scope: %s`. The scope string identifies the change set you are covering — "+
+			"copy it verbatim; the gate uses it to tell your artifact apart from one written for different work.",
+		day, proj.DocsRel(), row.Class(), row, day, scope)
 	var task string
 	switch row {
 	case trail.RowChangelog:

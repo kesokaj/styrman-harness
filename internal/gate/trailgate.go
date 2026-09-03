@@ -68,31 +68,60 @@ func NoticeOnce(p hookio.Payload) string {
 	return notice
 }
 
+// commitBoundary reports whether this is a commit the trail has not recorded,
+// and the scope an entry must declare to record it.
+//
+// The gate no longer computes a scope of its own. It used to: coverage was
+// decided with one function and the remediation message printed another, so on
+// a dirty tree the block named a scope the gate would never accept — doing
+// exactly what it said left it blocking. Two functions that must agree will
+// eventually not. Asking Owed, which is also what `harness dispatch` satisfies,
+// removes the possibility rather than re-aligning it.
+func commitBoundary(dir string) (blocked bool, scope, head, newest string) {
+	proj, ok := trail.Resolve(dir)
+	if !ok || !proj.Opted() {
+		return false, "", "", ""
+	}
+	// Uncommitted work is not this gate's business — TrailNotice reports it.
+	// The Definition of Done is a commit contract, not a turn contract.
+	if len(proj.DirtySource()) > 0 {
+		return false, "", "", ""
+	}
+	cfg, err := trail.LoadConfig(proj.Root)
+	if err != nil {
+		return false, "", "", ""
+	}
+	rep := proj.Owed(cfg, trail.Today())
+	for _, due := range rep.Due {
+		if due.Row == trail.RowChangelog {
+			return true, rep.Scope, proj.HeadDate(), proj.NewestChangeDate()
+		}
+	}
+	return false, "", "", ""
+}
+
 // StopDecision is the Claude Code Stop hook.
 //
-// It blocks at one boundary only: a commit exists that the changelog trail
-// does not cover. Uncommitted work in progress is reported by TrailNotice
-// instead — blocking at every turn end is what made the old gate feel like it
-// never let go, and the DoD is a commit contract, not a turn contract.
+// It blocks at one boundary only: a commit the changelog does not record.
+// Uncommitted work in progress is reported by TrailNotice instead — blocking at
+// every turn end is what made the old gate feel like it never let go.
 func StopDecision(p hookio.Payload) hookio.Decision {
 	if p.StopHookActive {
 		return hookio.Allow() // already blocked once for this stop
 	}
-	proj, ok := trail.Resolve(p.Dir())
-	if !ok || !proj.Opted() {
-		return hookio.Allow()
-	}
-	covered, head, newest := proj.CoversHead()
-	if covered {
+	blocked, scope, head, newest := commitBoundary(p.Dir())
+	if !blocked {
 		return hookio.Allow()
 	}
 	if newest == "" {
 		newest = "none"
 	}
 	return hookio.Block(fmt.Sprintf(
-		"Trail behind code: HEAD was committed %s but the newest changelog entry is %s. "+
-			"Dispatch the changelog agent for the committed work — pass today's date %s — or say why it is not needed.",
-		head, newest, trail.Today()))
+		"Trail behind code: HEAD was committed %s and no changelog entry covers it "+
+			"(newest entry: %s). Run `harness dispatch`, or write the entry yourself with "+
+			"frontmatter `owner: changelog`, `date: %s` and `scope: %s` — an entry without "+
+			"that exact scope covers nothing. Or say why it is not needed.",
+		head, newest, trail.Today(), scope))
 }
 
 // AgyStopDecision is the Antigravity Stop hook. Antigravity spells "do not
@@ -102,12 +131,8 @@ func AgyStopDecision(p hookio.Payload) hookio.Decision {
 	if !p.Idle() {
 		return hookio.Allow() // pending work of its own; never nudge
 	}
-	proj, ok := trail.Resolve(p.Dir())
-	if !ok || !proj.Opted() {
-		return hookio.Allow()
-	}
-	covered, head, newest := proj.CoversHead()
-	if covered {
+	blocked, scope, head, newest := commitBoundary(p.Dir())
+	if !blocked {
 		return hookio.Allow()
 	}
 
@@ -130,6 +155,7 @@ func AgyStopDecision(p hookio.Payload) hookio.Decision {
 		newest = "none"
 	}
 	return hookio.Continue(fmt.Sprintf(
-		"Trail behind code: HEAD was committed %s but the newest changelog entry is %s. "+
-			"Record the committed work — today is %s.", head, newest, trail.Today()))
+		"Trail behind code: HEAD was committed %s and no changelog entry covers it "+
+			"(newest entry: %s). Record the committed work — today is %s, scope %s.",
+		head, newest, trail.Today(), scope))
 }

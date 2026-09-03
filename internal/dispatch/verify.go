@@ -20,7 +20,7 @@ import (
 // model to relay an exit code is the clearest case of a subagent working for
 // no benefit. A model is invoked only when something fails, where explaining
 // the failure is genuinely useful work.
-func runVerifier(proj trail.Project, cfg trail.Config, cli cliTool, day string) Result {
+func runVerifier(proj trail.Project, cfg trail.Config, cli cliTool, day, scope string) Result {
 	start := time.Now()
 	cmds := verifyCommands(proj.Root)
 	res := Result{Row: trail.RowVerifier}
@@ -67,7 +67,7 @@ func runVerifier(proj trail.Project, cfg trail.Config, cli cliTool, day string) 
 		// with it: the verifier agent is forbidden from blind-rerunning the
 		// suite, so without the log it would have nothing to work from.
 		res.Detail = "tests failed — escalating to the verifier agent to explain"
-		esc := runAgentRow(proj, cfg, cli, trail.RowVerifier, day, log.String())
+		esc := runAgentRow(proj, cfg, cli, trail.RowVerifier, day, scope, log.String())
 		esc.Duration = time.Since(start).Round(time.Second).String()
 		if esc.OK {
 			esc.OK = false // the artifact exists, but verification still failed
@@ -76,7 +76,7 @@ func runVerifier(proj trail.Project, cfg trail.Config, cli cliTool, day string) 
 		return esc
 	}
 
-	path, err := writeVerificationLog(proj, day, cmds, log.String())
+	path, err := writeVerificationLog(proj, day, scope, cmds, log.String())
 	if err != nil {
 		res.Detail = "tests passed but the log could not be written: " + err.Error()
 		return res
@@ -137,7 +137,7 @@ func runShell(ctx context.Context, dir, cmd string) (string, error) {
 
 // writeVerificationLog records a passing run. The script owns this artifact:
 // it did the work, so it writes the record.
-func writeVerificationLog(proj trail.Project, day string, cmds []string, body string) (string, error) {
+func writeVerificationLog(proj trail.Project, day, scope string, cmds []string, body string) (string, error) {
 	dir := filepath.Join(proj.Docs, "testing")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
@@ -146,6 +146,7 @@ func writeVerificationLog(proj trail.Project, day string, cmds []string, body st
 	content := fmt.Sprintf(`---
 owner: verifier
 date: %s
+scope: %s
 verdict: PASS
 ---
 
@@ -155,7 +156,7 @@ Produced by `+"`harness dispatch`"+`, which ran the project's declared commands
 directly. No model was involved: every command below exited zero.
 
 Commands: %s
-%s`, day, day, "`"+strings.Join(cmds, "`, `")+"`", body)
+%s`, day, scope, day, "`"+strings.Join(cmds, "`, `")+"`", body)
 
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		return "", err

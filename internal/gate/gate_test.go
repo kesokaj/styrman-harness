@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/kesokaj/styrman-harness/internal/hookio"
+	"github.com/kesokaj/styrman-harness/internal/trail"
 )
 
 func TestIsSecretPath(t *testing.T) {
@@ -198,4 +199,54 @@ func newContractRepo(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return root
+}
+
+// TestBlockMessageNamesTheScopeThatClearsIt is the regression for the failure
+// that ended five rounds of the same bug: coverage was decided with one scope
+// function and the message printed another, so following the instruction
+// exactly left the gate blocking. The gate and the dispatcher now share one
+// computation, and this asserts the property that matters — do what it says,
+// and it stops saying it.
+func TestBlockMessageNamesTheScopeThatClearsIt(t *testing.T) {
+	t.Setenv("TMPDIR", t.TempDir())
+	root := newContractRepo(t)
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = root
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, out)
+		}
+	}
+	run("config", "user.email", "t@e.com")
+	run("config", "user.name", "t")
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run("add", "-A")
+	run("commit", "-q", "-m", "unrecorded work")
+
+	p := hookio.Payload{CWD: root}
+	first := StopDecision(p)
+	if first.Verb != "block" {
+		t.Fatalf("an unrecorded commit did not block: %+v", first)
+	}
+
+	// Extract the scope the message demands and write exactly that entry.
+	idx := strings.Index(first.Reason, "changeset:")
+	if idx < 0 {
+		t.Fatalf("the block message names no scope: %s", first.Reason)
+	}
+	scope := strings.Fields(strings.TrimPrefix(first.Reason[idx:], ""))[0]
+	scope = strings.Trim(scope, "`—,. ")
+
+	entry := filepath.Join(root, ".agents", "docs", "changes", "recorded.md")
+	body := "---\nowner: changelog\ndate: " + trail.Today() + "\nscope: " + scope + "\n---\n"
+	if err := os.WriteFile(entry, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if second := StopDecision(p); second.Verb != "" {
+		t.Errorf("following the block message exactly did not clear it: %+v", second)
+	}
 }

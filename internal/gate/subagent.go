@@ -68,11 +68,15 @@ func SubagentStopDecision(p hookio.Payload) hookio.Decision {
 		return release()
 	}
 
+	// The scope must travel with the instruction. Under the coverage rule an
+	// artifact without one covers nothing, so a remediation message that omits
+	// it asks the agent to write a file that cannot satisfy the row it is being
+	// held for.
 	return hookio.Block(fmt.Sprintf(
-		"Definition of Done: the %s agent stopped without writing its artifact. Write %s/%s/%s-<slug>.md "+
-			"with frontmatter `owner: %s` and `date: %s`, then name its path in your final message and stop. "+
-			"A refusal, a no-op, or an empty result is still a report with a verdict.",
-		p.AgentType, proj.DocsRel(), row.Class(), trail.Today(), row, trail.Today()))
+		"Definition of Done: the %s agent stopped without writing its artifact. Write a file under %s/%s/ "+
+			"with frontmatter `owner: %s`, `date: %s` and `scope: %s`, then name its path in your final "+
+			"message and stop. A refusal, a no-op, or an empty result is still a report with a verdict.",
+		p.AgentType, proj.DocsRel(), row.Class(), row, trail.Today(), proj.Scope()))
 }
 
 // SubagentStartMark stamps the start of a subagent run, so its artifact can be

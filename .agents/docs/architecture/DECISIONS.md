@@ -101,3 +101,49 @@ binary that resolves inside the working repository or a `node_modules` directory
 **Consequences:** Formatting now happens only where the operator has installed the
 tool themselves. A project relying solely on a local prettier gets no auto-formatting
 from the harness — its own tooling still applies. The 419 ms probe is gone.
+
+## ADR-007: Rows are satisfied by scope, not by date     (2026-09-03) — Accepted
+
+**Context:** `HasArtifact(row, day)` matched any artifact owned by the row and dated
+today, so a second substantive change on the same day owed nothing. The gap hid owed
+rows five separate times on the day it was found — including for a 251-line round and
+for changes to the gate logic itself, both of which had to be dispatched by hand. A
+parallel convention had also grown up alongside it: `/preflight` matched release ranges
+against a `Scope:` line in a report's body, while the gates matched frontmatter. Two
+mechanisms for one question.
+
+**Decision:** Every artifact declares `scope:` in its frontmatter, and a row is
+satisfied only by an artifact whose scope matches the current one exactly. A scope is
+`changeset:<digest>`: a digest over the paths and contents of the changed source files,
+one form spanning both sides of a commit. An artifact with no scope covers nothing.
+
+Two earlier designs were written and rejected in review before shipping. A two-form
+scope — `worktree:<digest>` before a commit, `commit:<sha>` after — re-owed every row the
+moment work was committed, a gate rejecting what it had just accepted; content rather
+than diff is what makes one form possible, since committing alters no byte on disk. A
+`<base>..<head>` range form was unreachable, since nothing produced a scope it could
+match; range coverage is a judgement the release gate makes from frontmatter, not
+something the binary computes.
+
+**Consequences:** The worktree digest changes the moment the tree does, so an artifact
+stops covering work that has moved on — the property dates never had. Artifacts written
+before this existed satisfy nothing and their rows come due again, which is correct
+rather than unfortunate. `/preflight` reads the same frontmatter as the gates, so there
+is one mechanism. Cost: two extra git invocations and a hash per gate evaluation.
+
+## ADR-008: The dispatcher's CLI contract is tested against a stub     (2026-09-03) — Accepted
+
+**Context:** The dispatcher shells out to `claude -p` and `agy -p`. Both need
+credentials and cost money per run, so the contract — argument shape, result envelope,
+cost field, timeout behaviour, artifact detection — was only ever exercised by hand. In
+this project, every seam checked only by hand turned out to contain a bug.
+
+**Decision:** Test against a stub script that mimics the CLIs: it parses the prompt,
+writes a conforming artifact, and prints the result envelope. Behaviours are selected
+per test — writes an artifact, writes nothing, hangs.
+
+**Consequences:** CI covers the contract with no credentials and no spend. The stub
+immediately found that `exec.CommandContext` cancellation does not bound wall time —
+a one-second timeout took thirty seconds, because `Output()` waits for inherited pipes
+to close; fixed with `WaitDelay`. The stub tests the harness's side of the contract,
+not the vendors': a vendor changing its envelope would still only surface in use.

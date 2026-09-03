@@ -136,18 +136,20 @@ func EmitContext(text string) {
 }
 
 // EmitAgyContext wraps context text in Antigravity's PreInvocation shape.
-func EmitAgyContext(text string) {
+func EmitAgyContext(text string) { fmt.Println(AgyContextJSON(text)) }
+
+// AgyContextJSON renders Antigravity's PreInvocation payload. Empty text
+// yields "{}" — the shape that injects nothing without erroring.
+func AgyContextJSON(text string) string {
 	if text == "" {
-		fmt.Println("{}")
-		return
+		return "{}"
 	}
 	payload := map[string]any{
 		"injectSteps": []map[string]any{{"ephemeralMessage": text}},
 	}
 	out, err := json.Marshal(payload)
 	if err != nil {
-		fmt.Println("{}")
-		return
+		return "{}"
 	}
-	fmt.Println(string(out))
+	return string(out)
 }

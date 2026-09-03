@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 // cliTool is one vendor's headless entry point. Both CLIs can run a named
@@ -67,6 +68,13 @@ func requireBinary(name string) error {
 func (c cliTool) run(ctx context.Context, dir, agent, prompt string) (runOutput, error) {
 	cmd := exec.CommandContext(ctx, c.name, c.args(agent, prompt)...)
 	cmd.Dir = dir
+
+	// Cancelling the context kills the process, but Output() still waits for
+	// the output pipes to close — and a child that inherited them keeps them
+	// open. Without WaitDelay a one-second timeout took thirty seconds to
+	// return, which makes the timeout a suggestion rather than a bound.
+	cmd.WaitDelay = 5 * time.Second
+
 	out, err := cmd.Output()
 	if err != nil {
 		if ctx.Err() != nil {

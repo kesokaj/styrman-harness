@@ -78,15 +78,18 @@ func TestArtifactMatchedByFrontmatterNotFilename(t *testing.T) {
 
 	// Off-convention filename, correct frontmatter: must count.
 	write(t, filepath.Join(plans, "harness-recon-notes.md"),
-		"---\nowner: explorer\ndate: 2026-09-03\n---\n\n# Recon\n")
+		"---\nowner: explorer\ndate: 2026-09-03\nscope: worktree:abc123\n---\n\n# Recon\n")
 	// Convention-shaped filename, no frontmatter: must not count.
 	write(t, filepath.Join(plans, "2026-09-03-recon-decoy.md"), "# Recon\n")
 
-	if !proj.HasArtifact(RowExplorer, "2026-09-03") {
+	if !proj.HasArtifact(RowExplorer, "worktree:abc123") {
 		t.Error("artifact with correct frontmatter but off-convention filename was not found")
 	}
-	if proj.HasArtifact(RowExplorer, "2026-09-04") {
-		t.Error("artifact matched a date it does not declare")
+	if proj.HasArtifact(RowExplorer, "worktree:different") {
+		t.Error("artifact matched a scope it does not declare")
+	}
+	if !proj.HasArtifactDated(RowExplorer, "2026-09-03") {
+		t.Error("dated lookup did not find the artifact")
 	}
 	if got := len(proj.Artifacts("plans")); got != 1 {
 		t.Errorf("Artifacts returned %d entries; the decoy without frontmatter should be ignored", got)
@@ -124,10 +127,11 @@ func TestOwedProportionality(t *testing.T) {
 
 func TestOwedSatisfiedByExistingArtifact(t *testing.T) {
 	proj := newRepo(t)
-	day := "2026-09-03"
+	day := Today()
 	write(t, filepath.Join(proj.Root, "main.go"), "package main\n")
+	// The artifact must declare the scope of the very change it covers.
 	write(t, filepath.Join(proj.Docs, "changes", "anything.md"),
-		"---\nowner: changelog\ndate: "+day+"\n---\n")
+		"---\nowner: changelog\ndate: "+day+"\nscope: "+proj.Scope()+"\n---\n")
 
 	rep := proj.Owed(DefaultConfig(), day)
 	if hasRow(rep.Due, RowChangelog) {
@@ -351,5 +355,39 @@ func TestLineCountingIsStableAcrossCommit(t *testing.T) {
 	}
 	if before < 60 || before >= 120 {
 		t.Errorf("got %d lines; expected the .go file counted and the .md file ignored", before)
+	}
+}
+
+// TestMergeCommitIsVisible: diff-tree prints nothing for a merge commit, with
+// or without --root, so a merge as HEAD reported no changed files and owed no
+// rows. It is diffed against its first parent instead.
+func TestMergeCommitIsVisible(t *testing.T) {
+	proj := newRepo(t)
+	write(t, filepath.Join(proj.Root, "base.go"), "package main\n")
+	commit(t, proj.Root, "base")
+
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = proj.Root
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, out)
+		}
+	}
+	run("checkout", "-q", "-b", "feature")
+	write(t, filepath.Join(proj.Root, "feature.go"), strings.Repeat("package main\n", 70))
+	commit(t, proj.Root, "feature work")
+	run("checkout", "-q", "-")
+	run("merge", "-q", "--no-ff", "-m", "merge feature", "feature")
+
+	if !proj.headIsMerge() {
+		t.Fatal("fixture did not produce a merge commit")
+	}
+	changed := proj.HeadSourceToday()
+	if len(changed) == 0 {
+		t.Error("a merge commit reported no changed source files")
+	}
+	if got := proj.HeadLinesToday(); got < 70 {
+		t.Errorf("HeadLinesToday() = %d across a merge of a 70-line branch", got)
 	}
 }

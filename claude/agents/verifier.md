@@ -22,7 +22,7 @@ mkdir -p "$docs_root/testing"
 ```
 
 2. Read `$docs_root/testing/<app>/` for the current LOCAL/REMOTE/CLOUD instructions, and read the dispatch prompt for the exact command(s) that failed and their output — that is your starting point, not a blind rerun. If what actually failed differs from what that guide describes, update the guide as part of this run.
-3. Establish the change set (`git diff`, `git diff --staged`, `git diff <base>...HEAD`) — the failure is judged against it, and it goes on the log's `Scope:` line (`/preflight` matches release ranges against that line).
+3. Establish the change set (`git diff`, `git diff --staged`, `git diff <base>...HEAD`) — the failure is judged against it, and it goes in the log body on a `Range reviewed:` line. What the log *covers* is the `scope:` key in its frontmatter.
 
 ## Diagnosing the failure
 
@@ -41,7 +41,7 @@ Write `$docs_root/testing/$(date +%F)-verify-<slug>.md` — date from `date +%F`
 ```markdown
 # Verification — <slug>   (<date>)
 
-Scope: <base>..<head>, or `uncommitted diff at <sha> (diff sha1 <hash>)` with `<hash>` from `git diff <sha> | sha1sum | cut -c1-12`
+What this covers is the `scope:` key in your frontmatter, not a line in the body.
 
 ## Status: FAIL
 
@@ -74,11 +74,18 @@ Write your artifact with YAML frontmatter naming you as its owner:
 ---
 owner: verifier
 date: <from `date +%F`, never memory>
+scope: <the scope string from your dispatch prompt, copied verbatim>
 ---
 ```
 
 The gates locate your artifact by that frontmatter, not by its filename — so name
 the file whatever reads best.
+
+`scope` is what tells your artifact apart from one written for different work. It
+identifies the exact change set you covered, so a later change stops being covered
+by your report the moment the tree moves on. Copy it exactly as the dispatch prompt
+gave it; if no scope was given, omit the key rather than inventing one — a wrong
+scope silently satisfies a row it has nothing to do with.
 
 Then reply in **at most ten lines**: a verdict, the artifact path, and up to three
 findings. Nothing else. The detail is already on disk; repeating it into the

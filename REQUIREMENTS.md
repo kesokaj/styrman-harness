@@ -60,11 +60,29 @@ lives in its artifact.
 Every dispatch records its cost to `.agents/docs/testing/dispatch-ledger.jsonl`, so
 "this row is not worth its price" is an argument that can be settled with data.
 
-## R7 — Artifacts are identified by content
+## R7 — Artifacts are identified by content, and record what they cover
 
-Every Definition-of-Done artifact declares `owner:` and `date:` in YAML frontmatter.
-Gates locate artifacts by that frontmatter, never by filename glob — a dispatch prompt
-that names an output path must not be able to silently break the contract.
+Every Definition-of-Done artifact declares `owner:`, `date:` and `scope:` in YAML
+frontmatter. Gates locate artifacts by that frontmatter, never by filename glob — a
+dispatch prompt that names an output path must not be able to silently break the
+contract.
+
+`scope` is what a row is satisfied *against*. Dates were the first answer and were far
+too coarse: any artifact dated today satisfied its row, so a second change on the same
+day owed nothing. That gap hid owed rows five separate times on the day it was found,
+including for changes to the gate logic itself. A scope is `changeset:<digest>` — one
+form, a digest over the paths and contents of the changed source files. Content rather
+than diff is what lets it span the commit that lands the work: committing moves files
+from untracked to tracked without altering a byte on disk, so the digest is identical
+either side. An artifact with no scope covers nothing, so one written before the
+mechanism existed cannot silently satisfy a row.
+
+Coverage decides the blocking gate too, not just the dispatcher. Deciding it by date
+there would have left the harness's one blocking gate with the very bug this replaced:
+two commits on one day, only the first with a changelog, and both dates reading "today".
+
+This is also the single mechanism for coverage: `/preflight` reads the same frontmatter
+rather than parsing a `Scope:` line out of a report body.
 
 ## R8 — Isolation covers the host; the gate covers the remote
 
@@ -91,6 +109,29 @@ Two consequences the harness accepts rather than hides:
   `node_modules` directory. An earlier version ran `npx --no-install prettier`, which
   resolves the repo's own `node_modules/.bin/prettier` — editing a markdown file in a
   hostile repo executed that repo's code, with no operator action.
+
+## Known limits
+
+Accepted, not outstanding. Each was investigated and left as it is for the reason given.
+
+- **The `documentation` row cannot be computed.** "Behaviour or interfaces changed" is
+  a judgement, not a property of a diff. It stays model-triggered; the dispatcher
+  deliberately declares no such row rather than declaring one that never fires.
+- **agy tool names cannot be enumerated.** Antigravity offers no way to list the tool
+  names valid in an agent's `tools:` list, and an unrecognised name hangs the subagent
+  at dispatch. `harness derive` therefore fails the build on any tool it cannot map,
+  and `harness doctor` runs `agy plugin validate` — the closest check that exists.
+- **Antigravity IDE behaviour is unverified.** Only the `agy` CLI is installed on the
+  operator's machine. Whether the IDE loads a plugin without `agy plugin install`, and
+  whether it fires plugin `PreToolUse` hooks at all, are untested; open upstream bug
+  reports suggest the latter may not work. The credential gate is therefore load-bearing
+  on Claude Code and best-effort on the Antigravity IDE.
+- **No README.** Removed deliberately in `a63a208`. `AGENTS.md` covers orientation and
+  this file covers intent; a third document would only drift from both.
+- **Bundled vendor skills stay enabled.** `disableBundledSkills` was considered and
+  rejected: the harness skills are domain knowledge (Go, Terraform, GKE) rather than
+  workflow duplicates, and `review-standards` is the reviewer's criteria library, not a
+  competing review command. The constitution already leaves `/code-review` untouched.
 
 ## Non-goals
 

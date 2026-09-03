@@ -72,6 +72,7 @@ type Due struct {
 type Report struct {
 	Changed []string // changed source paths
 	Lines   int      // added+removed lines
+	Scope   string   // what an artifact must cover to satisfy a row
 	Due     []Due    // rows owed and not yet satisfied
 	Skipped []Due    // rows deliberately not fired, and why
 }
@@ -89,7 +90,6 @@ func (p Project) Owed(cfg Config, day string) Report {
 	if !p.Opted() {
 		return rep
 	}
-	p.SourceGlobs = cfg.SourceGlobs
 
 	// Uncommitted work first; failing that, work committed today that the trail
 	// may not yet cover. The line count has to come from the same place, or a
@@ -103,9 +103,12 @@ func (p Project) Owed(cfg Config, day string) Report {
 	if len(rep.Changed) == 0 {
 		return rep
 	}
+	rep.Scope = p.Scope()
 
+	// A row is satisfied by an artifact that covers THIS change set, not by one
+	// that merely shares its date.
 	add := func(row Row, reason string) {
-		if p.HasArtifact(row, day) {
+		if p.HasArtifact(row, rep.Scope) {
 			return
 		}
 		rep.Due = append(rep.Due, Due{Row: row, Reason: reason})

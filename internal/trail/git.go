@@ -58,12 +58,7 @@ func (p Project) HeadSourceToday() []string {
 	if !p.headIsToday() {
 		return nil
 	}
-	// Known limitation: diff-tree prints nothing for a merge commit, with or
-	// without --root. A merge whose HEAD is a merge therefore reports no
-	// changed files. That is tolerable because the rows were owed on the
-	// branch's own commits, and a gate that over-reports on every merge would
-	// be worse — but it is a gap, not a design.
-	out, err := git(p.Root, "diff-tree", "-r", "--root", "--no-commit-id", "--name-only", "HEAD")
+	out, err := p.headDiff("--name-only")
 	if err != nil {
 		return nil
 	}
@@ -84,11 +79,36 @@ func (p Project) HeadLinesToday() int {
 	if !p.headIsToday() {
 		return 0
 	}
-	out, err := git(p.Root, "diff-tree", "-r", "--root", "--no-commit-id", "--numstat", "HEAD")
+	out, err := p.headDiff("--numstat")
 	if err != nil {
 		return 0
 	}
 	return p.sumNumstat(out)
+}
+
+// headDiff describes what HEAD changed, in the requested format.
+//
+// Two git quirks have to be handled or whole classes of commit go unseen.
+// --root is what makes a repository's first commit visible: without it,
+// diff-tree compares against a parent that does not exist and prints nothing.
+// And diff-tree prints nothing at all for a merge commit, with or without
+// --root — so a merge is diffed against its first parent instead, which is the
+// change the merge actually brought in.
+func (p Project) headDiff(format string) (string, error) {
+	if p.headIsMerge() {
+		return git(p.Root, "diff-tree", "-r", "--no-commit-id", format, "HEAD^1", "HEAD")
+	}
+	return git(p.Root, "diff-tree", "-r", "--root", "--no-commit-id", format, "HEAD")
+}
+
+// headIsMerge reports whether HEAD has more than one parent.
+func (p Project) headIsMerge() bool {
+	out, err := git(p.Root, "rev-list", "--parents", "-n", "1", "HEAD")
+	if err != nil {
+		return false
+	}
+	// The line is "<commit> <parent>...": more than two fields means a merge.
+	return len(strings.Fields(out)) > 2
 }
 
 func (p Project) headIsToday() bool {

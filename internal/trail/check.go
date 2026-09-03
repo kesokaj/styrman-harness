@@ -29,6 +29,14 @@ func (f *Freshness) fail(format string, args ...any) {
 // A project that never adopted the contract passes: the gate binds projects
 // that keep a trail, and failing a foreign clone for not having one would make
 // the check useless in exactly the repos it should stay quiet in.
+//
+// This deliberately answers a wider question than the Stop gate. Both share one
+// scope computation, so they cannot disagree about *what* a change set is — but
+// they are asked different things. The Stop gate fires only at a commit boundary
+// and stays silent on work in progress; this reports on the working tree too,
+// because /preflight and /audit want to know whether the trail covers the code
+// as it stands, not merely as it was last committed. So a dirty tree reading
+// STALE here while the Stop gate allows is correct, not divergence.
 func (p Project) CheckFreshness() Freshness {
 	var f Freshness
 	f.note("Trail freshness — %s", p.Root)
@@ -39,26 +47,31 @@ func (p Project) CheckFreshness() Freshness {
 		f.note("RESULT: OK (nothing to check; run /init-project to adopt the contract)")
 		return f
 	}
-	// Source classification is project-configurable, so the freshness report
-	// must see the same set of files the dispatcher does.
-	if cfg, err := LoadConfig(p.Root); err == nil {
-		p.SourceGlobs = cfg.SourceGlobs
-	}
 
-	covered, head, newest := p.CoversHead()
+	// Same computation the gate and the dispatcher use — a freshness report that
+	// disagreed with the gate would send the operator chasing a scope the gate
+	// will not accept.
+	head, newest := p.HeadDate(), p.NewestChangeDate()
+	cfg, _ := LoadConfig(p.Root)
+	rep := p.Owed(cfg, Today())
+	changelogDue := false
+	for _, due := range rep.Due {
+		changelogDue = changelogDue || due.Row == RowChangelog
+	}
 	switch {
 	case head == "":
 		f.note("commits: none yet — HEAD coverage vacuously OK")
+	case !changelogDue:
+		f.note("OK: a changelog entry covers the current change set (HEAD %s)", head)
 	case newest == "":
-		f.fail("repo has commits (HEAD %s) but no changelog artifacts", head)
-	case !covered:
-		f.fail("newest changelog entry (%s) is older than HEAD (%s)", newest, head)
+		f.fail("HEAD was committed %s and no changelog entry exists", head)
 	default:
-		f.note("OK: newest changelog entry (%s) covers HEAD (%s)", newest, head)
+		f.fail("no changelog entry covers the current change set (HEAD %s, newest entry %s) — "+
+			"an entry must declare `scope: %s`", head, newest, rep.Scope)
 	}
 
 	today := Today()
-	if p.HasArtifact(RowChangelog, today) {
+	if p.HasArtifactDated(RowChangelog, today) {
 		f.note("OK: changelog entry for today (%s) present", today)
 	} else if changed := p.DirtySource(); len(changed) > 0 {
 		f.fail("%d uncommitted source file(s) but no changelog entry dated %s", len(changed), today)

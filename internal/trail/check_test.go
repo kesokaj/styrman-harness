@@ -48,7 +48,7 @@ func TestCheckFreshnessFlagsUncoveredCommit(t *testing.T) {
 	if !f.Stale {
 		t.Errorf("a commit with no changelog artifact was reported fresh:\n%s", joined(f))
 	}
-	if !strings.Contains(joined(f), "no changelog artifacts") {
+	if !strings.Contains(joined(f), "no changelog entry exists") {
 		t.Errorf("report did not name the problem:\n%s", joined(f))
 	}
 }
@@ -57,10 +57,12 @@ func TestCheckFreshnessAcceptsCoveredCommit(t *testing.T) {
 	proj := newRepo(t)
 	today := Today()
 	write(t, filepath.Join(proj.Root, "main.go"), "package main\n")
-	write(t, filepath.Join(proj.Docs, "changes", "whatever-name.md"),
-		"---\nowner: changelog\ndate: "+today+"\n---\n\nrecorded\n")
 	write(t, filepath.Join(proj.Root, "ROADMAP.md"), "# Roadmap\n")
 	write(t, filepath.Join(proj.Root, "TODO.md"), "# Todo\n")
+	// The entry must declare the scope of the change it covers — a bare date no
+	// longer satisfies the blocking gate.
+	write(t, filepath.Join(proj.Docs, "changes", "whatever-name.md"),
+		"---\nowner: changelog\ndate: "+today+"\nscope: "+proj.Scope()+"\n---\n\nrecorded\n")
 	commit(t, proj.Root, "source plus its changelog")
 
 	f := proj.CheckFreshness()
@@ -105,5 +107,26 @@ func TestCheckFreshnessEnforcesAppendOnly(t *testing.T) {
 	}
 	if !strings.Contains(joined(f), "append-only") {
 		t.Errorf("report did not name the append-only violation:\n%s", joined(f))
+	}
+}
+
+// TestFreshnessIsNotFooledByADateMatch: two commits in one day, only the first
+// recorded. A date comparison called that covered.
+func TestFreshnessIsNotFooledByADateMatch(t *testing.T) {
+	proj := newRepo(t)
+	write(t, filepath.Join(proj.Root, "one.go"), "package main\n")
+	write(t, filepath.Join(proj.Docs, "changes", "first.md"),
+		"---\nowner: changelog\ndate: "+Today()+"\nscope: "+proj.Scope()+"\n---\n")
+	commit(t, proj.Root, "first, recorded")
+
+	if f := proj.CheckFreshness(); f.Stale {
+		t.Fatalf("a recorded commit was reported stale:\n%s", joined(f))
+	}
+
+	write(t, filepath.Join(proj.Root, "two.go"), "package main\n")
+	commit(t, proj.Root, "second, unrecorded")
+
+	if f := proj.CheckFreshness(); !f.Stale {
+		t.Errorf("an unrecorded second commit passed:\n%s", joined(f))
 	}
 }

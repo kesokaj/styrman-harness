@@ -18,13 +18,13 @@ Rows split by purpose, and the two halves are not owed alike. **Resumability** r
 |---|---|---|---|
 | `changes/` entry | `changelog` | resumability | every commit touching source |
 | verification log in `testing/` | `harness dispatch` runs the project's own commands; the `verifier` agent is spent only to explain a failure | resumability | every commit touching source — changed code without covering tests = FAIL. Auto-detection covers tests and vet only; a project needing more (ARM64/AMD64 image builds, smoke checks) declares them in `verify` in `.agents/harness.json` |
-| review report in `reviews/` — from `reviewer`, or a `/code-review` run saved with only `Source:` and `Scope:` lines prepended and nothing else changed | `reviewer` (or `/code-review`) | accountability | diff ≥ `reviewLines` or ≥ `reviewFiles`; below that, read it yourself or run `/code-review` |
+| review report in `reviews/` — from `reviewer`, or a `/code-review` run saved with frontmatter (`owner: reviewer`, today's `date:`, and the current `scope:`) plus a `Source: /code-review` line prepended, nothing else changed | `reviewer` (or `/code-review`) | accountability | diff ≥ `reviewLines` or ≥ `reviewFiles`; below that, read it yourself or run `/code-review` |
 | security findings in `reviews/` | `security` | accountability | a changed path touches auth, crypto, secrets, input parsing, or dependencies |
 | README / spec / `ROADMAP.md` updates | `documentation` | accountability | behavior, interfaces, or plan changed |
 | recon brief in `plans/` (only its summary enters main context) | `explorer` | — | survey spanning 10+ files |
 | snapshot in `handoffs/` | main agent, via `/handoff` | resumability | session ends mid-task — never a substitute for rows already due |
 
-Every artifact carries frontmatter `owner:` and `date:`; that is how the gates find it, so filenames are free. Every dispatched agent answers in **at most ten lines** — verdict, artifact path, up to three findings — because the detail already lives in the artifact and repeating it into the caller's context is how a harness fills its own window with what it just wrote to disk. A docs-only or non-functional change of ≤10 lines needs only the changelog row and may be edited inline.
+Every artifact carries frontmatter `owner:`, `date:` and `scope:` — that is how the gates find it, so filenames are free. `scope` is the change set the artifact covers, given in the dispatch prompt and copied verbatim; a row is satisfied only by an artifact covering the current one, and an artifact without a scope covers nothing. This applies to anything you write into the trail by hand as well, a handoff or an inline changelog included. Every dispatched agent answers in **at most ten lines** — verdict, artifact path, up to three findings — because the detail already lives in the artifact and repeating it into the caller's context is how a harness fills its own window with what it just wrote to disk. A docs-only or non-functional change of ≤10 lines needs only the changelog row and may be edited inline.
 
 ## Skill vs Subagent
 

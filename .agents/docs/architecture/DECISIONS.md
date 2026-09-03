@@ -81,3 +81,11 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
 **Decision:** Neither escape hatch. `REQUIREMENTS.md` names editing vendor settings a non-goal and R7 fixes the state's location; the one prompt per session is accepted and documented (README, `deploy/local.md`), with the user-side setting named for those who want it gone. The matrix is recorded as documentation — `testing/skill-matrix.md` lists every scenario's prompt and check and the invocation flags — so any session on any machine can rebuild the kit in scratch; the scripts are not committed, keeping "the harness is context, skills, and subagents" true.
 
 **Consequences:** One approval per Claude Code session that writes feedback or a proposal; nothing installed outside the customization directories. Re-running the matrix costs a few minutes of setup from the doc instead of a `git pull`; the trade is deliberate, and a Go `sh-agent sandbox` subcommand remains possible if the matrix becomes routine.
+
+## ADR-011: GCP defaults are asked for once and recorded in the project's deploy guide     (2026-09-03) — Accepted, supersedes the "never stored" half of ADR-006
+
+**Context:** ADR-006 rejected stored GCP defaults because a placeholder region or registry in the global context is exactly what an agent silently assumes. The operator then asked for per-project deploy guides (local, remote, GCP) that the agent both reads and maintains. Asking the same five questions in every session is friction with no safety gain once the values are the project's own.
+
+**Decision:** The global context still stores nothing and still asks before the first GCP action. Once the user answers, the values are recorded in the project's `.agents/docs/deploy/gcp.md` (project ID, region, Artifact Registry repository, service, visibility), the project `AGENTS.md` only points there, and `cloud-run-deploy` reads that file first. ADR-006's naming decision stands; its "never stored" clause is superseded for project-level storage only.
+
+**Consequences:** One question per project instead of one per session; the recorded values are reviewable in the project's own trail and never leak across projects. A missing or empty `gcp.md` means ask, never guess.

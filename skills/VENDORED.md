@@ -31,7 +31,9 @@ Re-vendoring any of them should fill in the Source column at the same time.
 Notes:
 - `grill-me` (a launcher for `grilling`) and `skill-repair` (repairs a `skills`-CLI manifest the
   harness does not use) were pruned 2026-09-03 after the sandbox matrix: `/grilling` does the same
-  job on both CLIs, and `sh-agent adopt` replaced the manifest repair.
+  job on both CLIs, and `sh-agent adopt` replaced the manifest repair. `find-skills` (vendored verbatim)
+  still names `skill-repair` in its description; harmless — the model finds no such skill — and fixed
+  by the next re-fetch, not by editing the vendored file.
 - `anti-ui-slop` includes its own LICENSE/NOTICE/MANIFEST from the upstream archive; the
   optional paid UIZZE MCP is NOT configured — the free playbooks work standalone.
 - To add a skill: run `npx skills add <owner/repo> -s <skill> -y` from the repo root (it lands

@@ -34,7 +34,7 @@ Nothing generated is committed. The deployed files are assembled by `sh-agent in
 - The installer must never run against the operator's real `$HOME` during development. Use `--home /tmp/<scratch>` for every test. Deploying to the real home is the operator's job.
 - Adding a tool to an agent's `tools:` list means adding it to `toolMap` in `internal/harness/derive.go`. An unmapped tool fails the install on purpose: Antigravity hangs a subagent that names a tool it does not recognise.
 - Agent `description:` values are one line, double-quoted if they contain a colon, and free of the words "dispatch prompt" or "harness binary" — there is no binary behind them anymore.
-- Every skill directory needs a `SKILL.md` with a `description`; the installer refuses one without it.
+- Every skill directory needs a `SKILL.md` with a `description`; the installer refuses one without it. It also refuses any frontmatter value that a strict YAML parser reads as a comment — an unquoted `#` at the start or after a space or tab — because Antigravity silently drops such a skill (BUG-004); quote the value.
 - Adding a skill, agent, command, or rule is a file drop — never a code change. If a new kind of customization needs code, that is a design question, not a quick patch.
 - Third-party skills are vendored verbatim and listed in `skills/VENDORED.md`; never edit them in place — fork into a differently named skill.
 - Stdlib only in the Go code. The binary is a file copier with a manifest; it does not need a dependency.

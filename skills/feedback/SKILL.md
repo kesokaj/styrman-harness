@@ -21,7 +21,7 @@ This skill is the only writer of that log — there is no hook behind it — so 
 Append an entry when ANY of these occur:
 
 1. **Explicit correction** — The user says "no", "wrong", "don't do that", "stop doing X"
-2. **Preference re-statement** — The user repeats a convention that should already be in the global standards file (CLAUDE.md/GEMINI.md) or a skill
+2. **Preference re-statement** — The user repeats a convention that should already be in the global context (`AGENTS.md`, deployed as `~/.claude/AGENTS.md` and `~/.gemini/config/rules/AGENTS.md`) or a skill
 3. **Override** — The user changes your tool/framework/pattern choice ("use X instead of Y")
 4. **Format correction** — The user asks you to restructure or reformat output
 5. **Knowledge gap** — You had to ask about something the harness should have told you

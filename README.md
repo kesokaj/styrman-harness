@@ -1,6 +1,6 @@
 # styrman-harness
 
-A personal agent harness for **Claude Code** and the **Antigravity CLI** (`agy`): one global context file in the [agents.md](https://agents.md) standard, 30 skills in the [Agent Skills](https://agentskills.io) `SKILL.md` standard, seven subagents, and `sh-agent` — a small Go binary that installs, resyncs, inspects, and removes all of it. No hooks, no gates, no CI.
+A personal agent harness for **Claude Code** and the **Antigravity CLI** (`agy`): one global context file in the [agents.md](https://agents.md) standard, 28 skills in the [Agent Skills](https://agentskills.io) `SKILL.md` standard, seven subagents, and `sh-agent` — a small Go binary that installs, resyncs, inspects, and removes all of it. No hooks, no gates, no CI.
 
 ## Install
 
@@ -27,6 +27,7 @@ Harness state (feedback log, retro proposals, global handoffs) lives in `~/.conf
 | `sh-agent list` | Prints the skill and agent inventory. |
 | `sh-agent render` | Prints the assembled context file. |
 | `sh-agent adopt <name\|path>` | Copies a skill installed elsewhere (for example by `npx skills add -g`) into `skills/`. |
+| `sh-agent version` | Prints the build version. |
 
 Every command accepts `--home DIR` (install somewhere other than `$HOME`, used by the tests) and `--repo DIR`. Without `--repo`, sh-agent finds the checkout from `$SH_AGENT_REPO`, the working directory, or the path it recorded at the last install — so `sh-agent update` works from anywhere.
 
@@ -47,13 +48,13 @@ sh-agent update      # fetches, pulls, rebuilds, reinstalls
 | `skills/<name>/` | `~/.claude/skills/<name>/` | `~/.gemini/config/skills/<name>/` |
 | `agents/<name>.md` (Claude format) | `~/.claude/agents/<name>.md` | `~/.gemini/config/agents/<name>/agent.md` (tool and model names translated at install) |
 | the binary | `~/.local/bin/sh-agent` | same |
-| manifest, feedback log, retro proposals | `~/.config/sh-agent/` | same |
+| manifest, feedback log, retro proposals, global handoffs | `~/.config/sh-agent/` | same |
 
 An existing `~/.claude/CLAUDE.md` that sh-agent did not write is left alone; add the line `@AGENTS.md` to it yourself.
 
 ## Adding things by hand — no code
 
-Every customization is a file in a directory. Drop it in, run `sh-agent install`, commit. Nothing to register.
+Every customization is a file in a directory. Drop it in, run `sh-agent install`, commit. Nothing to register. The installer refuses a `SKILL.md` without a `description`, and any frontmatter value that a strict YAML parser would read as a comment (an unquoted `#` after a space or tab) — Antigravity silently drops such a skill, so quote it.
 
 | Put it in | What it is | Claude Code gets | Antigravity gets |
 |---|---|---|---|
@@ -83,7 +84,7 @@ Record third-party provenance in `skills/VENDORED.md`. A skill you already insta
 ```
 context/     AGENTS.md (the global context) and dev-setup.md (environment, stack, GCP rule)
 agents/      seven subagents in Claude Code format — the single source; Antigravity's flavour is derived
-skills/      30 skills, each a directory with SKILL.md (+ references/, assets/); `feature` and `bug` are the work protocols and load themselves
+skills/      28 skills, each a directory with SKILL.md (+ references/, assets/); `feature` and `bug` are the work protocols and load themselves
 commands/    markdown prompts invoked as /name (empty; prefer skills)
 rules/       extra always-on or path-scoped rules (empty)
 cmd/sh-agent  the binary; internal/harness is its logic and tests

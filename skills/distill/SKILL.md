@@ -161,6 +161,6 @@ Append an entry to `~/.config/sh-agent/feedback.jsonl` (create the directory wit
 
 ## Cross-References
 
-- Claude Code's built-in `skill-creator` skill handles manual skill creation and iterative refinement (on Antigravity, follow the SKILL.md standard by hand)
+- Manual skill creation follows the SKILL.md standard by hand on both CLIs (Claude Code may offer a built-in skill-creator; check `/skills` before relying on it)
 - The `/retro` workflow handles corrections and rule gaps (not patterns)
 - The `feedback` skill logs entries that `/distill --from-log` can analyze for cross-session patterns

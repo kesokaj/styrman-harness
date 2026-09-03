@@ -6,7 +6,7 @@ Deferred work items. Not blocking current work, but should be addressed later.
 
 ## High Priority
 
-- [ ] On the Mac, verify the Antigravity CLI picks up `~/.gemini/config/rules/AGENTS.md`, `agents/<name>/agent.md`, and the skills; if rules are not read from there, change the path in `internal/harness/plan.go` (added 2026-09-03)
+- [ ] On the Mac, verify the Antigravity CLI picks up `~/.gemini/config/rules/AGENTS.md`, `agents/<name>/agent.md`, and the skills — verified on the Linux box 2026-09-03 (`.agents/docs/testing/2026-09-03-verify-real-home.md`); if the Mac build reads another path, change it in `internal/harness/plan.go` (added 2026-09-03)
 
 ## Medium Priority
 

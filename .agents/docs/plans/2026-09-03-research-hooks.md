@@ -93,3 +93,7 @@ Option C: skill-scoped hooks. `cloud-run-deploy` and `preflight` could carry the
 3. Deploy gate: `ask` (recommended) or hard `deny`?
 4. Allowed models: Claude `claude-fable-5-1`, `claude-opus-5`? Antigravity `pro` only, or is `auto` fine?
 5. Loop threshold: 3 identical calls with no edit in between (recommended), or stricter?
+
+## Decision (2026-09-03)
+
+Rejected by the operator: "Skip the hooks. I think this was my problem before. Keep the no hooks/scripts rule." Recorded as ADR-007. This document stays as the record of what was considered.

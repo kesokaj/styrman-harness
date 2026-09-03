@@ -34,7 +34,7 @@ Every test and every development run of the installer uses `--home` with a scrat
 
 ## Non-goals
 
-- Hooks of any kind, on either vendor.
+- Hooks of any kind, on either vendor. Researched and rejected 2026-09-03 (ADR-007, `.agents/docs/plans/2026-09-03-research-hooks.md`); the harness is enforced by reading, not by gates.
 - Plugin or marketplace packaging on either vendor: both namespace skills and agents, which would rename all of them.
 - Editing `settings.json` or any vendor setting: the harness is files in the customization directories, nothing else.
 - Symlinking the vendor directories to one shared store: neither CLI documents reading the other's directory, and a copy has no dangling-symlink failure mode.

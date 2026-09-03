@@ -49,3 +49,11 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
 **Decision:** The binary, its state directory (`~/.config/sh-agent`), its env var (`SH_AGENT_REPO`), and its file marker are named `sh-agent`; the repo keeps its name. The context says work is local by default and, when the user says GCP, the agent asks for project, region, Artifact Registry repository, service name, and visibility before doing anything, then records them in the project's `AGENTS.md`. The one shell script in the repo (`mermaid-syntax/scripts/validate-mermaid.sh`) was deleted along with the old hook scripts under `~/.agents/bin`.
 
 **Consequences:** ADR-002's name is superseded by this one; its content stands. The first GCP action in a new project costs one question instead of one wrong assumption. Skills that need helper code ship it as documentation, not as scripts.
+
+## ADR-007: Hooks stay out — researched and rejected     (2026-09-03) — Accepted
+
+**Context:** After the rebuild the operator considered three hooks (a deploy gate for documentation freshness, a wrong-model warning, a loop protector). The options for both vendors were researched in `.agents/docs/plans/2026-09-03-research-hooks.md`: all three are buildable as `sh-agent hook` subcommands, but the Claude side requires a managed block in `~/.claude/settings.json`, and every hook adds a way for the harness to be wrong at run time.
+
+**Decision:** No hooks. The operator's words: "Skip the hooks. I think this was my problem before. Keep the no hooks/scripts rule." R3 (no hooks, no gates, no CI) and the zero-scripts rule stand as written; the research is kept as the record of what was weighed.
+
+**Consequences:** The Definition of Done, the model choice, and loop avoidance remain prose in the global context, enforced by reading. If a rule is not followed, the fix is `/retro` and a better rule, never a gate. Reopening this needs a new ADR that answers the research's cost section.

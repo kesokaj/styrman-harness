@@ -210,3 +210,74 @@ func TestChangedLinesCountsUntracked(t *testing.T) {
 		t.Errorf("ChangedLines() = %d, want at least 120 for an untracked file", got)
 	}
 }
+
+// TestMatchGlobSupportsDoublestar: init-project documents patterns like
+// `**/*.go` and `claude/agents/**`, and Go's path.Match implements neither —
+// its `*` never crosses a separator, so `**/*.go` would match exactly one
+// directory level. The matcher has to mean what the documentation says.
+func TestMatchGlobSupportsDoublestar(t *testing.T) {
+	cases := []struct {
+		glob, path string
+		want       bool
+	}{
+		{"**/*.go", "main.go", true},
+		{"**/*.go", "internal/trail/git.go", true},
+		{"**/*.go", "a/b/c/d/e.go", true},
+		{"**/*.go", "web/app.ts", false},
+		{"claude/agents/**", "claude/agents/reviewer.md", true},
+		{"claude/agents/**", "claude/agents/sub/x.md", true},
+		{"claude/agents/**", "claude/settings.json", false},
+		{"shared/AGENTS.md", "shared/AGENTS.md", true},
+		{"shared/AGENTS.md", "shared/skills/AGENTS.md", false},
+		{"web/**/*.tsx", "web/app.tsx", true},
+		{"web/**/*.tsx", "web/routes/deep/page.tsx", true},
+		{"web/**/*.tsx", "api/app.tsx", false},
+		{"*.md", "README.md", true},
+		{"*.md", "docs/README.md", false},
+	}
+	for _, tc := range cases {
+		if got := matchGlob(tc.glob, tc.path); got != tc.want {
+			t.Errorf("matchGlob(%q, %q) = %v, want %v", tc.glob, tc.path, got, tc.want)
+		}
+	}
+}
+
+// TestMatchGlobHandlesUnicodeAndClasses: an earlier version quoted one BYTE of
+// a multi-byte rune, producing a pattern that could never match, and turned
+// character classes into literal brackets. Both failed silently — a gate that
+// matches nothing has switched itself off without saying so.
+func TestMatchGlobHandlesUnicodeAndClasses(t *testing.T) {
+	cases := []struct {
+		glob, path string
+		want       bool
+	}{
+		{"src/år/*.go", "src/år/main.go", true},
+		{"src/år/*.go", "src/ar/main.go", false},
+		{"**/naïve/*.ts", "web/naïve/x.ts", true},
+		{"[a-z]*.go", "main.go", true},
+		{"[a-z]*.go", "Main.go", false},
+		{"[!a-z]*.go", "Main.go", true},
+		{"[!a-z]*.go", "main.go", false},
+		{"cmd/?arness/*.go", "cmd/harness/main.go", true},
+		{"cmd/?arness/*.go", "cmd/hharness/main.go", false},
+		{"a**b", "axxb", true},
+		{"a**b", "ax/xb", true},
+	}
+	for _, tc := range cases {
+		if got := matchGlob(tc.glob, tc.path); got != tc.want {
+			t.Errorf("matchGlob(%q, %q) = %v, want %v", tc.glob, tc.path, got, tc.want)
+		}
+	}
+}
+
+// TestCompileGlobRejectsUnterminatedClass asserts on compileGlob directly. An
+// earlier test called matchGlob("[unterminated", …) and passed for the wrong
+// reason: the pattern compiled fine as a literal, so it proved nothing.
+func TestCompileGlobRejectsUnterminatedClass(t *testing.T) {
+	if _, err := compileGlob("src/[abc/*.go"); err == nil {
+		t.Error("an unterminated character class compiled without error")
+	}
+	if matchGlob("src/[abc/*.go", "src/[abc/main.go") {
+		t.Error("a malformed glob matched instead of being rejected")
+	}
+}

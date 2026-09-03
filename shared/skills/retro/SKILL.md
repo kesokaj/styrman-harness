@@ -129,7 +129,7 @@ Show the user:
 
 If the user approves specific proposals:
 - Apply the changes to the target files in the harness repo
-- Run `./harness/setup.sh --dry-run` to verify deployment would succeed
+- Run `go run ./cmd/harness install --dry-run` to verify deployment would succeed without touching `$HOME` (`setup.sh` is only the bootstrap that invokes this before the binary itself is built)
 - Commit with message: `harness: apply retro proposals from YYYY-MM-DD`
 
 If the user rejects proposals:

@@ -17,7 +17,7 @@ Rows split by purpose, and the two halves are not owed alike. **Resumability** r
 | Artifact (under `.agents/docs/`) | Owner | Kind | Fires when |
 |---|---|---|---|
 | `changes/` entry | `changelog` | resumability | every commit touching source |
-| verification log in `testing/` | `harness dispatch` runs the project's own commands; the `verifier` agent is spent only to explain a failure | resumability | every commit touching source — changed code without covering tests = FAIL |
+| verification log in `testing/` | `harness dispatch` runs the project's own commands; the `verifier` agent is spent only to explain a failure | resumability | every commit touching source — changed code without covering tests = FAIL. Auto-detection covers tests and vet only; a project needing more (ARM64/AMD64 image builds, smoke checks) declares them in `verify` in `.agents/harness.json` |
 | review report in `reviews/` — from `reviewer`, or a `/code-review` run saved with only `Source:` and `Scope:` lines prepended and nothing else changed | `reviewer` (or `/code-review`) | accountability | diff ≥ `reviewLines` or ≥ `reviewFiles`; below that, read it yourself or run `/code-review` |
 | security findings in `reviews/` | `security` | accountability | a changed path touches auth, crypto, secrets, input parsing, or dependencies |
 | README / spec / `ROADMAP.md` updates | `documentation` | accountability | behavior, interfaces, or plan changed |

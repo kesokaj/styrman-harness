@@ -25,12 +25,12 @@ On Antigravity, first run `harness resume`. Then on either vendor run `harness c
 
 ### Step 1: Dispatch the Scan — in parallel
 
-Do not scan inline — never self-audit. Dispatch four subagents in parallel (on Claude Code these are subagents; on Antigravity use `invoke_subagent` — same names) and let the main loop only merge their findings:
+Do not scan inline — never self-audit. Dispatch three subagents in parallel (on Claude Code these are subagents; on Antigravity use `invoke_subagent` — same names) and run `harness dispatch --only verifier` for the verification row (plain `harness dispatch` would re-dispatch `reviewer` and `security` on top of the ones already running here), then let the main loop only merge the findings:
 
 - `explorer` — inventory and structure map of the target: uniformity across the project, orphaned/dead-code candidates
 - `reviewer` — standards pass, loading the `review-standards` skill: naming conventions, syntax errors, badly written functions, adherence to API specifications (check `<docs-root>/specs/`)
 - `security` — vulnerability pass: auth, secrets, input parsing, dependency surfaces
-- `verifier` — verification pass: run the local test suite and builds per `<docs-root>/testing/`; changed or audited code without covering tests is a finding
+- **Verification** — `harness dispatch --only verifier` runs the project's own commands (declared `verify` in `.agents/harness.json`, or auto-detected) as a script and records PASS/FAIL; audited code without covering tests is a finding regardless. The `verifier` agent is dispatched only to explain a FAIL that `harness dispatch` reports, not to run the suite itself.
 
 **Quality Standards:** the `review-standards` skill is the audit standard — its six criteria (dead code, flow tracing, standards conformance, directory layout, simplicity, decoupling) plus its `references/go-review.md` and `references/typescript-review.md` checklists; the `golang`/`typescript`/`frontend` skills are the idiom authority.
 

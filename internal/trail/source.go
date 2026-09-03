@@ -1,8 +1,11 @@
 package trail
 
 import (
+	"fmt"
 	"path"
+	"regexp"
 	"strings"
+	"sync"
 )
 
 // sourceExts are the file types whose change owes the DoD rows.
@@ -55,11 +58,7 @@ func (p Project) IsSourcePath(rel string) bool {
 		return false
 	}
 	for _, glob := range p.SourceGlobs {
-		if ok, _ := path.Match(glob, rel); ok {
-			return true
-		}
-		// A trailing /** also covers everything below the prefix.
-		if prefix, found := strings.CutSuffix(glob, "/**"); found && strings.HasPrefix(rel, prefix+"/") {
+		if matchGlob(glob, rel) {
 			return true
 		}
 	}
@@ -101,6 +100,108 @@ func (p Project) IsSourcePath(rel string) bool {
 		}
 	}
 	return false
+}
+
+// globCache memoises compiled source globs; IsSourcePath runs once per changed
+// file per gate invocation, and the pattern set is tiny and fixed per project.
+var globCache sync.Map // string -> *regexp.Regexp
+
+// matchGlob reports whether a path matches a glob, supporting `**` for "any
+// number of path segments".
+//
+// Go's path.Match deliberately does not implement `**` — its `*` never crosses
+// a separator, so `**/*.go` matches exactly one directory level. Since the
+// documented way to declare a project's source is patterns like `**/*.go` and
+// `claude/agents/**`, the matcher has to mean what the documentation says.
+func matchGlob(glob, name string) bool {
+	re, ok := globCache.Load(glob)
+	if !ok {
+		compiled, err := compileGlob(glob)
+		if err != nil {
+			return false
+		}
+		re, _ = globCache.LoadOrStore(glob, compiled)
+	}
+	return re.(*regexp.Regexp).MatchString(name)
+}
+
+// compileGlob translates a glob into an anchored regexp.
+//
+// It walks runes, not bytes: quoting one byte of a multi-byte character would
+// produce a pattern that can never match, and a gate that silently matches
+// nothing is a gate that silently switches itself off. Character classes are
+// passed through so the syntax stays a superset of path.Match's rather than
+// quietly turning `[a-z]*.go` into a search for a literal bracket.
+func compileGlob(glob string) (*regexp.Regexp, error) {
+	var b strings.Builder
+	b.WriteString("^")
+
+	runes := []rune(glob)
+	for i := 0; i < len(runes); i++ {
+		rest := string(runes[i:])
+		switch {
+		case strings.HasPrefix(rest, "**/"):
+			// Any number of leading segments, including none.
+			b.WriteString("(?:[^/]+/)*")
+			i += 2
+		case strings.HasPrefix(rest, "/**"):
+			// Everything beneath this prefix.
+			b.WriteString("(?:/.*)?")
+			i += 2
+		case strings.HasPrefix(rest, "**"):
+			b.WriteString(".*")
+			i++
+		case runes[i] == '*':
+			b.WriteString("[^/]*")
+		case runes[i] == '?':
+			b.WriteString("[^/]")
+		case runes[i] == '[':
+			class, next, err := compileClass(runes, i)
+			if err != nil {
+				return nil, err
+			}
+			b.WriteString(class)
+			i = next
+		default:
+			b.WriteString(regexp.QuoteMeta(string(runes[i])))
+		}
+	}
+
+	b.WriteString("$")
+	return regexp.Compile(b.String())
+}
+
+// compileClass translates a `[...]` character class, returning the regexp
+// fragment and the index of its closing bracket. An unterminated class is an
+// error rather than a literal: silently reinterpreting a malformed pattern is
+// how a gate ends up matching something nobody asked for.
+func compileClass(runes []rune, start int) (string, int, error) {
+	var b strings.Builder
+	b.WriteRune('[')
+
+	i := start + 1
+	if i < len(runes) && (runes[i] == '!' || runes[i] == '^') {
+		b.WriteRune('^')
+		i++
+	}
+	// A ']' immediately after the opener is a literal, per glob convention.
+	if i < len(runes) && runes[i] == ']' {
+		b.WriteString(`\]`)
+		i++
+	}
+	for ; i < len(runes); i++ {
+		switch runes[i] {
+		case ']':
+			b.WriteRune(']')
+			return b.String(), i, nil
+		case '\\', '^':
+			b.WriteRune('\\')
+			b.WriteRune(runes[i])
+		default:
+			b.WriteRune(runes[i])
+		}
+	}
+	return "", 0, fmt.Errorf("unterminated character class in glob %q", string(runes))
 }
 
 // securityPatterns name the surfaces that make the security row due: auth,

@@ -49,20 +49,13 @@ Shared seam: the `verifier` subagent may update `testing/<app>/` guides when a v
 
 Report which files you created/changed with a one-line summary of each. If you lacked information (unclear API contract, missing app name), say what's missing rather than guessing. If dispatched for an internal-only refactor, report "no doc changes needed" and why.
 
-## Reply budget — the artifact is the deliverable
+## Reply budget — the files are the deliverable
 
-Write your artifact with YAML frontmatter naming you as its owner:
+You are the one Definition-of-Done owner that writes no dated artifact of its own:
+you edit documents that already exist and belong to the project — README, specs,
+testing guides, ROADMAP. **Never** stamp `owner:`/`date:` frontmatter into them.
+That frontmatter marks trail artifacts, and a README is not one.
 
-```yaml
----
-owner: documentation
-date: <from `date +%F`, never memory>
----
-```
-
-The gates locate your artifact by that frontmatter, not by its filename — so name
-the file whatever reads best.
-
-Then reply in **at most ten lines**: a verdict, the artifact path, and up to three
-findings. Nothing else. The detail is already on disk; repeating it into the
-caller's context is what fills a session's window with what it just wrote.
+Reply in **at most ten lines**: what you changed, the paths, and anything you could
+not determine. Nothing else — the detail is in the files you just wrote, and
+repeating it into the caller's context is what fills a session's window twice over.

@@ -168,14 +168,21 @@ func runRows(proj trail.Project, cfg trail.Config, cli cliTool, rows []trail.Row
 	return results
 }
 
-// runAgentRow dispatches one row to a subagent headlessly.
-func runAgentRow(proj trail.Project, cfg trail.Config, cli cliTool, row trail.Row, day string) Result {
+// runAgentRow dispatches one row to a subagent headlessly. extra carries
+// material the agent cannot obtain for itself — the verification row's captured
+// failure output, for instance.
+func runAgentRow(proj trail.Project, cfg trail.Config, cli cliTool, row trail.Row, day string, extra ...string) Result {
 	start := time.Now()
 	ctx, cancel := context.WithTimeout(context.Background(),
 		time.Duration(cfg.DispatchTimeout)*time.Second)
 	defer cancel()
 
 	prompt := rowPrompt(proj, row, day)
+	for _, e := range extra {
+		if strings.TrimSpace(e) != "" {
+			prompt += "\n\nWhat already ran, and its output:\n" + e
+		}
+	}
 	out, err := cli.run(ctx, proj.Root, string(row), prompt)
 	res := Result{Row: row, Duration: time.Since(start).Round(time.Second).String()}
 
@@ -230,6 +237,10 @@ func rowPrompt(proj trail.Project, row trail.Row, day string) string {
 		task = "Review the current working-tree diff against the project's review standards."
 	case trail.RowSecurity:
 		task = "Security-review the current working-tree diff and its blast radius."
+	case trail.RowVerifier:
+		task = "Verification FAILED. The commands and their output are appended below — " +
+			"do not re-run the suite blind. Diagnose the root cause of the failure, " +
+			"and record it with a FAIL verdict."
 	default:
 		task = "Complete your Definition-of-Done row for the current changes."
 	}

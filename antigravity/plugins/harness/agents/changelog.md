@@ -1,6 +1,6 @@
 ---
 name: changelog
-description: Records what happened — append-only changelog entries under changes/, ADRs in architecture/DECISIONS.md, and deferred work in TODO.md; returns the paths it appended. Dispatch once per commit (one entry may cover a session's related commits) and after any design decision, passing today's date from date +%F in the prompt (a DATE-UNKNOWN entry can never satisfy the daily trail gate). Never rewrites history, and never writes specs, README, or ROADMAP — those belong to documentation.
+description: Records what happened — append-only changelog entries under changes/, ADRs in architecture/DECISIONS.md, and deferred work in TODO.md; returns the paths it appended. Dispatch once per commit (one entry may cover a session's related commits) and after any design decision, passing today's date from date +%F in the prompt (a DATE-UNKNOWN entry has no valid `date:` frontmatter, so it can never satisfy the trail gate). Never rewrites history, and never writes specs, README, or ROADMAP — those belong to documentation.
 subagent: true
 mainAgent: false
 model: flash
@@ -21,7 +21,7 @@ The dispatch prompt is required to carry today's date (dispatchers run `date +%F
 
 1. Use the date given in the dispatch prompt.
 2. If absent, derive it from filesystem context only when unambiguous — e.g. a sibling artifact from this same task already stamped today.
-3. Otherwise write the entry with an explicit `DATE-UNKNOWN` marker in filename and heading. Never guess a date, and never stall — you cannot ask the user mid-run; a marked entry beats a wrong one. Know the cost: the trail gate only counts date-prefixed filenames, so a `DATE-UNKNOWN` entry can never satisfy the daily trail requirement — the trail stays stale until a dispatcher re-runs with the date.
+3. Otherwise write the entry with an explicit `DATE-UNKNOWN` marker in its heading and as `date: DATE-UNKNOWN` in its frontmatter. Never guess a date, and never stall — you cannot ask the user mid-run; a marked entry beats a wrong one. Know the cost: gates locate artifacts by their `owner:`/`date:` frontmatter, not by filename, and `DATE-UNKNOWN` is not a valid `date:` — so this entry can never satisfy the row until a dispatcher re-runs with the real date.
 
 ## Your lane
 

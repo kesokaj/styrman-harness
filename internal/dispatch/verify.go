@@ -62,10 +62,12 @@ func runVerifier(proj trail.Project, cfg trail.Config, cli cliTool, day string) 
 	res.Duration = time.Since(start).Round(time.Second).String()
 
 	if !passed {
-		// Hand the failure to a model to explain and record. This is the only
-		// path where the verification row costs anything.
+		// Hand the failure to a model to explain and record — the only path
+		// where the verification row costs anything. The captured output goes
+		// with it: the verifier agent is forbidden from blind-rerunning the
+		// suite, so without the log it would have nothing to work from.
 		res.Detail = "tests failed — escalating to the verifier agent to explain"
-		esc := runAgentRow(proj, cfg, cli, trail.RowVerifier, day)
+		esc := runAgentRow(proj, cfg, cli, trail.RowVerifier, day, log.String())
 		esc.Duration = time.Since(start).Round(time.Second).String()
 		if esc.OK {
 			esc.OK = false // the artifact exists, but verification still failed

@@ -197,6 +197,23 @@ What was decided and why? Include specific technologies, configurations, or trad
 -->
 ```
 
+Create `.agents/harness.json` — the per-project thresholds and verify commands `harness dispatch` reads; JSON has no comments, so the fields below are documented here instead:
+
+```json
+{
+  "reviewLines": 50,
+  "reviewFiles": 5,
+  "dispatchTimeoutSeconds": 300,
+  "sourceGlobs": ["**/*.go", "web/**/*.ts", "web/**/*.tsx"],
+  "verify": ["go test ./... -race", "go vet ./..."]
+}
+```
+
+- `reviewLines` / `reviewFiles` — a diff at or above either threshold triggers the `reviewer` accountability row; below both, `harness dispatch` skips it. Defaults (shown above) apply if the file or the field is absent.
+- `dispatchTimeoutSeconds` — max wall time `harness dispatch` gives a subagent before treating the row as failed.
+- `sourceGlobs` — which changed paths count as "source" for triggering rows; adjust for the project's actual layout.
+- `verify` — the exact commands `harness dispatch` runs as the verification row. Omit the field to fall back to auto-detection: `go vet ./...` and `go test -race ./...` when `go.mod` exists at the project root, plus `npm test --if-present` when `package.json` exists at the project root — nothing is detected in subdirectories such as `web/`or `ui/`, and no other test runner (e.g. `vitest`) is auto-invoked. A project needing more — a runner auto-detection misses, image builds, smoke checks — must declare it here.
+
 ### Step 7: Create README.md
 
 If no `README.md` exists, create a basic one using the project overview from Step 2.

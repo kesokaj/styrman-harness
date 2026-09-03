@@ -42,7 +42,7 @@ Nothing generated is committed. The deployed files are assembled by `sh-agent in
 
 ## Testing
 
-There is no test framework beyond `go test`. A change to `context/`, `agents/`, or `skills/` is verified by `go run ./cmd/sh-agent install --home /tmp/x` succeeding and `go run ./cmd/sh-agent status --home /tmp/x` reporting no drift, then by one start of each CLI in the sandbox (`.agents/docs/testing/2026-09-03-verify-sandbox.md`) with its log grepped for parse errors. A verification log states what it did not exercise; "complete" or "all skills" is said only after the full matrix in `.agents/docs/testing/skill-matrix.md` has run.
+There is no test framework beyond `go test`. A change to `context/`, `agents/`, or `skills/` is verified by `go run ./cmd/sh-agent install --home /tmp/x` succeeding and `go run ./cmd/sh-agent status --home /tmp/x` reporting no drift, then by one start of each CLI in the sandbox (`.agents/docs/testing/2026-09-03-verify-sandbox.md`) with its log grepped for parse errors. A verification log states what it did not exercise; "complete" or "all skills" is said only after the full matrix in `.agents/docs/testing/skill-matrix.md` has run. Tested means tested from where it runs: after any install into a real home, the three smoke checks in `.agents/docs/testing/2026-09-03-verify-real-home.md` (context questions, one skill load, one agent dispatch) run from that home on each CLI before the install is called done.
 
 ## Key files
 

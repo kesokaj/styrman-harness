@@ -173,6 +173,10 @@ mkdir -p ~/.config/sh-agent/handoffs
 # Save as: ~/.config/sh-agent/handoffs/YYYY-MM-DD-<topic>.md
 ```
 
+### Cold-reader check — before the handoff counts as finished
+
+A handoff is done when a fresh reader can resume from it, not when it is saved. Run the Resume Protocol as that reader (yourself with the file only, or the `explorer` agent given the path and nothing else): AGENTS.md → TODO.md → this handoff → ROADMAP.md "Now" → the active plan's unticked boxes → the three newest `changes/` → `bugs/INDEX.md`. Ask for four things: the status and single next step as the trail states them, any named file that does not exist, any contradiction between handoff, ROADMAP, TODO, and plan, and anything still left to guess. Fix what comes back at the source (plan, ROADMAP, TODO via the dispatches above) and in the handoff itself while it is still this session's; then report.
+
 ## Step 7: Report to User
 
 After saving, tell the user:

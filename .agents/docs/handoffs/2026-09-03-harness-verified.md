@@ -23,8 +23,8 @@ The rebuilt harness (context, 28 skills, 7 subagents, the `sh-agent` installer) 
 
 ## Open / In Progress
 
-- The Mac: `sh-agent update`, then one interactive start of each CLI (`/skills`, `/agents`, a context-only question). Plan section 12 and `TODO.md` high priority. Nothing else is open.
-- No tuning before two weeks of use (ADR-009); then `/retro`.
+- The Mac: first time `git clone git@github.com:kesokaj/styrman-harness.git ~/workspace/styrman-harness && cd ~/workspace/styrman-harness && go run ./cmd/sh-agent install`; afterwards `sh-agent update`. Then one interactive start of each CLI: Claude Code `/memory` (expect `~/.claude/CLAUDE.md` importing `AGENTS.md`), `/skills` (28), `/agents` (7); Antigravity `/skills`, `/agents`, and a context-only question. After the next push from any machine, `sh-agent update --check` on the other (expect exit 2, then `sh-agent update`). Plan section 12 and `TODO.md` high priority. Nothing else is open.
+- No tuning before two weeks of use (ADR-009): the clock ends 2026-09-17; then `/retro`.
 
 ## Key Decisions
 
@@ -43,7 +43,7 @@ The rebuilt harness (context, 28 skills, 7 subagents, the `sh-agent` installer) 
 
 ## Environment State
 
-- Branch: main, clean after this handoff commit; real home installed at `ff58afd`.
+- Branch: main, clean; real home on the Linux box reinstalled at HEAD after every commit (`sh-agent status` → no drift). The Mac has no install yet as far as this box knows.
 - Running processes: none. Sandbox: `/home/kesokaj/sandbox/home` (both CLIs logged in), `demo-app`, `demo-app-agy`; test clones removed.
 - Pending: nothing uncommitted.
 
@@ -62,6 +62,6 @@ The rebuilt harness (context, 28 skills, 7 subagents, the `sh-agent` installer) 
 
 ## Next Steps
 
-1. On the Mac: `cd ~/workspace/styrman-harness && sh-agent update && sh-agent status`, start `claude` and `agy` once, run `/skills` and `/agents`, ask "which slash command grills a plan" (expect `/grilling`); tick plan section 12 and `TODO.md`.
+1. On the Mac: clone and `go run ./cmd/sh-agent install` if the repo is not there, else `sh-agent update`; `sh-agent status`; start `claude` (`/memory`, `/skills`, `/agents`) and `agy` (`/skills`, `/agents`) once; ask both "which slash command grills a plan" (expect `/grilling`); confirm `sh-agent update --check` after a push; tick plan section 12 and `TODO.md`.
 2. Use the harness on a real project for two weeks; log corrections as they happen.
 3. Then `/retro`, fold accepted proposals, and re-run the matrix if `context/` or `agents/` changed.

@@ -42,6 +42,13 @@ type Op struct {
 	Dst    string // absolute, under Home
 	Mirror bool   // mirror a directory, deleting destination extras
 	Mode   fs.FileMode
+
+	// AgyOwned marks a destination that `agy plugin install` writes itself.
+	// The op still describes the desired state so doctor can check it, but the
+	// installer must not copy into it: agy's canonical plugin location is this
+	// same path, so handing agy this directory makes it copy a tree onto
+	// itself — which truncates every file to zero bytes.
+	AgyOwned bool
 }
 
 // Run deploys the harness.
@@ -79,7 +86,16 @@ func Run(args []string) error {
 		if err != nil {
 			return err
 		}
+		// One predicate decides both halves. Guarding the skip on "agy exists"
+		// while guarding the install on "this is the real home" left a gap
+		// where neither ran: a scratch-home install — the procedure AGENTS.md
+		// mandates for development — deployed the plugin by no mechanism at
+		// all, then failed its own doctor, and re-running never fixed it.
+		agyInstalls := agyWillInstall(env)
 		for _, op := range ops {
+			if op.AgyOwned && agyInstalls {
+				continue // agy installs this itself, from the repo
+			}
 			if err := apply(op, *dryRun); err != nil {
 				return fmt.Errorf("%s: %w", t, err)
 			}
@@ -160,7 +176,7 @@ func Plan(env Env, t Target) ([]Op, error) {
 		return []Op{
 			{Src: env.repo("antigravity", "GEMINI.md"), Dst: filepath.Join(home, "GEMINI.md"), Mode: 0o644},
 			{Src: env.repo("shared", "skills"), Dst: filepath.Join(home, "config", "skills"), Mirror: true},
-			{Src: env.repo("antigravity", "plugins", "harness"), Dst: filepath.Join(home, "config", "plugins", "harness"), Mirror: true},
+			{Src: env.repo("antigravity", "plugins", "harness"), Dst: filepath.Join(home, "config", "plugins", "harness"), Mirror: true, AgyOwned: true},
 		}, nil
 	}
 	return nil, fmt.Errorf("unknown target %q", t)
@@ -242,26 +258,46 @@ func buildBinary(env Env, dst string, dryRun bool) error {
 // copies the plugin into its own canonical location. So a scratch-home install
 // must not call it, or a test run would reach out and modify the operator's
 // actual configuration.
+// The source is always the repo, never the deployed directory. agy's canonical
+// plugin location is ~/.gemini/config/plugins/<name>, so passing it that path
+// asks it to copy a tree onto itself — which truncated every file in the plugin
+// to zero bytes the first time this ran against a real home.
 func registerAgyPlugin(env Env, dryRun bool) error {
-	path := filepath.Join(env.Home, ".gemini", "config", "plugins", "harness")
+	src := env.repo("antigravity", "plugins", "harness")
+	dst := filepath.Join(env.Home, ".gemini", "config", "plugins", "harness")
 	if dryRun {
-		fmt.Printf("[dry-run] agy plugin install %s\n", path)
+		fmt.Printf("[dry-run] agy plugin install %s\n", src)
 		return nil
 	}
-	if !env.isRealHome() {
-		fmt.Println("skipping agy plugin install: --home is a scratch directory and agy would write to the real home")
+	if !agyWillInstall(env) {
+		if !env.isRealHome() {
+			fmt.Println("skipping agy plugin install: --home is a scratch directory and agy would write to the real home;",
+				"the plugin was mirrored to", dst, "instead")
+			return nil
+		}
+		fmt.Println("warning: agy not on PATH — plugin mirrored to", dst,
+			"but not registered; run `agy plugin install "+src+"` once agy is installed")
 		return nil
 	}
-	if _, err := exec.LookPath("agy"); err != nil {
-		fmt.Println("warning: agy not on PATH — plugin copied but not registered; run `agy plugin install", path+"` after installing agy")
-		return nil
-	}
-	cmd := exec.Command("agy", "plugin", "install", path)
+	cmd := exec.Command("agy", "plugin", "install", src)
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("agy plugin install: %w", err)
 	}
 	return nil
+}
+
+// agyWillInstall reports whether `agy plugin install` is actually going to run
+// for this install. Both the decision to skip mirroring an agy-owned directory
+// and the decision to invoke agy must consult exactly this — if they can
+// disagree, the plugin falls through the gap between them.
+func agyWillInstall(env Env) bool {
+	if _, err := exec.LookPath("agy"); err != nil {
+		return false
+	}
+	// agy has no --home and always writes to the real one, so a scratch-home
+	// install must not call it.
+	return env.isRealHome()
 }
 
 func apply(op Op, dryRun bool) error {

@@ -281,3 +281,75 @@ func TestCompileGlobRejectsUnterminatedClass(t *testing.T) {
 		t.Error("a malformed glob matched instead of being rejected")
 	}
 }
+
+// TestOwedSeesInitialCommit: `git diff-tree HEAD` prints nothing for a root
+// commit unless --root is passed, so without it a project's very first commit
+// owed no rows at all.
+func TestOwedSeesInitialCommit(t *testing.T) {
+	proj := newRepo(t)
+	write(t, filepath.Join(proj.Root, "main.go"), strings.Repeat("package main\n", 80))
+	commit(t, proj.Root, "initial")
+
+	rep := proj.Owed(DefaultConfig(), Today())
+	if len(rep.Changed) == 0 {
+		t.Fatal("the initial commit reported no changed source files")
+	}
+	if !hasRow(rep.Due, RowChangelog) {
+		t.Error("changelog row did not fire for the initial commit")
+	}
+}
+
+// TestOwedMeasuresCommittedLines: a clean tree has no working diff, so the
+// proportionality rule has to read the commit itself or every committed change
+// scores zero and skips the reviewer row however large it is.
+func TestOwedMeasuresCommittedLines(t *testing.T) {
+	proj := newRepo(t)
+	write(t, filepath.Join(proj.Root, "seed.go"), "package main\n")
+	commit(t, proj.Root, "seed")
+	write(t, filepath.Join(proj.Root, "big.go"), strings.Repeat("package main\n", 200))
+	commit(t, proj.Root, "a large committed change")
+
+	rep := proj.Owed(DefaultConfig(), Today())
+	if rep.Lines < 200 {
+		t.Errorf("Lines = %d for a 200-line commit against a clean tree", rep.Lines)
+	}
+	if !hasRow(rep.Due, RowReviewer) {
+		t.Error("reviewer row did not fire for a 200-line committed change")
+	}
+}
+
+// TestInitialCommitLinesCounted covers --root on the numstat path, which the
+// earlier tests exercised only via --name-only.
+func TestInitialCommitLinesCounted(t *testing.T) {
+	proj := newRepo(t)
+	write(t, filepath.Join(proj.Root, "main.go"), strings.Repeat("package main\n", 90))
+	commit(t, proj.Root, "initial")
+
+	if got := proj.HeadLinesToday(); got < 90 {
+		t.Errorf("HeadLinesToday() = %d on a root commit of 90 lines", got)
+	}
+}
+
+// TestLineCountingIsStableAcrossCommit: both counters must filter paths the
+// same way, or a change scores differently before and after it is committed and
+// the reviewer row fires on one side of the commit but not the other.
+func TestLineCountingIsStableAcrossCommit(t *testing.T) {
+	proj := newRepo(t)
+	write(t, filepath.Join(proj.Root, "seed.go"), "package main\n")
+	commit(t, proj.Root, "seed")
+
+	// A source file and a non-source file of equal size.
+	write(t, filepath.Join(proj.Root, "app.go"), strings.Repeat("package main\n", 60))
+	write(t, filepath.Join(proj.Root, "notes.md"), strings.Repeat("prose\n", 60))
+
+	before := proj.ChangedLines()
+	commit(t, proj.Root, "add both")
+	after := proj.HeadLinesToday()
+
+	if before != after {
+		t.Errorf("line count changed across the commit: %d before, %d after", before, after)
+	}
+	if before < 60 || before >= 120 {
+		t.Errorf("got %d lines; expected the .go file counted and the .md file ignored", before)
+	}
+}

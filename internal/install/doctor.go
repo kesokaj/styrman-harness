@@ -246,9 +246,18 @@ func hashFile(path string) (string, error) {
 	return hex.EncodeToString(sum[:]), nil
 }
 
-// dirDiff lists relative paths under src that are missing from dst or differ.
+// dirDiff lists relative paths that differ between src and dst: missing,
+// changed, or present in dst but no longer in src.
+//
+// The second walk is not symmetry for its own sake. Where the installer hands a
+// directory to an external tool rather than mirroring it, nothing runs
+// pruneExtras — so a file deleted from the repo lingers in the deployment, and
+// a one-directional walk would never mention it. "Drift is loud" has to include
+// drift made of things that should no longer be there.
 func dirDiff(src, dst string) ([]string, error) {
 	var diff []string
+	inSrc := map[string]bool{}
+
 	err := filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
@@ -257,6 +266,7 @@ func dirDiff(src, dst string) ([]string, error) {
 		if err != nil {
 			return err
 		}
+		inSrc[relPath] = true
 		same, err := sameContent(path, filepath.Join(dst, relPath))
 		if err != nil {
 			return err
@@ -264,6 +274,25 @@ func dirDiff(src, dst string) ([]string, error) {
 		if !same {
 			diff = append(diff, relPath)
 		}
+		return nil
+	})
+	if err != nil {
+		return diff, err
+	}
+
+	// Anything deployed that the repo no longer has.
+	err = filepath.WalkDir(dst, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil // a destination that cannot be read is reported by the first walk
+		}
+		if d.IsDir() {
+			return nil
+		}
+		relPath, err := filepath.Rel(dst, path)
+		if err != nil || inSrc[relPath] {
+			return nil
+		}
+		diff = append(diff, relPath+" (deployed but not in the repo)")
 		return nil
 	})
 	return diff, err

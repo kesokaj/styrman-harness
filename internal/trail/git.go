@@ -50,13 +50,20 @@ func (p Project) DirtySource() []string {
 
 // HeadSourceToday lists source files in HEAD when HEAD was committed today.
 // Committed-but-unrecorded still owes the trail.
+//
+// --root is what makes a repository's first commit visible: without it,
+// diff-tree compares against a parent that does not exist and prints nothing,
+// so an initial commit would owe no rows at all.
 func (p Project) HeadSourceToday() []string {
-	day, err := git(p.Root, "log", "-1", "--format=%cd", "--date=short")
-	if err != nil || day != Today() {
+	if !p.headIsToday() {
 		return nil
 	}
-	// diff-tree names files for merge commits too, which `git show` suppresses.
-	out, err := git(p.Root, "diff-tree", "-r", "--no-commit-id", "--name-only", "HEAD")
+	// Known limitation: diff-tree prints nothing for a merge commit, with or
+	// without --root. A merge whose HEAD is a merge therefore reports no
+	// changed files. That is tolerable because the rows were owed on the
+	// branch's own commits, and a gate that over-reports on every merge would
+	// be worse — but it is a gap, not a design.
+	out, err := git(p.Root, "diff-tree", "-r", "--root", "--no-commit-id", "--name-only", "HEAD")
 	if err != nil {
 		return nil
 	}
@@ -67,6 +74,26 @@ func (p Project) HeadSourceToday() []string {
 		}
 	}
 	return files
+}
+
+// HeadLinesToday counts added+removed lines in HEAD when it was committed
+// today. Without it the proportionality rule cannot measure committed work at
+// all: a clean tree has no diff, so an already-committed change scored zero
+// lines and skipped the reviewer row however large it was.
+func (p Project) HeadLinesToday() int {
+	if !p.headIsToday() {
+		return 0
+	}
+	out, err := git(p.Root, "diff-tree", "-r", "--root", "--no-commit-id", "--numstat", "HEAD")
+	if err != nil {
+		return 0
+	}
+	return p.sumNumstat(out)
+}
+
+func (p Project) headIsToday() bool {
+	day, err := git(p.Root, "log", "-1", "--format=%cd", "--date=short")
+	return err == nil && day == Today()
 }
 
 // ChangedLines counts added+removed lines across the working tree and index,
@@ -86,15 +113,31 @@ func (p Project) ChangedLines() int {
 		if err != nil {
 			continue
 		}
-		for _, line := range strings.Split(out, "\n") {
-			fields := strings.Fields(line)
-			if len(fields) < 3 {
-				continue
-			}
-			total += atoiSafe(fields[0]) + atoiSafe(fields[1])
-		}
+		total += p.sumNumstat(out)
 	}
 	return total + p.untrackedLines()
+}
+
+// sumNumstat totals added+removed lines over numstat output, counting only
+// source paths.
+//
+// Both line counters must filter identically, or the same change scores
+// differently before and after it is committed — and the reviewer row would
+// fire on one side of a commit but not the other.
+func (p Project) sumNumstat(out string) int {
+	total := 0
+	for _, line := range strings.Split(out, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 3 {
+			continue
+		}
+		// A rename renders as `old => new`; the destination is the last field.
+		if !p.IsSourcePath(fields[len(fields)-1]) {
+			continue
+		}
+		total += atoiSafe(fields[0]) + atoiSafe(fields[1])
+	}
+	return total
 }
 
 // untrackedLines counts the lines of untracked source files.

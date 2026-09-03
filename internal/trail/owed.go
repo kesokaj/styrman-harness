@@ -91,14 +91,18 @@ func (p Project) Owed(cfg Config, day string) Report {
 	}
 	p.SourceGlobs = cfg.SourceGlobs
 
+	// Uncommitted work first; failing that, work committed today that the trail
+	// may not yet cover. The line count has to come from the same place, or a
+	// committed change is measured against an empty working tree and scores nil.
 	rep.Changed = p.DirtySource()
+	rep.Lines = p.ChangedLines()
 	if len(rep.Changed) == 0 {
 		rep.Changed = p.HeadSourceToday()
+		rep.Lines = p.HeadLinesToday()
 	}
 	if len(rep.Changed) == 0 {
 		return rep
 	}
-	rep.Lines = p.ChangedLines()
 
 	add := func(row Row, reason string) {
 		if p.HasArtifact(row, day) {

@@ -2,11 +2,11 @@
 
 <!-- Division of labor: ROADMAP.md = where the project is going; TODO.md = small deferred items; .agents/docs/plans/ = how. -->
 
-Last reviewed: 2026-09-03
+Last reviewed: 2026-09-04
 
 ## Now
 
-Real use. The rebuild is verified on the Linux box for both CLIs (every skill and agent, sandbox and real home — `.agents/docs/testing/`), and installed in the operator's real home there. What is left is the Mac: `sh-agent update`, then one interactive start of each CLI to confirm `~/.gemini/config/rules/AGENTS.md`, the seven agents, and the 28 skills load (checklist: `.agents/docs/plans/2026-09-03-rebuild.md`, section 12). No tuning before two weeks of use (ADR-009).
+Real use. The rebuild is verified on both the Linux box (both CLIs) and the Mac (Antigravity with `--vendor antigravity`, `.agents/docs/testing/2026-09-04-verify-mac-real-home.md`), installed in the operator's real home on both machines. No tuning before two weeks of use (ADR-009).
 
 ## Next
 

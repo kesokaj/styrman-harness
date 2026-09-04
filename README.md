@@ -21,7 +21,7 @@ Harness state (feedback log, retro proposals, global handoffs) lives in `~/.conf
 |---|---|
 | `sh-agent status` | Shows what is installed, from which commit, and every file that drifted. Exit 1 on drift. |
 | `sh-agent diff` | Unified diff of every drifted file (installed vs repo). |
-| `sh-agent install` (or `sync`) | Deploys the repo. Idempotent; removes files a previous install wrote that the repo no longer has. |
+| `sh-agent install` (or `sync`) | Deploys the repo (`--vendor antigravity\|claude\|all`). Idempotent; removes files a previous install wrote that the repo no longer has. |
 | `sh-agent update` | `git fetch` the harness repo; if behind, `pull --ff-only`, rebuild, and reinstall. `--check` only reports (exit 2 when behind). |
 | `sh-agent uninstall` | Removes exactly the files it installed (from its manifest) and nothing else. |
 | `sh-agent list` | Prints the skill and agent inventory. |
@@ -29,7 +29,7 @@ Harness state (feedback log, retro proposals, global handoffs) lives in `~/.conf
 | `sh-agent adopt <name\|path>` | Copies a skill installed elsewhere (for example by `npx skills add -g`) into `skills/`. |
 | `sh-agent version` | Prints the build version. |
 
-Every command accepts `--home DIR` (install somewhere other than `$HOME`, used by the tests) and `--repo DIR`. Without `--repo`, sh-agent finds the checkout from `$SH_AGENT_REPO`, the working directory, or the path it recorded at the last install — so `sh-agent update` works from anywhere.
+Every command accepts `--vendor VENDOR` (target `all` [default], `antigravity` / `agy`, or `claude`), `--home DIR` (install somewhere other than `$HOME`, used by the tests) and `--repo DIR`. Without `--repo`, sh-agent finds the checkout from `$SH_AGENT_REPO`, the working directory, or the path it recorded at the last install — so `sh-agent update` works from anywhere.
 
 ## The loop: edit on one machine, pull on another
 

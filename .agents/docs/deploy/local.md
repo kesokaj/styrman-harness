@@ -9,7 +9,7 @@ target: local
 
 ## Prerequisites
 
-Go 1.24+ and git. `~/.local/bin` on `PATH`. Claude Code and/or the Antigravity CLI installed; both are optional, the installer writes for both.
+Go 1.24+ and git. `~/.local/bin` on `PATH`. Claude Code and/or the Antigravity CLI installed; both are optional, the installer writes for both by default or selectively with `--vendor`.
 
 ## Build and install
 
@@ -17,12 +17,14 @@ Go 1.24+ and git. `~/.local/bin` on `PATH`. Claude Code and/or the Antigravity C
 cd ~/workspace/styrman-harness
 gofmt -l . && go vet ./... && go test -race ./...   # before deploying anything
 go run ./cmd/sh-agent install                        # writes ~/.claude and ~/.gemini/config, copies itself to ~/.local/bin/sh-agent
+# or for Antigravity only:
+# go run ./cmd/sh-agent install --vendor antigravity
 sh-agent status                                      # must end with "drift none"
 ```
 
 ## Configure
 
-Nothing to configure. `--repo DIR` overrides where the checkout is; `$SH_AGENT_REPO` does the same persistently. `--home DIR` installs elsewhere and is what every development run uses.
+Nothing to configure. `--vendor VENDOR` selects the target CLI: `all` (default), `antigravity` (or `agy`), or `claude`. `--repo DIR` overrides where the checkout is; `$SH_AGENT_REPO` does the same persistently. `--home DIR` installs elsewhere and is what every development run uses.
 
 ## Verify
 

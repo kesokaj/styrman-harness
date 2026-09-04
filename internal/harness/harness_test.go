@@ -217,12 +217,12 @@ func TestInstallStatusResyncUninstall(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	files, err := Plan(repo, self)
+	files, err := Plan(repo, self, VendorAll)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err := Install(repo, home, files, false, &out); err != nil {
+	if err := Install(repo, home, files, VendorAll, false, &out); err != nil {
 		t.Fatal(err)
 	}
 	for _, rel := range []string{
@@ -263,7 +263,7 @@ func TestInstallStatusResyncUninstall(t *testing.T) {
 		t.Errorf("fresh install should be clean apart from the foreign CLAUDE.md: %+v", report.Counts)
 	}
 	// status and diff plan without the binary; the installed one is not stale.
-	noSelf, err := Plan(repo, nil)
+	noSelf, err := Plan(repo, nil, VendorAll)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -287,12 +287,12 @@ func TestInstallStatusResyncUninstall(t *testing.T) {
 	if err := os.RemoveAll(filepath.Join(repo, "skills", "beta")); err != nil {
 		t.Fatal(err)
 	}
-	files, err = Plan(repo, self)
+	files, err = Plan(repo, self, VendorAll)
 	if err != nil {
 		t.Fatal(err)
 	}
 	out.Reset()
-	if err := Install(repo, home, files, false, &out); err != nil {
+	if err := Install(repo, home, files, VendorAll, false, &out); err != nil {
 		t.Fatal(err)
 	}
 	for _, rel := range []string{".claude/skills/beta", ".gemini/config/skills/beta"} {
@@ -337,11 +337,11 @@ func TestInstallStatusResyncUninstall(t *testing.T) {
 func TestInstallWritesOwnClaudeStub(t *testing.T) {
 	repo := newRepo(t)
 	home := t.TempDir()
-	files, err := Plan(repo, nil)
+	files, err := Plan(repo, nil, VendorAll)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := Install(repo, home, files, false, &bytes.Buffer{}); err != nil {
+	if err := Install(repo, home, files, VendorAll, false, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
 	got, err := os.ReadFile(filepath.Join(home, ClaudeRoot, "CLAUDE.md"))
@@ -350,6 +350,129 @@ func TestInstallWritesOwnClaudeStub(t *testing.T) {
 	}
 	if !IsOurs(got) || !strings.Contains(string(got), "\n@AGENTS.md\n") {
 		t.Errorf("stub = %q", got)
+	}
+}
+
+func TestVendorSelection(t *testing.T) {
+	// NormalizeVendor checks
+	for _, in := range []string{"", "all", "ALL", " all "} {
+		if got, err := NormalizeVendor(in); err != nil || got != VendorAll {
+			t.Errorf("NormalizeVendor(%q) = %q, err %v", in, got, err)
+		}
+	}
+	for _, in := range []string{"antigravity", "Antigravity", "agy", "gemini"} {
+		if got, err := NormalizeVendor(in); err != nil || got != VendorAntigravity {
+			t.Errorf("NormalizeVendor(%q) = %q, err %v", in, got, err)
+		}
+	}
+	for _, in := range []string{"claude", "Claude", "claudecode"} {
+		if got, err := NormalizeVendor(in); err != nil || got != VendorClaude {
+			t.Errorf("NormalizeVendor(%q) = %q, err %v", in, got, err)
+		}
+	}
+	if _, err := NormalizeVendor("invalid-vendor"); err == nil {
+		t.Error("NormalizeVendor should reject unknown vendor")
+	}
+
+	repo := newRepo(t)
+	self := []byte("#!/bin/sh\necho sh-agent\n")
+
+	// Plan for antigravity only
+	agyPlan, err := Plan(repo, self, VendorAntigravity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range agyPlan {
+		if strings.HasPrefix(f.Rel, ClaudeRoot) {
+			t.Errorf("antigravity plan contains Claude file %s", f.Rel)
+		}
+	}
+	foundAgyAgents := false
+	for _, f := range agyPlan {
+		if f.Rel == filepath.Join(AgyRoot, "rules", "AGENTS.md") {
+			foundAgyAgents = true
+		}
+	}
+	if !foundAgyAgents {
+		t.Error("antigravity plan missing rules/AGENTS.md")
+	}
+
+	// Plan for claude only
+	claudePlan, err := Plan(repo, self, VendorClaude)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range claudePlan {
+		if strings.HasPrefix(f.Rel, AgyRoot) {
+			t.Errorf("claude plan contains Antigravity file %s", f.Rel)
+		}
+	}
+
+	// Install antigravity-only to clean home
+	home := t.TempDir()
+	var out bytes.Buffer
+	if err := Install(repo, home, agyPlan, VendorAntigravity, false, &out); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(home, ClaudeRoot)); err == nil {
+		t.Errorf(".claude should not exist after antigravity-only install")
+	}
+	if _, err := os.Stat(filepath.Join(home, AgyRoot, "rules", "AGENTS.md")); err != nil {
+		t.Errorf("expected antigravity rules/AGENTS.md to exist: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(home, BinPath)); err != nil {
+		t.Errorf("expected binary to be installed: %v", err)
+	}
+
+	// Verify state records vendor
+	st, found, err := LoadState(home)
+	if err != nil || !found {
+		t.Fatalf("LoadState failed: %v, found: %v", err, found)
+	}
+	if st.Vendor != VendorAntigravity {
+		t.Errorf("state vendor = %q, want %q", st.Vendor, VendorAntigravity)
+	}
+
+	// Status check with antigravity plan has no drift
+	noSelfAgy, err := Plan(repo, nil, VendorAntigravity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, err := Status(home, noSelfAgy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Drift() {
+		t.Errorf("antigravity status has drift: %+v", report.Counts)
+	}
+
+	// Switch from antigravity to all, then back to antigravity:
+	// Verify resync removes Claude files when returning to antigravity
+	allPlan, err := Plan(repo, self, VendorAll)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Install(repo, home, allPlan, VendorAll, false, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(home, ClaudeRoot, "AGENTS.md")); err != nil {
+		t.Fatalf("expected .claude/AGENTS.md after installing all: %v", err)
+	}
+
+	// Now switch back to antigravity
+	out.Reset()
+	if err := Install(repo, home, agyPlan, VendorAntigravity, false, &out); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(home, ClaudeRoot, "AGENTS.md")); err == nil {
+		t.Errorf(".claude/AGENTS.md should have been removed by resync when switching back to antigravity")
+	}
+	st, _, err = LoadState(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Vendor != VendorAntigravity {
+		t.Errorf("state vendor = %q, want %q", st.Vendor, VendorAntigravity)
 	}
 }
 

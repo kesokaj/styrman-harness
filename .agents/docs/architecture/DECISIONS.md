@@ -89,3 +89,12 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
 **Decision:** The global context still stores nothing and still asks before the first GCP action. Once the user answers, the values are recorded in the project's `.agents/docs/deploy/gcp.md` (project ID, region, Artifact Registry repository, service, visibility), the project `AGENTS.md` only points there, and `cloud-run-deploy` reads that file first. ADR-006's naming decision stands; its "never stored" clause is superseded for project-level storage only.
 
 **Consequences:** One question per project instead of one per session; the recorded values are reviewable in the project's own trail and never leak across projects. A missing or empty `gcp.md` means ask, never guess.
+
+## ADR-012: Selective vendor deployment via `--vendor`     (2026-09-04) — Accepted
+
+**Context:** The installer previously deployed unconditionally to both `~/.claude` and `~/.gemini/config`. When operating on a machine dedicated to Antigravity (or Claude Code only), writing unneeded vendor directories pollutes the home environment and generates unused files.
+
+**Decision:** `sh-agent` supports `--vendor <all|antigravity|claude>` (with `agy` as an alias for `antigravity`). When a specific vendor is selected, `Plan` generates files only for that vendor's customization directory plus the harness binary (`~/.local/bin/sh-agent`). The active vendor is saved in `state.json` so `status`, `diff`, and `update` default to the installed vendor without re-specifying the flag. Omitting the flag on a fresh install defaults to `all`, preserving backward compatibility.
+
+**Consequences:** A machine with only Antigravity installed remains clean with zero `.claude/` directories created. If the operator later chooses to switch vendors or deploy `all`, `Install`'s resync cleanly handles additions or deletions.
+

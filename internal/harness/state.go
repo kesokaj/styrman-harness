@@ -16,6 +16,7 @@ type State struct {
 	Repo        string   `json:"repo"`
 	Commit      string   `json:"commit"`
 	InstalledAt string   `json:"installedAt"`
+	Vendor      string   `json:"vendor,omitempty"`
 	Files       []string `json:"files"` // relative to $HOME, sorted
 }
 
@@ -36,6 +37,9 @@ func LoadState(home string) (State, bool, error) {
 	var s State
 	if err := json.Unmarshal(data, &s); err != nil {
 		return State{}, false, fmt.Errorf("parsing %s: %w", statePath(home), err)
+	}
+	if s.Vendor == "" {
+		s.Vendor = VendorAll
 	}
 	return s, true, nil
 }

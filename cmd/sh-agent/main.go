@@ -30,7 +30,7 @@ import (
 const usage = `sh-agent — lifecycle tool for the sh-agent harness
 
 Commands:
-  install [--dry-run]     deploy context, skills, and agents into ~/.claude and ~/.gemini/config (alias: sync)
+  install [--vendor V] [--dry-run]  deploy context, skills, and agents into ~/.claude and/or ~/.gemini/config (alias: sync)
   status                  show what is installed and whether it drifted from the repo (exit 1 on drift)
   diff                    unified diff of every drifted file
   update [--check]        git fetch the harness repo; pull --ff-only and reinstall when behind (--check only reports, exit 2 when behind)
@@ -41,8 +41,9 @@ Commands:
   version                 print the build version
 
 Flags accepted by every command:
-  --repo DIR    harness checkout (default: --repo, $SH_AGENT_REPO, the working directory or its parents, then the last install)
-  --home DIR    install under DIR instead of $HOME (for testing)
+  --repo DIR        harness checkout (default: --repo, $SH_AGENT_REPO, the working directory or its parents, then the last install)
+  --home DIR        install under DIR instead of $HOME (for testing)
+  --vendor VENDOR   target vendor: all, antigravity (or agy), claude (default: from manifest if installed, else all)
 `
 
 func main() {
@@ -72,6 +73,7 @@ func run(args []string, out io.Writer) error {
 	fs.SetOutput(out)
 	repoFlag := fs.String("repo", "", "harness checkout")
 	homeFlag := fs.String("home", "", "install under this directory instead of $HOME")
+	vendorFlag := fs.String("vendor", "", "target vendor: all, antigravity (or agy), claude")
 	dryRun := fs.Bool("dry-run", false, "print what would change, change nothing")
 	check := fs.Bool("check", false, "update: only report whether the repo is behind")
 	force := fs.Bool("force", false, "adopt: replace an existing skill")
@@ -103,31 +105,39 @@ func run(args []string, out io.Writer) error {
 
 	switch cmd {
 	case "install", "sync":
+		vendor, err := resolveVendor(*vendorFlag, home)
+		if err != nil {
+			return err
+		}
 		self, err := selfExecutable()
 		if err != nil {
 			return err
 		}
-		files, err := harness.Plan(repo, self)
+		files, err := harness.Plan(repo, self, vendor)
 		if err != nil {
 			return err
 		}
-		if err := harness.Install(repo, home, files, *dryRun, out); err != nil {
+		if err := harness.Install(repo, home, files, vendor, *dryRun, out); err != nil {
 			return err
 		}
 		return pathHint(home, out)
 
 	case "status":
-		return status(repo, home, out)
+		return status(repo, home, *vendorFlag, out)
 
 	case "diff":
-		files, err := harness.Plan(repo, nil)
+		vendor, err := resolveVendor(*vendorFlag, home)
+		if err != nil {
+			return err
+		}
+		files, err := harness.Plan(repo, nil, vendor)
 		if err != nil {
 			return err
 		}
 		return harness.Diff(home, files, out)
 
 	case "update":
-		return update(repo, home, *check, *homeFlag, out)
+		return update(repo, home, *check, *homeFlag, *vendorFlag, out)
 
 	case "list":
 		inv, err := harness.LoadInventory(repo)
@@ -163,7 +173,18 @@ func run(args []string, out io.Writer) error {
 	return fmt.Errorf("unknown command %q\n\n%s", cmd, usage)
 }
 
-func status(repo, home string, out io.Writer) error {
+func resolveVendor(flagVal, home string) (string, error) {
+	if flagVal != "" {
+		return harness.NormalizeVendor(flagVal)
+	}
+	st, found, err := harness.LoadState(home)
+	if err == nil && found && st.Vendor != "" {
+		return harness.NormalizeVendor(st.Vendor)
+	}
+	return harness.VendorAll, nil
+}
+
+func status(repo, home, vendorFlag string, out io.Writer) error {
 	info := harness.Inspect(repo)
 	dirty := "clean"
 	if info.Dirty {
@@ -179,7 +200,11 @@ func status(repo, home string, out io.Writer) error {
 		fmt.Fprintln(out, "installed  nothing — run `sh-agent install`")
 		return exitCode(1)
 	}
-	fmt.Fprintf(out, "installed  %s from commit %s (%d files, manifest ~/.config/sh-agent/state.json)\n", st.InstalledAt, st.Commit, len(st.Files))
+	vDisplay := st.Vendor
+	if vDisplay == "" {
+		vDisplay = harness.VendorAll
+	}
+	fmt.Fprintf(out, "installed  %s from commit %s (vendor: %s, %d files, manifest ~/.config/sh-agent/state.json)\n", st.InstalledAt, st.Commit, vDisplay, len(st.Files))
 	if last, ok := harness.LastRetro(home); ok {
 		days := int(time.Since(last).Hours() / 24)
 		hint := ""
@@ -191,15 +216,24 @@ func status(repo, home string, out io.Writer) error {
 		fmt.Fprintln(out, "retro      none yet — run /retro at the end of a session with corrections")
 	}
 
+	vendor, err := resolveVendor(vendorFlag, home)
+	if err != nil {
+		return err
+	}
+
 	inv, err := harness.LoadInventory(repo)
 	if err != nil {
 		return err
 	}
 	fmt.Fprintf(out, "repo has   %d skills, %d agents, %d commands, %d rules\n", len(inv.Skills), len(inv.Agents), len(inv.Commands), len(inv.Rules))
-	fmt.Fprintf(out, "claude     ~/%s  (AGENTS.md, CLAUDE.md, skills/, agents/, commands/, rules/)\n", harness.ClaudeRoot)
-	fmt.Fprintf(out, "agy        ~/%s  (rules/AGENTS.md, skills/, agents/, workflows/, rules/)\n", harness.AgyRoot)
+	if vendor == harness.VendorAll || vendor == harness.VendorClaude {
+		fmt.Fprintf(out, "claude     ~/%s  (AGENTS.md, CLAUDE.md, skills/, agents/, commands/, rules/)\n", harness.ClaudeRoot)
+	}
+	if vendor == harness.VendorAll || vendor == harness.VendorAntigravity {
+		fmt.Fprintf(out, "agy        ~/%s  (rules/AGENTS.md, skills/, agents/, workflows/, rules/)\n", harness.AgyRoot)
+	}
 
-	files, err := harness.Plan(repo, nil)
+	files, err := harness.Plan(repo, nil, vendor)
 	if err != nil {
 		return err
 	}
@@ -224,7 +258,7 @@ func status(repo, home string, out io.Writer) error {
 	return exitCode(1)
 }
 
-func update(repo, home string, checkOnly bool, homeFlag string, out io.Writer) error {
+func update(repo, home string, checkOnly bool, homeFlag, vendorFlag string, out io.Writer) error {
 	behind, err := harness.Behind(repo)
 	if err != nil {
 		return err
@@ -248,6 +282,13 @@ func update(repo, home string, checkOnly bool, homeFlag string, out io.Writer) e
 	if homeFlag != "" {
 		args = append(args, "--home", home)
 	}
+	vendor, err := resolveVendor(vendorFlag, home)
+	if err != nil {
+		return err
+	}
+	if vendor != harness.VendorAll {
+		args = append(args, "--vendor", vendor)
+	}
 	return harness.Reinstall(repo, args, out)
 }
 
@@ -255,7 +296,11 @@ func update(repo, home string, checkOnly bool, homeFlag string, out io.Writer) e
 // `sh-agent adopt my-skill --home /tmp/x` parses; the flag package stops at
 // the first positional argument otherwise.
 func reorder(args []string) []string {
-	takesValue := map[string]bool{"-repo": true, "--repo": true, "-home": true, "--home": true}
+	takesValue := map[string]bool{
+		"-repo": true, "--repo": true,
+		"-home": true, "--home": true,
+		"-vendor": true, "--vendor": true,
+	}
 	var flags, positional []string
 	for i := 0; i < len(args); i++ {
 		a := args[i]

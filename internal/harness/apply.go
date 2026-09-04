@@ -16,7 +16,11 @@ import (
 // Install writes the planned files under home, removes files a previous
 // install wrote that the plan no longer contains, and records the manifest.
 // Writing is idempotent: an unchanged file is neither rewritten nor reported.
-func Install(repo, home string, files []File, dryRun bool, out io.Writer) error {
+func Install(repo, home string, files []File, vendor string, dryRun bool, out io.Writer) error {
+	v, err := NormalizeVendor(vendor)
+	if err != nil {
+		return err
+	}
 	old, _, err := LoadState(home)
 	if err != nil {
 		return err
@@ -73,7 +77,7 @@ func Install(repo, home string, files []File, dryRun bool, out io.Writer) error 
 
 	sort.Strings(manifest)
 	commit, _ := gitOut(repo, "rev-parse", "--short", "HEAD")
-	st := State{Repo: repo, Commit: commit, InstalledAt: time.Now().Format(time.RFC3339), Files: manifest}
+	st := State{Repo: repo, Commit: commit, InstalledAt: time.Now().Format(time.RFC3339), Vendor: v, Files: manifest}
 	if !dryRun {
 		if err := SaveState(home, st); err != nil {
 			return fmt.Errorf("saving manifest: %w", err)

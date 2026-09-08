@@ -13,7 +13,7 @@ Checkpoints are what resume reads, written at fixed moments: after every plan ph
 ## Definition of Done, in this order
 
 1. **Tests and verification:** `verifier` runs the project's commands and every tier the plan names and writes the log in `testing/`. Changed code without a covering test is a FAIL, reported, never hidden.
-2. **Review:** `reviewer` for 50+ lines or 5+ files, given the diff only, never the intent; below that read the diff yourself and say so in the changelog. `security` whenever auth, crypto, secrets, IAM, input parsing, or dependencies are touched. Findings are fixed or rebutted in writing; three rounds without convergence means stop and ask the user.
+2. **Review:** `reviewer` for 50+ lines or 5+ files, given the diff only, never the intent; below that read the diff yourself and say so in the changelog. `security` whenever auth, crypto, secrets, IAM, input parsing, or dependencies are touched. Findings are fixed or rebutted in writing; three rounds without convergence means stop and ask the user. When a SECOND round of findings lands on the same mechanism, or a fix introduces the next round's defect, stop fixing and ask what the mechanism is for — the answer is often that it can be deleted rather than repaired. A fix that makes the code shorter is worth more than one that makes it more defended.
 3. **Docs:** `documentation` when behavior, interfaces, the plan, or a deploy path changed. `docs/deploy/{local,remote,gcp}.md` are the deploy guides: how the project runs here, on a remote box, and on GCP; `/preflight` deploys only by them.
 4. **Records:** `changelog` writes the entry and names the agents dispatched; `bugs` records anything that went wrong; tick the plan.
 5. **Commit and push.**

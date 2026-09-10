@@ -13,7 +13,7 @@ Checkpoints are what resume reads, written at fixed moments: after every plan ph
 ## Definition of Done, in this order
 
 1. **Tests and verification:** `verifier` runs the project's commands and every tier the plan names and writes the log in `testing/`. Changed code without a covering test is a FAIL, reported, never hidden.
-2. **Review:** `reviewer` for 50+ lines or 5+ files, given the diff only, never the intent; below that read the diff yourself and say so in the changelog. `security` whenever auth, crypto, secrets, IAM, input parsing, or dependencies are touched. Findings are fixed or rebutted in writing; three rounds without convergence means stop and ask the user. When a SECOND round of findings lands on the same mechanism, or a fix introduces the next round's defect, stop fixing and ask what the mechanism is for — the answer is often that it can be deleted rather than repaired. A fix that makes the code shorter is worth more than one that makes it more defended.
+2. **Review:** `reviewer` for 50+ lines or 5+ files, given the diff only (a git range or a path list, never the intent; a saved diff file only when the tree will stand still, and the reviewer pins the blobs it read); below that read the diff yourself and say so in the changelog. `security` whenever auth, crypto, secrets, IAM, input parsing, or dependencies are touched. Findings are fixed or rebutted in writing; three rounds without convergence means stop and ask the user. When a SECOND round of findings lands on the same mechanism, or a fix introduces the next round's defect, stop fixing and ask what the mechanism is for — the answer is often that it can be deleted rather than repaired. A fix that makes the code shorter is worth more than one that makes it more defended.
 3. **Docs:** `documentation` when behavior, interfaces, the plan, or a deploy path changed. `docs/deploy/{local,remote,gcp}.md` are the deploy guides: how the project runs here, on a remote box, and on GCP; `/preflight` deploys only by them.
 4. **Records:** `changelog` writes the entry and names the agents dispatched; `bugs` records anything that went wrong; tick the plan.
 5. **Commit and push.**
@@ -54,6 +54,7 @@ Backup and versioning only: no CI, no hooks, ever. Commit and push to the curren
 - Lead with what is broken; state severity and confidence; never restate a failure as success; disagree before complying.
 - A claim that something works states HOW it was verified and on which path. Running a command as root does not verify the non-root path; one green run does not verify the other branch. Never generalise a single observation into a claim about "both paths" or "every case".
 - Silence from your own instrumentation is not evidence. Before trusting a monitor, watcher or filter that reports nothing, confirm it can emit at all — a filter that misses success would also miss failure.
+- A verification command is never piped into a filter inside a `&&` chain that leads to a commit: the chain then guards the filter's exit status, not the command's. Run the command bare, read its status, filter its captured output afterwards, and issue the commit as its own call once the result has been read.
 
 ## Project layout
 

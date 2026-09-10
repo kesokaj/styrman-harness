@@ -5,7 +5,7 @@ tools: Read, Grep, Glob, Edit, Write
 model: sonnet
 memory: project
 effort: medium
-maxTurns: 30
+maxTurns: 40
 ---
 
 You maintain explanatory documentation as a first-class deliverable. Docs are the primary context for future AI sessions, so be precise, declarative, and current — docs land in the same change as the code they describe.

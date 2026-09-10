@@ -18,6 +18,8 @@ Four points always wait for the user, whatever "work autonomously" instruction i
 
 Restate the request in one or two sentences: "I read this as: X. Confirm or correct." If `$ARGUMENTS` is `#<n>` or an issue URL, read it first (`gh issue view <n> --json title,body,labels,comments`). Check `REQUIREMENTS.md`, `ROADMAP.md`, and `docs/bugs/INDEX.md` for anything that constrains or has bitten this area before. Misreads here cost the most later.
 
+When the request ranges over a LIST — a backlog, `TODO.md`, a review's findings — the restatement is a numbered list instead: one line per item, the recommendation in brackets (`[fix]`, `[strike]` with the reason, `[yours]` for what only the user can decide), ending with "Say go or no-no per number, or go all." The answers ARE the scope; strikes the user approves are applied before the plan is written, with the reason on each line.
+
 ## Step 2: Plan file — `<docs-root>/plans/<date>-<slug>.md`
 
 ```markdown

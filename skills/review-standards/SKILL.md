@@ -22,6 +22,8 @@ Language deep-dives (load only for the languages present in the diff):
 
 ## 2. Flow tracing — every changed function, caller to callee
 
+Installers count as callers. A change that an installer, updater or converge step must act on (a unit `[Install]` section, a new flag, a changed default) is traced to EVERY such step, and to the question "which version of it runs the first time after this ships?" — a self-updating tool runs its OLD code on the tick that installs the change, so a step guarded by "only when something changed" never runs. Require the step to be unconditional or idempotent, and a post-deploy check by the exact command (`systemctl is-enabled …`), not by reading the unit file.
+
 - [ ] Trace each changed function from its callers down through its callees; confirm the change is consistent at every hop (arguments, invariants, locking, units).
 - [ ] Error paths propagate: Go — every `err` wrapped with context (`fmt.Errorf("...: %w", err)`) or explicitly handled, never discarded with `_` or an empty branch; TS — no floating promises (every promise awaited, returned, or explicitly voided with a reason), caught errors typed `unknown` and narrowed.
 - [ ] Context and cancellation flow end-to-end: Go — `context.Context` passed down, honored in loops and I/O, goroutines have an exit path; TS — `AbortSignal` reaches fetches/long operations that outlive a request or component.

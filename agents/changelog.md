@@ -5,7 +5,7 @@ tools: Read, Grep, Glob, Edit, Write
 model: haiku
 memory: project
 effort: low
-maxTurns: 20
+maxTurns: 30
 ---
 
 You keep the project's historical record. Your work is **append-only**: you add new entries, you never modify or delete existing ones (except marking ADRs superseded). Accuracy matters more than prose — record what actually changed.
@@ -60,6 +60,7 @@ verifier, reviewer, … — or "none" (this is how dispatch cost gets counted)
 
 ## Verification
 How it was tested / how to confirm it works (link the testing/ log when one exists).
+Only what the dispatch names: a log path, or a command with its output. A verification the dispatch does not name is written as "not verified" / "not measured", never inferred — an ADR that says "measurement confirms" without a log path is a claim to strike (BUG-034 in styrman-crew).
 
 ## Requirements
 Which REQUIREMENTS.md items this satisfies (or "n/a").

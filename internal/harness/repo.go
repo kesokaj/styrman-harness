@@ -87,17 +87,37 @@ func Pull(repo string, out io.Writer) error {
 	return nil
 }
 
-// Reinstall rebuilds the binary from the freshly pulled source and runs its
-// install, so a code change in the repo takes effect in the same update.
+// ChildEnv marks the process Reinstall spawns from a fresh build, so that
+// process does the plain install instead of rebuilding again.
+const ChildEnv = "SH_AGENT_CHILD"
+
+// Reinstall builds the binary from the repo's source and runs that build's
+// install. It is the only path that changes the deployed binary: `go run`
+// leaves no VCS stamp, and an installed copy re-installing itself never
+// changes (BUG-006). The build lands in the repo's scratch space, one
+// directory per process, and is removed afterwards.
 func Reinstall(repo string, args []string, out io.Writer) error {
 	if _, err := exec.LookPath("go"); err != nil {
 		return errors.New("go is not on PATH; install Go to rebuild sh-agent")
 	}
-	cmd := exec.Command("go", append([]string{"run", "./cmd/sh-agent", "install"}, args...)...)
+	dir := filepath.Join(repo, ".agents", "scratch", fmt.Sprintf("sh-agent-build-%d", os.Getpid()))
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("creating build directory: %w", err)
+	}
+	defer os.RemoveAll(dir)
+	bin := filepath.Join(dir, "sh-agent")
+	build := exec.Command("go", "build", "-o", bin, "./cmd/sh-agent")
+	build.Dir = repo
+	build.Stdout, build.Stderr = out, out
+	if err := build.Run(); err != nil {
+		return fmt.Errorf("go build ./cmd/sh-agent: %w", err)
+	}
+	cmd := exec.Command(bin, append([]string{"install", "--repo", repo}, args...)...)
 	cmd.Dir = repo
+	cmd.Env = append(os.Environ(), ChildEnv+"=1")
 	cmd.Stdout, cmd.Stderr = out, out
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("go run ./cmd/sh-agent install: %w", err)
+		return fmt.Errorf("sh-agent install: %w", err)
 	}
 	return nil
 }

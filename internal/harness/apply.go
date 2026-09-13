@@ -77,6 +77,9 @@ func Install(repo, home string, files []File, vendor string, dryRun bool, out io
 
 	sort.Strings(manifest)
 	commit, _ := gitOut(repo, "rev-parse", "--short", "HEAD")
+	if commit != "" && Inspect(repo).Dirty {
+		commit += "+dirty" // the files came from the working tree, not from this commit
+	}
 	st := State{Repo: repo, Commit: commit, InstalledAt: time.Now().Format(time.RFC3339), Vendor: v, Files: manifest}
 	if !dryRun {
 		if err := SaveState(home, st); err != nil {

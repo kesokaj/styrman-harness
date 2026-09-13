@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // newRepo builds a minimal harness checkout: two skills, one agent, two
@@ -607,7 +608,44 @@ func TestLastRetro(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "2026-09-03-retro.md"), []byte("# retro\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := LastRetro(home); !ok {
+	first, ok := LastRetro(home)
+	if !ok {
 		t.Fatal("proposal should be found")
+	}
+	// A project-level retro appends to the index without a proposal file;
+	// that counts as a retro too, and its newer mtime wins.
+	index := filepath.Join(home, ".config", "sh-agent", "retros.jsonl")
+	if err := os.WriteFile(index, []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	later := first.Add(48 * time.Hour)
+	if err := os.Chtimes(index, later, later); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := LastRetro(home); !ok || !got.Equal(later) {
+		t.Fatalf("LastRetro = %v, %v; want %v", got, ok, later)
+	}
+}
+
+func TestSlashNoteOnlyWhenSomeSkillIsSlashOnly(t *testing.T) {
+	repo := newRepo(t)
+	inv, err := LoadInventory(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const marked = "Skills marked `/name` are typed by the user"
+	if !strings.Contains(RenderInventoryCompact(inv), marked) || !strings.Contains(RenderInventory(inv), marked) {
+		t.Errorf("fixture has a slash-only skill; the note should be printed")
+	}
+	for i := range inv.Skills {
+		inv.Skills[i].SlashOnly = false
+	}
+	for _, out := range []string{RenderInventoryCompact(inv), RenderInventory(inv)} {
+		if strings.Contains(out, marked) {
+			t.Errorf("no slash-only skill; the note must not be printed:\n%s", out)
+		}
+		if !strings.Contains(out, "can also be typed as `/name`") {
+			t.Errorf("expected the all-model-invocable sentence:\n%s", out)
+		}
 	}
 }

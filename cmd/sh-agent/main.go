@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime/debug"
 	"strings"
@@ -108,6 +109,26 @@ func run(args []string, out io.Writer) error {
 		vendor, err := resolveVendor(*vendorFlag, home)
 		if err != nil {
 			return err
+		}
+		// The deployed binary must be the repo's own build: rebuild and let
+		// that build install, unless this process is that build (ChildEnv)
+		// or there is no toolchain to build with.
+		_, goErr := exec.LookPath("go")
+		if shouldRebuild(goErr == nil, os.Getenv(harness.ChildEnv) == "1") {
+			var pass []string
+			if *homeFlag != "" {
+				pass = append(pass, "--home", home)
+			}
+			if *vendorFlag != "" {
+				pass = append(pass, "--vendor", vendor)
+			}
+			if *dryRun {
+				pass = append(pass, "--dry-run")
+			}
+			return harness.Reinstall(repo, pass, out)
+		}
+		if goErr != nil {
+			fmt.Fprintln(out, "warning: go is not on PATH; the running binary was copied, not rebuilt — install Go and run `sh-agent update`")
 		}
 		self, err := selfExecutable()
 		if err != nil {
@@ -205,6 +226,16 @@ func status(repo, home, vendorFlag string, out io.Writer) error {
 		vDisplay = harness.VendorAll
 	}
 	fmt.Fprintf(out, "installed  %s from commit %s (vendor: %s, %d files, manifest ~/.config/sh-agent/state.json)\n", st.InstalledAt, st.Commit, vDisplay, len(st.Files))
+	rev := buildVersion()
+	binaryLine := "binary     " + rev
+	switch {
+	case !binaryOlder(rev, info.Commit):
+	case rev == "(devel)" || rev == "unknown":
+		binaryLine += " — no build stamp; run `sh-agent update`"
+	default:
+		binaryLine += fmt.Sprintf(" — older than the repo (%s); run `sh-agent update`", info.Commit)
+	}
+	fmt.Fprintln(out, binaryLine)
 	if last, ok := harness.LastRetro(home); ok {
 		days := int(time.Since(last).Hours() / 24)
 		hint := ""
@@ -292,6 +323,28 @@ func update(repo, home string, checkOnly bool, homeFlag, vendorFlag string, out 
 	return harness.Reinstall(repo, args, out)
 }
 
+// shouldRebuild decides whether install re-executes through a fresh build
+// of the repo: yes whenever a toolchain is present, unless this process is
+// already the fresh build that Reinstall spawned.
+func shouldRebuild(goOnPath, child bool) bool {
+	return goOnPath && !child
+}
+
+// binaryOlder reports whether the running binary is not the repo's current
+// build: unstamped (`go run`, or a build outside git) or stamped with a
+// different revision. Prefixes are compared both ways because git's short
+// hash length is not fixed.
+func binaryOlder(rev, commit string) bool {
+	rev = strings.TrimSuffix(rev, "+dirty")
+	if rev == "" || commit == "" {
+		return false
+	}
+	if rev == "(devel)" || rev == "unknown" {
+		return true
+	}
+	return !strings.HasPrefix(rev, commit) && !strings.HasPrefix(commit, rev)
+}
+
 // reorder moves flags in front of positional arguments so that
 // `sh-agent adopt my-skill --home /tmp/x` parses; the flag package stops at
 // the first positional argument otherwise.
@@ -322,8 +375,8 @@ func reorder(args []string) []string {
 }
 
 // selfExecutable returns the running binary so install can copy it to
-// ~/.local/bin. Under `go run` that is a cached build in GOCACHE, which is
-// still a complete binary.
+// ~/.local/bin. On the normal path this is the build Reinstall just made;
+// without a toolchain it is whatever binary is running, and status says so.
 func selfExecutable() ([]byte, error) {
 	p, err := os.Executable()
 	if err != nil {

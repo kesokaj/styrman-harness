@@ -4,12 +4,18 @@
 # Build output of `go build -o sh-agent ./cmd/sh-agent`; the binary is never committed.
 /sh-agent
 
+# Secret-shaped paths never belong here (the global git rule stops the commit; this stops the add).
+.env
+.env.*
+*.pem
+*.key
+*.tfvars
+*.tfstate
+
 # Claude Code's view of the repo's own skills, created by `npx skills add` (symlinks into .agents/skills).
 /.claude/
 /agent/
 
-# Per-project subagent memory.
-.claude/agent-memory/
 
 # Agent scratch space: generated and temporary files, never committed.
 .agents/scratch/*

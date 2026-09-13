@@ -34,7 +34,7 @@ Nothing to configure. `--vendor VENDOR` selects the target CLI: `all` (default),
 
 ## First session after install
 
-Claude Code asks once per session before the first read or write under `~/.config/sh-agent/` (feedback log, proposals, global handoffs), because it is outside the project. Approve it, or add the directory to `permissions.additionalDirectories` in `~/.claude/settings.json` yourself — the installer never edits vendor settings (ADR-010). Antigravity prompts the same way for paths outside the workspace.
+Claude Code asks once per session before the first read or write under `~/.config/sh-agent/` (feedback log, proposals, the retro index), because it is outside the project. Approve it, or add the directory to `permissions.additionalDirectories` in `~/.claude/settings.json` yourself — the installer never edits vendor settings (ADR-010). Antigravity prompts the same way for paths outside the workspace.
 
 ## Roll back
 

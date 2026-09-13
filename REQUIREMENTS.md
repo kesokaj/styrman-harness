@@ -28,7 +28,7 @@ Every test and every development run of the installer uses `--home` with a scrat
 
 ## R7 — Projects remember and stay resumable
 
-Every project keeps its scratch in `.agents/scratch/` (gitignored), its failures as numbered records in `.agents/docs/bugs/`, and its progress in plan files with task checkboxes, so a zero-context session can resume and does not repeat a mistake. The harness's own state (manifest, feedback log, retro proposals) lives in `~/.config/sh-agent/` and nowhere else.
+Every project keeps its scratch in `.agents/scratch/` (gitignored), its failures as numbered records in `.agents/docs/bugs/`, its progress in plan files with task checkboxes, and its retro and distill records in `.agents/docs/retros/`, so a zero-context session can resume and does not repeat a mistake. The harness's own state (manifest, feedback log, the harness proposal queue, the cross-project index) lives in `~/.config/sh-agent/` and nowhere else; a project's retro and distill records are the project's own state, in its trail (ADR-015, clarified 2026-09-13 with the operator's approval).
 
 ## Known limits
 

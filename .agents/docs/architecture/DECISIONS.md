@@ -122,3 +122,11 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
 
 **Consequences:** The trail gains `retros/` and becomes the project's learning record; the queue and index are per-machine while the record is per-project. Project-scope proposals are applied in the project's own session; harness-scope proposals remain `queued` by default (applied later in the harness checkout via `--harness`). A rule seen in two projects is surfaced for graduation to the harness by the second project's retro. Dates use `date -u +%FT%TZ` for machine-readable UTC time. ADR-013's "LastRetro" now reads both `proposals/*.md` mtimes and `retros.jsonl`.
 
+## ADR-016: R7 clarified — a project's retro and distill records are project state     (2026-09-13) — Accepted
+
+**Context:** Three independent cold readers of the 2026-09-13 learning-loop plan read R7's "retro proposals … nowhere else" as forbidding project-level records entirely. ADR-015 built project-level records as project state (in `.agents/docs/retros/`) with harness-scope content only as pointers; the improvement review panel offered an optional clarifying sentence for R7 as item 19, and the operator approved it ("go all"). The sequence followed the trajectory-change rule: proposal → approval → ADR → REQUIREMENTS.md and ROADMAP update in one commit.
+
+**Decision:** REQUIREMENTS.md R7 now explicitly names `.agents/docs/retros/` among what a project keeps alongside its trail, lists the harness's own state as manifest, feedback log, the harness proposal queue, and the cross-project index, and states: "The harness's own state (manifest, feedback log, the harness proposal queue, the cross-project index) lives in `~/.config/sh-agent/` and nowhere else; a project's retro and distill records are the project's own state, in its trail." This removes the ambiguity that three readers independently encountered.
+
+**Consequences:** No change to what was built in ADR-015 or to the moving parts; only the prose boundary between harness state and project state is now unambiguous. The per-machine scope of the queue and index (blocking a cross-machine retro workflow) remains an open question, deferred until the first retro run on the Mac (improvement review item 20).
+

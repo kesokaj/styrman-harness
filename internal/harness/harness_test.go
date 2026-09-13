@@ -2,6 +2,7 @@ package harness
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -593,6 +594,65 @@ func TestBehindAndPull(t *testing.T) {
 	}
 	if n, _ := Behind(b); n != 0 {
 		t.Errorf("after pull behind = %d", n)
+	}
+}
+
+// TestNestedCopyIsNotACheckout: a harness-shaped tree inside another git
+// repository must not inherit that repository's branch, commit, or dirty
+// state, and git-driven update must refuse it.
+func TestNestedCopyIsNotACheckout(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	root := newRepo(t)
+	gitIn(t, root, "init", "-q")
+	gitIn(t, root, "add", ".")
+	gitIn(t, root, "commit", "-q", "-m", "fixture")
+
+	nested := filepath.Join(root, "mirror")
+	for _, rel := range []string{"context", "skills"} {
+		if err := os.MkdirAll(filepath.Join(nested, rel), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(nested, "context", "AGENTS.md"), []byte("# copy\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !IsRepo(nested) {
+		t.Fatal("fixture: nested copy should look like a harness")
+	}
+
+	if got := Inspect(nested); got != (RepoInfo{}) {
+		t.Errorf("nested copy Inspect = %+v, want empty", got)
+	}
+	if _, err := Behind(nested); !errors.Is(err, errPlainCopy) {
+		t.Errorf("nested copy Behind err = %v, want %v", err, errPlainCopy)
+	}
+	if err := Pull(nested, &bytes.Buffer{}); !errors.Is(err, errPlainCopy) {
+		t.Errorf("nested copy Pull err = %v, want %v", err, errPlainCopy)
+	}
+
+	// An inherited GIT_DIR/GIT_WORK_TREE must not redirect the check to the
+	// enclosing repository: the check looks for .git itself and never asks git.
+	t.Setenv("GIT_DIR", filepath.Join(root, ".git"))
+	t.Setenv("GIT_WORK_TREE", nested)
+	if got := Inspect(nested); got != (RepoInfo{}) {
+		t.Errorf("nested copy with GIT_DIR/GIT_WORK_TREE set: Inspect = %+v, want empty", got)
+	}
+	if _, err := Behind(nested); !errors.Is(err, errPlainCopy) {
+		t.Errorf("nested copy with GIT_DIR set: Behind err = %v, want %v", err, errPlainCopy)
+	}
+	t.Setenv("GIT_DIR", "")
+	t.Setenv("GIT_WORK_TREE", "")
+	os.Unsetenv("GIT_DIR")
+	os.Unsetenv("GIT_WORK_TREE")
+
+	got := Inspect(root)
+	if got.Branch == "" || got.Commit == "" || !got.Dirty {
+		t.Errorf("repo root Inspect = %+v, want branch, commit, and dirty (the untracked mirror)", got)
+	}
+	if _, err := Behind(root); errors.Is(err, errPlainCopy) {
+		t.Errorf("repo root Behind must not be refused as a plain copy: %v", err)
 	}
 }
 

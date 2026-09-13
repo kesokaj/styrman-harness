@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime/debug"
 	"strings"
 	"testing"
 
@@ -84,6 +85,30 @@ func TestBinaryOlder(t *testing.T) {
 	}
 }
 
+func TestVersionFromInfo(t *testing.T) {
+	stamp := func(rev, modified string) *debug.BuildInfo {
+		return &debug.BuildInfo{
+			Main:     debug.Module{Version: "(devel)"},
+			Settings: []debug.BuildSetting{{Key: "vcs.revision", Value: rev}, {Key: "vcs.modified", Value: modified}},
+		}
+	}
+	cases := []struct {
+		name string
+		info *debug.BuildInfo
+		want string
+	}{
+		{"clean", stamp("b64ffe886729abcdef0123456789abcdef012345", "false"), "b64ffe886729"},
+		{"dirty", stamp("b64ffe886729abcdef0123456789abcdef012345", "true"), "b64ffe886729+dirty"},
+		{"short revision kept whole", stamp("b64ffe8", "false"), "b64ffe8"},
+		{"no revision", &debug.BuildInfo{Main: debug.Module{Version: "v1.2.3"}}, "v1.2.3"},
+	}
+	for _, c := range cases {
+		if got := versionFromInfo(c.info); got != c.want {
+			t.Errorf("%s: versionFromInfo = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
 // TestRunInstallStatusUninstall drives the CLI end to end against this
 // checkout and a scratch home. ChildEnv is set so install takes the plain
 // path: under `go test` the running binary is the test binary, and a rebuild
@@ -113,6 +138,11 @@ func TestRunInstallStatusUninstall(t *testing.T) {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("status missing %q:\n%s", want, out.String())
 		}
+	}
+	// The binary line reads the installed file's build info: the test binary
+	// was copied there, so the line must carry its version, never "unknown".
+	if strings.Contains(out.String(), "binary     unknown") {
+		t.Errorf("status could not read the installed binary's build info:\n%s", out.String())
 	}
 	out.Reset()
 	if err := run([]string{"uninstall", "--home", home}, &out); err != nil {

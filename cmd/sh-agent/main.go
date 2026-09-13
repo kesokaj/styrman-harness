@@ -14,6 +14,7 @@
 package main
 
 import (
+	"debug/buildinfo"
 	"errors"
 	"flag"
 	"fmt"
@@ -219,7 +220,11 @@ func status(repo, home, vendorFlag string, out io.Writer) error {
 	if info.Dirty {
 		dirty = "uncommitted changes"
 	}
-	fmt.Fprintf(out, "repo       %s (%s @ %s, %s)\n", repo, info.Branch, info.Commit, dirty)
+	if info.Commit == "" {
+		fmt.Fprintf(out, "repo       %s (plain copy, not its own git checkout; update is refused)\n", repo)
+	} else {
+		fmt.Fprintf(out, "repo       %s (%s @ %s, %s)\n", repo, info.Branch, info.Commit, dirty)
+	}
 
 	st, found, err := harness.LoadState(home)
 	if err != nil {
@@ -234,14 +239,19 @@ func status(repo, home, vendorFlag string, out io.Writer) error {
 		vDisplay = harness.VendorAll
 	}
 	fmt.Fprintf(out, "installed  %s from commit %s (vendor: %s, %d files, manifest ~/.config/sh-agent/state.json)\n", st.InstalledAt, st.Commit, vDisplay, len(st.Files))
-	rev := buildVersion()
-	binaryLine := "binary     " + rev
-	switch {
-	case !binaryOlder(rev, info.Commit):
-	case rev == "(devel)" || rev == "unknown":
-		binaryLine += " — no build stamp; run `sh-agent update`"
-	default:
-		binaryLine += fmt.Sprintf(" — older than the repo (%s); run `sh-agent update`", info.Commit)
+	// The line describes the installed file, not this process: status may
+	// run from `go run` or from a build outside ~/.local/bin.
+	binaryLine := "binary     unknown (installed file has no build info)"
+	if bi, err := buildinfo.ReadFile(filepath.Join(home, harness.BinPath)); err == nil {
+		rev := versionFromInfo(bi)
+		binaryLine = "binary     " + rev
+		switch {
+		case !binaryOlder(rev, info.Commit):
+		case rev == "(devel)" || rev == "unknown":
+			binaryLine += " — no build stamp; run `sh-agent update`"
+		default:
+			binaryLine += fmt.Sprintf(" — older than the repo (%s); run `sh-agent update`", info.Commit)
+		}
 	}
 	fmt.Fprintln(out, binaryLine)
 	if last, ok := harness.LastRetro(home); ok {
@@ -439,11 +449,20 @@ func pathHint(home string, out io.Writer) error {
 	return nil
 }
 
+// buildVersion describes the running process, for `sh-agent version`.
+// `sh-agent status` reads the installed file instead (see status).
 func buildVersion() string {
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
 		return "unknown"
 	}
+	return versionFromInfo(info)
+}
+
+// versionFromInfo renders a binary's VCS stamp as the short revision with a
+// "+dirty" suffix for a modified tree, or the module version when the build
+// carried no stamp (`go run`, `go test`, a build outside git).
+func versionFromInfo(info *debug.BuildInfo) string {
 	rev, modified := "", ""
 	for _, s := range info.Settings {
 		switch s.Key {

@@ -87,7 +87,6 @@ Claude Code guards writes under `.claude/` and may refuse the `mkdir` and `ln` c
 
 ```
 .DS_Store
-.claude/agent-memory/
 .claude/worktrees/
 .agents/scratch/*
 !.agents/scratch/.gitkeep

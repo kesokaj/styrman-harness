@@ -75,7 +75,7 @@ Per-layer verification, typical Go + TanStack Start project: migration applied a
 
 ## Step 5: E2E before "done"
 
-Type checks and unit tests prove the code; e2e proves the feature. Service: build the container, run it, call the health check and one real request. Frontend: walk the golden path and one edge case (empty state, error response, unauthenticated) in a real browser. Deploy (only when the user asked for GCP): the live URL and the logs. Record the outcome in the verification log.
+Type checks and unit tests prove the code; e2e proves the feature. Service: build the container, run it, call the health check and one real request. Frontend: walk the golden path and one edge case (empty state, error response, unauthenticated) in a real browser. A deploy is not e2e: when the user asked for GCP, the cloud smoke tier runs inside `/preflight` after Step 6 — the only path that gates, tags, and deploys by `<docs-root>/deploy/gcp.md`. Record the outcome in the verification log.
 
 ## Step 6: Definition of Done
 

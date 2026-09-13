@@ -28,6 +28,10 @@ sh-agent update --check    # only reports; exit 2 when behind
 
 `sh-agent update` finds the checkout from `$SH_AGENT_REPO`, the working directory, or the path recorded at the last install, so it works from anywhere. It refuses a non-fast-forward pull; resolve that by hand in the checkout.
 
+## Downstream mirrors
+
+Two projects vendor this repo as a .git-less copy and build `sh-agent` from it inside their own images: styrman-crew `image/harness/` and argolis-devbox `deploy/harness/`. Each mirror's `VENDORED.md` holds the refresh recipe (rsync from a clean checkout, record `COMMIT` and checksums, bump the project's version, push — the VMs rebuild on their next update). A mirror is a plain copy: `sh-agent status` there shows no commit and `update` refuses, by design. After any change to `context/`, `skills/`, or `agents/` here, refreshing both mirrors is a task in each of those projects; a retro that applies a harness-scope proposal says so in its report.
+
 ## Verify
 
 Same as `local.md`: `sh-agent status` with no drift, then one start of each CLI. On the Mac, additionally confirm the Antigravity paths (`TODO.md`, high priority).

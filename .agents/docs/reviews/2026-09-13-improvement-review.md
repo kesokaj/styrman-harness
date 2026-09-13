@@ -63,3 +63,7 @@ Recommendation in brackets: `[fix]` do it, `[yours]` only the operator can decid
 ## Not examined
 
 The Mac itself; the full skill matrix on either CLI; the vendored `anti-ui-slop`, `terraform`, `gke-basics` content beyond their descriptions.
+
+## Outcome (2026-09-13, later the same session)
+
+The operator approved every item ("go all"). Applied in the commit that follows a4146dc: items 1–17 and 19 (the R7 sentence, with ADR-016). Item 18: both CLIs re-checked from the sandbox home on Antigravity 1.2.2 (context, `golang` auto-load, `explorer` dispatch — all pass, log clean); the real home on this box and the Mac stay the operator's (`TODO.md`); the Known-limits sentence in `REQUIREMENTS.md` about the Mac was not edited — proposed wording is in the handoff. Item 20: deferred by decision until the first retro on the Mac. Item 15 was verified against styrman-crew's `web/` before the rewrite: SPA mode, client embedded in the Go binary, no Nitro — the panel's "Nitro plugin" detail was wrong and is not in the skill.

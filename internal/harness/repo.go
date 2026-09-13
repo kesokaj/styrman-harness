@@ -13,9 +13,21 @@ import (
 
 // FindRepo locates the harness checkout: an explicit path, then $SH_AGENT_REPO,
 // then the working directory and its parents, then the path the last install
-// recorded — so `sh-agent update` works from anywhere once installed.
+// recorded — so `sh-agent update` works from anywhere once installed. A path
+// the operator named is used or refused, never silently replaced by one the
+// walk finds: install builds and runs the checkout's code, so a typo must
+// not hand that to whatever harness-shaped tree the shell happens to be in.
 func FindRepo(explicit, home string) (string, error) {
-	candidates := []string{explicit, os.Getenv("SH_AGENT_REPO")}
+	for _, named := range []string{explicit, os.Getenv("SH_AGENT_REPO")} {
+		if named == "" {
+			continue
+		}
+		if !IsRepo(named) {
+			return "", fmt.Errorf("%s is not a harness checkout (no context/AGENTS.md and skills/)", named)
+		}
+		return filepath.Abs(named)
+	}
+	var candidates []string
 	if wd, err := os.Getwd(); err == nil {
 		for dir := wd; ; dir = filepath.Dir(dir) {
 			candidates = append(candidates, dir)
@@ -106,6 +118,7 @@ func Reinstall(repo string, args []string, out io.Writer) error {
 	}
 	defer os.RemoveAll(dir)
 	bin := filepath.Join(dir, "sh-agent")
+	fmt.Fprintf(out, "building sh-agent from %s\n", repo)
 	build := exec.Command("go", "build", "-o", bin, "./cmd/sh-agent")
 	build.Dir = repo
 	build.Stdout, build.Stderr = out, out

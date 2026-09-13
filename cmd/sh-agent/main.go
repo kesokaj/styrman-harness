@@ -110,20 +110,25 @@ func run(args []string, out io.Writer) error {
 		if err != nil {
 			return err
 		}
+		if err := knownCheckout(*repoFlag, home, repo); err != nil {
+			return err
+		}
 		// The deployed binary must be the repo's own build: rebuild and let
-		// that build install, unless this process is that build (ChildEnv)
-		// or there is no toolchain to build with.
+		// that build install, unless this process is that build (ChildEnv),
+		// there is no toolchain to build with, or this is a dry run — a dry
+		// run never builds or runs a fresh binary; like every install it
+		// still reads the checkout's git state, which is why the checkout
+		// must be one the operator named or installed before.
 		_, goErr := exec.LookPath("go")
-		if shouldRebuild(goErr == nil, os.Getenv(harness.ChildEnv) == "1") {
+		if *dryRun && shouldRebuild(goErr == nil, os.Getenv(harness.ChildEnv) == "1") {
+			fmt.Fprintf(out, "[dry-run] the binary would be rebuilt from %s\n", repo)
+		} else if shouldRebuild(goErr == nil, os.Getenv(harness.ChildEnv) == "1") {
 			var pass []string
 			if *homeFlag != "" {
 				pass = append(pass, "--home", home)
 			}
 			if *vendorFlag != "" {
 				pass = append(pass, "--vendor", vendor)
-			}
-			if *dryRun {
-				pass = append(pass, "--dry-run")
 			}
 			return harness.Reinstall(repo, pass, out)
 		}
@@ -158,6 +163,9 @@ func run(args []string, out io.Writer) error {
 		return harness.Diff(home, files, out)
 
 	case "update":
+		if err := knownCheckout(*repoFlag, home, repo); err != nil {
+			return err
+		}
 		return update(repo, home, *check, *homeFlag, *vendorFlag, out)
 
 	case "list":
@@ -321,6 +329,38 @@ func update(repo, home string, checkOnly bool, homeFlag, vendorFlag string, out 
 		args = append(args, "--vendor", vendor)
 	}
 	return harness.Reinstall(repo, args, out)
+}
+
+// knownCheckout refuses to build and install from a checkout that was only
+// discovered by walking up from the working directory when a different
+// checkout is already installed. Building runs that tree's code and deploys
+// its context everywhere; standing in a harness-shaped directory (a mirror,
+// a clone under review) must not be enough. An explicit --repo or
+// $SH_AGENT_REPO, or a first install, is.
+func knownCheckout(repoFlag, home, repo string) error {
+	if repoFlag != "" || os.Getenv("SH_AGENT_REPO") != "" {
+		return nil
+	}
+	st, found, err := harness.LoadState(home)
+	if err != nil {
+		return fmt.Errorf("reading the manifest before building: %w", err)
+	}
+	if !found || st.Repo == "" {
+		return nil
+	}
+	if samePath(st.Repo, repo) {
+		return nil
+	}
+	return fmt.Errorf("checkout %s is not the installed one (%s); pass --repo %s to build and install from it", repo, st.Repo, repo)
+}
+
+func samePath(a, b string) bool {
+	ra, errA := filepath.EvalSymlinks(a)
+	rb, errB := filepath.EvalSymlinks(b)
+	if errA != nil || errB != nil {
+		return a == b
+	}
+	return ra == rb
 }
 
 // shouldRebuild decides whether install re-executes through a fresh build

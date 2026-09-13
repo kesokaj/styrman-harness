@@ -130,3 +130,63 @@ func TestRunInstallStatusUninstall(t *testing.T) {
 		t.Error("status after uninstall should report exit 1")
 	}
 }
+
+func TestKnownCheckout(t *testing.T) {
+	home := t.TempDir()
+	repo, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("SH_AGENT_REPO", "")
+	if err := knownCheckout("", home, repo); err != nil {
+		t.Errorf("first install (no manifest) must pass: %v", err)
+	}
+	if err := harness.SaveState(home, harness.State{Repo: repo}); err != nil {
+		t.Fatal(err)
+	}
+	if err := knownCheckout("", home, repo); err != nil {
+		t.Errorf("same checkout must pass: %v", err)
+	}
+	other := t.TempDir()
+	if err := knownCheckout("", home, other); err == nil {
+		t.Error("a checkout found only by the directory walk must be refused when another is installed")
+	}
+	if err := knownCheckout(other, home, other); err != nil {
+		t.Errorf("explicit --repo must pass: %v", err)
+	}
+	t.Setenv("SH_AGENT_REPO", other)
+	if err := knownCheckout("", home, other); err != nil {
+		t.Errorf("$SH_AGENT_REPO must pass: %v", err)
+	}
+}
+
+// TestDryRunNeverBuilds: with a toolchain present and no child guard, a dry
+// run must report the rebuild instead of performing it, and write nothing.
+func TestDryRunNeverBuilds(t *testing.T) {
+	t.Setenv(harness.ChildEnv, "")
+	home := t.TempDir()
+	repo, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := run([]string{"install", "--dry-run", "--repo", repo, "--home", home}, &out); err != nil {
+		t.Fatalf("dry run: %v\n%s", err, out.String())
+	}
+	for _, want := range []string{"[dry-run] the binary would be rebuilt from", "[dry-run] "} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("dry-run output missing %q:\n%s", want, out.String())
+		}
+	}
+	// Reinstall removes its build directory itself, so its absence proves
+	// nothing; what a rebuild would leave is an installed binary and a
+	// child's output, and a dry run must leave neither.
+	for _, rel := range []string{harness.BinPath, ".claude", ".config"} {
+		if _, err := os.Stat(filepath.Join(home, rel)); !os.IsNotExist(err) {
+			t.Errorf("dry run wrote ~/%s: stat err = %v", rel, err)
+		}
+	}
+	if strings.Contains(out.String(), "building sh-agent from") {
+		t.Errorf("dry run ran a build:\n%s", out.String())
+	}
+}

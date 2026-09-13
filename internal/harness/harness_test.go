@@ -649,3 +649,106 @@ func TestSlashNoteOnlyWhenSomeSkillIsSlashOnly(t *testing.T) {
 		}
 	}
 }
+
+// gitIn runs git in dir and fails the test on error.
+func gitIn(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
+	outb, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, outb)
+	}
+	return strings.TrimSpace(string(outb))
+}
+
+func TestFindRepoRefusesNamedNonRepo(t *testing.T) {
+	home := t.TempDir()
+	bogus := filepath.Join(t.TempDir(), "not-a-checkout")
+	if _, err := FindRepo(bogus, home); err == nil {
+		t.Error("an explicit path that is not a checkout must be an error, not a fallback")
+	}
+	t.Setenv("SH_AGENT_REPO", bogus)
+	if _, err := FindRepo("", home); err == nil {
+		t.Error("$SH_AGENT_REPO pointing at a non-checkout must be an error, not a fallback")
+	}
+	t.Setenv("SH_AGENT_REPO", "")
+	repo := newRepo(t)
+	if got, err := FindRepo(repo, home); err != nil || got != repo {
+		t.Errorf("explicit checkout: %q, %v", got, err)
+	}
+}
+
+func TestInstallMarksDirtyTree(t *testing.T) {
+	repo := newRepo(t)
+	gitIn(t, repo, "init", "-q")
+	gitIn(t, repo, "add", ".")
+	gitIn(t, repo, "commit", "-q", "-m", "fixture")
+	short := gitIn(t, repo, "rev-parse", "--short", "HEAD")
+	home := t.TempDir()
+	files, err := Plan(repo, nil, VendorAll)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := Install(repo, home, files, VendorAll, false, &out); err != nil {
+		t.Fatal(err)
+	}
+	st, _, err := LoadState(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Commit != short {
+		t.Errorf("clean tree: commit = %q, want %q", st.Commit, short)
+	}
+	if err := os.WriteFile(filepath.Join(repo, "context", "AGENTS.md"), []byte("# AGENTS.md\n\nBe honest and brief.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	files, err = Plan(repo, nil, VendorAll)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Install(repo, home, files, VendorAll, false, &out); err != nil {
+		t.Fatal(err)
+	}
+	st, _, err = LoadState(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Commit != short+"+dirty" {
+		t.Errorf("dirty tree: commit = %q, want %q", st.Commit, short+"+dirty")
+	}
+}
+
+// TestReinstallBuildsAndInstalls runs the real rebuild path against this
+// checkout: go build into the repo's scratch space, then that build installs
+// into a scratch home and copies itself there, stamped with the revision.
+func TestReinstallBuildsAndInstalls(t *testing.T) {
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("go not on PATH")
+	}
+	repo, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	var out bytes.Buffer
+	if err := Reinstall(repo, []string{"--home", home}, &out); err != nil {
+		t.Fatalf("Reinstall: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "files managed") {
+		t.Errorf("child install output missing:\n%s", out.String())
+	}
+	bin := filepath.Join(home, BinPath)
+	ver, err := exec.Command(bin, "version").Output()
+	if err != nil {
+		t.Fatalf("installed binary does not run: %v", err)
+	}
+	if v := strings.TrimSpace(string(ver)); strings.Contains(v, "(devel)") || strings.Contains(v, "unknown") {
+		t.Errorf("installed binary is unstamped: %q", v)
+	}
+	builds, _ := filepath.Glob(filepath.Join(repo, ".agents", "scratch", "sh-agent-build-*"))
+	if len(builds) != 0 {
+		t.Errorf("build directories left behind: %v", builds)
+	}
+}

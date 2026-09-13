@@ -48,7 +48,7 @@ sh-agent update      # fetches, pulls, rebuilds, reinstalls
 | `skills/<name>/` | `~/.claude/skills/<name>/` | `~/.gemini/config/skills/<name>/` |
 | `agents/<name>.md` (Claude format) | `~/.claude/agents/<name>.md` | `~/.gemini/config/agents/<name>/agent.md` (tool and model names translated at install) |
 | the binary | `~/.local/bin/sh-agent` | same |
-| manifest, feedback log, retro proposals, global handoffs | `~/.config/sh-agent/` | same |
+| manifest, feedback log, retro proposals, `retros.jsonl` (cross-project retro/distill index), global handoffs | `~/.config/sh-agent/` | same |
 
 An existing `~/.claude/CLAUDE.md` that sh-agent did not write is left alone; add the line `@AGENTS.md` to it yourself.
 

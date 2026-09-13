@@ -122,17 +122,17 @@ Tiers: unit (`gofmt -l .`, `go vet ./...`, `go test -race ./...` incl. `cmd/sh-a
 - [x] `init-project`: `assets/agents-tree/docs/retros/.gitkeep`, tree listing in SKILL.md (the template's Key Files row `.agents/docs/` already covers `retros/`; no new row) — verify: `find skills/init-project/assets -type d`; who: AI
 - [x] `handoff`: artifact table row for retro records — verify: grep; who: AI
 - [x] Sandbox e2e: headless Claude Code `/retro` in the demo produces the record and the index line; Antigravity context question quotes the new Learning loop paragraph; log clean — verify: e2e; who: AI
-- [ ] Checkpoint — who: AI
+- [x] Checkpoint — who: AI
 
 ### Phase 4 — Docs and trail
 - [x] `AGENTS.md` (repo), `README.md`, `deploy/local.md`: scratch home is `.agents/scratch/home`; rebuild rule; `sh-agent update` as the daily refresh — verify: `grep -rn '/tmp' AGENTS.md README.md .agents/docs/deploy` empty; who: AI
 - [x] Changes entry for 830f1fb..b64ffe8 (catch-up) and one per phase — verify: files exist; who: AI
 - [x] BUG-006 stale binary self-copy, BUG-007 `/tmp` contradiction, BUG-008 four commits without records (`bugs` agent) — verify: INDEX rows; who: AI
-- [ ] ADR-013 rebuild-not-copy, ADR-014 all skills model-invocable (done 2026-09-13), ADR-015 project-level retro records + global index (with Phase 3) (`changelog` agent) — verify: DECISIONS.md; who: AI
+- [x] ADR-013 rebuild-not-copy, ADR-014 all skills model-invocable, ADR-015 project-level retro records + global index (all done 2026-09-13) (`changelog` agent) — verify: DECISIONS.md; who: AI
 - [x] `testing/2026-09-13-verify-research-pass.md` (today's evidence) and the verifier's log for the change — verify: files; who: AI
 - [x] ROADMAP "Now" → this plan; TODO — verify: read; who: AI
-- [ ] Definition of Done: `verifier`, `reviewer` over `b64ffe8..HEAD`, `security` (the installer executes `go build` and a built binary from a recorded repo path), `documentation`, `changelog`; fix or rebut; commit; push — who: AI
-- [ ] `/handoff` with cold-reader check — who: AI
+- [x] Definition of Done: `verifier`, `reviewer` over `b64ffe8..HEAD`, `security` (the installer executes `go build` and a built binary from a recorded repo path), `documentation`, `changelog`; fix or rebut; commit; push — who: AI
+- [x] `/handoff` with cold-reader check — who: AI
 - [ ] Operator: on this box run `sh-agent update` (or `go run ./cmd/sh-agent install`) once, since the installed 2026-09-03 binary cannot rebuild itself; on the Mac `sh-agent update` — who: user
 
 ### Phase 5 — Improvement review (separate deliverable)

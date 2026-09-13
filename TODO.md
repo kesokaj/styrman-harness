@@ -8,7 +8,6 @@ Deferred work items. Not blocking current work, but should be addressed later.
 
 - [x] On the Mac, verify the Antigravity CLI picks up `~/.gemini/config/rules/AGENTS.md`, `agents/<name>/agent.md`, and the skills — verified on Linux (2026-09-03) and on Mac (2026-09-04, `.agents/docs/testing/2026-09-04-verify-mac-real-home.md`)
 - [ ] Operator: run `sh-agent update` (or `go run ./cmd/sh-agent install`) once on this Linux box and once on the Mac — the installed 2026-09-03 binary cannot rebuild itself (BUG-006); then `sh-agent status` must show a `binary` line without a warning (added 2026-09-13)
-- [ ] Phase 3 of `.agents/docs/plans/2026-09-13-learning-loop-project-level.md` (project-level retro/distill records) waits for the operator's answer on the round-3 residue: feedback `rule_ref` vocabulary and spacing-agnostic grep confirmation — see the plan's D6/D11 (added 2026-09-13)
 
 ## Medium Priority
 

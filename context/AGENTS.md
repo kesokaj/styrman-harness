@@ -38,7 +38,7 @@ Global is this harness (`skills/`, `agents/`, `commands/`, `rules/`, `context/`)
 
 ## Learning loop
 
-`feedback` logs corrections to `~/.config/sh-agent/feedback.jsonl`. Run `/retro` at the end of a session with two or more corrections, and whenever `sh-agent status` shows more than 14 days since the last one. Run `/distill` on the third repeat of a procedure. Recurring bug prevention rules are retro input.
+`feedback` logs corrections to `~/.config/sh-agent/feedback.jsonl`. Run `/retro` at the end of a session with two or more corrections, and whenever `sh-agent status` shows more than 14 days since the last one; run `/distill` on the third repeat of a procedure. Recurring bug prevention rules are retro input. Each proposal is scoped by its target: the project's own rules, `AGENTS.md`, skills, or agents (`Scope: project`, applied in the project), or the harness (`Scope: harness`, queued in `~/.config/sh-agent/proposals/` for a session in the harness checkout, `/retro --harness`). Every retro and distill leaves a record in `.agents/docs/retros/` and one line in `~/.config/sh-agent/retros.jsonl`, the cross-project index; a rule seen in two projects is promoted to the harness.
 
 ## Git
 
@@ -62,7 +62,7 @@ Backup and versioning only: no CI, no hooks, ever. Commit and push to the curren
 .agents/
 ├── rules/ skills/ agents/ workflows/ commands/     # project-level customizations
 ├── scratch/                                        # gitignored temporary and generated files
-└── docs/ changes/ architecture/DECISIONS.md specs/<app>/ testing/ deploy/{local,remote,gcp}.md plans/ bugs/INDEX.md handoffs/ reviews/
+└── docs/ changes/ architecture/DECISIONS.md specs/<app>/ testing/ deploy/{local,remote,gcp}.md plans/ bugs/INDEX.md handoffs/ reviews/ retros/
 ```
 
 Root: `AGENTS.md` (`CLAUDE.md` is the line `@AGENTS.md`; no `GEMINI.md`), `REQUIREMENTS.md`, `TODO.md`, `ROADMAP.md` ("Now" points at the active plan), `README.md`. Every `docs/` artifact starts with frontmatter `owner:` and `date:`; `changes/` and `DECISIONS.md` are append-only; comments say why, not what.

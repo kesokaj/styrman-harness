@@ -47,7 +47,8 @@ Do NOT duplicate content that already exists elsewhere. Instead, reference these
 | Deploy guides | `.agents/docs/deploy/{local,remote,gcp}.md` |
 | Deferred work | `TODO.md` |
 | Requirements | `REQUIREMENTS.md` |
-| Retro proposals | `~/.config/sh-agent/proposals/` |
+| Retro and distill records (project scope) | `.agents/docs/retros/` |
+| Harness-scope retro proposals (queue) | `~/.config/sh-agent/proposals/` |
 | Commits | Reference by short SHA |
 | PRs / Issues | Reference by `#number` or URL |
 
@@ -188,7 +189,7 @@ After saving, tell the user:
 
 ## Cross-References
 
-- The `/retro` workflow captures corrections and proposes harness improvements
+- The `/retro` workflow turns corrections into proposals scoped to the project (applied there, recorded in `.agents/docs/retros/`) or to the harness (queued in `~/.config/sh-agent/proposals/`)
 - The `/distill` workflow captures repeated patterns as reusable skills
 - The `feedback` skill passively logs corrections to `~/.config/sh-agent/feedback.jsonl`
 - The `changelog` subagent writes `.agents/docs/changes/` entries — reference these, don't duplicate them

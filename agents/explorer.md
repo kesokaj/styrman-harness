@@ -1,6 +1,6 @@
 ---
 name: explorer
-description: "Read-only codebase recon in an isolated context. Returns a structured brief (files, flows, conventions, risks, open questions) and writes it to the docs root under plans/ so only the summary enters the main context. Dispatch for any survey spanning 10+ files, before large features, and as the scan phase of /audit. Never edits source; the only file it creates is its own brief."
+description: "Read-only codebase recon in an isolated context. Returns a structured brief (files, flows, conventions, risks, open questions) and writes it to the docs root under plans/ so only the summary enters the main context. Dispatch for any survey spanning 10+ files, before large features, and as the scan phase of /review --project. Never edits source; the only file it creates is its own brief."
 tools: Read, Grep, Glob, Bash, Write
 model: sonnet
 effort: medium

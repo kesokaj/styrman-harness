@@ -1,6 +1,6 @@
 ---
 name: preflight
-description: Release gate and release path. Run whenever the user asks to ship, release, deploy, tag, or cut a new version ("ship it", "deploy v1.4", "new version", "release this"). Brings uncommitted work through the Definition of Done, dispatches the reviewer and security agents over the release diff, writes a SHIP / NO-SHIP report, and on SHIP commits, tags, pushes, and deploys. Do NOT use for ordinary commits or for reviewing a diff (use the reviewer agent or the vendor's built-in review command).
+description: Release gate and release path. Run whenever the user asks to ship, release, deploy, tag, or cut a new version ("ship it", "deploy v1.4", "new version", "release this"). Brings uncommitted work through the Definition of Done, dispatches the reviewer and security agents over the release diff, writes a SHIP / NO-SHIP report, and on SHIP commits, tags, pushes, and deploys. Do NOT use for ordinary commits or for reviewing a diff (use `/review`).
 argument-hint: "[version or base ref]"
 ---
 
@@ -47,7 +47,7 @@ Untracked or modified files **under `<docs-root>`** need no commit of their own 
 
 Never self-review, self-verify, or self-audit. Dispatch in parallel, each with the range `<base>..HEAD`, today's date, and the instruction to record a `Range reviewed: <base>..<head>` line in its artifact:
 
-- **Reviewer** — dispatch the `reviewer` agent on the strongest model (Claude Code: pass `model: opus` in the dispatch; Antigravity: subagents inherit the session model, so run release sessions with `agy --model pro`; it loads the `review-standards` skill) when the release diff is 50+ lines or 5+ files, over the commits **not already covered** by a prior `reviews/*-review-*` or `reviews/*-preflight-*` report. Coverage is your judgement: read each candidate report's `Range reviewed:` line and decide whether it subsumes the commits in question; when it does, cite the covering report in the gate report instead of re-reviewing. Below threshold, read the diff yourself or run the vendor's built-in review command and note that in the gate report.
+- **Reviewer** — dispatch the `reviewer` agent on the strongest model (Claude Code: pass `model: opus` in the dispatch; Antigravity: subagents inherit the session model, so run release sessions with `agy --model pro`; it loads the `review-standards` skill) when the release diff is 50+ lines or 5+ files, over the commits **not already covered** by a prior `reviews/*-review-*` or `reviews/*-preflight-*` report. Coverage is your judgement: read each candidate report's `Range reviewed:` line and decide whether it subsumes the commits in question; when it does, cite the covering report in the gate report instead of re-reviewing. Below threshold, read the diff yourself or run `/review` and note that in the gate report.
 - **Security** — dispatch the `security` agent whenever a changed path in the release diff touches auth, IAM, secrets, input parsing, or dependencies, regardless of diff size — every such surface, always. A release that touches none of those has no security row; say so in the gate report rather than skipping it silently.
 - **Verification** — a `testing/*-verify-*` log written in Step 1 (or earlier today) whose `Range reviewed:` reaches HEAD satisfies this row; cite it. Otherwise dispatch the `verifier` agent now over the release range.
 

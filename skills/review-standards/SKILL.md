@@ -1,11 +1,11 @@
 ---
 name: review-standards
-description: "Per-language code-excellence standards for Go and TypeScript, loaded by the reviewer agent, /audit, and /preflight. Load when applying the project review criteria: dead code, function flow, directory layout, simplicity, security-exempt DIY rule, decoupling. Not a review workflow — the reviewer agent and (on Claude Code) the built-in /code-review do the reviewing."
+description: "Per-language code-excellence standards for Go and TypeScript, loaded by the reviewer agent, /review, and /preflight. Load when applying the project review criteria: dead code, function flow, directory layout, simplicity, security-exempt DIY rule, decoupling. Not a review workflow — `/review` dispatches the reviewing."
 ---
 
 # Review Standards
 
-A standards **library**, not an actor. Whoever is reviewing (the `reviewer` agent, `/audit`, `/preflight`) loads this file and judges the diff against the six criteria below. Every finding gets a severity (high / medium / low) and a confidence level, and lands in the docs root under `reviews/` — never chat-only. Docs root: `.agents/docs/` if it exists, else `docs/` if it exists, else create `.agents/docs/`.
+A standards **library**, not an actor. Whoever is reviewing (the `reviewer` agent, `/review`, `/preflight`) loads this file and judges the diff against the six criteria below. Every finding gets a severity (high / medium / low) and a confidence level, and lands in the docs root under `reviews/` — never chat-only. Docs root: `.agents/docs/` if it exists, else `docs/` if it exists, else create `.agents/docs/`.
 
 Language deep-dives (load only for the languages present in the diff):
 

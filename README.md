@@ -7,7 +7,7 @@ A personal agent harness for **Claude Code** and the **Antigravity CLI** (`agy`)
 ```bash
 git clone git@github.com:kesokaj/styrman-harness.git ~/workspace/styrman-harness
 cd ~/workspace/styrman-harness
-go run ./cmd/sh-agent install     # deploys everything and copies itself to ~/.local/bin/sh-agent
+go run ./cmd/sh-agent install     # builds the binary from the checkout, deploys everything, installs the build to ~/.local/bin/sh-agent
 sh-agent status                   # should end with "drift none"
 ```
 
@@ -19,9 +19,9 @@ Harness state (feedback log, retro proposals, global handoffs) lives in `~/.conf
 
 | Command | What it does |
 |---|---|
-| `sh-agent status` | Shows what is installed, from which commit, and every file that drifted. Exit 1 on drift. |
+| `sh-agent status` | Shows what is installed, from which commit, the running binary's build (with a warning when it is older than the checkout), and every file that drifted. Exit 1 on drift. |
 | `sh-agent diff` | Unified diff of every drifted file (installed vs repo). |
-| `sh-agent install` (or `sync`) | Deploys the repo (`--vendor antigravity\|claude\|all`). Idempotent; removes files a previous install wrote that the repo no longer has. |
+| `sh-agent install` (or `sync`) | Rebuilds the binary from the checkout with `go build`, then deploys the repo (`--vendor antigravity\|claude\|all`). Idempotent; removes files a previous install wrote that the repo no longer has. |
 | `sh-agent update` | `git fetch` the harness repo; if behind, `pull --ff-only`, rebuild, and reinstall. `--check` only reports (exit 2 when behind). |
 | `sh-agent uninstall` | Removes exactly the files it installed (from its manifest) and nothing else. |
 | `sh-agent list` | Prints the skill and agent inventory. |
@@ -58,13 +58,13 @@ Every customization is a file in a directory. Drop it in, run `sh-agent install`
 
 | Put it in | What it is | Claude Code gets | Antigravity gets |
 |---|---|---|---|
-| `skills/<name>/SKILL.md` | a skill (Agent Skills standard); add `disable-model-invocation: true` for a `/name` command | `~/.claude/skills/<name>/` | `~/.gemini/config/skills/<name>/` |
+| `skills/<name>/SKILL.md` | a skill (Agent Skills standard); the model loads it when the description matches, and `/name` types it | `~/.claude/skills/<name>/` | `~/.gemini/config/skills/<name>/` |
 | `agents/<name>.md` | a subagent in Claude Code format (`name`, `description`, `tools`, `model`, …) | `~/.claude/agents/<name>.md` | `~/.gemini/config/agents/<name>/agent.md`, tools and model translated |
 | `commands/<name>.md` (or `workflows/`) | a plain markdown prompt invoked as `/name`; frontmatter `description` optional | `~/.claude/commands/<name>.md` | `~/.gemini/config/workflows/<name>.md` |
 | `rules/<name>.md` | an always-on or path-scoped rule (Claude: `paths:` frontmatter; Antigravity: `trigger: glob` + `globs:`; both ignore the other's keys) | `~/.claude/rules/<name>.md` | `~/.gemini/config/rules/<name>.md` |
 | `context/<name>.md` | more global context, appended after `AGENTS.md` | part of `~/.claude/AGENTS.md` | part of `~/.gemini/config/rules/AGENTS.md` |
 
-A skill with `disable-model-invocation: true` is the portable way to write a command: both vendors run it as `/name` without translation. Prefer it over `commands/` for anything new.
+A skill is the portable way to write a command: both vendors run any skill as `/name` without translation, and the model can load it itself when the description matches — every harness skill works both ways, so the agent can run `/handoff` or `/retro` for you. Add `disable-model-invocation: true` only to a skill that must never fire on its own (none of the harness's own do). Prefer a skill over `commands/` for anything new.
 
 ### From skills.sh
 
@@ -95,7 +95,7 @@ cmd/sh-agent  the binary; internal/harness is its logic and tests
 
 ```bash
 gofmt -l . && go vet ./... && go test -race ./...
-go run ./cmd/sh-agent install --home /tmp/sh-agent-test   # never test against your real $HOME
+go run ./cmd/sh-agent install --home .agents/scratch/home   # never test against your real $HOME; scratch lives in the repo, never /tmp
 ```
 
 See `AGENTS.md` for the repo rules and `.agents/docs/plans/2026-09-03-rebuild.md` for the rebuild checklist.

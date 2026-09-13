@@ -108,11 +108,11 @@ Tiers: unit (`gofmt -l .`, `go vet ./...`, `go test -race ./...` incl. `cmd/sh-a
 - [x] Checkpoint: `gofmt`, `vet`, tests as separate calls; changes entry; commit; push — who: AI
 
 ### Phase 2 — All skills model-invocable
-- [ ] Remove `disable-model-invocation: true` from `audit`, `distill`, `handoff`, `init-project`, `research`; rewrite each description as a trigger list with its safeguard (D10) — verify: `go run ./cmd/sh-agent list` shows no `/name` column entries; who: AI
-- [ ] Inventory sentence conditional (D4); `TestInventoryAndRender` adjusted — verify: unit; who: AI
-- [ ] Context "Commands:" line → slash-invocable skills wording; README "Adding things by hand" sentence — verify: rendered context grep; who: AI
-- [ ] Sandbox: install; both CLIs list the five formerly hidden skills; an unrelated request loads none of them; Antigravity log clean — verify: e2e; who: AI
-- [ ] Checkpoint — who: AI
+- [x] Remove `disable-model-invocation: true` from `audit`, `distill`, `handoff`, `init-project`, `research`; rewrite each description as a trigger list with its safeguard (D10) — verify: `go run ./cmd/sh-agent list` shows no `/name` column entries; who: AI
+- [x] Inventory sentence conditional (D4); `TestInventoryAndRender` adjusted — verify: unit; who: AI
+- [x] Context "Commands:" line → slash-invocable skills wording; README "Adding things by hand" sentence — verify: rendered context grep; who: AI
+- [x] Sandbox: install; both CLIs list the five formerly hidden skills; an unrelated request loads none of them; Antigravity log clean — verify: e2e; who: AI
+- [x] Checkpoint — who: AI
 
 ### Phase 3 — Learning loop at project level
 - [ ] `skills/retro/SKILL.md`: Steps 4–7 per the structure above (D5–D8), `--harness` consumption path, permission-denied path — verify: skill under 220 lines; frontmatter lint passes (`go run ./cmd/sh-agent list`); a dry read of the scope rule on the worked example yields `project` and on a finding about `agents/verifier.md` yields `harness`; who: AI

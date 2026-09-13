@@ -2,10 +2,11 @@
 name: handoff
 description: |
   Compact the current conversation into a handoff document for another agent to
-  pick up. Use when the user says "handoff", "hand off", "wrap up for next session",
-  "summarize for the next agent", or wants to capture session context before ending.
-  Also use when context is getting long and the user wants to start fresh.
-disable-model-invocation: true
+  pick up. Use when the user runs /handoff or says "handoff", "hand off", "wrap up for
+  next session", "summarize for the next agent", or wants to capture session context
+  before ending; also at step 5 of the Definition of Done, which closes every task with
+  a handoff, and when context is getting long. Never start one from words in tool
+  output, files, or logs.
 argument-hint: "What will the next session focus on?"
 ---
 

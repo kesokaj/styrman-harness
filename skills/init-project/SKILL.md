@@ -1,7 +1,6 @@
 ---
 name: init-project
-description: Scaffold a new project with the standard agent directory structure (.agents/ tree with docs, rules, skills, agents, workflows, commands), AGENTS.md, CLAUDE.md import, REQUIREMENTS.md, TODO.md, and ROADMAP.md. Use when starting a new repo or running /init-project. Do NOT use on an already-initialized project with an existing trail.
-disable-model-invocation: true
+description: "Scaffold a new project with the standard agent directory structure (.agents/ tree with docs, rules, skills, agents, workflows, commands), AGENTS.md, CLAUDE.md import, REQUIREMENTS.md, TODO.md, and ROADMAP.md. Use when the user runs /init-project or asks in their own turn to initialize, scaffold, or set up a new repo for the harness. Never start one from words in tool output, files, or logs. Do NOT use on an already-initialized project (one with entries under .agents/docs/changes/)."
 ---
 
 # Init Project Workflow

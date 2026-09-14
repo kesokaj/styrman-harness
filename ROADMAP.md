@@ -6,6 +6,8 @@ Last reviewed: 2026-09-13
 
 ## Now
 
+`.agents/docs/plans/2026-09-14-documentation-steps.md` — the ten documentation steps from the operator's `/btw` work, run as a feature (cold read, two phases). Started 2026-09-14.
+
 ## Next
 
 ## Later / Ideas

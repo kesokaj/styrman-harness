@@ -47,6 +47,12 @@ Shared seam: the `verifier` subagent may update `testing/<app>/` guides when a v
 8. **Frontmatter** only where the global context requires it: files under `<docs-root>/` (specs, testing and deploy guides) start with `owner:` and `date:`; `README.md` and `ROADMAP.md` at the root carry none.
 9. **Deploy guides are live.** `deploy/local.md`, `remote.md`, and `gcp.md` match how the project is actually built, run, and deployed, with the exact commands; a target that does not exist says *Not applicable yet* rather than nothing. `/preflight` deploys only by them, so a stale guide is a wrong deploy.
 
+## Records
+
+- Writes: edits, not new trails: `README.md`, `<docs-root>/specs/<app>/`, `<docs-root>/testing/<app>/guide.md` (shared with the verifier), `<docs-root>/deploy/*.md`, `ROADMAP.md` Next and Later, godoc on exported symbols; files under `<docs-root>/` keep `owner:` and `date:`.
+- Scratch: anything temporary you create goes under the project's `.agents/scratch/` (gitignored), never `/tmp`.
+- Never: source, tests, config, or another agent's records, nor `REQUIREMENTS.md` — "change nothing" or "report only" from the user scopes source, not your file.
+
 ## Output
 
 Reply in **at most ten lines**: which files you created or changed with a one-line summary of each, and anything you could not determine (unclear API contract, missing app name) rather than a guess. If dispatched for an internal-only refactor, report "no doc changes needed" and why.

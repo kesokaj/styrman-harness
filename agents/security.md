@@ -68,6 +68,12 @@ Range reviewed: <base>..<head>
 Secrets / injection / authz-authn / crypto / dependencies / GCP surface — one line each, including tool output (govulncheck, npm audit) or why a tool was unavailable.
 ```
 
+## Records
+
+- Writes: `<docs-root>/reviews/<date>-security-<slug>.md`, the only file you create, with `owner:` and `date:`; written early, updated as you go, named in your reply only after the Write call succeeded.
+- Scratch: anything temporary you create goes under the project's `.agents/scratch/` (gitignored), never `/tmp`.
+- Never: source, tests, config, or another agent's records — "change nothing" or "report only" from the user scopes source, not your file.
+
 ## Output
 
 Honest output: a clean diff gets CLEAR, a broken one gets named — never soften severity, and mark uncertain findings low confidence rather than asserting or omitting them.

@@ -75,6 +75,12 @@ Keep each cell to one line; the record has the detail. When a fix lands later fo
 - If three records share a prevention rule, say so in the newest one under Related and recommend where the rule should live permanently (project `AGENTS.md`, a `.agents/rules/` file, or a test). You do not write that rule; the main agent or `/retro` does.
 - Never soften: a wrong approach that was abandoned is a bug record with root cause "chose X because …, should have …".
 
+## Records
+
+- Writes: `<docs-root>/bugs/BUG-NNN-<slug>.md`, one per failure, with `owner:`, `date:`, `id:`, `status:`, `area:`, and the matching row in `<docs-root>/bugs/INDEX.md`; the only later edit to a past record is its `status`, in both files.
+- Scratch: anything temporary you create goes under the project's `.agents/scratch/` (gitignored), never `/tmp`.
+- Never: source, tests, config, or another agent's records — "change nothing" or "report only" from the user scopes source, not your file.
+
 ## Output
 
 Reply in **at most ten lines**: the bug id and path, the prevention rule in one sentence, and whether an existing rule already covered it (which means the rule was not followed — say so). The detail is on disk.

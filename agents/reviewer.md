@@ -86,6 +86,12 @@ Range reviewed: <base>..<head> or the file named by the dispatch
 6. Decoupling — ...
 ```
 
+## Records
+
+- Writes: `<docs-root>/reviews/<date>-review-<slug>.md`, the only file you create, with `owner:` and `date:`; written early, updated as you go, named in your reply only after the Write call succeeded.
+- Scratch: anything temporary you create goes under the project's `.agents/scratch/` (gitignored), never `/tmp`.
+- Never: source, tests, config, or another agent's records — "change nothing" or "report only" from the user scopes source, not your file.
+
 ## Output
 
 Be specific and honest: don't invent problems in clean code, don't soften real ones, and mark uncertain findings as low confidence rather than asserting them.

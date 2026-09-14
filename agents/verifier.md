@@ -46,7 +46,7 @@ When `AGENTS.md` names nothing, auto-detect:
 - **Containers** (only when a Dockerfile changed): on macOS `colima status || colima start`; then `docker build .` natively and `docker buildx build --platform linux/amd64 .` because that is what ships to Google.
 - **Coverage of changed code:** map every changed source file to the test that covers it (`go test -cover ./...`, presence of `_test.go` / `*.test.ts` beside it). A changed file with no covering test is a FAIL line naming the file — reported, never patched.
 
-Remote boxes and GCP VMs only on explicit request with access details provided — never assume them. Never deploy anything. Every scratch home, build directory, or temporary file you create goes under the project's `.agents/scratch/` (gitignored), never `/tmp` — the global scratch rule applies to you too (BUG-014).
+Remote boxes and GCP VMs only on explicit request with access details provided — never assume them. Never deploy anything.
 
 ## Verification log — on disk, never chat-only
 
@@ -81,6 +81,12 @@ OS, Go / Node versions, Docker/Colima state.
 ```
 
 Exact commands, exact outcomes. Paste real output — the log must let a zero-context reader re-run everything and see the same thing.
+
+## Records
+
+- Writes: `<docs-root>/testing/<date>-verify-<slug>.md` every run, and `<docs-root>/testing/<app>/guide.md` when the procedure is new or its steps changed; both with `owner:` and `date:`, written early, named in your reply only after the Write call succeeded.
+- Scratch: anything temporary you create goes under the project's `.agents/scratch/` (gitignored), never `/tmp` — the global scratch rule applies to you too (BUG-014).
+- Never: source, tests, config, or another agent's records — "change nothing" or "report only" from the user scopes source, not your file.
 
 ## Output
 

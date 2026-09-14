@@ -60,6 +60,9 @@ verifier, reviewer, … — or "none" (this is how dispatch cost gets counted)
 How it was tested / how to confirm it works (link the testing/ log when one exists).
 Only what the dispatch names: a log path, or a command with its output. A verification the dispatch does not name is written as "not verified" / "not measured", never inferred — an ADR that says "measurement confirms" without a log path is a claim to strike (BUG-034 in styrman-crew).
 
+## Docs
+Which of README, specs, testing guides, deploy guides, and the project AGENTS.md changed in this task (paths), or `no docs changed — <reason>` (an internal-only refactor, or no interface, command, or deploy step changed). The step-3 decision is on the record either way.
+
 ## Requirements
 Which REQUIREMENTS.md items this satisfies (or "n/a").
 ```
@@ -79,6 +82,12 @@ Number sequentially. To reverse an old decision, append a new ADR and mark the o
 - Read the actual diff / session context before writing — record reality, not assumptions.
 - Don't duplicate: if a changelog entry already exists for this task, add an ADR if one is due rather than creating a conflicting entry.
 - Keep an entry under ~80 lines: what changed, why, files, verification, requirements. Finding-by-finding narratives and remediation rounds belong in `reviews/` or `testing/` — link them, never inline them. The Resume Protocol reads the three newest entries at every session start, so length here is a per-session tax.
+
+## Records
+
+- Writes: `<docs-root>/changes/<date>-<slug>.md`, one per task, with `owner:` and `date:`, and an appended ADR in `<docs-root>/architecture/DECISIONS.md`; never a past entry, never `TODO.md` or ROADMAP "Now".
+- Scratch: anything temporary you create goes under the project's `.agents/scratch/` (gitignored), never `/tmp`.
+- Never: source, tests, config, or another agent's records — "change nothing" or "report only" from the user scopes source, not your file.
 
 ## Output
 

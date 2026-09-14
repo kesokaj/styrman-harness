@@ -62,7 +62,7 @@ Check by inspection and record each as pass or finding:
 
 ## Step 4: Docs freshness
 
-Confirm `README.md`, `<docs-root>/specs/`, and `<docs-root>/deploy/` reflect the release diff (interfaces, behavior, deployment). If they do not, dispatch the `documentation` agent and record the gap as a finding.
+Run the `--docs` lens of `/review` over `<base>..HEAD` — the `reviewer` agent with the docs brief and the slug `<base>-<head>-docs` — against `README.md`, `<docs-root>/specs/`, `<docs-root>/testing/<app>/guide.md`, and `<docs-root>/deploy/`. Its findings are the docs gaps: dispatch the `documentation` agent for them and record each as a finding in the gate report.
 
 ## Step 5: Write the merged gate report
 

@@ -28,6 +28,7 @@ Installers count as callers. A change that an installer, updater or converge ste
 - [ ] Error paths propagate: Go — every `err` wrapped with context (`fmt.Errorf("...: %w", err)`) or explicitly handled, never discarded with `_` or an empty branch; TS — no floating promises (every promise awaited, returned, or explicitly voided with a reason), caught errors typed `unknown` and narrowed.
 - [ ] Context and cancellation flow end-to-end: Go — `context.Context` passed down, honored in loops and I/O, goroutines have an exit path; TS — `AbortSignal` reaches fetches/long operations that outlive a request or component.
 - [ ] Resource lifetimes: everything opened is closed on every path, including the error paths.
+- [ ] Every new test can FAIL: would it still pass if the behaviour it names were reverted? Reject tests that assert on source text rather than behaviour, that re-assert a constant against itself, or that exercise a path the test setup makes unreachable. A test that cannot fail is worse than no test — it reports coverage that does not exist.
 
 ## 3. Standards conformance — the language skills are the authority
 

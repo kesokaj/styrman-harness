@@ -3,6 +3,7 @@ package harness
 import (
 	"bytes"
 	"errors"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -810,5 +811,48 @@ func TestReinstallBuildsAndInstalls(t *testing.T) {
 	builds, _ := filepath.Glob(filepath.Join(repo, ".agents", "scratch", "sh-agent-build-*"))
 	if len(builds) != 0 {
 		t.Errorf("build directories left behind: %v", builds)
+	}
+}
+
+// TestNoTmpInHarnessProse guards the scratch rule at the source: the
+// context, the agents, the skills, and the repo docs may mention /tmp only
+// to forbid it. Three records (BUG-003, BUG-007, BUG-014) are the reason
+// this is a test and not a reminder.
+func TestNoTmpInHarnessProse(t *testing.T) {
+	repo, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	roots := []string{"context", "agents", "README.md", "AGENTS.md"}
+	skills, _ := filepath.Glob(filepath.Join(repo, "skills", "*", "SKILL.md"))
+	for _, s := range skills {
+		rel, _ := filepath.Rel(repo, s)
+		roots = append(roots, rel)
+	}
+	allowed := func(line string) bool {
+		l := strings.ToLower(line)
+		return strings.Contains(l, "never /tmp") || strings.Contains(l, "never `/tmp`") ||
+			strings.Contains(l, "not /tmp") || strings.Contains(l, "not `/tmp`") || strings.Contains(l, "instead of `/tmp`")
+	}
+	for _, root := range roots {
+		err := filepath.WalkDir(filepath.Join(repo, root), func(path string, d fs.DirEntry, err error) error {
+			if err != nil || d.IsDir() || !strings.HasSuffix(path, ".md") {
+				return err
+			}
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			for i, line := range strings.Split(string(data), "\n") {
+				if strings.Contains(line, "/tmp") && !allowed(line) {
+					rel, _ := filepath.Rel(repo, path)
+					t.Errorf("%s:%d mentions /tmp outside a 'never /tmp' clause: %s", rel, i+1, strings.TrimSpace(line))
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 }

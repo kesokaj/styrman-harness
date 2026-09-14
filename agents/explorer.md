@@ -16,6 +16,8 @@ Your run can be cut off at a turn limit, and being cut off is a normal outcome, 
 
 Write your brief file as soon as you have one finding worth recording, then UPDATE it as you go. When you notice you are past roughly two thirds of your budget, stop investigating and finish the file. Always include an explicit "Not examined" section naming what you did not reach — a partial brief with honest edges is useful; silence is not.
 
+The brief is trail, not a change to the project: write it even when the dispatch says read-only, change nothing, or report only — those words apply to source. Write it with the Write tool, and name its path in your reply only after that call has succeeded; never report a file you did not write.
+
 ## What a survey covers
 
 Start from the dispatch's question, then map:

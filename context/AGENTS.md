@@ -30,7 +30,7 @@ Once per task over the whole change. Agents reply in at most ten lines; the deta
 
 Every failure gets a number. A failure is: a test failing for a reason other than the change under test, a fix that took more than one attempt, a regression, a failed build or deploy, an abandoned approach, a review finding that was a real defect, or the user correcting a mistake. Dispatch `bugs`; it writes `docs/bugs/BUG-NNN-*.md` with a prevention rule and updates `INDEX.md`. Read the index before touching an area it names. A rule that recurs graduates into the project's `AGENTS.md`, a `.agents/rules/` file, or a test.
 
-Skill = knowledge the main thread loads while working. Subagent = judgement independent of the author (review, verify, security, diagnosis) or read-heavy recon (`explorer`); it gets the artifact, never the conversation.
+Skill = knowledge the main thread loads while working. Subagent = judgement independent of the author (review, verify, security, diagnosis) or read-heavy recon (`explorer`); it gets the artifact, never the conversation. An agent's artifact (brief, log, report, record) is trail, not a change: "change nothing", "apply nothing", or "report only" from the user never cancels it — those words cover source, config, and tests, and a dispatch never tells an agent to skip its file (BUG-012).
 
 ## Global vs project
 

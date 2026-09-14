@@ -2,7 +2,7 @@
 owner: bugs
 date: 2026-09-13
 id: BUG-012
-status: open
+status: fixed
 area: agents/explorer
 ---
 # BUG-012: explorer claims a written brief that does not exist on disk
@@ -34,33 +34,45 @@ had written `plans/2026-09-13-recon-project.md`. No such file existed after:
    same narrow allow-list, not explorer-specific.
 
 ## Root cause
-NOT CONFIRMED — no controlled retest isolating the variable yet. Leading
-candidate, promoted by evidence 3: (b) explorer writes its brief through a
-shell command (heredoc via `bash -c` / `printf` / `cat >`) rather than the
-Write tool; a narrow headless `--allowedTools` list silently denies that
-Bash invocation, after which the agent still reports the write as done.
-`reviewer`/`security`/`verifier` write their artifacts with the Write tool
-and were unaffected in runs 1-2 (verifier's own Bash loss in run 2 was a
-separate symptom of the same narrow list, not a Write-tool failure). (a)
-"change nothing" misread and (c) working-directory mismatch are now
-secondary candidates. Still not confirmed: needs a retest with the narrow
-allow-list plus transcript inspection of explorer's actual write call.
+CONFIRMED, two mechanisms, from transcripts (goldfish brief
+`.agents/docs/plans/2026-09-14-bug-012-diagnosis.md`), refuting the earlier
+"narrow allow-list" hypothesis (the same narrow list produced a brief under a
+neutral prompt in `bug012-before`; the verifier's Bash denials there came from
+compound commands like `go build …; echo …` that no single allow-list pattern
+matches — a headless caveat, unrelated to this bug). (A) Dispatcher: when the
+user's prompt said "change nothing" the MAIN agent dispatched the explorer as
+"read-only recon" and told it not to write its brief, and the explorer
+complied — seen in the 2026-09-13 smoke run and the 2026-09-14 controlled
+reproduction (`bug012-before2`: "I told the explorer not to write its usual
+file under plans/"). (B) In the `/review --project --all` run of 2026-09-13,
+explorer's own transcript shows two Read calls, no Write call, and no
+denial, yet its reply named a brief path — a fabricated write.
 
 ## Fix
-Not fixed. Candidate fix, not yet applied: change `agents/explorer.md` to
-write its brief with the Write tool instead of a shell heredoc, then retest
-under the narrow allow-list to confirm.
+`context/AGENTS.md`: an agent's artifact (brief, log, report, record) is
+trail, not a change — "change nothing", "apply nothing", or "report only"
+from the user never cancels it, and a dispatch never tells an agent to skip
+its file (BUG-012). `agents/explorer.md`: the brief is trail, write it even
+when the dispatch says read-only or change nothing, write it with the Write
+tool, name its path only after that call succeeded, never report a file not
+written. `skills/review/SKILL.md`: every dispatch carries "Write your
+artifact with the Write tool; report only means no source edits." Verified:
+the exact failing prompt with the same narrow allow-list, twice on Claude
+Code and once on Antigravity 1.2.2, each left the brief on disk with source
+untouched (`.agents/scratch/bug012/after*`; verifier log
+`testing/2026-09-14-verify-bug-012-fix.md`).
 
 ## Prevention
-Until diagnosed: headless dispatch allow-lists include `Bash(bash:*)` and
-`Bash(printf:*)` (or wider) as a workaround; a dispatcher that needs the
-explorer's brief checks the path exists before trusting the reply (`/review`
-already records "artifact missing" — follow that pattern elsewhere). Next
-investigation: dispatch explorer under the narrow allow-list with the
-transcript inspected for the actual write call, and once the mechanism is
-confirmed, change `agents/explorer.md` to use the Write tool and retest.
+A user's "change nothing" scopes source, never the trail — `context/AGENTS.md`
+now says so explicitly; an agent names an artifact only after its write
+succeeded (never report a file you did not write); a dispatcher that needs an
+artifact checks the path exists (already the pattern in `/review`).
 
 ## Related
-`agents/explorer.md` gained the early-write section today (improvement
-review item 7); this bug shows the claim of a write must also be verified,
-not just the instruction to write early.
+BUG-013 (a second failure of trusting a report over checking the artifact);
+the goldfish diagnosis brief `.agents/docs/plans/2026-09-14-bug-012-diagnosis.md`;
+`agents/explorer.md` gained the early-write section on 2026-09-13 (improvement
+review item 7) — this bug shows the claim of a write must also be verified,
+not just the instruction to write early. Claude's built-in Write-tool
+guidance ("never create documentation files unless explicitly requested") is
+the seam the explicit context/agent instruction closes.

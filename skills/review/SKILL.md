@@ -38,7 +38,7 @@ Every agent writes that text on its `Range reviewed:` line. `<scope>` for artifa
 
 ## Step 3: Dispatch — one agent per lens, all in parallel
 
-Each dispatch gets the scope text, today's date, its slug, and its brief. `--high`: on Claude Code pass `model: opus` to `reviewer` and `security`; on Antigravity subagents inherit the session model, so run the session with `agy --model pro` when it matters.
+Each dispatch gets the scope text, today's date, its slug, its brief, and the sentence "Write your artifact with the Write tool; report only means no source edits." `--high`: on Claude Code pass `model: opus` to `reviewer` and `security`; on Antigravity subagents inherit the session model, so run the session with `agy --model pro` when it matters.
 
 | Lens | Agent | Slug it receives | Brief (verbatim) |
 |---|---|---|---|

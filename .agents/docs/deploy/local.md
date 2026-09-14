@@ -24,7 +24,7 @@ sh-agent status                                      # must end with "drift none
 
 ## Configure
 
-Nothing to configure. `--vendor VENDOR` selects the target CLI: `all` (default), `antigravity` (or `agy`), or `claude`. `--repo DIR` overrides where the checkout is; `$SH_AGENT_REPO` does the same persistently. `--home DIR` installs elsewhere and is what every development run uses (a scratch home under `.agents/scratch/`, never `/tmp`). Every `install` rebuilds the binary with `go build` first; only without `go` on PATH is the running binary copied, with a warning.
+Nothing to configure. `--vendor VENDOR` selects the target CLI: `all` (default), `antigravity` (or `agy`), or `claude`. `--repo DIR` overrides where the checkout is; `$SH_AGENT_REPO` does the same persistently. `--home DIR` installs elsewhere and is what every development run uses (a scratch home under `.agents/scratch/`, never `/tmp`). From its own git checkout, `install` rebuilds the binary with `go build` first; the running binary is installed as is when `go` is missing (with a warning) or when the tree is a plain copy with no `.git` — a downstream mirror (BUG-015).
 
 ## Verify
 

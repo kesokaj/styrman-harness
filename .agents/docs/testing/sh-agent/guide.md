@@ -38,6 +38,32 @@ Confirm every `agents/*.md` and its derived Antigravity `agent.md` under
 `.gemini/config/agents/<name>/agent.md` in the scratch home carry the same
 `## Records` section (exactly one each) when an agent definition changed.
 
+## 3a. Plain-copy install (change touching checkout-vs-mirror rebuild logic)
+
+When a change affects `IsCheckout` / rebuild-decision logic in `cmd/sh-agent` or
+`internal/harness/repo.go`, the scratch-home tier above only exercises the checkout
+path. Also build the real binary and run it against a read-only, `.git`-less copy:
+
+```bash
+go build -o .agents/scratch/<slug>/sh-agent ./cmd/sh-agent
+mkdir -p .agents/scratch/<slug>/mirror
+for d in context skills agents commands rules; do
+  mkdir -p ".agents/scratch/<slug>/mirror/$d"
+  rsync -a --exclude .git "$d/" ".agents/scratch/<slug>/mirror/$d/"
+done
+chmod -R a-w .agents/scratch/<slug>/mirror
+.agents/scratch/<slug>/sh-agent install --repo .agents/scratch/<slug>/mirror \
+  --home .agents/scratch/<slug>/home2   # must say "plain copy" and not rebuild
+ls -a .agents/scratch/<slug>/mirror     # must show no .agents/ created
+.agents/scratch/<slug>/sh-agent status --repo .agents/scratch/<slug>/mirror \
+  --home .agents/scratch/<slug>/home2   # first line "plain copy"; drift none
+chmod -R u+w .agents/scratch/<slug>/mirror   # restore before cleanup
+```
+
+Then confirm the checkout path still rebuilds with
+`<built binary> install --repo <this checkout> --home .agents/scratch/<slug>/home3 --dry-run`
+→ `[dry-run] the binary would be rebuilt from <checkout>`.
+
 ## 4. Sandbox start of each CLI (change to `context/`, `agents/`, or `skills/`)
 
 One start of Claude Code and one of Antigravity in the sandbox (paths and flags in

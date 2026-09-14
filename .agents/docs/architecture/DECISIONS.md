@@ -154,3 +154,11 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
 
 **Consequences:** Known-limits entries now record what was actually verified and name the unverified half explicitly. The trail (improvement-review records, `/retro` proposals, and handoff "pending requirements edits" sections) is the path by which stale limits reach the operator before they drift for years. The next similar discovery merges a retro proposal with the verification record and applies it in a single ADR and commit.
 
+## ADR-020: A plain copy never rebuilds — the rebuild belongs to a git checkout     (2026-09-14) — Accepted
+
+**Context:** ADR-013 made install rebuild from source so the deployed binary is the checkout's own build (BUG-006); the two downstream mirrors are plain copies inside other projects' images (styrman-crew's `image/harness/` and argolis-devbox's `deploy/harness/`), their images build the binary from that same tree, the tree is read-only to the installing user in one of them, and git cannot update it (ADR-016's ownCheckout check discovered the problem).
+
+**Decision:** The rebuild is gated on `IsCheckout` (a `.git` entry directly in the repo); a plain copy installs the running binary and says so; the no-toolchain warning is reserved for a checkout.
+
+**Consequences:** Install behaves the same on a consumer whether or not `go` is on its PATH. A change to install's environment-dependent behaviour is checked against `.agents/docs/deploy/remote.md § Downstream mirrors` before it is done (BUG-015's prevention rule). ADR-013 stands for checkouts; plain copies have always had their binary built by the image, and now the install respects that constraint.
+

@@ -66,13 +66,13 @@ type RepoInfo struct {
 // errPlainCopy is returned by Behind and Pull for a tree git cannot update.
 var errPlainCopy = errors.New("not its own git checkout; a plain copy cannot be updated with git")
 
-// ownCheckout reports whether repo is the top of its own git checkout: a
+// IsCheckout reports whether repo is the top of its own git checkout: a
 // `.git` entry sits directly in it (a directory, or the file a worktree
 // carries). A harness-shaped tree nested inside another repository (a mirror
 // kept under review, a copy inside a project) has none and is a plain copy;
 // asking git would answer for the enclosing repository, and git's answer
 // can be redirected by its environment, so the check never asks git.
-func ownCheckout(repo string) bool {
+func IsCheckout(repo string) bool {
 	_, err := os.Lstat(filepath.Join(repo, ".git"))
 	return err == nil
 }
@@ -81,7 +81,7 @@ func ownCheckout(repo string) bool {
 // own git checkout yields empty fields rather than an error: the harness
 // works from a plain copy too, only `update` needs git.
 func Inspect(repo string) RepoInfo {
-	if !ownCheckout(repo) {
+	if !IsCheckout(repo) {
 		return RepoInfo{}
 	}
 	branch, _ := gitOut(repo, "rev-parse", "--abbrev-ref", "HEAD")
@@ -92,7 +92,7 @@ func Inspect(repo string) RepoInfo {
 
 // Behind fetches the upstream and reports how many commits HEAD lags it.
 func Behind(repo string) (int, error) {
-	if !ownCheckout(repo) {
+	if !IsCheckout(repo) {
 		return 0, errPlainCopy
 	}
 	if _, err := gitOut(repo, "fetch", "--quiet"); err != nil {
@@ -113,7 +113,7 @@ func Behind(repo string) (int, error) {
 // git so a typo or a nested copy can never redirect a build (security
 // reviews of 2026-09-13, rounds 1–3).
 func Pull(repo string, out io.Writer) error {
-	if !ownCheckout(repo) {
+	if !IsCheckout(repo) {
 		return errPlainCopy
 	}
 	if Inspect(repo).Dirty {

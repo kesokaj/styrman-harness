@@ -30,7 +30,7 @@ sh-agent update --check    # only reports; exit 2 when behind
 
 ## Downstream mirrors
 
-Two projects vendor this repo as a .git-less copy and build `sh-agent` from it inside their own images: styrman-crew `image/harness/` and argolis-devbox `deploy/harness/`. Each mirror's `VENDORED.md` holds the refresh recipe (rsync from a clean checkout, record `COMMIT` and checksums, bump the project's version, push — the VMs rebuild on their next update). A mirror is a plain copy: `sh-agent status` there shows no commit and `update` refuses, by design. After any change to `context/`, `skills/`, or `agents/` here, refreshing both mirrors is a task in each of those projects; a retro that applies a harness-scope proposal says so in its report.
+Two projects vendor this repo as a .git-less copy and build `sh-agent` from it inside their own images: styrman-crew `image/harness/` and argolis-devbox `deploy/harness/`. Each mirror's `VENDORED.md` holds the refresh recipe (rsync from a clean checkout, record `COMMIT` and checksums, bump the project's version, push — the VMs rebuild on their next update). A mirror is a plain copy: `install` from it never rebuilds (the image built the running binary from that same tree, and the tree may be read-only to the installing user — BUG-015), `sh-agent status` there shows no commit, and `update` refuses, by design. After any change to `context/`, `skills/`, or `agents/` here, refreshing both mirrors is a task in each of those projects; a retro that applies a harness-scope proposal says so in its report.
 
 ## Verify
 

@@ -116,14 +116,20 @@ func run(args []string, out io.Writer) error {
 		}
 		// The deployed binary must be the repo's own build: rebuild and let
 		// that build install, unless this process is that build (ChildEnv),
-		// there is no toolchain to build with, or this is a dry run — a dry
-		// run never builds or runs a fresh binary; like every install it
-		// still reads the checkout's git state, which is why the checkout
-		// must be one the operator named or installed before.
+		// there is no toolchain to build with, the tree is a plain copy, or
+		// this is a dry run — a dry run never builds or runs a fresh binary;
+		// like every install it still reads the checkout's git state, which
+		// is why the checkout must be one the operator named or installed
+		// before. A plain copy (no .git: a mirror inside a project's image)
+		// never rebuilds — its image built the running binary from that
+		// same tree, the tree is often read-only to the installing user,
+		// and git cannot update it anyway (BUG-015).
 		_, goErr := exec.LookPath("go")
-		if *dryRun && shouldRebuild(goErr == nil, os.Getenv(harness.ChildEnv) == "1") {
+		own := harness.IsCheckout(repo)
+		rebuild := shouldRebuild(goErr == nil, os.Getenv(harness.ChildEnv) == "1", own)
+		if *dryRun && rebuild {
 			fmt.Fprintf(out, "[dry-run] the binary would be rebuilt from %s\n", repo)
-		} else if shouldRebuild(goErr == nil, os.Getenv(harness.ChildEnv) == "1") {
+		} else if rebuild {
 			var pass []string
 			if *homeFlag != "" {
 				pass = append(pass, "--home", home)
@@ -133,7 +139,11 @@ func run(args []string, out io.Writer) error {
 			}
 			return harness.Reinstall(repo, pass, out)
 		}
-		if goErr != nil {
+		if !own && *dryRun {
+			fmt.Fprintln(out, "[dry-run] plain copy, not its own git checkout: the running binary would be installed as is")
+		} else if !own {
+			fmt.Fprintln(out, "plain copy, not its own git checkout: the running binary is installed as is")
+		} else if goErr != nil {
 			fmt.Fprintln(out, "warning: go is not on PATH; the running binary was copied, not rebuilt — install Go and run `sh-agent update`")
 		}
 		self, err := selfExecutable()
@@ -374,10 +384,11 @@ func samePath(a, b string) bool {
 }
 
 // shouldRebuild decides whether install re-executes through a fresh build
-// of the repo: yes whenever a toolchain is present, unless this process is
-// already the fresh build that Reinstall spawned.
-func shouldRebuild(goOnPath, child bool) bool {
-	return goOnPath && !child
+// of the repo: yes whenever a toolchain is present and the repo is its own
+// git checkout, unless this process is already the fresh build that
+// Reinstall spawned. A plain copy is installed from the running binary.
+func shouldRebuild(goOnPath, child, ownCheckout bool) bool {
+	return goOnPath && !child && ownCheckout
 }
 
 // binaryOlder reports whether the running binary is not the repo's current

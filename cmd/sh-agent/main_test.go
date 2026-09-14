@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"runtime/debug"
@@ -51,15 +52,17 @@ func TestResolveVendor(t *testing.T) {
 }
 
 func TestShouldRebuild(t *testing.T) {
-	cases := []struct{ goOnPath, child, want bool }{
-		{true, false, true},
-		{true, true, false},
-		{false, false, false},
-		{false, true, false},
+	cases := []struct{ goOnPath, child, own, want bool }{
+		{true, false, true, true},
+		{true, true, true, false},
+		{false, false, true, false},
+		{false, true, true, false},
+		{true, false, false, false}, // a plain copy never rebuilds (BUG-015)
+		{false, false, false, false},
 	}
 	for _, c := range cases {
-		if got := shouldRebuild(c.goOnPath, c.child); got != c.want {
-			t.Errorf("shouldRebuild(%v, %v) = %v", c.goOnPath, c.child, got)
+		if got := shouldRebuild(c.goOnPath, c.child, c.own); got != c.want {
+			t.Errorf("shouldRebuild(%v, %v, %v) = %v", c.goOnPath, c.child, c.own, got)
 		}
 	}
 }
@@ -218,5 +221,83 @@ func TestDryRunNeverBuilds(t *testing.T) {
 	}
 	if strings.Contains(out.String(), "building sh-agent from") {
 		t.Errorf("dry run ran a build:\n%s", out.String())
+	}
+}
+
+// plainCopy copies this checkout's deployable trees into a directory with
+// no .git: what a downstream image ships (styrman-crew image/harness,
+// argolis-devbox deploy/harness).
+func plainCopy(t *testing.T) string {
+	t.Helper()
+	src, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dst := t.TempDir()
+	for _, top := range []string{"context", "skills", "agents", "commands", "rules"} {
+		root := filepath.Join(src, top)
+		err := filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			rel, _ := filepath.Rel(src, p)
+			if d.IsDir() {
+				return os.MkdirAll(filepath.Join(dst, rel), 0o755)
+			}
+			b, err := os.ReadFile(p)
+			if err != nil {
+				return err
+			}
+			return os.WriteFile(filepath.Join(dst, rel), b, 0o644)
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if harness.IsCheckout(dst) {
+		t.Fatal("fixture: the plain copy must not carry .git")
+	}
+	return dst
+}
+
+// TestPlainCopyNeverRebuilds: a mirror inside a project's image is built by
+// that image from the same tree, is usually read-only to the installing
+// user, and cannot be updated with git; install from it must deploy the
+// running binary without a rebuild, without the no-toolchain warning, and
+// without creating a scratch directory inside the mirror (BUG-015).
+func TestPlainCopyNeverRebuilds(t *testing.T) {
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("go not on PATH: the rebuild path is unreachable, nothing to prove")
+	}
+	t.Setenv(harness.ChildEnv, "")
+	os.Unsetenv(harness.ChildEnv)
+	copyDir := plainCopy(t)
+	home := t.TempDir()
+
+	var out bytes.Buffer
+	if err := run([]string{"install", "--repo", copyDir, "--home", home}, &out); err != nil {
+		t.Fatalf("install from a plain copy: %v\n%s", err, out.String())
+	}
+	for _, never := range []string{"building sh-agent from", "would be rebuilt", "warning: go is not on PATH"} {
+		if strings.Contains(out.String(), never) {
+			t.Errorf("install from a plain copy printed %q:\n%s", never, out.String())
+		}
+	}
+	if _, err := os.Stat(filepath.Join(copyDir, ".agents")); !os.IsNotExist(err) {
+		t.Errorf("install created %s inside the mirror (err=%v)", filepath.Join(copyDir, ".agents"), err)
+	}
+	if _, err := os.Stat(filepath.Join(home, harness.BinPath)); err != nil {
+		t.Errorf("binary not installed from the plain copy: %v", err)
+	}
+
+	out.Reset()
+	if err := run([]string{"install", "--dry-run", "--repo", copyDir, "--home", home}, &out); err != nil {
+		t.Fatalf("dry run from a plain copy: %v\n%s", err, out.String())
+	}
+	if strings.Contains(out.String(), "would be rebuilt") {
+		t.Errorf("dry run from a plain copy announced a rebuild:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "[dry-run] plain copy") {
+		t.Errorf("dry run from a plain copy must say so as a dry run:\n%s", out.String())
 	}
 }

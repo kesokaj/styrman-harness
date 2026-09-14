@@ -63,7 +63,7 @@ That yields:
     ├── changes/  architecture/DECISIONS.md  specs/  testing/  deploy/{local,remote,gcp}.md  plans/  bugs/INDEX.md  handoffs/  reviews/  retros/
 ```
 
-Antigravity reads `.agents/` natively (rules, skills, agents). `workflows/` is kept for older Antigravity versions; new slash commands are skills. `docs/bugs/INDEX.md` starts empty and is the project's memory of what went wrong; `docs/retros/` receives every `/retro` and `/distill` record, the project's learning history; `scratch/` is where every generated or temporary file goes. `docs/deploy/` holds the three deploy guides: fill `local.md` now from the build/run/test answers and set its `date:` from `date +%F`; `remote.md` and `gcp.md` keep their *Not applicable yet* line until the user names a target — the GCP guide is where the defaults the global context asks for get recorded, never invented.
+Antigravity reads `.agents/` natively (rules, skills, agents). `workflows/` is kept for older Antigravity versions; new slash commands are skills. `docs/bugs/INDEX.md` starts empty and is the project's memory of what went wrong; `docs/retros/` receives every `/retro` and `/distill` record, the project's learning history; `scratch/` is where every generated or temporary file goes. `docs/testing/<app>/guide.md` is not scaffolded: the verifier writes it the first time it runs the project's procedure. `docs/deploy/` holds the three deploy guides: fill `local.md` now from the build/run/test answers and set its `date:` from `date +%F`; `remote.md` and `gcp.md` keep their *Not applicable yet* line until the user names a target — the GCP guide is where the defaults the global context asks for get recorded, never invented.
 
 ## Step 5: Claude Code discovery — symlinks
 

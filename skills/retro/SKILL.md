@@ -42,7 +42,7 @@ Read the conversation transcript, plus the entries in `~/.config/sh-agent/feedba
 5. **Architecture/tooling mismatches** — the wrong tool, framework, or pattern
 6. **Trail evidence** — `<docs-root>/bugs/INDEX.md` rows from this session whose prevention rule is not yet written anywhere
 
-`--harness` (or the working directory is the harness checkout, `sh-agent status` first line): also read `~/.config/sh-agent/retros.jsonl` and every `~/.config/sh-agent/proposals/*.md` holding a `Status: queued` proposal. Each queued proposal is a finding; its diff is reused as drafted and re-derived only when its target moved and the diff no longer applies.
+`--harness` (or the working directory is the harness checkout, `sh-agent status` first line): FIRST, before drafting anything, read `~/.config/sh-agent/retros.jsonl` and every `~/.config/sh-agent/proposals/*.md`, and list in the chat table, oldest first, every proposal whose `**Status:**` line says `queued` or is absent (files older than 2026-09-14 predate the line; absent means queued), plus every `REQUIREMENTS.md` edit the newest handoff names as awaiting approval. Each is a finding; a queued proposal's diff is reused as drafted and re-derived only when its target moved and the diff no longer applies.
 
 ## Step 2: Target, scope, rule_ref — per finding
 
@@ -115,7 +115,7 @@ Trigger / Current behavior / Expected behavior / diff / Rationale     ← projec
 
 ## Step 5: Harness queue and index
 
-- Harness-scope proposals, in full, appended to `~/.config/sh-agent/proposals/<date>-retro.md` (create it; if it exists, append a section `## From <project path> (<time>)` — one queue file per day).
+- Harness-scope proposals, in full, appended to `~/.config/sh-agent/proposals/<date>-retro.md` (create it; if it exists, append a section `## From <project path> (<time>)` — one queue file per day), each with `**Status:** queued` directly under its heading from the day it is written; the statuses are `queued`, `applied <date> (<commit>)`, and `rejected <date> — <reason>`.
 - One line appended to `~/.config/sh-agent/retros.jsonl`, compact JSON:
 
 ```json
@@ -130,7 +130,7 @@ Show a numbered table — title, scope, target, one-line why — and ask which t
 
 - **Project scope, approved:** apply now as a task under the Definition of Done — edit the target, run the project's checks, commit in the project (stage by name), status `applied` in the record and the index.
 - **Harness scope:** status `queued` by default; a later session in the harness checkout runs `/retro --harness` and applies it there. Only when the user asks in the same turn to apply now: locate the checkout (`sh-agent status` first line, confirm `test -f <repo>/context/AGENTS.md`; either failing → stays `queued`), apply there under that repo's own rules (`sh-agent install`, one start of each CLI as its `AGENTS.md` Testing section says, a `changes/` entry, commit, push, handoff; name the downstream mirrors its `deploy/remote.md` lists as the next task in their projects), then update the status in the queue file and in the record when it is on this machine.
-- **Rejected:** annotate `Status: rejected — <reason>` in the record and the queue; never delete a proposal.
+- **Rejected:** annotate `Status: rejected <date> — <reason>` in the record and the queue; never delete a proposal.
 - **Headless, no user turn:** nothing is applied; every status stays `proposed` or `queued`, and the record says so.
 
 Report in chat: the record's path, the counts per scope, and what was applied, queued, or rejected.

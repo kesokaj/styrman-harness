@@ -91,6 +91,7 @@ Branch: <current git branch>
 
 - <bullet list of unfinished work>
 - <include any error messages or blockers>
+- Requirements edits awaiting approval: <the exact replacement sentence for `REQUIREMENTS.md`, or `none`>
 
 ## Key Decisions
 

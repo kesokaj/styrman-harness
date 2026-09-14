@@ -36,6 +36,14 @@ Two projects vendor this repo as a .git-less copy and build `sh-agent` from it i
 
 Same as `local.md`: `sh-agent status` with no drift, then one start of each CLI. On the Mac, additionally confirm the Antigravity paths (`TODO.md`, high priority).
 
+## Operator steps
+
+Standing by-hand procedures, never pending items (those live in the newest handoff):
+
+- On the Mac after a push from the Linux box: `sh-agent update`, `sh-agent status`, then the three smoke checks on each CLI (`.agents/docs/testing/2026-09-03-verify-real-home.md`; the Mac procedure is `2026-09-04-verify-mac-real-home.md`).
+- After any change to `context/`, `skills/`, or `agents/`: refresh the downstream mirrors from their own projects (section above).
+- Go upgrades on the Mac: `brew upgrade go`.
+
 ## Roll back
 
 `git checkout <last good commit> && go run ./cmd/sh-agent install` on the affected machine; `sh-agent update` will refuse to move until the branch is fast-forwardable again, so push a fix or reset the branch first.

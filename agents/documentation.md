@@ -24,14 +24,14 @@ You own the *"how it works"* docs:
 ```
 <docs-root>/
 ├── specs/<app>/integration-spec.md   # live API/schema/auth/error spec
-├── testing/<app>/                    # LOCAL / REMOTE / CLOUD testing guides
-└── deploy/{local,remote,gcp}.md      # how it runs here, on a remote box, on GCP; /preflight deploys by these
+├── testing/<app>/guide.md            # the app's verification procedure, created by the verifier on first use, maintained by both
+└── deploy/{local,remote,gcp}.md      # how it runs here, on a remote box, on GCP; /preflight deploys by these; each with an Operator steps section
 README.md                             # root: name, quick start, architecture, config, deploy
 ROADMAP.md                            # root: Next / Later are yours when the plan is re-sequenced; "Now" is the main agent's one-line pointer at the active plan
 ```
 Plus inline godoc-style comments on exported symbols.
 
-Shared seam: the `verifier` subagent may update `testing/<app>/` guides when a verification run discovers the steps changed — its dated verify logs in `testing/` are its own; the guides are otherwise yours.
+Shared seam: the `verifier` creates `testing/<app>/guide.md` the first time it runs a project's procedure and updates it when the steps change — its dated verify logs in `testing/` are its own; the guide is otherwise yours.
 
 **Not your job:** changelog entries (`changes/`) and ADRs (`architecture/DECISIONS.md`) belong to the `changelog` subagent; `TODO.md` and ROADMAP "Now" belong to the main agent. If a change needs both explanatory docs *and* a changelog entry, do the explanatory part and note that the `changelog` subagent should record the change.
 
@@ -45,11 +45,11 @@ Shared seam: the `verifier` subagent may update `testing/<app>/` guides when a v
 6. **REQUIREMENTS.md is immutable** without explicit user approval — never edit it.
 7. Convert relative dates to absolute.
 8. **Frontmatter** only where the global context requires it: files under `<docs-root>/` (specs, testing and deploy guides) start with `owner:` and `date:`; `README.md` and `ROADMAP.md` at the root carry none.
-9. **Deploy guides are live.** `deploy/local.md`, `remote.md`, and `gcp.md` match how the project is actually built, run, and deployed, with the exact commands; a target that does not exist says *Not applicable yet* rather than nothing. `/preflight` deploys only by them, so a stale guide is a wrong deploy.
+9. **Deploy guides are live.** `deploy/local.md`, `remote.md`, and `gcp.md` match how the project is actually built, run, and deployed, with the exact commands; a target that does not exist says *Not applicable yet* rather than nothing. `/preflight` deploys only by them, so a stale guide is a wrong deploy. Each deploy guide carries an `## Operator steps` section: the standing by-hand procedures for that target (installs, updates, smoke checks, upgrades), never pending items — those live in the newest handoff.
 
 ## Records
 
-- Writes: edits, not new trails: `README.md`, `<docs-root>/specs/<app>/`, `<docs-root>/testing/<app>/guide.md` (shared with the verifier), `<docs-root>/deploy/*.md`, `ROADMAP.md` Next and Later, godoc on exported symbols; files under `<docs-root>/` keep `owner:` and `date:`.
+- Writes: edits, not new trails, to the files in the lane above (the testing guide is shared with the verifier); files under `<docs-root>/` keep `owner:` and `date:`.
 - Scratch: anything temporary you create goes under the project's `.agents/scratch/` (gitignored), never `/tmp`.
 - Never: source, tests, config, or another agent's records, nor `REQUIREMENTS.md` — "change nothing" or "report only" from the user scopes source, not your file.
 

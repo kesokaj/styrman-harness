@@ -36,6 +36,14 @@ Nothing to configure. `--vendor VENDOR` selects the target CLI: `all` (default),
 
 Claude Code asks once per session before the first read or write under `~/.config/sh-agent/` (feedback log, proposals, the retro index), because it is outside the project. Approve it, or add the directory to `permissions.additionalDirectories` in `~/.claude/settings.json` yourself — the installer never edits vendor settings (ADR-010). Antigravity prompts the same way for paths outside the workspace.
 
+## Operator steps
+
+Standing by-hand procedures on this box, never pending items (those live in the newest handoff):
+
+- After a push from another machine: `sh-agent update`, then `sh-agent status` shows a stamped `binary` line and no drift.
+- After any change to `context/`, `agents/`, or `skills/` reaches this home: the three smoke checks of `.agents/docs/testing/2026-09-03-verify-real-home.md` on each CLI, from a fresh clone of the demo service.
+- When `govulncheck ./...` names a toolchain-fixed advisory: upgrade Go with the system package manager (this box: apt), never by raising the `go` directive in `go.mod`.
+
 ## Roll back
 
 `sh-agent uninstall` removes exactly the files the manifest lists. To return to an earlier harness commit: `git checkout <commit> && go run ./cmd/sh-agent install`.

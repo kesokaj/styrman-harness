@@ -6,7 +6,7 @@ Last reviewed: 2026-09-15
 
 ## Now
 
-- `.agents/docs/plans/2026-09-15-harness-practices-g01-g26.md` — harness practices G01–G26 from the 2026-09-15 research. Phases 1–6 are done; in Phase 7 so are 7.1–7.4 and 7.7. Next: the real-home smoke checks (7.5), the downstream mirror refresh (7.6), the Phase 7 checkpoint, then the Done list.
+- `.agents/docs/plans/2026-09-15-harness-practices-g01-g26.md` — harness practices G01–G26 from the 2026-09-15 research. Phases 1–6 are done; in Phase 7 so are 7.1–7.5 and 7.7. Next: the downstream mirror refresh (7.6), the Phase 7 checkpoint, then the Done list.
 
 ## Next
 

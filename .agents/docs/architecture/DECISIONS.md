@@ -162,3 +162,11 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
 
 **Consequences:** Install behaves the same on a consumer whether or not `go` is on its PATH. A change to install's environment-dependent behaviour is checked against `.agents/docs/deploy/remote.md § Downstream mirrors` before it is done (BUG-015's prevention rule). ADR-013 stands for checkouts; plain copies have always had their binary built by the image, and now the install respects that constraint.
 
+## ADR-021: Bug index rows move to a Graduated table when their rule graduates     (2026-09-15) — Accepted
+
+**Context:** The 2026-09-13 improvement review refused capping the bug index as a speculative benefit. Resume reads `INDEX.md` whole in every session, and the 2026-09-15 research counted a 60-row index in styrman-crew (not re-checked). The operator approved group G24 on 2026-09-15 ("go all").
+
+**Decision:** No size or age cap. When a bug's prevention rule graduates in the same repository — into its `AGENTS.md`, its `context/AGENTS.md`, a `.agents/rules/` file, a skill, an agent definition or a test — the commit that writes it has `bugs` move that bug's row to a `## Graduated` table (`| ID | Area | Graduated to |`) at the bottom of `INDEX.md`; record files are untouched, new ids continue from the highest id in either table, and rows that graduated before this ADR move only when a dispatch names them. A rule promoted from a project to the harness leaves the project's row. This reopens the 2026-09-13 refusal for this narrower rule.
+
+**Consequences:** The main table shrinks only as rules graduate. `context/AGENTS.md`, `agents/bugs.md` and `skills/retro/SKILL.md` say so together.
+

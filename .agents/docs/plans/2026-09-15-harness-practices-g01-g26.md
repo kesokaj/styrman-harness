@@ -969,7 +969,7 @@ Each criterion is a yes/no outcome that still holds if the interface wording wer
 
 ## Phases
 
-- [ ] Cold-reader check — design ready and implementation ready (<reviews/ paths>), or the user's same-turn override quoted with its date
+- [ ] Cold-reader check — design ready and implementation ready (<reviews/ paths>), or the user's same-turn override quoted with its date — in progress: three rounds of three readers did not converge (`reviews/2026-09-15-review-coldread-harness-practices-r{1,2,3}-{a,b,c}.md`); blocker: the cap gate, waiting on the operator's decision on the two cap `Open:` rows below
 
 ### Phase 1 — the docs lens and the lost rule (G06, G08)
 - [ ] 1.1 I-1a — verify: integration, `grep -c 'narrowed: <old file:line>' skills/review/SKILL.md`, who: AI — expect: `1` (positive control: `git show c192622:skills/review/SKILL.md | grep -c 'narrowed:'` prints `0`)
@@ -1102,6 +1102,8 @@ D31 — 2026-09-15 — the bug skill gets one gate, the missing repro; a diagnos
 D32 — 2026-09-15 — waiver words in the invocation's arguments count, and the `feature` matrix row names the scope gate it waives — by: cold read round 2
 D33 — 2026-09-15 — the golden-path criterion claims one of each property, as its check tests, and the Phase 6 log names what no row exercises end to end — by: cold read round 2
 D34 — 2026-09-15 — preflight Step 1 treats uncommitted work as a bug fix when the tree adds a bug record or the `bug` skill ran on it — by: cold read round 2
+Open: (cap, round 3) the release gate's coverage rule, I-21a–c, drew findings in all three rounds (working-tree reports, entries that are not paths, the re-dispatch scope, a deferred CLI start blocking every release) — default: cut I-21a–c and keep I-21e's blocking thresholds, per the context rule that a second round on the same mechanism asks whether it can be deleted — waiting on the operator
+Open: (cap, round 3) narrow items — default, resolved by recommendation: preflight Step 4 routes docs findings like I-12d and its fixes ride in the release commit; I-19a gains a variant for a layer that did not load, without "Both load"; the 1.6 sweep splits into area dispatches, each re-dispatched once if cut; the Phase 5 checkpoint adds one sandbox start of each CLI (I-20c changes frontmatter) and earlier verifier briefs list the deferred CLI start under Not examined; 6.4 caps a harness-defect loop at three rounds and compares against `c192622` reinstalled into the same sandbox home; the `bug-no-repro` prompt adds "I will not answer"; the Phase 6 log maps every I-edit to the row that exercises it or names it as not exercised; graduation targets include the context, a skill and an agent definition, the index header and the init-project template describe the Graduated table, and the retro window counts only retro records; I-12e names other `AGENTS.md` sections; I-11's marks use `superseded by <plan § Done>`; I-1a excludes vendored skills; a bug fix is never a docs-only change — waiting on the operator
 Open: findings of the one-time sweep (1.6) outside this plan's surfaces — default: Follow-ups lines, or a bug record for a real defect; no new groups
 Open: G26 outcome A or B — default: decided by 5.1; any unquoted control means A
 Rejected: several smaller plans — the order constraints (G02 before G03, G06 before G21, G22's four lines in one commit) belong in one place

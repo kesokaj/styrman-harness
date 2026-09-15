@@ -178,10 +178,18 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
 
 **Consequences:** One Sonnet reviewer dispatch per non-trivial bug fix. Features and tasks keep the 50-line / 5-file threshold, and so does the release gate's review of the release diff (`skills/preflight/SKILL.md` Step 2), which reads a sub-threshold release diff itself.
 
-## ADR-023: The release gate weighs docs findings like review findings     (2026-09-15) — Accepted
+## ADR-023: The release gate weighs docs findings like review findings     (2026-09-15) — Superseded by ADR-024
 
 **Context:** Plan edit I-21d had `/preflight` Step 4 fix docs itself after the gate, so unverified edits to skills, agents and the context rode into the tag (Done review finding F2, BUG-026). The round 1 fix made every Step 4 docs finding block and the gate run again after NO-SHIP. That blocked a correctly rebutted finding on every re-run (R2-1), and its "never edits the tree" sentence contradicted Step 6 (R2-2). The review loop stopped at round 2 under Definition of Done step 2, and on 2026-09-15 the operator chose the recommended rule ("Do your recommendation.").
 
 **Decision:** Step 4 records each docs finding with severity and confidence, like a Step 2 finding. A finding that the newest prior gate report's `## Outcome` rebutted, the same statement at the same file:line, is cited as rebutted there and not raised again. Only a Step 4 REQUEST CHANGES verdict or a high-severity docs finding blocks the release. A blocking gap is fixed after NO-SHIP as ordinary work, and `/preflight` runs again. Every other gap is recorded as `left` with an owner. No docs fix rides in the release commit; the tag is the gated tree plus its records.
 
 **Consequences:** `skills/preflight/SKILL.md` Step 4 and Step 5's blocking list change together. A false-positive docs finding costs one rebuttal in a gate report's Outcome instead of blocking every later release. A low-severity docs gap can ship, recorded with its owner. This supersedes the Step 4 routing of plan rows D36 and D43.
+
+## ADR-024: The release gate's docs review is advisory     (2026-09-15) — Accepted
+
+**Context:** ADR-023 had `/preflight` Step 4 block a release on a docs REQUEST CHANGES verdict or a high-severity docs finding, and carry a rebutted finding forward from the newest prior gate report. The Phase 7 reviews found three defects in that carry-forward, and a coverage rule tried in its place drew four more, among them a gate that could ship unresolved docs findings: the third and fourth rounds of findings on this mechanism (BUG-026). Under Definition of Done step 2 the operator was asked what the mechanism is for and approved the recommendation on 2026-09-15 ("Everything is approved. Go go go.").
+
+**Decision:** Step 4 still runs the `--docs` lens of `/review` over `<base>..HEAD` and records each docs gap in the gate report with severity, confidence and an owner, who fixes it as ordinary work. No docs gap blocks the release. A docs finding blocks where the Definition of Done's `/review --docs` runs, in the task that made the change.
+
+**Consequences:** `skills/preflight/SKILL.md` Step 4 loses the rebuttal carry-forward, and Step 5's blocking list loses its docs clause, so the gate keeps no state across runs for docs findings. A release can ship with a recorded docs gap; the task-time docs review is the docs gate. This supersedes ADR-023.

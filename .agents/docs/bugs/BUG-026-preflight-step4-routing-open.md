@@ -2,7 +2,7 @@
 owner: bugs
 date: 2026-09-15
 id: BUG-026
-status: open
+status: fixed
 area: skills/preflight (Step 4 docs freshness)
 ---
 # BUG-026: Step 4 docs-freshness routing patched twice, each patch introducing new defects
@@ -32,6 +32,29 @@ Phase 7 reviews (`.agents/docs/reviews/2026-09-15-review-641eccd-worktree-code.m
 This is the third round of review findings on this one mechanism (round 1, round 2, Phase 7). Under
 Definition of Done step 2, patching stops and the operator is asked what the mechanism is for.
 
+Round 4: the D49/ADR-024 coverage fix (uncommitted, `skills/preflight/SKILL.md:65`, `:77`, `:81`) drew a
+fourth round of findings, `.agents/docs/reviews/2026-09-15-review-c514936-preflight-docs.md`
+(REQUEST CHANGES):
+1. Medium: a prior `reviews/*-docs*` report counts as covering its commits whatever its verdict and
+   whether or not its findings were resolved; Step 5 (`:77`) blocks only on the new, smaller run's
+   findings. An unresolved REQUEST CHANGES report can be skipped and the release ships past it. This
+   repository already has such a report, `2026-09-15-review-641eccd-worktree-docs.md` (REQUEST CHANGES,
+   its `-merged.md` record has no `## Outcome`).
+2. Medium: "is therefore not raised again" (`:65`) assumes a docs finding can come only from the commits
+   that produced it, but the docs lens greps the living docs at the scope's head, so a later, uncovered
+   commit touching the same rule brings the same stale hit back with no rebuttal shown. The `## Outcome`
+   it points at also usually lives in a `reviews/*-merged*` record, which the `reviews/*-docs*` pattern
+   does not match.
+3. Low: `:65` requires citing a covering report only when prior reports cover every commit, so a
+   partial-coverage case leaves no trace of the covering reports or their rebuttals in the gate report.
+4. Low: the deleted "the SHIP path has no findings left and needs none" (`:81`) has no replacement;
+   nothing says where a SHIP gate report records Step 4's non-blocking `left` gaps.
+
+This is the fourth round of review findings on this one mechanism. Under Definition of Done step 2, no
+patch was attempted this round; the operator is asked again what the mechanism is for. The
+recommendation on the table: make Step 4's docs review advisory only, since docs findings already block
+at task time under the Definition of Done's `/review --docs` row.
+
 ## Repro
 Not reproduced as a running scenario; found by the Done review reading `skills/preflight/SKILL.md`
 Step 4 and Step 6 against each other.
@@ -52,8 +75,28 @@ verdict or a high-severity docs finding, not counting a finding a prior gate rep
 sentence "the gate never edits the tree after it has run" is gone, resolving R2-1 and R2-2 in
 `.agents/docs/reviews/2026-09-15-review-c192622-22c106c-merged.md`.
 
-Phase 7: not fixed. No patch was attempted for the three defects above; the question of what this
-mechanism is for is with the operator.
+Phase 7 resolution: the operator answered the stop-and-ask on 2026-09-15 with "Do your recommendation"
+(plan row D49, ADR-024, superseding ADR-023 in part). `skills/preflight/SKILL.md:65` now runs the
+`--docs` lens only over the commits of `<base>..HEAD` not already covered by a prior `reviews/*-docs*`
+or `reviews/*-preflight-*` report, deciding coverage exactly as Step 2 does; a finding rebutted in a
+covering report's `## Outcome` is not raised again because its commits are not reviewed again, and the
+rebuttal carry-forward is deleted. `:77`'s blocking line is now "a Step 4 REQUEST CHANGES verdict or
+high-severity docs finding", with no exception for rebutted findings. `:81` no longer says the SHIP
+path has no findings left. This resolves P1, P2 and P3 in
+`.agents/docs/reviews/2026-09-15-review-641eccd-worktree-merged.md`.
+
+Round 4: not fixed. The D49/ADR-024 coverage-rule edit at `skills/preflight/SKILL.md:65`, `:77` and
+`:81` is uncommitted and on hold pending the operator's answer to the round 4 stop-and-ask above.
+
+Option C resolution: the operator approved the recommendation on 2026-09-15 ("Everything is approved.
+Go go go."; plan row D49, ADR-024, superseding ADR-023). Step 4's docs review is advisory only.
+`skills/preflight/SKILL.md:65` runs the `--docs` lens over `<base>..HEAD` and records each docs finding
+in the gate report with severity, confidence and an owner; no docs gap blocks — a docs finding blocks
+where the Definition of Done's `/review --docs` runs, in the task that made the change. `:77`'s blocking
+list has no docs clause and states "Step 4's docs gaps never block." `:81` no longer says the SHIP path
+has no findings left. D46's rebuttal carry-forward and the D49/round-4 coverage rule are both removed;
+the four round 4 findings in `.agents/docs/reviews/2026-09-15-review-c514936-preflight-docs.md` are
+resolved by deleting the mechanism they concern rather than patching it again.
 
 ## Prevention
 When one mechanism draws findings in two consecutive rounds — a cold read or a review — stop patching
@@ -65,4 +108,6 @@ recorded intent" shape — see BUG-028's Related note on where this class of rul
 stop-and-ask this bug's prevention rule calls for was settled by the operator in one decision (D46,
 ADR-023) rather than a third patch — the prevention rule held for round 2, but the Phase 7 reviews
 found the same mechanism drawing findings a third time; this is the third round, and the prevention
-rule applies again: stop and ask, do not patch.
+rule applies again: stop and ask, do not patch. Remaining follow-up (not this bug, tracked in the plan's
+Follow-ups list): a second `/preflight` run on the same day for the same version still overwrites that
+day's gate report, losing a NO-SHIP report's `## Outcome`.

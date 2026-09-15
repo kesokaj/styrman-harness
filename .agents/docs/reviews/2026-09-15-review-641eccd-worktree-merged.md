@@ -44,3 +44,12 @@ After the fixes: `go test -race ./...` exit 0, `go vet ./...` exit 0, `gofmt -l`
 - P7 — `fixed` in c514936 at `cmd/sh-agent/main.go:124`.
 - U1 — `rebutted`: `.agents/docs/architecture/DECISIONS.md:39` records which file each CLI reads.
 - U2 — `rebutted`: `/home/kesokaj/workspace/argolis-devbox/AGENTS.md:160` makes the git commit hash that project's version.
+
+## Round 2
+
+Both lenses re-ran over `641eccd..fcf3b79`, which includes round 1's fixes and the option C replacement (e31c3a2), each given round 1's fixed lines and "Verify each fix is correct and complete; look for defects the fixes introduced."
+
+- code — APPROVE, no findings — `reviews/2026-09-15-review-641eccd-fcf3b79-code.md`; the five fixes re-derived from the diff, the assertion at `internal/harness/harness_test.go:257` fails when the string at `internal/harness/apply.go:37` is reverted.
+- docs — APPROVE, no findings — `reviews/2026-09-15-review-641eccd-fcf3b79-docs.md`; `git grep` at fcf3b79 finds no restatement of superseded wording in the living docs.
+
+The loop stops here: round 2 reports no finding beyond the Outcome's `fixed` and `rebutted` lines.

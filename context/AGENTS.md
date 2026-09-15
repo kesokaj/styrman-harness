@@ -8,7 +8,7 @@ Operator: fullstack software engineer, Go + TypeScript, macOS (Apple Silicon) or
 
 Start every session in an existing project by reading, in order: `AGENTS.md` → `TODO.md` → newest `.agents/docs/handoffs/` → `ROADMAP.md` "Now" → the active plan in `.agents/docs/plans/` (its unticked boxes are the remaining work) → three newest `.agents/docs/changes/` → `.agents/docs/bugs/INDEX.md`. Open `REQUIREMENTS.md` before any significant change. State status and next step before editing. Newest handoff wins on conflict; name missing files; if the trail cannot say where work stopped, ask or offer `/init-project`. Never guess intent.
 
-Checkpoints are what resume reads, written at fixed moments: after every plan phase (tick its tasks, `changes/` entry, commit, push); before the context gets long or the session may end mid-task (`/handoff`); after a structural decision (ADR); after anything went wrong (bug record). Progress that lives only in chat is lost. When compacting, preserve the active plan path, the list of modified files, the test commands, and open findings.
+Checkpoints are what resume reads, written at fixed moments: after every plan phase (tick its Checkpoint box, `changes/` entry, commit, push); before the context gets long or the session may end mid-task (`/handoff`); after a structural decision (ADR); after anything went wrong (bug record). Progress that lives only in chat, a compaction summary, or the CLI's own memory is lost: write it to the trail file that owns it. When compacting, preserve the active plan path, the list of modified files, the test commands, and open findings; after a compaction, re-read that plan and `git status` and restate status and next step before the next edit.
 
 ## Definition of Done, in this order
 
@@ -23,7 +23,7 @@ Once per task over the whole change. Agents reply in at most ten lines; the deta
 ## Work: classify, then load the skill
 
 - **Trivial** (typo, one-line config, rename): just act, then steps 4 and 5.
-- **Task** (one sitting, no design question): three-line plan in chat, do it, Definition of Done.
+- **Task** (one sitting, no design question): three-line plan in chat, do it, Definition of Done; a Task that meets a design question or outgrows one sitting becomes a Feature for the remainder, under the feature skill's gates.
 - **Feature** (new behavior or surface, any design question): load the `feature` skill — scope confirmation, plan file with phases and task boxes, cold-reader check before any code, one phase per checkpoint, e2e before done.
 - **Bug** (anything broken): load the `bug` skill — problem note, goldfish diagnosis, failing test first, smallest fix, bug record.
 - Unattended runs on Claude Code set a `/goal` naming the check that must pass.
@@ -68,4 +68,4 @@ Backup and versioning only: no CI, no hooks, ever. Commit and push to the curren
 
 Root: `AGENTS.md` (`CLAUDE.md` is the line `@AGENTS.md`; no `GEMINI.md`), `REQUIREMENTS.md`, `TODO.md`, `ROADMAP.md` ("Now" points at the active plan), `README.md`. Every `docs/` artifact starts with frontmatter `owner:` and `date:`; `changes/` and `DECISIONS.md` are append-only; comments say why, not what.
 
-Workflow skills, also typed as `/name`: `/init-project` `/handoff` `/review` `/research` `/preflight` `/retro` `/distill` `/grilling` `/feature` `/bug`. The harness is the `styrman-harness` repo, managed by `sh-agent status|update|list`; a new skill, agent, command, or rule is a file dropped into it, never code.
+The harness is the `styrman-harness` repo, managed by `sh-agent status|update|list`; a new skill, agent, command, or rule is a file dropped into it, never code.

@@ -133,7 +133,7 @@ Tiers: unit (`gofmt -l .`, `go vet ./...`, `go test -race ./...` incl. `cmd/sh-a
 - [x] ROADMAP "Now" → this plan; TODO — verify: read; who: AI
 - [x] Definition of Done: `verifier`, `reviewer` over `b64ffe8..HEAD`, `security` (the installer executes `go build` and a built binary from a recorded repo path), `documentation`, `changelog`; fix or rebut; commit; push — who: AI
 - [x] `/handoff` with cold-reader check — who: AI
-- [ ] Operator: on this box run `sh-agent update` (or `go run ./cmd/sh-agent install`) once, since the installed 2026-09-03 binary cannot rebuild itself; on the Mac `sh-agent update` — who: user
+- [-] Operator: on this box run `sh-agent update` (or `go run ./cmd/sh-agent install`) once, since the installed 2026-09-03 binary cannot rebuild itself; on the Mac `sh-agent update` — who: user — superseded by `plans/2026-09-15-harness-practices-g01-g26.md` § Done (2026-09-15)
 
 ### Phase 5 — Improvement review (separate deliverable)
 - [x] Panel review of the harness (trail/resume, skills, agents, binary, context, vendor parity, learning loop) with adversarial verification; numbered go/no-go list for the operator — who: AI, then user

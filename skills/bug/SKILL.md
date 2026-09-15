@@ -42,7 +42,7 @@ Write the test that captures the bug at the right tier (unit beside the code; in
 
 ## Step 4: Smallest fix
 
-Change the least that turns the test green and satisfies "fixed means". No adjacent refactors, no defensive code for cases the bug did not show, no feature flags. Re-run the test: green, or the bug is not fixed — do not rewrite the test. Re-run the original repro once more.
+Change the least that turns the test green and satisfies "fixed means". No adjacent refactors (note what you saw under the active plan's Follow-ups, or the handoff's Next Steps when no plan is active), no defensive code for cases the bug did not show, no feature flags. Re-run the test: green, or the bug is not fixed — do not rewrite the test. Re-run the original repro once more.
 
 ## Step 5: Definition of Done and the record
 

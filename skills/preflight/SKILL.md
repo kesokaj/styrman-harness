@@ -78,7 +78,7 @@ Never restate a failure as success. Any blocking finding from Steps 2–4 means 
 
 ## Step 6: Ship or stop
 
-- **NO-SHIP:** stop. Report the blocking findings and the report path. Never ship on NO-SHIP — no override. The pre-gate commit from Step 1, if any, stays on the branch — name it and its SHA in the gate report so the user can amend or drop it. The task that later resolves the blocking findings appends `## Outcome` to the gate report — `fixed`, `rebutted`, or `left`, one line per finding — in the same commit as the fix; the SHIP path has no findings left and needs none.
+- **NO-SHIP:** stop. Report the blocking findings and the report path. Never ship on NO-SHIP — no override. The pre-gate commit from Step 1, if any, stays on the branch — name it and its SHA in the gate report so the user can amend or drop it. The task that later resolves the blocking findings appends `## Outcome` to the gate report — `fixed`, `rebutted` (a reason as `/review` Step 4 defines it), or `left`, one line per finding — in the same commit as the fix; the SHIP path has no findings left and needs none.
 - **SHIP:** the gate has already run against the clean source tree; now assemble **one release commit**:
   1. Dispatch the `changelog` agent with today's date for the release entry.
   2. Bump the version **only where the repo already tracks one** (do not introduce version tracking).

@@ -14,13 +14,14 @@ The operator asked for three repositories to be researched for ways to fight dri
 
 In: groups G01–G26 of the research record, as text edits to `context/AGENTS.md`, skills, agents, this repo's `AGENTS.md`, `README.md`, the sh-agent testing guide, the skill matrix, two stale plans, `DECISIONS.md` (ADR-021, ADR-022) and BUG-018's status. Group ids are the research record's.
 Out: groups G27–G40; any Go code; `REQUIREMENTS.md`; installing into a real home (the operator's step, R6); refreshing the downstream mirrors (their own projects).
-Follow-ups noted, not built: none yet (task 1.6 and Step 4 file discoveries here, each ending `found in: <task>`).
+Follow-ups noted, not built (task 1.6 and Step 4 file discoveries here, each ending `found in: <task>`):
+- The `preflight` row of `.agents/docs/testing/skill-matrix.md` checks `grep -q "SHIP"`, which also matches `NO-SHIP` — found in: cold read round 2.
 
 ## Surfaces touched
 
 - Global context: `context/AGENTS.md` lines 11, 16, 26, 31, 37, 71.
-- Skills: `skills/feature/SKILL.md` (gates, Steps 1–4, 6); `skills/bug/SKILL.md` (new gates section, :29, :37, :45, :49); `skills/review/SKILL.md` (:48, :56, :60); `skills/preflight/SKILL.md` (:40, :50, :52, :65, :77, :81); `skills/handoff/SKILL.md` (:32, :33, :154); `skills/retro/SKILL.md` (:43, :56, :58, :75, :129, :131); `skills/distill/SKILL.md` (:98); `skills/init-project/SKILL.md` (:43, :44); `skills/review-standards/SKILL.md` (§1–§3) with `references/go-review.md` and `references/typescript-review.md` (§ Tests); `skills/golang/SKILL.md` (:23); `skills/golang/references/golang-ecosystem.md` (:323). None is vendored: `skills/VENDORED.md` lists grilling, codebase-design, find-skills, anti-ui-slop, gke-basics and terraform.
-- Agents, bodies only except the `reviewer` description: `agents/verifier.md`, `agents/reviewer.md`, `agents/security.md`, `agents/explorer.md`, `agents/bugs.md` (:12, :24, template, :59, :69, :75, :80), `agents/changelog.md` (:94).
+- Skills: `skills/feature/SKILL.md` (gates, Steps 1–4, 6); `skills/bug/SKILL.md` (new gates section, :29, :45, :49); `skills/review/SKILL.md` (:48, :56, :60); `skills/preflight/SKILL.md` (:40, :50, :52, :65, :77, :81); `skills/handoff/SKILL.md` (:32, :33, :154); `skills/retro/SKILL.md` (:43, :56, :58, :75, :129, :131); `skills/distill/SKILL.md` (:98); `skills/init-project/SKILL.md` (:43, :44); `skills/review-standards/SKILL.md` (§1–§3) with `references/go-review.md` and `references/typescript-review.md` (§ Tests); `skills/golang/SKILL.md` (:23); `skills/golang/references/golang-ecosystem.md` (:323). None is vendored: `skills/VENDORED.md` lists grilling, codebase-design, find-skills, anti-ui-slop, gke-basics and terraform.
+- Agents, bodies only except the `reviewer` description: `agents/verifier.md` (What to run, report template), `agents/reviewer.md` (report template), `agents/security.md` (report template), `agents/explorer.md`, `agents/bugs.md` (:12, :24, template, :59, :69, :75, :80), `agents/changelog.md` (:94).
 - This repo: `AGENTS.md` (:7, :46), `README.md` (:3, :86, :87), `.agents/docs/testing/sh-agent/guide.md` (:22), `.agents/docs/testing/skill-matrix.md`, `.agents/docs/plans/2026-09-03-rebuild.md` (:58, :97, :98, :99, :101, :113), `.agents/docs/plans/2026-09-13-learning-loop-project-level.md` (:136), `.agents/docs/architecture/DECISIONS.md`, BUG-018's record and `INDEX.md` row (status only).
 - Scratch only, never committed: the docs-lens control repository `.agents/scratch/docs-lens-control/` (task 1.2) and the sandbox project `runs/g26-precedence` (task 5.1).
 - Line numbers are as of commit `c192622`; edits are located by their old text.
@@ -29,7 +30,7 @@ Follow-ups noted, not built: none yet (task 1.6 and Step 4 file discoveries here
 
 - Interfaces are listed in application order, phase by phase. Each edit is a heading `#### I-<n><letter> — <file>` followed by fenced blocks: `old` is text that must occur exactly once in the file at the moment the edit is applied, and `new` replaces it verbatim (an insert repeats the old text inside `new`). A range edit has `from` (the first line replaced) and `to` (the first line kept, or `<EOF>`), and its `new` is followed by one blank line before `to`. `new-A` and `new-B` are alternatives a task chooses between. Fenced blocks with any other label are reference text, not edits.
 - Before any file of a task is written, every `old` of the task is confirmed to occur exactly once in the current file (BUG-010). A rehearsal parses this plan, applies every edit in order to copies of the files at `c192622`, and asserts each `old` occurs once at its moment (D15).
-- In-session dispatches: this checkout has no `.claude/` directory, so a Claude Code session here loads skills and agents from the installed home, which does not carry this plan's edits, and R6 rules out installing there. Every dispatch whose behaviour this plan changes therefore carries the changed text in its brief: a `--docs` review gets the I-1a brief verbatim (plus I-4a's paths in this repo), and from the Phase 4 checkpoint on the verifier gets the repo's `agents/verifier.md` § What to run pasted with "apply these rules as written; they are not installed in this session". Phase 6 exercises the installed new definitions in the sandbox (D9).
+- In-session dispatches: this checkout has no `.claude/` directory, so a Claude Code session here loads skills and agents from the installed home, which does not carry this plan's edits, and R6 rules out installing there. Every dispatch whose behaviour this plan changes therefore carries the changed text in its brief: a `--docs` review gets the I-1a brief verbatim (plus I-4a's paths in this repo), and from the Phase 4 checkpoint on the verifier gets the repo's `agents/verifier.md` § What to run pasted with "apply these rules as written; they are not installed in this session"; the Done reviewer gets the repo's `skills/review-standards/SKILL.md` § 1–3 and the I-17a sentence pasted the same way. Phase 6 exercises the installed new definitions in the sandbox (D9).
 
 ## Interfaces — the exact edits
 
@@ -290,7 +291,7 @@ Ask for six things:
 any contradiction between handoff, ROADMAP, TODO, and plan,
 ```
 ```new
-any contradiction between handoff, ROADMAP, TODO, and plan, any plan with `[ ]` boxes that `ROADMAP.md` "Now" does not name (`grep -l '^- \[ \]' <docs-root>/plans/*.md`), any commit since the previous handoff that changed paths outside `<docs-root>` with no `changes/` entry covering it,
+any contradiction between handoff, ROADMAP, TODO, and plan, any plan with an unticked box outside its fenced blocks that `ROADMAP.md` "Now" does not name (``awk 'FNR==1{f=0} match($0,/^`{3,}/){n=RLENGTH; if(!f){f=n} else if(n==f && $0 ~ /^`+[[:space:]]*$/){f=0}; next} !f && /^- \[ \]/{print FILENAME; nextfile}' <docs-root>/plans/*.md``), any commit since the previous handoff that changed paths outside `<docs-root>` with no `changes/` entry covering it,
 ```
 
 ### I-10 — noticed work goes to the plan or the handoff, not TODO.md (G03)
@@ -376,7 +377,7 @@ any deferred work the main agent should file under the active plan's Follow-ups 
 A round: apply each finding or rebut it in writing in the record; run the project's checks bare and read the status; re-dispatch the same lens agents over the same scope with the same slugs (they overwrite their artifacts; the record gains a `## Round N` section and, at the end, its `## Outcome`).
 ```
 ```new
-A round: apply each finding or rebut it in the record; run the project's checks bare and read the status; write the record's `## Round N` section, one line per finding so far — the finding quoted, then `fixed at <file:line>`, `rebutted: <reason>` (Step 4) or `left: <owner>`; re-dispatch the same lens agents over the same scope with the same slugs (they overwrite their artifacts), each brief followed by `---`, that section's fixed lines only (`<file:line> — what changed`), and "Verify each fix is correct and complete; look for defects the fixes introduced." Rebuttal reasons stay in the record, out of the dispatch. The record ends with its `## Outcome`.
+A round: apply each finding or rebut it in the record; run the project's checks bare and read the status; write the record's `## Round N` section, one line per finding so far — the finding quoted, then `fixed at <file:line>`, `rebutted: <reason>` (Step 4), `in flight: <who>` (handed to `documentation`, or a test still being written, in this run) or `left: <owner>` (not fixed in this run); re-dispatch the same lens agents over the same scope with the same slugs (they overwrite their artifacts), each brief followed by `---`, that section's fixed lines only (`<file:line> — what changed`), and "Verify each fix is correct and complete; look for defects the fixes introduced." Rebuttal reasons stay in the record, out of the dispatch. The record ends with its `## Outcome`.
 ```
 
 #### I-12b — skills/review/SKILL.md
@@ -384,7 +385,31 @@ A round: apply each finding or rebut it in the record; run the project's checks 
 Stop when a round reports nothing, after the third round
 ```
 ```new
-Stop when a round reports nothing and no ledger line is still in flight (a `--docs` list with `documentation`, a `--tests` gap not yet written), after the third round
+Stop when a round reports no finding beyond the ledger's `rebutted` and `left` lines and no line is still `in flight`, after the third round
+```
+
+#### I-12c — skills/review/SKILL.md
+```old
+At most three rounds.
+```
+```new
+At most three rounds, unless the user picks one more at the cap.
+```
+
+#### I-12d — skills/review/SKILL.md
+```old
+`--docs` → dispatch `documentation` with the list;
+```
+```new
+`--docs` → dispatch `documentation` with the findings in its files (README, specs, testing guides, deploy guides, the project `AGENTS.md` setup and deploy sections) and fix the rest yourself (skills, agents, rules, the context, other `AGENTS.md` sections);
+```
+
+#### I-12e — context/AGENTS.md
+```old
+its findings go to `documentation` in step 3.
+```
+```new
+its findings go to `documentation` in step 3, except findings in skills, agents, rules or the context, which the main agent fixes.
 ```
 
 ### I-13 — a rebuttal needs a checkable reason (G11)
@@ -479,8 +504,8 @@ Code must pass `go vet` and `staticcheck`. A vet, lint or test failure is fixed 
 When `AGENTS.md` names nothing, auto-detect:
 ```
 ```new
-- **Every command on its own:** run each command as its own call and read its own exit status and output — a chain in `AGENTS.md` (`a && b && c`) is split into its commands, and `gofmt -l` fails by printing, not by exit status; record every command's outcome even after an earlier one failed.
-- **Test counts:** the project's full Go test command (never a `-run` narrowing) runs once, with `-v` added and its output saved to `.agents/scratch/verify-<slug>/go-test.txt`; read its exit status, then count the `--- PASS:`, `--- FAIL:` and `--- SKIP:` lines, indented subtest lines included, and write `counts: pass N, fail N, skip N at <git rev-parse --short HEAD>[+dirty]`. Find the newest earlier log in `testing/` with a counts line for the same command and write `vs previous: <path>, pass a→b, skip c→d`. A fall in pass or a rise in skip is a FAIL line unless `git diff <that sha>` explains it (a test removed with its code, a skip added with its reason) or the Environment section does (go or git missing from PATH, no symlink support, another working directory); then the line says `explained: <cause>`. With no earlier counts write `vs previous: none`. A frontend runner's counts are copied from its summary, else `counts: not printed`; a project with neither writes `counts: not applicable`.
+- **Every command on its own:** run each command as its own call and read its own exit status and output. A chain in `AGENTS.md` (`a && b && c`) is split into its commands, each run in the directory the chain would run it in: a leading `cd <dir> &&`, or a `(cd <dir> && …)` subshell, stays attached to every command after it. `gofmt -l` fails by printing, not by exit status. Record every command's outcome even after an earlier one failed.
+- **Test counts:** each Go test command the project names (the auto-detected one when it names none), never a `-run` narrowing, runs once with `-v` added in place of its plain run, its output saved to `.agents/scratch/verify-<slug>/go-test-<n>.txt`; read its exit status, then count the `--- PASS:`, `--- FAIL:` and `--- SKIP:` lines, indented subtest lines included, and write `counts: pass N, fail N, skip N at <git rev-parse --short HEAD>[+dirty] for <the command as run>`. Find the newest earlier log in `testing/` with a counts line for the same command and write `vs previous: <path>, pass a→b, skip c→d`. A fall in pass or a rise in skip is a FAIL line unless `git diff <that sha>` explains it (a test removed with its code, a skip added with its reason) or the Environment section does (go or git missing from PATH, no symlink support, another working directory); then the line says `explained: <cause>`. With no earlier counts write `vs previous: none`. A frontend runner's counts are copied from its summary, else `counts: not printed`; a project with neither writes `counts: not applicable`.
 
 When `AGENTS.md` names nothing, auto-detect:
 ```
@@ -492,7 +517,7 @@ A changed file with no covering test is a FAIL line naming the file — reported
 ```new
 A changed file with no covering test is a FAIL line naming the file — reported, never patched.
 - **Inherited failures:** a failing test whose test file and the code it exercises are untouched by the change set is marked `pre-existing?` with that evidence; Status stays FAIL, and the reply says so, so the main agent numbers it.
-- **Suppressions added:** from the change set's diff, list under Coverage of changed code, as file:line, every added `//nolint`, `//lint:ignore`, `@ts-ignore`, `@ts-expect-error` or `eslint-disable` line in source files, every added `t.Skip`, `t.SkipNow` or `//go:build ignore` in `*_test.go`, and every added `.skip(` or `.only(` in `*.test.ts` or `*.spec.ts`; an added `.only(`, or a skip or ignore with no reason, is a FAIL line; a bare `//nolint` is a FAIL only when the project's commands run golangci-lint.
+- **Suppressions added:** from the change set's diff, list under Coverage of changed code, as file:line, every added `//nolint`, `//lint:ignore`, `@ts-ignore`, `@ts-expect-error` or `eslint-disable` line in source files, every added `t.Skip`, `t.SkipNow` or `//go:build ignore` in `*_test.go`, and every added `.skip(` or `.only(` in `*.test.ts` or `*.spec.ts`. An added `.only(` is a FAIL line, and so is any added suppression or skip that carries no reason: text after the directive on its line (`//nolint:errcheck // <reason>`, `//lint:ignore SA1019 <reason>`, `eslint-disable-next-line <rule> -- <reason>`, `@ts-expect-error <reason>`), a message argument to `t.Skip`, or a comment on the line directly above.
 ```
 
 #### I-16c — agents/verifier.md
@@ -500,10 +525,23 @@ A changed file with no covering test is a FAIL line naming the file — reported
 - `go test ./... -race` → exact outcome (counts, failures verbatim)
 ```
 ```new
-- `go test -race -v ./...` → exit 0; counts: pass N, fail 0, skip N at <sha>; vs previous: <path> (failures verbatim)
+- `go test -race -v ./...` → exit 0; counts: pass N, fail 0, skip N at <sha> for go test -race -v ./...; vs previous: <path> (failures verbatim)
 ```
 
-### I-17 — a cut tool result counts as not examined (G18)
+#### I-16d — agents/verifier.md
+```old
+## Environment
+OS, Go / Node versions, Docker/Colima state.
+```
+```new
+## Not examined
+What this run did not run or read — tiers, packages, paths — or `nothing`.
+
+## Environment
+OS, Go / Node versions, Docker/Colima state.
+```
+
+### I-17 — a cut tool result counts as not examined, and every report template names what it did not examine (G18, G20)
 
 #### I-17a — agents/reviewer.md
 ```old
@@ -535,6 +573,28 @@ naming what you did not reach
 ```
 ```new
 naming what you did not reach (a tool result that came back cut — a preview, a saved-output path, a line limit — counts as not reached until you have read the rest)
+```
+
+#### I-17e — agents/reviewer.md
+```old
+6. Decoupling — ...
+```
+```new
+6. Decoupling — ...
+
+## Not examined
+What you did not reach — files, criteria, commits — or `nothing`.
+```
+
+#### I-17f — agents/security.md
+```old
+Secrets / injection / authz-authn / crypto / dependencies / GCP surface — one line each, including tool output (govulncheck, npm audit) or why a tool was unavailable.
+```
+```new
+Secrets / injection / authz-authn / crypto / dependencies / GCP surface — one line each, including tool output (govulncheck, npm audit) or why a tool was unavailable.
+
+## Not examined
+What you did not reach — paths, surfaces, tools — or `nothing`.
 ```
 
 ### I-18 — diagnosis misses, graduation tests, graduated index rows (G23, G24)
@@ -577,7 +637,7 @@ One main table, newest last, one row per bug, and below it a `## Graduated` tabl
 that is the one allowed edit to a past record.
 ```
 ```new
-that is the one allowed edit to a past record. When a dispatch says a bug's prevention rule graduated into an `AGENTS.md`, a `.agents/rules/` file or a test, move that bug's row from the main table to the `## Graduated` table at the bottom of `INDEX.md` — `| BUG-NNN | area | → <home file> |` — and leave the record file untouched.
+that is the one allowed edit to a past record. When a dispatch says a bug's prevention rule graduated in this repository — into its `AGENTS.md`, its `context/AGENTS.md` where it has one, a `.agents/rules/` file or a test — move that bug's row from the main table to the `## Graduated` table at the bottom of `INDEX.md` (columns `| ID | Area | Graduated to |`), and leave the record file untouched. A rule promoted from a project to the harness leaves the project's row where it is.
 ```
 
 #### I-18f — agents/bugs.md
@@ -642,14 +702,14 @@ ADR-021, appended to `.agents/docs/architecture/DECISIONS.md` by `changelog`:
 
 **Context:** The 2026-09-13 improvement review refused capping the bug index as a speculative benefit. Resume reads `INDEX.md` whole in every session, and the 2026-09-15 research counted a 60-row index in styrman-crew (not re-checked). The operator approved group G24 on 2026-09-15 ("go all").
 
-**Decision:** No size or age cap. When a bug's prevention rule graduates into an `AGENTS.md`, a `.agents/rules/` file or a test, the commit that writes it has `bugs` move that bug's row to a `## Graduated` table at the bottom of `INDEX.md` naming the rule's new home; record files are untouched, and new ids continue from the highest id in either table. This reopens the 2026-09-13 refusal for this narrower rule.
+**Decision:** No size or age cap. When a bug's prevention rule graduates in the same repository — into its `AGENTS.md`, its `context/AGENTS.md`, a `.agents/rules/` file or a test — the commit that writes it has `bugs` move that bug's row to a `## Graduated` table (`| ID | Area | Graduated to |`) at the bottom of `INDEX.md`; record files are untouched, new ids continue from the highest id in either table, and rows that graduated before this ADR move only when a dispatch names them. A rule promoted from a project to the harness leaves the project's row. This reopens the 2026-09-13 refusal for this narrower rule.
 
 **Consequences:** The main table shrinks only as rules graduate. `context/AGENTS.md`, `agents/bugs.md` and `skills/retro/SKILL.md` say so together.
 ```
 
 ### I-19 — a project skill or agent never reuses a harness name (G26)
 
-The test, in the sandbox of `.agents/docs/testing/2026-09-03-verify-sandbox.md`, with this tree installed into the sandbox home. A throwaway git repository `runs/g26-precedence` holds these files, with the frontmatter shown and no body beyond one line:
+The test, in the sandbox of `.agents/docs/testing/2026-09-03-verify-sandbox.md`, with the working tree at that moment installed into the sandbox home (`sh-agent install --home <sandbox home>`). A throwaway git repository `runs/g26-precedence` holds these files, with the frontmatter shown and no body beyond one line:
 ```text
 .agents/skills/review/SKILL.md                name: review             description: "MARKER-G26-PROJECT-SKILL project copy of review"
 .agents/skills/g26-control/SKILL.md           name: g26-control        description: "MARKER-G26-CONTROL-SKILL"
@@ -660,9 +720,9 @@ The test, in the sandbox of `.agents/docs/testing/2026-09-03-verify-sandbox.md`,
 .claude/skills -> ../.agents/skills
 .claude/agents -> ../.agents/agents
 ```
-Each CLI gets, with the sandbox driver's usual flags: "Do not use any tools. Quote verbatim the description you have for the skill named review, the agent named reviewer, the skill named g26-control and the agent named g26-control-agent." The answers go verbatim into `testing/<date>-verify-g26-precedence.md`, with one line per CLI and layer: control quoted or not, project marker quoted or not.
+Each CLI gets, with the sandbox driver's usual flags: "Do not use any tools. Quote verbatim the description you have for the skill named review, the agent named reviewer, the skill named g26-control and the agent named g26-control-agent." The answers go verbatim into `testing/<date>-verify-g26-precedence.md`, with one line per CLI and layer: control quoted or not, project marker quoted or not, harness description quoted or not.
 
-Outcome B holds only when both CLIs quote both control markers and both project markers. Every other result, including an unquoted control, is outcome A (D12).
+Outcome B holds only when, on both CLIs, both control markers and both project markers are quoted and neither harness description is: the `review` skill's begins "One review command that behaves the same", the `reviewer` agent's begins "Independent code reviewer run in an isolated context". Every other result, including an unquoted control, is outcome A (D12).
 
 #### I-19a — context/AGENTS.md
 ```old
@@ -730,7 +790,7 @@ when it reaches 50 lines or 5 files or fixes a bug,
 when that work alone is 50+ lines or 5+ files.
 ```
 ```new
-when that work alone is 50+ lines or 5+ files or is a bug fix.
+when that work alone is 50+ lines or 5+ files or is a bug fix (the tree adds a `bugs/BUG-*.md` record, or this session ran the `bug` skill on it).
 ```
 
 ADR-022, appended to `.agents/docs/architecture/DECISIONS.md` by `changelog`:
@@ -751,7 +811,7 @@ ADR-022, appended to `.agents/docs/architecture/DECISIONS.md` by `changelog`:
 decide whether it subsumes the commits in question;
 ```
 ```new
-decide whether it subsumes the commits in question — a report covers a commit only if its `Range reviewed:` line reaches it and its not-examined section (`Not examined`, `Not checked`, or `What was not checked`) names none of that commit's paths;
+decide whether it subsumes the commits in question — a report covers a commit only if its `Range reviewed:` line reaches it and it has a not-examined section (a heading that begins `Not examined`, `Not checked`, `Not verified` or `What was not checked`) naming none of that commit's paths, where a directory named there covers every path under it; a report without that section covers nothing;
 ```
 
 #### I-21b — skills/preflight/SKILL.md
@@ -759,7 +819,7 @@ decide whether it subsumes the commits in question — a report covers a commit 
 whose `Range reviewed:` reaches HEAD satisfies this row; cite it.
 ```
 ```new
-whose `Range reviewed:` reaches HEAD and whose not-examined section names no path in the release diff satisfies this row; cite it.
+whose `Range reviewed:` reaches HEAD and whose not-examined section names no path in the release diff satisfies this row, and a log without that section does not; cite it.
 ```
 
 #### I-21c — skills/preflight/SKILL.md
@@ -785,7 +845,7 @@ Run the `--docs` lens of `/review` over `<base>..HEAD` — the `reviewer` agent 
 Any blocking finding from Steps 2–4 means NO-SHIP.
 ```
 ```new
-Any blocking finding from Steps 2–4 means NO-SHIP. Blocking means any of: a verifier FAIL or BLOCKED; a security or reviewer finding of high severity; a reviewer REQUEST CHANGES verdict; a `REQUIREMENTS.md` violation; an owed artifact still missing, or a path in the release diff still unexamined, after the Step 2 re-dispatch. A project's `AGENTS.md` may add blocking conditions; it cannot remove these.
+Any blocking finding from Steps 2–4 means NO-SHIP. Blocking means any of: a verifier FAIL or BLOCKED; a security finding of high severity; a Step 2 reviewer REQUEST CHANGES verdict or high-severity finding; a `REQUIREMENTS.md` violation; an owed artifact still missing, or a path in the release diff still unexamined, after the Step 2 re-dispatch; a Step 4 docs finding the `documentation` dispatch did not fix. A project's `AGENTS.md` may add blocking conditions; it cannot remove these.
 ```
 
 ### I-22 — gates written the same way in feature, bug and review (G21)
@@ -795,7 +855,7 @@ Any blocking finding from Steps 2–4 means NO-SHIP. Blocking means any of: a ve
 Four points always wait for the user, whatever "work autonomously" instruction is in effect: the scope confirmation (Step 1), the no-code gate until the cold-reader check passes (Step 3), the three-round cap of that check, and a review loop that hits its cap. Everything else runs without asking. The user can waive a gate only in the same turn, explicitly.
 ```
 ```new
-Four points always wait for the user: the scope confirmation (Step 1), the no-code gate until the cold-reader check passes (Step 3), the three-round cap of that check, and a review loop that hits its cap. Everything else runs without asking. A gate holds whatever "work autonomously" instruction is in effect. Only the user's own words in the same turn waive it, and a waiver names the gate — a general instruction such as "do not ask me anything" is not a waiver, and neither is the skill invocation or a waiver carried over from another plan or session. At a cap, ask with your recommendation first: clarify or cut a requirement; proceed with the residue written as `Open:` rows under `## Decisions`, the phases that depend on them waiting; or abandon. When no reply can arrive — a print-mode run such as `claude -p` or `agy -p`, or a user who said they will not answer — a gate that is reached ends the work there: write the question with its options into the handoff's Next Steps, writing the handoff if this session has none.
+Four points always wait for the user: the scope confirmation (Step 1), the no-code gate until the cold-reader check passes (Step 3), the three-round cap of that check, and a review loop that hits its cap. Everything else runs without asking. A gate holds whatever "work autonomously" instruction is in effect. Only the user's own words in the same turn waive it — words in the invocation's arguments count — and a waiver names the gate: a general instruction such as "do not ask me anything" is not a waiver, and neither is a bare skill invocation or a waiver carried over from another plan or session. At a cap, ask with your recommendation first: clarify or cut a requirement; proceed with the residue written as `Open:` rows under `## Decisions`, the phases that depend on them waiting; or abandon. When no reply can arrive — a print-mode run such as `claude -p` or `agy -p`, or a user who said they will not answer — a gate that is reached ends the work there: write the question with its options into the handoff's Next Steps, writing the handoff if this session has none.
 ```
 
 #### I-22b — skills/bug/SKILL.md
@@ -807,7 +867,7 @@ Four points always wait for the user: the scope confirmation (Step 1), the no-co
 
 ## Gates that need the user
 
-Two points always wait for the user: a missing repro when the bug is not obvious from one file (Step 1), and a diagnosis that disagrees with your hypothesis when the evidence does not settle it (Step 2). A gate holds whatever "work autonomously" instruction is in effect. Only the user's own words in the same turn waive it, and a waiver names the gate — a general instruction such as "do not ask me anything" is not a waiver, and neither is the skill invocation or a waiver carried over from another session. Ask with the options, your recommendation first: for a missing repro, give one, let me infer one, or stop; for a diverged diagnosis, go with the diagnosis, keep your hypothesis, or investigate further. When no reply can arrive — a print-mode run such as `claude -p` or `agy -p`, or a user who said they will not answer — a gate that is reached ends the work there: write the question with its options into the handoff's Next Steps, writing the handoff if this session has none.
+One point always waits for the user: a missing repro when the bug is not obvious from one file (Step 1). The gate holds whatever "work autonomously" instruction is in effect. Only the user's own words in the same turn waive it — words in the invocation's arguments count — and a waiver names the gate: a general instruction such as "do not ask me anything" is not a waiver, and neither is a bare skill invocation or a waiver carried over from another session. Ask with the options, your recommendation first: give a repro, let me infer one, or stop. When no reply can arrive — a print-mode run such as `claude -p` or `agy -p`, or a user who said they will not answer — the gate ends the work there: write the question with its options into the handoff's Next Steps, writing the handoff if this session has none.
 ```
 
 #### I-22c — skills/bug/SKILL.md
@@ -816,14 +876,6 @@ Two points always wait for the user: a missing repro when the bug is not obvious
 ```
 ```new
 **ask the user for one** (steps, URL, log line, failing test; a gate, above). Never invent a repro on your own: one is inferred only when the user picks that option at the gate, and it is printed before Step 2 runs, because a wrong-shaped guess wastes the diagnosis.
-```
-
-#### I-22d — skills/bug/SKILL.md
-```old
-Disagreement: read its evidence and re-investigate before choosing;
-```
-```new
-Disagreement: read its evidence and re-investigate before choosing, and when the evidence does not settle it, ask (a gate, above);
 ```
 
 #### I-22e — skills/review/SKILL.md
@@ -852,7 +904,7 @@ ask the user for a one-paragraph project overview and the deploy target (none, a
 - `CLAUDE.md` — the single line `@AGENTS.md`, so Claude Code reads the agents.md file. If it already existed with content, never overwrite it: ask whether to fold that content into `AGENTS.md`; on yes, fold it and make `CLAUDE.md` the single line; on no, keep the content and add `@AGENTS.md` as its first line. Say which in the summary.
 ```
 
-### I-24 — the skill matrix checks what the E2E criteria claim (G02, G07, G17, G21)
+### I-24 — the skill matrix checks what the E2E criteria claim, and names the gate its feature row waives (G02, G07, G17, G21)
 
 #### I-24a — .agents/docs/testing/skill-matrix.md
 ```old
@@ -876,8 +928,16 @@ ask the user for a one-paragraph project overview and the deploy target (none, a
 | `ctx-deploy` | demo HEAD |
 ```
 ```new
-| `verifier-counts` | demo HEAD + an uncommitted `internal/greet/extra_test.go` holding one passing test |  | Dispatch the verifier agent on the uncommitted change and relay its status line. Change nothing else. | `grep -q "counts: pass" .agents/docs/testing/*verify*.md && grep -q "vs previous:" .agents/docs/testing/*verify*.md` |
+| `verifier-counts` | demo HEAD + an uncommitted `internal/greet/extra_test.go` holding `package greet`, `import "testing"` and `func TestExtra(t *testing.T) {}` |  | Dispatch the verifier agent on the uncommitted change and relay its status line. Change nothing else. | `grep -q "counts: pass" .agents/docs/testing/*verify*.md && grep -q "vs previous:" .agents/docs/testing/*verify*.md` |
 | `ctx-deploy` | demo HEAD |
+```
+
+#### I-24d — .agents/docs/testing/skill-matrix.md
+```old
+Scope is confirmed exactly as written and I will not answer follow-ups:
+```
+```new
+I waive the scope-confirmation gate: scope is confirmed exactly as written, and I will not answer follow-ups:
 ```
 
 ## Failure modes
@@ -887,9 +947,9 @@ ask the user for a one-paragraph project overview and the deploy target (none, a
 - `sh-agent render | wc -l` shows other than 93: an edit added or removed a newline; fix it before the checkpoint.
 - A CLI log shows a parse error for a skill or agent: the phase stays open until fixed.
 - The docs-lens control (1.2) misses a planted finding or flags the negative: the brief does not work; rework I-1a and re-run 1.2 before anything else.
-- The one-time sweep (1.6) returns many findings: a finding on a surface this plan edits is fixed in the phase that edits it; any other is a Follow-ups line, or a bug record when it is a real defect; the plan gains no groups.
+- The one-time sweep (1.6) returns many findings: a finding on a surface this plan edits is fixed in the phase that edits it, as a new rehearsed edit placed after the edit that rewrites that surface, with a D-row; any other is a Follow-ups line, or a bug record when it is a real defect; the plan gains no groups.
 - A G26 control is not quoted on a CLI: outcome A (D12); the log says which layer did not load.
-- A matrix row fails because the demo or a CLI changed rather than the harness: the e2e log says so; it is not recorded as a pass.
+- A matrix row fails: 6.4's policy applies — one re-run, then a harness defect is fixed, a cause outside this plan is shown against `c192622`, or a stop at a gate the row does not test gets that gate's waiver in the row prompt; none of these is recorded as a plain pass.
 - A count comparison falls: a FAIL line unless the diff or the environment explains it, in which case the line names the cause (I-16a, D17).
 - A headless run outlives the tool timeout: a detached driver with its own status file, whose exit status is read before any output is cited (BUG-013).
 
@@ -902,7 +962,7 @@ Tiers:
 - Cloud smoke: none.
 
 E2E criteria:
-- Golden path: in the sandbox demo, `/feature` writes a plan with `expect:` on its task lines, a Checkpoint box per phase, a Cold-reader check box and a `## Decisions` section, on both CLIs — yes when the `feature` row's check (I-24a) exits 0 on both.
+- Golden path: in the sandbox demo, `/feature` writes a plan containing an `expect:` clause, a Checkpoint box, a Cold-reader check box and a `## Decisions` section, on both CLIs — yes when the `feature` row's check (I-24a) exits 0 on both.
 - Edge case: `/bug` with no repro and "do not ask me anything" changes nothing under `cmd/` or `internal/`, tracked or untracked, and writes the repro question into a handoff, on both CLIs — yes when the `bug-no-repro` row's check (I-24b) exits 0 on both.
 
 Each criterion is a yes/no outcome that still holds if the interface wording were different.
@@ -913,7 +973,7 @@ Each criterion is a yes/no outcome that still holds if the interface wording wer
 
 ### Phase 1 — the docs lens and the lost rule (G06, G08)
 - [ ] 1.1 I-1a — verify: integration, `grep -c 'narrowed: <old file:line>' skills/review/SKILL.md`, who: AI — expect: `1` (positive control: `git show c192622:skills/review/SKILL.md | grep -c 'narrowed:'` prints `0`)
-- [ ] 1.2 Docs-lens control, after 1.1: build `.agents/scratch/docs-lens-control/` as below and dispatch `reviewer` there with the I-1a brief verbatim and the scope `Scope: commits base..change (git log base..change); the diff is git diff base...change.` — verify: integration, the report the reviewer writes inside that repository, who: AI — expect: a `dropped:` finding for "Never deploy on Fridays."; a finding naming `README.md` for "from the `main` branch"; a `narrowed:` finding for the linter rule; no finding for "Tag releases with the git short SHA."
+- [ ] 1.2 Docs-lens control, after 1.1: build `.agents/scratch/docs-lens-control/` as below and dispatch `reviewer` with the I-1a brief verbatim, the scope `Scope: commits base..change (git log base..change); the diff is git diff base...change.`, and "The repository under review is /home/kesokaj/workspace/styrman-harness/.agents/scratch/docs-lens-control. Run every command in that directory, read no file outside it, resolve the docs root there and write your report there." — verify: integration, the report the reviewer writes inside that repository, who: AI — expect: a `dropped:` finding for "Never deploy on Fridays."; a finding naming `README.md` for "from the `main` branch"; a `narrowed:` finding for the linter rule; no finding for "Tag releases with the git short SHA."
 - [ ] 1.3 I-2a, then I-6 — verify: integration, `grep -c "whatever autonomous instruction is in effect" skills/bug/SKILL.md` and `grep '^| BUG-018' .agents/docs/bugs/INDEX.md`, who: AI — expect: `1`, and the row's status cell reads `fixed`
 - [ ] 1.4 I-3a — verify: integration, `grep -c 'dropped: <why>' skills/retro/SKILL.md`, who: AI — expect: `1`
 - [ ] 1.5 I-4a and I-5a–e through `documentation` (D7) — verify: integration, `git grep -nE '27 skills|seven subagents|7 agents parse' -- README.md AGENTS.md .agents/docs/testing/sh-agent/guide.md` and `grep -c 'searched at `skills/` because' AGENTS.md`, who: AI — expect: the first prints nothing (positive control: the same pattern over `c192622` prints lines) and the second prints `1`
@@ -953,27 +1013,27 @@ commit change (tag it `change`; tag the first `base`)
 - [ ] 2.1 I-7a and I-7b — verify: integration, for each pattern in "— expect:", "- [ ] Checkpoint —", "## Decisions", "- [ ] Cold-reader check —", "— in progress:", "recon-<slug>", "phase-<N>", "close the plan": `grep -cF -- "<pattern>" skills/feature/SKILL.md`, plus `grep -cF "then tick the boxes in the plan" skills/feature/SKILL.md`, who: AI — expect: every pattern prints at least `1`, and the last prints `0` (positive control: over `c192622` every pattern prints `0` and the last prints `1`)
 - [ ] 2.2 I-8a–e — verify: integration, `go run ./cmd/sh-agent render` into `.agents/scratch/render.txt`, then `grep -cF "restate status and next step before the next edit"`, `grep -cF "Workflow skills, also typed"`, `grep -cF "can also be typed as"` on it and `wc -l` on it, who: AI — expect: `1`, `0`, `1`, `93`
 - [ ] 2.3 I-9a–d and I-10a–b — verify: integration, `grep -cF "Ask for six things" skills/handoff/SKILL.md` and `git grep -nF 'should put in `TODO.md`' -- agents skills context`, who: AI — expect: `1`, and nothing printed (positive control: over `c192622` it prints `agents/changelog.md:94`)
-- [ ] 2.4 I-11a–g — verify: integration, `grep -l '^- \[ \]' .agents/docs/plans/*.md`, who: AI — expect: only this plan's path
+- [ ] 2.4 I-11a–g — verify: integration, the fence-aware command of I-9d over `.agents/docs/plans/*.md`, who: AI — expect: only this plan's path (positive control: before I-11 it also prints the two old plans)
 - [ ] 2.5 Describing text — verify: integration, `git grep -nE "tick its tasks|then tick the boxes|Workflow skills, also typed|should put in .TODO" -- context skills agents README.md AGENTS.md`, who: AI — expect: nothing printed (positive control: over `c192622` at least three lines)
 - [ ] Checkpoint — expect: `go test -race ./...` exit 0; drift none; `render | wc -l` prints 93; a `verifier` log over the phase range with Status PASS — evidence: <commands, exit status, log path>, <date>
 
 ### Phase 3 — review loop and review standards (G10, G11, G15, G16 skill half)
-- [ ] 3.1 I-12a–b, then I-13a–b — verify: integration, `grep -cF "that section's fixed lines only" skills/review/SKILL.md`, `grep -cF "never a command that exited non-zero" skills/review/SKILL.md`, `grep -cF 'a reason as `/review` Step 4 defines it' skills/preflight/SKILL.md`, who: AI — expect: `1`, `1`, `1` (positive control: each prints `0` over `c192622`)
+- [ ] 3.1 I-12a–e, then I-13a–b — verify: integration, `grep -cF` for "that section's fixed lines only", "`in flight: <who>`", "unless the user picks one more at the cap" and "fix the rest yourself" in `skills/review/SKILL.md` (each `1`), `grep -cF "which the main agent fixes" context/AGENTS.md` (`1`), `grep -cF "never a command that exited non-zero" skills/review/SKILL.md`, `grep -cF 'a reason as `/review` Step 4 defines it' skills/preflight/SKILL.md`, who: AI — expect: `1`, `1`, `1` (positive control: each prints `0` over `c192622`)
 - [ ] 3.2 I-14a–c and I-15a–d — verify: integration, `grep -cF` for "Leftover debug output", "TOCTOU race", "generated counterpart", "assertion changed in an existing test" and "describing-text rule" in `skills/review-standards/SKILL.md`; "lint:ignore" in `go-review.md`; "describe.only" in `typescript-review.md`; "demonstrated false positive" in `skills/golang/SKILL.md`; and `sed -n 323p skills/golang/references/golang-ecosystem.md` piped to `grep -cF nolintlint`, who: AI — expect: every grep prints `1`
-- [ ] Checkpoint — expect: tests exit 0; drift none; a `verifier` log over the phase range with Status PASS — evidence: <log path>, <date>
+- [ ] Checkpoint — expect: tests exit 0; drift none; `render | wc -l` prints 93; a `verifier` log over the phase range with Status PASS — evidence: <log path>, <date>
 
 ### Phase 4 — agents and records (G07, G16 verifier half, G17, G18, G23, G24)
-- [ ] 4.1 I-16a–c — verify: integration, `grep -cF` for "Every command on its own", "Test counts:", "Inherited failures:" and "Suppressions added:" in `agents/verifier.md`, who: AI — expect: each prints `1`
-- [ ] 4.2 I-17a–d — verify: integration, `grep -cF "counts as not reached until you have read the rest" agents/reviewer.md agents/verifier.md agents/security.md agents/explorer.md`, who: AI — expect: `1` for each file
-- [ ] 4.3 I-18a–l — verify: integration, `grep -cF "Diagnosis missed:"` in `agents/bugs.md`, `skills/bug/SKILL.md` and `skills/retro/SKILL.md`; `grep -cF "Graduated"` in `agents/bugs.md`, `skills/retro/SKILL.md` and `context/AGENTS.md`, who: AI — expect: at least `1` in each
+- [ ] 4.1 I-16a–d — verify: integration, `grep -cF` for "Every command on its own", "Test counts:", "Inherited failures:", "Suppressions added:" and "What this run did not run or read" in `agents/verifier.md`, who: AI — expect: each prints `1`
+- [ ] 4.2 I-17a–f — verify: integration, `grep -cF "counts as not reached until you have read the rest" agents/reviewer.md agents/verifier.md agents/security.md agents/explorer.md`, `grep -cF "What you did not reach — files" agents/reviewer.md`, `grep -cF "What you did not reach — paths" agents/security.md`, who: AI — expect: `1` for each file; `1`; `1`
+- [ ] 4.3 I-18a–l — verify: integration, `grep -cF "Diagnosis missed:"` in `agents/bugs.md`, `skills/bug/SKILL.md` and `skills/retro/SKILL.md`; `grep -cF "Graduated"` in `agents/bugs.md`, `skills/retro/SKILL.md` and `context/AGENTS.md`, and `render | wc -l`, who: AI — expect: at least `1` in each, and `93`
 - [ ] 4.4 ADR-021 through `changelog`, with I-18's text — verify: integration, `grep -c '^## ADR-021: Bug index rows move' .agents/docs/architecture/DECISIONS.md`, who: AI — expect: `1`
-- [ ] 4.5 The derived Antigravity agents carry I-16 and I-17 — verify: integration, scratch install, then `grep -cF "counts as not reached"` in `<scratch>/.gemini/config/agents/{reviewer,verifier,security,explorer}/agent.md`, who: AI — expect: `1` for each file
-- [ ] Checkpoint — expect: tests exit 0; drift none; a `verifier` log over the phase range with Status PASS, dispatched with the repo's § What to run pasted (D9), carrying a `counts:` line and a `vs previous:` line — evidence: <log path>, <date>
+- [ ] 4.5 The derived Antigravity agents carry I-16 and I-17 — verify: integration, scratch install, then `grep -cF "counts as not reached"` in `<scratch>/.gemini/config/agents/{reviewer,verifier,security,explorer}/agent.md` and `grep -cF "Every command on its own" <scratch>/.gemini/config/agents/verifier/agent.md`, who: AI — expect: `1` for each file; `1`
+- [ ] Checkpoint — expect: tests exit 0; drift none; `render | wc -l` prints 93; a `verifier` log over the phase range with Status PASS, dispatched with the repo's § What to run pasted (D9), carrying a `counts:` line and a `vs previous:` line — evidence: <log path>, <date>
 
 ### Phase 5 — gates, release gate, init and names (G20, G21, G22, G25, G26)
 - [ ] 5.1 The I-19 precedence test — verify: e2e, `testing/<date>-verify-g26-precedence.md`, who: AI — expect: one line per CLI and layer; the outcome, A or B, is a D-row
-- [ ] 5.2 I-19a with that outcome's `new`, then I-19b–d — verify: integration, the render file's `grep -cF "never reuses a harness name"`, `grep -cF "never a harness" skills/retro/SKILL.md skills/distill/SKILL.md`, who: AI — expect: `1`; `2` and `1`
-- [ ] 5.3 I-20a–d with ADR-022, all in the phase commit — verify: integration, `git grep -nF "50+ lines or 5+ files" -- context skills agents` and `grep -c '^## ADR-022: Every bug fix gets the reviewer' .agents/docs/architecture/DECISIONS.md`, who: AI — expect: exactly two lines, both in `skills/preflight/SKILL.md`, the Step 1 line ending "or is a bug fix." and the Step 2 release-diff line (D8); `1`
+- [ ] 5.2 I-19a with that outcome's `new`, then I-19b–d — verify: integration, `go run ./cmd/sh-agent render` into `.agents/scratch/render.txt` again, then its `grep -cF "never reuses a harness name"`, `grep -cF "never a harness" skills/retro/SKILL.md skills/distill/SKILL.md`, who: AI — expect: `1`; `2` and `1`
+- [ ] 5.3 I-20a–d with ADR-022, all in the phase commit — verify: integration, `git grep -nF "50+ lines or 5+ files" -- context skills agents` and `grep -c '^## ADR-022: Every bug fix gets the reviewer' .agents/docs/architecture/DECISIONS.md`, who: AI — expect: exactly two lines, both in `skills/preflight/SKILL.md`: the Step 1 line containing "or is a bug fix" and the Step 2 release-diff line (D8); `1`
 - [ ] 5.4 I-21a–e — verify: integration, `grep -cF` for "Blocking means any of", "names no path in the release diff", "The artifacts this step owes" and "exactly as `/review` Step 3 gives it" in `skills/preflight/SKILL.md`, who: AI — expect: each prints `1`
 - [ ] 5.5 I-22a–e — verify: integration, `grep -c "^## Gates that need the user" skills/feature/SKILL.md skills/bug/SKILL.md`, `grep -cF "The three-round cap is a gate" skills/review/SKILL.md`, `grep -cF "whatever autonomous instruction is in effect" skills/bug/SKILL.md`, `grep -cF "Never invent a repro on your own" skills/bug/SKILL.md`, who: AI — expect: `1` each; `1`; `0`; `1`
 - [ ] 5.6 I-23a–b — verify: integration, `grep -cF` for "derive the build, run and test commands" and "add `@AGENTS.md` as its first line" in `skills/init-project/SKILL.md`, who: AI — expect: each prints `1`
@@ -981,15 +1041,15 @@ commit change (tag it `change`; tag the first `base`)
 - [ ] Checkpoint — expect: tests exit 0; drift none; `render | wc -l` prints 93; a `verifier` log over the phase range with Status PASS (D9) — evidence: <log path>, <date>
 
 ### Phase 6 — end to end in the sandbox, both CLIs
-- [ ] 6.1 I-24a–c — verify: integration, `grep -cF` for "`bug-no-repro`" and "`verifier-counts`" in `.agents/docs/testing/skill-matrix.md`, who: AI — expect: each prints `1`
+- [ ] 6.1 I-24a–d — verify: integration, `grep -cF` for "`bug-no-repro`", "`verifier-counts`" and "I waive the scope-confirmation gate" in `.agents/docs/testing/skill-matrix.md`, who: AI — expect: each prints `1`
 - [ ] 6.2 Install this tree into the sandbox home and check drift — verify: e2e, `sh-agent install --home <sandbox home>` then `sh-agent status --home <sandbox home>`, who: AI — expect: exit 0 and drift none
 - [ ] 6.3 One start of each CLI with a context question: quote Definition of Done step 2's reviewer trigger and the compaction sentence — verify: e2e, the two outputs and the newest Antigravity `cli-*.log`, who: AI — expect: both quote "or any fix under the `bug` skill" and "restate status and next step"; `grep -c "Failed to parse"` on the log prints `0`
-- [ ] 6.4 Matrix rows on both CLIs, detached with a status file, after `git -C <a fresh clone> rev-parse --verify origin/HEAD` succeeds: `feature`, `bug`, `bug-no-repro`, `review`, `review-project`, `preflight`, `retro`, `distill`, `handoff`, `init-deploy`, `explorer`, `review-standards`, `golang`, `verifier-counts` — verify: e2e, each row's check in its clone, who: AI — expect: every check exits 0 on both CLIs; a failure gets a bug record and a fix, or a `[-]` box with the reason and an `Open:` row
-- [ ] Checkpoint — expect: 6.2 to 6.4 pass, recorded in `testing/<date>-verify-harness-practices-e2e.md` — evidence: <log path>, <date>
+- [ ] 6.4 Matrix rows on both CLIs, detached with a status file, after `git -C <a fresh clone> rev-parse --verify origin/HEAD` succeeds: `feature`, `bug`, `bug-no-repro`, `review`, `review-project`, `preflight`, `retro`, `distill`, `handoff`, `init-deploy`, `explorer`, `review-standards`, `golang`, `documentation`, `verifier-counts`. A row whose check fails runs once more, and a pass on that re-run counts with the re-run named in the log. A row that fails twice is one of three things, recorded with its evidence: a harness defect (a bug record, a fix, and the row re-run until it passes); a cause outside this plan, shown by the same row failing the same way with the harness at `c192622` installed in a second sandbox home (not available to `bug-no-repro` and `verifier-counts`, which test new behaviour); or a stop at a gate the row does not test, with that gate's question written into a handoff (the row prompt gains that gate's waiver in `skill-matrix.md`, and the row re-runs) — verify: e2e, each row's check in its clone, who: AI — expect: every row passes on both CLIs, directly, on its re-run, or after its harness defect is fixed, except rows recorded with evidence as caused outside this plan
+- [ ] Checkpoint — expect: 6.2 and 6.3 pass and 6.4 meets its expect, recorded per row and CLI in `testing/<date>-verify-harness-practices-e2e.md`, whose Not examined section names what no row exercises end to end: I-21's fail-closed gate, I-12's ledger and I-22e's cap, I-18's graduated-row move, I-23b's CLAUDE.md fold, and I-19b–d's table cells — evidence: <log path>, <date>
 
 ### Done — the Definition of Done
 - [ ] `verifier` over `c192622..HEAD`, every tier above, dispatched with the repo's § What to run pasted (D9) — who: AI
-- [ ] `reviewer` over the diff by commit range, and a `--docs` review over the same range with the I-1a brief and I-4a's paths — who: AI
+- [ ] `reviewer` over the diff by commit range, dispatched with the repo's `skills/review-standards/SKILL.md` § 1–3 and the I-17a sentence pasted (D9), and a `--docs` review over the same range with the I-1a brief and I-4a's paths — who: AI
 - [ ] `documentation` for anything the reviews name in README, the testing guide or the deploy guides — who: AI
 - [ ] `changelog` naming the agents dispatched; `bugs` for anything that went wrong — who: AI
 - [ ] Close the plan; `ROADMAP.md` "Now" and `TODO.md` empty — who: AI
@@ -1022,13 +1082,26 @@ D11 — 2026-09-15 — `I-1a` greps at the scope's head, follows a symlinked dir
 D12 — 2026-09-15 — the G26 test carries skill and agent controls in both vendor shapes; only a full B result keeps line 37's claim, and every other result writes the cause-neutral outcome A — by: cold read round 1
 D13 — 2026-09-15 — "no reply can arrive" (a print-mode run, or a user who said they will not answer) is when a reached gate ends the work and writes a handoff; the `bug-no-repro` check also catches untracked files — by: cold read round 1
 D14 — 2026-09-15 — the release gate names the artifacts it owes, accepts the three not-examined section names the agents and records use, and lets a project add blocking conditions but never remove them — by: cold read round 1
-D15 — 2026-09-15 — every edit is a fenced old/new block in application order, and a rehearsal applies them all to copies of the files at `c192622` before implementation. Run on 2026-09-15 for this revision: 82 edits parsed, 0 failures, 26 files, for both I-19a outcomes; against the rehearsed end state every task expectation above holds, `sh-agent render` prints 93 lines, `sh-agent list` parses 27 skills and 7 agents, and no line containing `/tmp` was added — by: cold read round 1
+D15 — 2026-09-15 — every edit is a fenced old/new block in application order, and a rehearsal applies them all to copies of the files at `c192622` before implementation. Run on 2026-09-15 for the round-2 revision: 88 edits parsed, 0 failures, 26 files, for both I-19a outcomes; against the rehearsed end state all 81 task expectations above hold, the fence-aware open-box check finds both old plans closed, `sh-agent render` prints 93 lines, `sh-agent list` parses 27 skills and 7 agents, and no line containing `/tmp` was added — by: cold read round 1
 D16 — 2026-09-15 — BUG-018 gets a status change only (`agents/bugs.md` allows no other edit); the Phase 1 and Phase 5 changes entries carry its fix history — by: cold read round 1
 D17 — 2026-09-15 — a count fall that the diff or the environment explains is not a FAIL; its line names the cause — by: cold read round 1
 D18 — 2026-09-15 — every phase checkpoint, Phases 1 and 2 included, gets a verifier log, because context, skill and agent prose is this repo's source — by: cold read round 1
 D19 — 2026-09-15 — the stale operator boxes point at this plan's Done list, whose last row names each of their checks — by: cold read round 1
 D20 — 2026-09-15 — the bug gate's "let me infer one" option and the "never invent a repro" sentence are reconciled in I-22c — by: cold read round 1
 D21 — 2026-09-15 — `agents/bugs.md` describing text (next number, one table, the one allowed edit) and `context/AGENTS.md`'s graduation sentence change with G24, so the row move has a trigger outside `/retro` — by: cold read round 1
+D22 — 2026-09-15 — Phase 6 closes on 6.4's policy: one re-run per failing row, then a fixed harness defect, a cause shown outside this plan against `c192622`, or a waiver added to the row prompt for a gate the row does not test — by: cold read round 2
+D23 — 2026-09-15 — the open-plan check reads boxes outside fenced blocks only, so a plan that quotes a template or old text is not flagged once closed — by: cold read round 2
+D24 — 2026-09-15 — the verifier, reviewer and security templates gain a Not examined section; at the release gate a report without a not-examined section covers nothing, and `Not verified` counts as one — by: cold read round 2
+D25 — 2026-09-15 — docs-lens findings in skills, agents, rules or the context are the main agent's; only findings in `documentation`'s files go to it (review Step 5, context line 16) — by: cold read round 2
+D26 — 2026-09-15 — G26's outcome B also requires both harness descriptions unquoted on both CLIs — by: cold read round 2
+D27 — 2026-09-15 — the review ledger has four states (fixed, rebutted, in flight, left); a later round repeating a rebutted or left finding reports nothing new; the three-round sentence allows one more round the user picks at the cap — by: cold read round 2
+D28 — 2026-09-15 — the verifier keeps a chain's directory prefix on every split command, counts each Go test command in place of its plain run, and fails any added suppression or skip without a reason — by: cold read round 2
+D29 — 2026-09-15 — graduated-row moves happen only in the repository where the rule graduated; rows graduated before ADR-021 move when a dispatch names them — by: cold read round 2
+D30 — 2026-09-15 — a Step 4 docs finding blocks the release only while `documentation` has not fixed it; this refines D2's reviewer threshold for Step 4 — by: cold read round 2
+D31 — 2026-09-15 — the bug skill gets one gate, the missing repro; a diagnosis that disagrees keeps Step 2's re-investigate rule, because the committed research record's G21 names no diagnosis gate — by: cold read round 2
+D32 — 2026-09-15 — waiver words in the invocation's arguments count, and the `feature` matrix row names the scope gate it waives — by: cold read round 2
+D33 — 2026-09-15 — the golden-path criterion claims one of each property, as its check tests, and the Phase 6 log names what no row exercises end to end — by: cold read round 2
+D34 — 2026-09-15 — preflight Step 1 treats uncommitted work as a bug fix when the tree adds a bug record or the `bug` skill ran on it — by: cold read round 2
 Open: findings of the one-time sweep (1.6) outside this plan's surfaces — default: Follow-ups lines, or a bug record for a real defect; no new groups
 Open: G26 outcome A or B — default: decided by 5.1; any unquoted control means A
 Rejected: several smaller plans — the order constraints (G02 before G03, G06 before G21, G22's four lines in one commit) belong in one place

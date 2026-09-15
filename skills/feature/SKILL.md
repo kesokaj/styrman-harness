@@ -12,7 +12,7 @@ Design before code; let a fresh reader test the design; implement in verifiable 
 
 ## Gates that need the user
 
-Four points always wait for the user, whatever "work autonomously" instruction is in effect: the scope confirmation (Step 1), the no-code gate until the cold-reader check passes (Step 3), the three-round cap of that check, and a review loop that hits its cap. Everything else runs without asking. The user can waive a gate only in the same turn, explicitly.
+Four points always wait for the user: the scope confirmation (Step 1), the no-code gate until the cold-reader check passes (Step 3), the three-round cap of that check, and a review loop that hits its cap. Everything else runs without asking. A gate holds whatever "work autonomously" instruction is in effect. Only the user's own words in the same turn waive it — words in the invocation's arguments count — and a waiver names the gate: a general instruction such as "do not ask me anything" is not a waiver, and neither is a bare skill invocation or a waiver carried over from another plan or session. At a cap, ask with your recommendation first: clarify or cut a requirement; proceed with the residue written as `Open:` rows under `## Decisions`, the phases that depend on them waiting; or abandon. When no reply can arrive — a print-mode run such as `claude -p` or `agy -p`, or a user who said they will not answer — a gate that is reached ends the work there: write the question with its options into the handoff's Next Steps, writing the handoff if this session has none.
 
 ## Step 1: Scope
 

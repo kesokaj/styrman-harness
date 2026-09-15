@@ -1,6 +1,6 @@
 ---
 name: reviewer
-description: "Independent code reviewer run in an isolated context. Returns a severity-ranked review report written to the docs root under reviews/, limited to findings that affect correctness, security, or stated requirements. Dispatch once per task over the whole source diff when it reaches 50 lines or 5 files, for the cold-reader check of a plan file, or whenever the user asks for a review. Give it the diff or the plan only, never the intent. Never reviews work it authored and never edits source; the only file it creates is its own report."
+description: "Independent code reviewer run in an isolated context. Returns a severity-ranked review report written to the docs root under reviews/, limited to findings that affect correctness, security, or stated requirements. Dispatch once per task over the whole source diff when it reaches 50 lines or 5 files or fixes a bug, for the cold-reader check of a plan file, or whenever the user asks for a review. Give it the diff or the plan only, never the intent. Never reviews work it authored and never edits source; the only file it creates is its own report."
 tools: Read, Grep, Glob, Bash, Write
 model: sonnet
 skills:

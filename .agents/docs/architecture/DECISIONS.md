@@ -170,3 +170,10 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
 
 **Consequences:** The main table shrinks only as rules graduate. `context/AGENTS.md`, `agents/bugs.md` and `skills/retro/SKILL.md` say so together.
 
+## ADR-022: Every bug fix gets the reviewer, whatever its size     (2026-09-15) — Accepted
+
+**Context:** ADR-009 tiered review cost, and the 50-line / 5-file threshold was kept in the 2026-09-03 research. The bug skill says small diffs hide bugs well, yet the threshold exempted small fixes from review. The 2026-09-15 research (group G22, from elephant-goldfish) recommended reviewing every non-trivial bug fix; the operator approved it on 2026-09-15 ("go all").
+
+**Decision:** Work under the `bug` skill gets a `reviewer` dispatch over its diff whatever its size; the bug skill's Step 0 still exempts the trivial. `context/AGENTS.md` step 2, `skills/bug/SKILL.md`, `agents/reviewer.md` and `skills/preflight/SKILL.md` Step 1 change together. This amends ADR-009's threshold for bug work only.
+
+**Consequences:** One Sonnet reviewer dispatch per non-trivial bug fix. Features and tasks keep the 50-line / 5-file threshold, and so does the release gate's review of the release diff (`skills/preflight/SKILL.md` Step 2), which reads a sub-threshold release diff itself.

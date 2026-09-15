@@ -53,9 +53,9 @@ Read the conversation transcript, plus the entries in `~/.config/sh-agent/feedba
 |---|---|---|
 | Rule gap or restatement | `.agents/rules/<name>.md`, or `AGENTS.md` § | `context/AGENTS.md` |
 | Environment / stack / GCP | `AGENTS.md` § Deploy, `.agents/docs/deploy/*.md` | `context/dev-setup.md` |
-| Skill knowledge or workflow | `.agents/skills/<name>/SKILL.md` | `skills/<name>/SKILL.md` |
+| Skill knowledge or workflow | `.agents/skills/<name>/SKILL.md` (never a harness skill's name; see `sh-agent list`) | `skills/<name>/SKILL.md` |
 | Skill reference | `.agents/skills/<name>/references/<topic>.md` | `skills/<name>/references/<topic>.md` |
-| Subagent behavior | `.agents/agents/<name>.md` | `agents/<name>.md` |
+| Subagent behavior | `.agents/agents/<name>.md` (never a harness agent's name) | `agents/<name>.md` |
 | Output format preference | `AGENTS.md` § | `context/AGENTS.md` (Hard rules) |
 
 3. **Scope from the target**: under the harness checkout (`context/`, `skills/`, `agents/`) → `Scope: harness`; in the project → `Scope: project`.

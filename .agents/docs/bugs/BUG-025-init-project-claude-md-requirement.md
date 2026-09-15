@@ -24,7 +24,10 @@ would have caught the contradiction was never run.
 ## Fix
 `skills/init-project/SKILL.md:44` now leaves the file untouched when the user declines to fold it. Round
 2 review found that line's new wording still inaccurate (R2-3); left open with the operator's R2
-question in the handoff.
+question in the handoff. Operator kept R2 on 2026-09-15 ("Yes. We should keep the AGENTS.md style.";
+plan row D45). R2-3 is now fixed at `skills/init-project/SKILL.md:44`: on "no", the summary says
+Antigravity never reads the kept file's content, and Claude Code imports `AGENTS.md` only if the file
+has the line `@AGENTS.md`.
 
 ## Prevention
 A plan's cold-reader check and rehearsal compare every edit against `REQUIREMENTS.md`; an edit that

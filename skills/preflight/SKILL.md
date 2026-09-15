@@ -62,7 +62,7 @@ Check by inspection and record each as pass or finding:
 
 ## Step 4: Docs freshness
 
-Run the `--docs` lens of `/review` over `<base>..HEAD` — the `reviewer` agent with the docs brief exactly as `/review` Step 3 gives it, and the slug `<base>-<head>-docs`. Its findings are the docs gaps, and each one blocks the release (Step 5): the gate never edits the tree after it has run. After NO-SHIP they are fixed as ordinary work — `documentation` for those in its files, the main agent for those in skills, agents, rules, the context or other `AGENTS.md` sections — and `/preflight` runs again.
+Run the `--docs` lens of `/review` over `<base>..HEAD` — the `reviewer` agent with the docs brief exactly as `/review` Step 3 gives it, and the slug `<base>-<head>-docs`. Its findings are the docs gaps, each recorded with severity and confidence like a Step 2 finding. Read the `## Outcome` of the newest prior `reviews/*-preflight-*` report first: a finding it rebutted, the same statement at the same file:line, is cited in the gate report as rebutted there and not raised again. A gap that blocks (Step 5) is fixed after NO-SHIP as ordinary work — `documentation` for those in its files, the main agent for those in skills, agents, rules, the context or other `AGENTS.md` sections — and `/preflight` runs again; every other gap is recorded as `left` with an owner.
 
 ## Step 5: Write the merged gate report
 
@@ -74,7 +74,7 @@ Write to `<docs-root>/reviews/$(date +%F)-preflight-<version>.md` with frontmatt
 - An explicit verdict line: `VERDICT: SHIP` or `VERDICT: NO-SHIP`.
 - A **"What was not checked"** section — name the gaps honestly.
 
-Never restate a failure as success. Any blocking finding from Steps 2–4 means NO-SHIP. Blocking means any of: a verifier FAIL or BLOCKED; a security finding of high severity; a Step 2 reviewer REQUEST CHANGES verdict or high-severity finding; a `REQUIREMENTS.md` violation; a Step 4 docs finding. A project's `AGENTS.md` may add blocking conditions; it cannot remove these.
+Never restate a failure as success. Any blocking finding from Steps 2–4 means NO-SHIP. Blocking means any of: a verifier FAIL or BLOCKED; a security finding of high severity; a Step 2 reviewer REQUEST CHANGES verdict or high-severity finding; a `REQUIREMENTS.md` violation; a Step 4 REQUEST CHANGES verdict or high-severity docs finding, not counting a finding a prior gate report rebutted. A project's `AGENTS.md` may add blocking conditions; it cannot remove these.
 
 ## Step 6: Ship or stop
 

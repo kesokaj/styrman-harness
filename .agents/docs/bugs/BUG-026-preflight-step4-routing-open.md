@@ -2,7 +2,7 @@
 owner: bugs
 date: 2026-09-15
 id: BUG-026
-status: open
+status: fixed
 area: skills/preflight (Step 4 docs freshness)
 ---
 # BUG-026: Step 4 docs-freshness routing patched twice, each patch introducing new defects
@@ -27,8 +27,15 @@ recommendation, plan D36) and patched again in review. Each patch moved the defe
 instead of settling what the mechanism (Step 4 docs freshness) is for.
 
 ## Fix
-None yet. The review loop stopped at round 2 under Definition of Done step 2 (two consecutive rounds of
-findings on the same mechanism); the question goes to the operator in the handoff.
+Operator settled the mechanism's purpose on 2026-09-15 ("Do your recommendation"; plan row D46, ADR-023).
+`skills/preflight/SKILL.md:65` now records each Step 4 docs finding with severity and confidence like a
+Step 2 finding; a finding the newest prior `reviews/*-preflight-*` report's `## Outcome` rebutted, the
+same statement at the same file:line, is cited as rebutted there and not raised again; a gap that blocks
+is fixed after NO-SHIP as ordinary work and `/preflight` runs again; every other gap is recorded as
+`left` with an owner. `skills/preflight/SKILL.md:77` now blocks Step 5 only on a Step 4 REQUEST CHANGES
+verdict or a high-severity docs finding, not counting a finding a prior gate report rebutted. The
+sentence "the gate never edits the tree after it has run" is gone, resolving R2-1 and R2-2 in
+`.agents/docs/reviews/2026-09-15-review-c192622-22c106c-merged.md`.
 
 ## Prevention
 When one mechanism draws findings in two consecutive rounds — a cold read or a review — stop patching
@@ -36,4 +43,6 @@ and settle its purpose with the operator before a third change.
 
 ## Related
 BUG-025 shares the Done review; recurs with BUG-004/BUG-003/BUG-007-style "patch without checking
-recorded intent" shape — see BUG-028's Related note on where this class of rule should live.
+recorded intent" shape — see BUG-028's Related note on where this class of rule should live. The
+stop-and-ask this bug's prevention rule calls for was settled by the operator in one decision (D46,
+ADR-023) rather than a third patch — the prevention rule held.

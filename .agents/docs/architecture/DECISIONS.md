@@ -177,3 +177,11 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
 **Decision:** Work under the `bug` skill gets a `reviewer` dispatch over its diff whatever its size; the bug skill's Step 0 still exempts the trivial. `context/AGENTS.md` step 2, `skills/bug/SKILL.md`, `agents/reviewer.md` and `skills/preflight/SKILL.md` Step 1 change together. This amends ADR-009's threshold for bug work only.
 
 **Consequences:** One Sonnet reviewer dispatch per non-trivial bug fix. Features and tasks keep the 50-line / 5-file threshold, and so does the release gate's review of the release diff (`skills/preflight/SKILL.md` Step 2), which reads a sub-threshold release diff itself.
+
+## ADR-023: The release gate weighs docs findings like review findings     (2026-09-15) — Accepted
+
+**Context:** Plan edit I-21d had `/preflight` Step 4 fix docs itself after the gate, so unverified edits to skills, agents and the context rode into the tag (Done review finding F2, BUG-026). The round 1 fix made every Step 4 docs finding block and the gate run again after NO-SHIP. That blocked a correctly rebutted finding on every re-run (R2-1), and its "never edits the tree" sentence contradicted Step 6 (R2-2). The review loop stopped at round 2 under Definition of Done step 2, and on 2026-09-15 the operator chose the recommended rule ("Do your recommendation.").
+
+**Decision:** Step 4 records each docs finding with severity and confidence, like a Step 2 finding. A finding that the newest prior gate report's `## Outcome` rebutted, the same statement at the same file:line, is cited as rebutted there and not raised again. Only a Step 4 REQUEST CHANGES verdict or a high-severity docs finding blocks the release. A blocking gap is fixed after NO-SHIP as ordinary work, and `/preflight` runs again. Every other gap is recorded as `left` with an owner. No docs fix rides in the release commit; the tag is the gated tree plus its records.
+
+**Consequences:** `skills/preflight/SKILL.md` Step 4 and Step 5's blocking list change together. A false-positive docs finding costs one rebuttal in a gate report's Outcome instead of blocking every later release. A low-severity docs gap can ship, recorded with its owner. This supersedes the Step 4 routing of plan rows D36 and D43.

@@ -174,3 +174,17 @@ Every line is `left`: no finding was fixed inside task 1.6. The triage rule is D
 - F87, F88, F89, F90, F91 — `left: follow-up` (python and mermaid)
 
 BUG-019 shares its shape with BUG-003 and BUG-007, a rule tightened while its old wording survived elsewhere; that is retro input.
+
+## Outcome update (2026-09-15, Phase 7 of the plan)
+
+- F11 — `fixed at README.md:32` — `--vendor` defaults to the vendor recorded by the existing install, else `all`.
+- F12 — `fixed at .agents/docs/deploy/local.md:27` — the same default.
+- F13 — `fixed at .agents/docs/deploy/remote.md:37` — Mac Antigravity cites its 2026-09-04 pass instead of `TODO.md`.
+- F14 — `fixed at README.md:57` — an unquoted `#` at the start of the value, or after a space or tab.
+- F15 — `fixed at README.md:24`, `:26`, `:29` — `install --dry-run`, `uninstall --dry-run` and `adopt --force`.
+- F16 — `fixed at README.md:32` and `.agents/docs/deploy/remote.md:29` — the working directory or any of its parents.
+- F17 — `fixed at .agents/docs/deploy/remote.md:33` — styrman-crew ships a refresh by cutting a release; argolis-devbox commits and pushes, with no version to bump.
+- F18 — `fixed at .agents/docs/deploy/remote.md:33` and `AGENTS.md:35` — styrman-crew builds `sh-agent` in its image, argolis-devbox on the VM as root.
+- F19 — `fixed at skills/VENDORED.md:36` — `anti-ui-slop` ships its own LICENSE and NOTICE; no manifest file exists. The mirrors' copies follow when they are refreshed.
+
+The other findings keep the owners in the Outcome above.

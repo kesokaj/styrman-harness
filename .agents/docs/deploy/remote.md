@@ -1,6 +1,6 @@
 ---
 owner: main
-date: 2026-09-03
+date: 2026-09-15
 target: remote
 ---
 # Deploy — other machines
@@ -26,15 +26,15 @@ sh-agent update            # fetch; if behind: pull --ff-only, rebuild, reinstal
 sh-agent update --check    # only reports; exit 2 when behind
 ```
 
-`sh-agent update` finds the checkout from `$SH_AGENT_REPO`, the working directory, or the path recorded at the last install, so it works from anywhere. It refuses a non-fast-forward pull; resolve that by hand in the checkout.
+`sh-agent update` finds the checkout from `$SH_AGENT_REPO`, then the working directory or any of its parents, then the path recorded at the last install, so it works from anywhere. It refuses a non-fast-forward pull; resolve that by hand in the checkout.
 
 ## Downstream mirrors
 
-Two projects vendor this repo as a .git-less copy and build `sh-agent` from it inside their own images: styrman-crew `image/harness/` and argolis-devbox `deploy/harness/`. Each mirror's `VENDORED.md` holds the refresh recipe (rsync from a clean checkout, record `COMMIT` and checksums, bump the project's version, push — the VMs rebuild on their next update). A mirror is a plain copy: `install` from it never rebuilds (the image built the running binary from that same tree, and the tree may be read-only to the installing user — BUG-015), `sh-agent status` there shows no commit, and `update` refuses, by design. After any change to `context/`, `skills/`, or `agents/` here, refreshing both mirrors is a task in each of those projects; a retro that applies a harness-scope proposal says so in its report.
+Two projects vendor this repo as a .git-less copy: styrman-crew `image/harness/` and argolis-devbox `deploy/harness/`. Each mirror's `VENDORED.md` holds the refresh recipe: rsync from a clean checkout, record `COMMIT` and `SHA256SUMS`, then diff to confirm only those two files plus `VENDORED.md` differ. What happens after the refresh differs by project — styrman-crew builds `sh-agent` inside its own image (`image/Dockerfile`, builder stage) and ships a refresh by cutting a release, since the image version stamp is what makes a running project re-seed; argolis-devbox commits and pushes with no version to bump, and its VM builds `sh-agent` on the box itself, as root, via `deploy/scripts.d/032_setup-harness.sh` on its next auto-update (within five minutes). A mirror is a plain copy either way: `install` from it never rebuilds (the tree may be read-only to the installing user — BUG-015), `sh-agent status` there shows no commit, and `update` refuses, by design. After any change to `context/`, `skills/`, or `agents/` here, refreshing both mirrors is a task in each of those projects; a retro that applies a harness-scope proposal says so in its report.
 
 ## Verify
 
-Same as `local.md`: `sh-agent status` with no drift, then one start of each CLI. On the Mac, additionally confirm the Antigravity paths (`TODO.md`, high priority).
+Same as `local.md`: `sh-agent status` with no drift, then one start of each CLI. On the Mac, additionally confirm the Antigravity paths — passed 2026-09-04 (`.agents/docs/testing/2026-09-04-verify-mac-real-home.md`); re-run after a change that touches Antigravity-specific behavior and record the result there.
 
 ## Operator steps
 

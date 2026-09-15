@@ -41,7 +41,7 @@ done
 ```
 
 - `AGENTS.md` — ask the user for a one-paragraph project overview and the deploy target (none, a remote box, or GCP); when `go.mod`, a `web/` or `ui/` `package.json`, or a Dockerfile exists, derive the build, run and test commands from them, print them and ask "confirm or correct", otherwise ask for them; delete every template command line the user did not confirm; fill the sections; `## Deploy` names the targets that exist and points at `.agents/docs/deploy/`. Only list standards that **differ** from the global context; delete the section if nothing differs.
-- `CLAUDE.md` — the single line `@AGENTS.md`, so Claude Code reads the agents.md file. If it already existed with content, never overwrite it: ask whether to fold that content into `AGENTS.md`; on yes, fold it and make `CLAUDE.md` the single line; on no, leave it untouched. Say in the summary which it was, and on no that Claude Code does not import `AGENTS.md` until `CLAUDE.md` is that single line.
+- `CLAUDE.md` — the single line `@AGENTS.md`, so Claude Code reads the agents.md file. If it already existed with content, never overwrite it: ask whether to fold that content into `AGENTS.md`; on yes, fold it and make `CLAUDE.md` the single line; on no, leave it untouched. Say in the summary which it was; on no, add that Antigravity never reads the content that file holds and that Claude Code imports `AGENTS.md` only if the file has the line `@AGENTS.md`, so the project follows R2 once the content is folded.
 - `REQUIREMENTS.md` — leave the tables for the user; note that agents never edit it.
 - `ROADMAP.md` — set `Last reviewed:` from `date +%F`, never memory.
 - `TODO.md` — empty sections are fine.

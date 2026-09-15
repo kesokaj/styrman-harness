@@ -16,12 +16,13 @@ In: groups G01–G26 of the research record (G20 without its coverage rule, cut 
 Out: groups G27–G40; any Go code; `REQUIREMENTS.md`; installing into a real home (the operator's step, R6); refreshing the downstream mirrors (their own projects).
 Follow-ups noted, not built (task 1.6 and Step 4 file discoveries here, each ending `found in: <task>`):
 - The `preflight` row of `.agents/docs/testing/skill-matrix.md` checks `grep -q "SHIP"`, which also matches `NO-SHIP` — found in: cold read round 2.
+- The 1.6 sweep's findings not fixed in this plan: `reviews/2026-09-15-review-sweep-merged.md` § Outcome names each one's owner — found in: 1.6.
 
 ## Surfaces touched
 
 - Global context: `context/AGENTS.md` lines 11, 16, 26, 31, 37, 71.
 - Skills: `skills/feature/SKILL.md` (gates, Steps 1–4, 6); `skills/bug/SKILL.md` (new gates section, :29, :45, :49); `skills/review/SKILL.md` (:48, :56, :60); `skills/preflight/SKILL.md` (:40, :65, :77, :81, :85, :90); `skills/handoff/SKILL.md` (:32, :33, :154); `skills/retro/SKILL.md` (:43, :56, :58, :75, :129, :131); `skills/distill/SKILL.md` (:98); `skills/init-project/SKILL.md` (:43, :44); `skills/init-project/assets/agents-tree/docs/bugs/INDEX.md` (:3); `skills/review-standards/SKILL.md` (§1–§3) with `references/go-review.md` and `references/typescript-review.md` (§ Tests); `skills/golang/SKILL.md` (:23); `skills/golang/references/golang-ecosystem.md` (:323). None is vendored: `skills/VENDORED.md` lists grilling, codebase-design, find-skills, anti-ui-slop, gke-basics and terraform.
-- Agents, bodies only except the `reviewer` description: `agents/verifier.md` (What to run, report template), `agents/reviewer.md` (report template), `agents/security.md` (report template), `agents/explorer.md`, `agents/bugs.md` (:12, :24, template, :59, :69, :75, :80), `agents/changelog.md` (:94).
+- Agents, bodies only except the `reviewer` and `documentation` descriptions: `agents/documentation.md` (description, :12, lane), `agents/verifier.md` (What to run, report template), `agents/reviewer.md` (report template), `agents/security.md` (report template), `agents/explorer.md`, `agents/bugs.md` (:12, :24, template, :59, :69, :75, :80), `agents/changelog.md` (:94).
 - This repo: `AGENTS.md` (:7, :46), `README.md` (:3, :86, :87), `.agents/docs/testing/sh-agent/guide.md` (:22), `.agents/docs/testing/skill-matrix.md`, `.agents/docs/plans/2026-09-03-rebuild.md` (:58, :97, :98, :99, :101, :113), `.agents/docs/plans/2026-09-13-learning-loop-project-level.md` (:136), `.agents/docs/architecture/DECISIONS.md`, BUG-018's record and `INDEX.md` row (status), and the index's header comment.
 - Scratch only, never committed: the docs-lens control repository `.agents/scratch/docs-lens-control/` (task 1.2) and the sandbox project `runs/g26-precedence` (task 5.1).
 - Line numbers are as of commit `c192622`; edits are located by their old text.
@@ -218,6 +219,32 @@ Per-layer verification, typical Go + TanStack Start project: migration applied a
 Steps 1–5 of the global Definition of Done: `verifier` log, `reviewer` (diff only) and `security` when due, `documentation` when behavior or interfaces changed, `changelog` naming the agents dispatched, `bugs` for anything that went wrong on the way; before the commit, close the plan — every `[ ]` becomes `[x]` or `[-]`, and a `who: user` box not done moves to the handoff's Next Steps — then commit and push. Then a report in chat: feature in one line, files by phase, tests added, cold-reader result and how each gap was resolved, review outcome with rebuttals verbatim, e2e result, follow-ups, and every `Open:` row.
 ```
 
+Sweep edits on the feature skill (task 1.6, D39):
+
+#### I-7c — skills/feature/SKILL.md
+```old
+and `docs/bugs/INDEX.md` for anything that constrains
+```
+```new
+and `<docs-root>/bugs/INDEX.md` for anything that constrains
+```
+
+#### I-7d — skills/feature/SKILL.md
+```old
+`documentation` when behavior or interfaces changed, `changelog` naming the agents dispatched,
+```
+```new
+`documentation` when behavior or interfaces changed, `/review --docs` over the range when an interface, command or deploy step changed, `changelog` naming the agents dispatched,
+```
+
+#### I-7e — skills/feature/SKILL.md
+```old
+— then commit and push. Then a report in chat:
+```
+```new
+— then commit, push and `/handoff`. Then a report in chat:
+```
+
 ### I-8 — the global context: checkpoint box, compaction, overgrown tasks (G01, G03, G19)
 
 #### I-8a — context/AGENTS.md
@@ -412,6 +439,16 @@ its findings go to `documentation` in step 3.
 its findings go to `documentation` in step 3, except findings in skills, agents, rules, the context or other `AGENTS.md` sections, which the main agent fixes.
 ```
 
+Sweep edit on the review loop (task 1.6, D39):
+
+#### I-12f — skills/review/SKILL.md
+```old
+land on the mechanism the previous round fixed
+```
+```new
+land on the mechanism the previous round fixed, or a fix introduced that round's new defect
+```
+
 ### I-13 — a rebuttal needs a checkable reason (G11)
 
 #### I-13a — skills/review/SKILL.md
@@ -495,6 +532,24 @@ Code must pass `go vet` and `staticcheck`. A vet, lint or test failure is fixed 
 ```
 ```new
 `unused`, `misspell`, `nolintlint`)
+```
+
+Sweep edits on the suppression rule and the golangci line (task 1.6, D39):
+
+#### I-15e — skills/review-standards/references/typescript-review.md
+```old
+`// @ts-expect-error` without a linked issue
+```
+```new
+`// @ts-expect-error` without a reason
+```
+
+#### I-15f — skills/golang/references/golang-ecosystem.md
+```old
+Every Go project MUST have a `.golangci.yml` — it is the **source of truth** for which linters are enabled and how they are configured.
+```
+```new
+A Go project that runs golangci-lint keeps a `.golangci.yml` as the **source of truth** for which linters are enabled and how they are configured; `go vet` and `staticcheck` are the baseline every Go project passes (`golang` skill).
 ```
 
 ### I-16 — the verifier runs every command, counts tests, names inherited failures and suppressions (G07, G16, G17)
@@ -831,6 +886,16 @@ ADR-022, appended to `.agents/docs/architecture/DECISIONS.md` by `changelog`:
 **Consequences:** One Sonnet reviewer dispatch per non-trivial bug fix. Features and tasks keep the 50-line / 5-file threshold, and so does the release gate's review of the release diff (`skills/preflight/SKILL.md` Step 2), which reads a sub-threshold release diff itself.
 ```
 
+Sweep edit on bug Step 5 (task 1.6, D39):
+
+#### I-20e — skills/bug/SKILL.md
+```old
+`security` when the area is sensitive, `documentation` if behavior changed;
+```
+```new
+`security` when the area is sensitive, `/review --docs` over the fix when it changed an interface, command or deploy step, `documentation` if behavior changed;
+```
+
 ### I-21 — the release gate routes docs findings and defines blocking (G20 without its coverage rule, D35)
 
 #### I-21d — skills/preflight/SKILL.md
@@ -863,6 +928,33 @@ The tagged commit is the gated tree plus its records — nothing else rides alon
 ```
 ```new
 The tagged commit is the gated tree plus its records and Step 4's docs fixes — nothing else rides along.
+```
+
+### I-25 — the documentation agent's trigger and lane name what the routing sends it (sweep F03, F04; applied after I-21, D39)
+
+#### I-25a — agents/documentation.md
+```old
+Maintains the how-it-works docs (README, specs, testing guides, ROADMAP.md Now/Next/Later, and godoc) and returns the files it updated. Dispatch when behavior, interfaces, or the plan changed.
+```
+```new
+Maintains the how-it-works docs (README, specs, testing guides, deploy guides, the project AGENTS.md setup and deploy sections, ROADMAP.md Now/Next/Later, and godoc) and returns the files it updated. Dispatch when behavior, interfaces, the plan, or a deploy path changed.
+```
+
+#### I-25b — agents/documentation.md
+```old
+You fire when **behavior, interfaces, or the plan** changed. Internal-only refactors — same behavior, same interfaces, same plan — do NOT trigger you;
+```
+```new
+You fire when **behavior, interfaces, the plan, or a deploy path** changed. Internal-only refactors — same behavior, same interfaces, same plan, same deploy path — do NOT trigger you;
+```
+
+#### I-25c — agents/documentation.md
+```old
+README.md                             # root: name, quick start, architecture, config, deploy
+```
+```new
+README.md                             # root: name, quick start, architecture, config, deploy
+AGENTS.md                             # root: the project's Setup commands and Deploy sections only
 ```
 
 ### I-22 — gates written the same way in feature, bug and review (G21)
@@ -901,6 +993,16 @@ A headless run with `--fix` applies; without it, every run only reports.
 ```
 ```new
 The three-round cap is a gate: it holds whatever "work autonomously" instruction is in effect, and only the user's own words in the same turn, naming it, waive it. At the cap, ask with your recommendation first: accept the remaining findings as `left` with an owner in the Outcome section, run one more round, or abandon the fix. A headless run with `--fix` applies up to the cap; when no reply can arrive there — a print-mode run, or a user who said they will not answer — it stops and writes the question into its record and into the handoff's Next Steps, writing the handoff if the session has none. Without `--fix`, every run only reports.
+```
+
+Sweep edit on the bug skill's gates (task 1.6, D40):
+
+#### I-22f — skills/bug/SKILL.md
+```old
+One point always waits for the user: a missing repro when the bug is not obvious from one file (Step 1). The gate holds whatever "work autonomously" instruction is in effect. Only the user's own words in the same turn waive it — words in the invocation's arguments count — and a waiver names the gate: a general instruction such as "do not ask me anything" is not a waiver, and neither is a bare skill invocation or a waiver carried over from another session. Ask with the options, your recommendation first: give a repro, let me infer one, or stop. When no reply can arrive — a print-mode run such as `claude -p` or `agy -p`, or a user who said they will not answer — the gate ends the work there: write the question with its options into the handoff's Next Steps, writing the handoff if this session has none.
+```
+```new
+Two points always wait for the user: a missing repro when the bug is not obvious from one file (Step 1), and a review loop that hits its three-round cap (Step 5). A gate holds whatever "work autonomously" instruction is in effect. Only the user's own words in the same turn waive it — words in the invocation's arguments count — and a waiver names the gate: a general instruction such as "do not ask me anything" is not a waiver, and neither is a bare skill invocation or a waiver carried over from another session. Ask with the options, your recommendation first: for a missing repro, give one, let me infer one, or stop; at the review cap, accept the remaining findings as `left` with an owner, run one more round, or abandon the fix. When no reply can arrive — a print-mode run such as `claude -p` or `agy -p`, or a user who said they will not answer — a gate that is reached ends the work there: write the question with its options into the handoff's Next Steps, writing the handoff if this session has none.
 ```
 
 ### I-23 — `/init-project` derives commands and folds an existing CLAUDE.md (G25)
@@ -989,13 +1091,13 @@ Each criterion is a yes/no outcome that still holds if the interface wording wer
 - [x] Cold-reader check — design ready and implementation ready (<reviews/ paths>), or the user's same-turn override quoted with its date — three rounds of three readers did not converge (`reviews/2026-09-15-review-coldread-harness-practices-r{1,2,3}-{a,b,c}.md`); the operator's answer at the cap, 2026-09-15: "Cut, fix, start (Recommended)" — cut I-21a–c, resolve the round-3 narrow items by recommendation, start Phase 1 with no fourth round (D35, D36)
 
 ### Phase 1 — the docs lens and the lost rule (G06, G08)
-- [ ] 1.1 I-1a — verify: integration, `grep -c 'narrowed: <old file:line>' skills/review/SKILL.md`, who: AI — expect: `1` (positive control: `git show c192622:skills/review/SKILL.md | grep -c 'narrowed:'` prints `0`)
-- [ ] 1.2 Docs-lens control, after 1.1: build `.agents/scratch/docs-lens-control/` as below and dispatch `reviewer` with the I-1a brief verbatim, the scope `Scope: commits base..change (git log base..change); the diff is git diff base...change.`, and "The repository under review is /home/kesokaj/workspace/styrman-harness/.agents/scratch/docs-lens-control. Run every command in that directory, read no file outside it, resolve the docs root there and write your report there." — verify: integration, the report the reviewer writes inside that repository, who: AI — expect: a `dropped:` finding for "Never deploy on Fridays."; a finding naming `README.md` for "from the `main` branch"; a `narrowed:` finding for the linter rule; no finding for "Tag releases with the git short SHA."
-- [ ] 1.3 I-2a, then I-6 — verify: integration, `grep -c "whatever autonomous instruction is in effect" skills/bug/SKILL.md` and `grep '^| BUG-018' .agents/docs/bugs/INDEX.md`, who: AI — expect: `1`, and the row's status cell reads `fixed`
-- [ ] 1.4 I-3a — verify: integration, `grep -c 'dropped: <why>' skills/retro/SKILL.md`, who: AI — expect: `1`
-- [ ] 1.5 I-4a and I-5a–e through `documentation` (D7) — verify: integration, `git grep -nE '27 skills|seven subagents|7 agents parse' -- README.md AGENTS.md .agents/docs/testing/sh-agent/guide.md` and `grep -c 'searched at `skills/` because' AGENTS.md`, who: AI — expect: the first prints nothing (positive control: the same pattern over `c192622` prints lines) and the second prints `1`
-- [ ] 1.6 One-time sweep, split by area: one `reviewer` dispatch per area, each with the I-1a brief including its `--project` clause, I-4a's extra paths, and the scope `Scope: the named files as they are in the working tree, read whole — not a diff: <area paths>.` The areas are `context/` with `agents/`; `README.md`, `AGENTS.md`, the testing guide and `.agents/docs/deploy/`; and the non-vendored skills in batches of about ten skill directories. An area report cut at its turn limit is re-dispatched once over what it did not reach — verify: integration, each area's report under `reviews/`, who: AI — expect: every living doc classified across the area reports, with closing re-check greps; each finding fixed, filed under Follow-ups, or recorded as a bug per Failure modes
-- [ ] Checkpoint — expect: `go test -race ./...` exit 0; scratch install exit 0 and drift none; `render | wc -l` prints 93; 1.2's expectations met; a `verifier` log over the phase range with Status PASS whose Not examined section names the sandbox CLI start deferred to the Phase 5 checkpoint — evidence: <commands, exit status, report and log paths>, <date>
+- [x] 1.1 I-1a — verify: integration, `grep -c 'narrowed: <old file:line>' skills/review/SKILL.md`, who: AI — expect: `1` (positive control: `git show c192622:skills/review/SKILL.md | grep -c 'narrowed:'` prints `0`)
+- [x] 1.2 Docs-lens control, after 1.1: build `.agents/scratch/docs-lens-control/` as below and dispatch `reviewer` with the I-1a brief verbatim, the scope `Scope: commits base..change (git log base..change); the diff is git diff base...change.`, and "The repository under review is /home/kesokaj/workspace/styrman-harness/.agents/scratch/docs-lens-control. Run every command in that directory, read no file outside it, resolve the docs root there and write your report there." — verify: integration, the report the reviewer writes inside that repository, who: AI — expect: a `dropped:` finding for "Never deploy on Fridays."; a finding naming `README.md` for "from the `main` branch"; a `narrowed:` finding for the linter rule; no finding for "Tag releases with the git short SHA." — evidence: `.agents/scratch/docs-lens-control/.agents/docs/reviews/2026-09-15-review-base-change-docs.md` (scratch) lists `dropped: AGENTS.md:5` (Fridays), the `README.md:3` old-wording hit, `narrowed: AGENTS.md:7 → .agents/skills/release/SKILL.md:6`, and nothing for the tag rule, 2026-09-15
+- [x] 1.3 I-2a, then I-6 — verify: integration, `grep -c "whatever autonomous instruction is in effect" skills/bug/SKILL.md` and `grep '^| BUG-018' .agents/docs/bugs/INDEX.md`, who: AI — expect: `1`, and the row's status cell reads `fixed` — evidence: `grep -c` printed 1 for the clause; the BUG-018 record and INDEX row read `fixed` (diff against 88f9771: the status line and the row only), 2026-09-15
+- [x] 1.4 I-3a — verify: integration, `grep -c 'dropped: <why>' skills/retro/SKILL.md`, who: AI — expect: `1` — evidence: `grep -c 'dropped: <why>' skills/retro/SKILL.md` printed 1, 2026-09-15
+- [x] 1.5 I-4a and I-5a–e through `documentation` (D7) — verify: integration, `git grep -nE '27 skills|seven subagents|7 agents parse' -- README.md AGENTS.md .agents/docs/testing/sh-agent/guide.md` and `grep -c 'searched at `skills/` because' AGENTS.md`, who: AI — expect: the first prints nothing (positive control: the same pattern over `c192622` prints lines) and the second prints `1` — evidence: the count grep printed nothing (at `c192622` it prints 5 lines) and the Testing sentence counts 1; `documentation` applied I-5a–c and I-5e and declined I-4a and I-5d as outside its lane, so the main agent applied those two per D7, 2026-09-15
+- [x] 1.6 One-time sweep, split by area: one `reviewer` dispatch per area, each with the I-1a brief including its `--project` clause, I-4a's extra paths, and the scope `Scope: the named files as they are in the working tree, read whole — not a diff: <area paths>.` The areas are `context/` with `agents/`; `README.md`, `AGENTS.md`, the testing guide and `.agents/docs/deploy/`; and the non-vendored skills in batches of about ten skill directories. An area report cut at its turn limit is re-dispatched once over what it did not reach — verify: integration, each area's report under `reviews/`, who: AI — expect: every living doc classified across the area reports, with closing re-check greps; each finding fixed, filed under Follow-ups, or recorded as a bug per Failure modes — evidence: seven area reports under `reviews/` (`2026-09-15-review-sweep-{context-agents,repo-docs,repo-docs-2,skills-1,skills-2,skills-3,skills-4}.md`), `repo-docs-2` the one re-dispatch over what `repo-docs` did not reach, each with a Re-check commands and a Not examined section; the merged record `reviews/2026-09-15-review-sweep-merged.md` classifies 74 of the 75 `.md` files under the living-doc paths, the 75th being `skills/VENDORED.md`, outside I-4a's skill directories, whose one stale line is F19; its Outcome names one owner per finding: 9 findings as rehearsed edits I-7c–e, I-12f, I-15e–f, I-20e, I-22f and I-25a–c (D39), 13 as BUG-019 to BUG-023, 76 under Follow-ups; after the triage the rehearsal parses 101 edits with 0 failures for A, B and C and 111 expectations hold (D15), 2026-09-15
+- [x] Checkpoint — expect: `go test -race ./...` exit 0; scratch install exit 0 and drift none; `render | wc -l` prints 93; 1.2's expectations met; a `verifier` log over the phase range with Status PASS whose Not examined section names the sandbox CLI start deferred to the Phase 5 checkpoint — evidence: `go test -race ./...` exit 0, both packages ok; `gofmt -l .` printed nothing and `go vet ./...` exit 0; scratch install into `.agents/scratch/phase1-checkpoint-home` exit 0, then `status` exit 0 with `drift none — 259 files match the repo` and a `binary` line with no warning; `render` into `.agents/scratch/phase1-checkpoint-render.txt` exit 0 and `wc -l` 93; 1.2's evidence above; `testing/2026-09-15-verify-harness-practices-phase1.md` Status PASS, its Not examined section naming the sandbox CLI start deferred to the Phase 5 checkpoint, 2026-09-15
 
 The control repository of 1.2, created with `git init` under `.agents/scratch/docs-lens-control/` (reference text, not edits):
 ```text
@@ -1027,7 +1129,7 @@ commit change (tag it `change`; tag the first `base`)
 ```
 
 ### Phase 2 — plans, phases and memory (G01, G02, G03, G04, G05, G09, G12, G13, G14, G19)
-- [ ] 2.1 I-7a and I-7b — verify: integration, for each pattern in "— expect:", "- [ ] Checkpoint —", "## Decisions", "- [ ] Cold-reader check —", "— in progress:", "recon-<slug>", "phase-<N>", "close the plan": `grep -cF -- "<pattern>" skills/feature/SKILL.md`, plus `grep -cF "then tick the boxes in the plan" skills/feature/SKILL.md`, who: AI — expect: every pattern prints at least `1`, and the last prints `0` (positive control: over `c192622` every pattern prints `0` and the last prints `1`)
+- [ ] 2.1 I-7a–e — verify: integration, for each pattern in "— expect:", "- [ ] Checkpoint —", "## Decisions", "- [ ] Cold-reader check —", "— in progress:", "recon-<slug>", "phase-<N>", "close the plan", "<docs-root>/bugs/INDEX.md", "then commit, push and `/handoff`", "over the range when an interface": `grep -cF -- "<pattern>" skills/feature/SKILL.md`, plus `grep -cF "then tick the boxes in the plan" skills/feature/SKILL.md`, who: AI — expect: every pattern prints at least `1`, and the last prints `0` (positive control: over `c192622` every pattern prints `0` and the last prints `1`)
 - [ ] 2.2 I-8a–e — verify: integration, `go run ./cmd/sh-agent render` into `.agents/scratch/render.txt`, then `grep -cF "restate status and next step before the next edit"`, `grep -cF "Workflow skills, also typed"`, `grep -cF "can also be typed as"` on it and `wc -l` on it, who: AI — expect: `1`, `0`, `1`, `93`
 - [ ] 2.3 I-9a–d and I-10a–b — verify: integration, `grep -cF "Ask for six things" skills/handoff/SKILL.md` and `git grep -nF 'should put in `TODO.md`' -- agents skills context`, who: AI — expect: `1`, and nothing printed (positive control: over `c192622` it prints `agents/changelog.md:94`)
 - [ ] 2.4 I-11a–g — verify: integration, the fence-aware command of I-9d over `.agents/docs/plans/*.md`, who: AI — expect: only this plan's path (positive control: before I-11 it also prints the two old plans)
@@ -1035,8 +1137,8 @@ commit change (tag it `change`; tag the first `base`)
 - [ ] Checkpoint — expect: `go test -race ./...` exit 0; drift none; `render | wc -l` prints 93; a `verifier` log over the phase range with Status PASS whose Not examined section names the deferred sandbox CLI start — evidence: <commands, exit status, log path>, <date>
 
 ### Phase 3 — review loop and review standards (G10, G11, G15, G16 skill half)
-- [ ] 3.1 I-12a–e, then I-13a–b — verify: integration, `grep -cF` for "that section's fixed lines only", '`in flight: <who>`', "unless the user picks one more at the cap" and "fix the rest yourself" in `skills/review/SKILL.md` (each `1`), `grep -cF "which the main agent fixes" context/AGENTS.md` (`1`), `grep -cF "never a command that exited non-zero" skills/review/SKILL.md`, `grep -cF 'a reason as `/review` Step 4 defines it' skills/preflight/SKILL.md`, who: AI — expect: `1`, `1`, `1` (positive control: each prints `0` over `c192622`)
-- [ ] 3.2 I-14a–c and I-15a–d — verify: integration, `grep -cF` for "Leftover debug output", "TOCTOU race", "generated counterpart", "assertion changed in an existing test" and "describing-text rule" in `skills/review-standards/SKILL.md`; "lint:ignore" in `go-review.md`; "describe.only" in `typescript-review.md`; "demonstrated false positive" in `skills/golang/SKILL.md`; and `sed -n 323p skills/golang/references/golang-ecosystem.md` piped to `grep -cF nolintlint`, who: AI — expect: every grep prints `1`
+- [ ] 3.1 I-12a–f, then I-13a–b — verify: integration, `grep -cF` for "that section's fixed lines only", '`in flight: <who>`', "unless the user picks one more at the cap", "or a fix introduced that round's new defect" and "fix the rest yourself" in `skills/review/SKILL.md` (each `1`), `grep -cF "which the main agent fixes" context/AGENTS.md` (`1`), `grep -cF "never a command that exited non-zero" skills/review/SKILL.md`, `grep -cF 'a reason as `/review` Step 4 defines it' skills/preflight/SKILL.md`, who: AI — expect: `1`, `1`, `1` (positive control: each prints `0` over `c192622`)
+- [ ] 3.2 I-14a–c and I-15a–f — verify: integration, `grep -cF` for "Leftover debug output", "TOCTOU race", "generated counterpart", "assertion changed in an existing test" and "describing-text rule" in `skills/review-standards/SKILL.md`; "lint:ignore" in `go-review.md`; "describe.only", "without a reason" and "without a linked issue" in `typescript-review.md`; "demonstrated false positive" in `skills/golang/SKILL.md`; "A Go project that runs golangci-lint" in `golang-ecosystem.md`; and `sed -n 323p skills/golang/references/golang-ecosystem.md` piped to `grep -cF nolintlint`, who: AI — expect: every grep prints `1` except "without a linked issue", which prints `0`
 - [ ] Checkpoint — expect: tests exit 0; drift none; `render | wc -l` prints 93; a `verifier` log over the phase range with Status PASS whose Not examined section names the deferred sandbox CLI start — evidence: <log path>, <date>
 
 ### Phase 4 — agents and records (G07, G16 verifier half, G17, G18, G23, G24)
@@ -1050,11 +1152,11 @@ commit change (tag it `change`; tag the first `base`)
 ### Phase 5 — gates, release gate, init and names (G20, G21, G22, G25, G26)
 - [ ] 5.1 The I-19 precedence test — verify: e2e, `testing/<date>-verify-g26-precedence.md`, who: AI — expect: one line per CLI and layer; the outcome, A or B, is a D-row
 - [ ] 5.2 I-19a with that outcome's `new`, then I-19b–e — verify: integration, `go run ./cmd/sh-agent render` into `.agents/scratch/render.txt` again, then its `grep -cF "never reuses a harness name"` and `grep -cF "show what a vendor loaded"`, and `grep -cF "never a harness" skills/retro/SKILL.md skills/distill/SKILL.md`, who: AI — expect: `1` and `1`; `2` and `1`
-- [ ] 5.3 I-20a–d with ADR-022, all in the phase commit — verify: integration, `git grep -nF "50+ lines or 5+ files" -- context skills agents` and `grep -c '^## ADR-022: Every bug fix gets the reviewer' .agents/docs/architecture/DECISIONS.md`, who: AI — expect: exactly two lines, both in `skills/preflight/SKILL.md`: the Step 1 line containing "or is a bug fix" and the Step 2 release-diff line (D8); `1`
-- [ ] 5.4 I-21d–g — verify: integration, `grep -cF` for "Blocking means any of", "exactly as `/review` Step 3 gives it", "fix those in skills, agents, rules", "Step 4's docs fixes, the changelog entry" and "plus its records and Step 4's docs fixes" in `skills/preflight/SKILL.md`, who: AI — expect: each prints `1`
-- [ ] 5.5 I-22a–e — verify: integration, `grep -c "^## Gates that need the user" skills/feature/SKILL.md skills/bug/SKILL.md`, `grep -cF "The three-round cap is a gate" skills/review/SKILL.md`, `grep -cF "whatever autonomous instruction is in effect" skills/bug/SKILL.md`, `grep -cF "Never invent a repro on your own" skills/bug/SKILL.md`, who: AI — expect: `1` each; `1`; `0`; `1`
+- [ ] 5.3 I-20a–e with ADR-022, all in the phase commit — verify: integration, `git grep -nF "50+ lines or 5+ files" -- context skills agents` , `grep -c '^## ADR-022: Every bug fix gets the reviewer' .agents/docs/architecture/DECISIONS.md` and `grep -cF 'over the fix when it changed an interface' skills/bug/SKILL.md`, who: AI — expect: exactly two lines, both in `skills/preflight/SKILL.md`: the Step 1 line containing "or is a bug fix" and the Step 2 release-diff line (D8); `1`; `1`
+- [ ] 5.4 I-21d–g, then I-25a–c — verify: integration, `grep -cF` for "Blocking means any of", "exactly as `/review` Step 3 gives it", "fix those in skills, agents, rules", "Step 4's docs fixes, the changelog entry" and "plus its records and Step 4's docs fixes" in `skills/preflight/SKILL.md`, and for "or a deploy path changed", "same deploy path", "deploy guides, the project AGENTS.md setup and deploy sections" and "Setup commands and Deploy sections only" in `agents/documentation.md`, who: AI — expect: each prints `1`
+- [ ] 5.5 I-22a–f — verify: integration, `grep -c "^## Gates that need the user" skills/feature/SKILL.md skills/bug/SKILL.md`, `grep -cF "The three-round cap is a gate" skills/review/SKILL.md`, `grep -cF "whatever autonomous instruction is in effect" skills/bug/SKILL.md`, `grep -cF "Never invent a repro on your own" skills/bug/SKILL.md`, `grep -cF "Two points always wait for the user" skills/bug/SKILL.md`, who: AI — expect: `1` each; `1`; `0`; `1`; `1`
 - [ ] 5.6 I-23a–b — verify: integration, `grep -cF` for "derive the build, run and test commands" and "add `@AGENTS.md` as its first line" in `skills/init-project/SKILL.md`, who: AI — expect: each prints `1`
-- [ ] 5.7 The reviewer description reaches both vendors — verify: integration, scratch install exit 0, then `grep -cF "or fixes a bug" <scratch>/.claude/agents/reviewer.md <scratch>/.gemini/config/agents/reviewer/agent.md`, who: AI — expect: `1` for each file
+- [ ] 5.7 The reviewer and documentation descriptions reach both vendors — verify: integration, scratch install exit 0, then `grep -cF "or fixes a bug" <scratch>/.claude/agents/reviewer.md <scratch>/.gemini/config/agents/reviewer/agent.md` and `grep -cF "or a deploy path changed" <scratch>/.claude/agents/documentation.md <scratch>/.gemini/config/agents/documentation/agent.md`, who: AI — expect: `1` for each file
 - [ ] Checkpoint — expect: tests exit 0; drift none; `render | wc -l` prints 93; this tree installed into the sandbox home and one start of each CLI quoting Definition of Done step 2's reviewer trigger, with `grep -c "Failed to parse"` on the newest Antigravity `cli-*.log` printing `0`, because I-20c changes frontmatter (BUG-004); a `verifier` log over the phase range with Status PASS (D9) — evidence: <log path>, <date>
 
 ### Phase 6 — end to end in the sandbox, both CLIs
@@ -1099,7 +1201,7 @@ D11 — 2026-09-15 — `I-1a` greps at the scope's head, follows a symlinked dir
 D12 — 2026-09-15 — the G26 test carries skill and agent controls in both vendor shapes; only a full B result keeps line 37's claim, and every other result writes the cause-neutral outcome A — by: cold read round 1
 D13 — 2026-09-15 — "no reply can arrive" (a print-mode run, or a user who said they will not answer) is when a reached gate ends the work and writes a handoff; the `bug-no-repro` check also catches untracked files — by: cold read round 1
 D14 — 2026-09-15 — the release gate names the artifacts it owes, accepts the three not-examined section names the agents and records use, and lets a project add blocking conditions but never remove them — by: cold read round 1 (its coverage half superseded by D35)
-D15 — 2026-09-15 — every edit is a fenced old/new block in application order, and a rehearsal applies them all to copies of the files at `c192622` before implementation. Run on 2026-09-15 for the cap revision: 90 edits parsed, 0 failures, 28 files, for all three I-19a outcomes; against the rehearsed end state all 91 task expectations above hold, the fence-aware open-box check finds both old plans closed, `sh-agent render` prints 93 lines, `sh-agent list` parses 27 skills and 7 agents, and no line containing `/tmp` was added — by: cold read round 1
+D15 — 2026-09-15 — every edit is a fenced old/new block in application order, and a rehearsal applies them all to copies of the files at `c192622` before implementation. Re-run on 2026-09-15 after the 1.6 sweep triage (D39): 101 edits parsed, 0 failures, 29 files, for all three I-19a outcomes; against the rehearsed end state all 111 task expectations above hold, the fence-aware open-box check finds both old plans closed, `sh-agent render` prints 93 lines, `sh-agent list` parses 27 skills and 7 agents, and no line containing `/tmp` was added — by: cold read round 1
 D16 — 2026-09-15 — BUG-018 gets a status change only (`agents/bugs.md` allows no other edit); the Phase 1 and Phase 5 changes entries carry its fix history — by: cold read round 1
 D17 — 2026-09-15 — a count fall that the diff or the environment explains is not a FAIL; its line names the cause — by: cold read round 1
 D18 — 2026-09-15 — every phase checkpoint, Phases 1 and 2 included, gets a verifier log, because context, skill and agent prose is this repo's source — by: cold read round 1
@@ -1123,7 +1225,8 @@ D35 — 2026-09-15 — the release gate's coverage rule (I-21a–c) is cut: it d
 D36 — 2026-09-15 — the round-3 narrow items are resolved by recommendation in this revision: preflight Step 4 routes docs findings and its fixes ride in the release commit (I-21d, I-21f, I-21g); outcome C for a layer that did not load, and a neutral listing claim (I-19); the 1.6 sweep split by area; a sandbox CLI start at the Phase 5 checkpoint, deferred and named under Not examined before it; a three-round cap on 6.4's defect loop and the base comparison in the same sandbox home; "I will not answer" in the `bug-no-repro` prompt; the Phase 6 edit-to-row map; graduation into a skill, an agent definition or the context, both index headers, and a retro-only window (I-18); I-12e naming other `AGENTS.md` sections; `superseded by` marks (I-11); vendored skills out of I-1a; a bug fix never a docs-only change (I-20b) — by: the operator at the cap, "Cut, fix, start (Recommended)"
 D37 — 2026-09-15 — deferred work with no active plan goes to the handoff's Next Steps, which `skills/handoff/SKILL.md` Step 3 item 3 allows ("any deferred idea worth keeping, goes in this handoff's Next Steps") — rebuttal of cold read round 3
 D38 — 2026-09-15 — a Phase 6 harness-defect fix runs under the `bug` skill and so gets the per-bug reviewer (I-20); the Done list's last box is ticked in the handoff's own commit; I-22d is absent on purpose, removed in round 2 — by: cold read round 3 defaults
-Open: findings of the one-time sweep (1.6) outside this plan's surfaces — default: Follow-ups lines, or a bug record for a real defect; no new groups
+D39 — 2026-09-15 — the 1.6 sweep's 98 findings (`reviews/2026-09-15-review-sweep-merged.md`) are triaged thus: a finding on words this plan's edits change, or on a rule this plan changes, becomes a rehearsed edit placed after that edit (I-7c–e, I-12f, I-15e–f, I-20e, I-22f, I-25a–c; F77 is already covered by I-21d); a finding whose instruction, followed as written, bypasses a gate, exposes private code, promotes a rule falsely or breaks a global hard rule gets an open bug record (five records); every other finding is `left` with its owner in the merged record's Outcome — by: implementer, applying the Failure modes rule
+D40 — 2026-09-15 — the bug skill's gates gain the review loop's three-round cap (sweep F28, lost in the same 87a862d trim as BUG-018), so D31's single gate becomes two; the missing-repro gate is unchanged — by: implementer, from the sweep
 Open: G26 outcome A, B or C — default: decided by 5.1; an unquoted control means C (D36)
 Rejected: several smaller plans — the order constraints (G02 before G03, G06 before G21, G22's four lines in one commit) belong in one place
 Rejected: a per-phase `documentation` dispatch for docs clauses — the main agent ticks docs clauses, and `documentation` runs at Done

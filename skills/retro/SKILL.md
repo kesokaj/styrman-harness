@@ -72,7 +72,7 @@ One hit from either → keep the project proposal AND add a second, `Scope: harn
 
 ## Step 3: Draft proposals
 
-For each finding, a **specific, minimal change**: the exact diff for context, rule, or skill edits; the full content for a new file; the **why** — what went wrong and how the change prevents it.
+For each finding, a **specific, minimal change**: the exact diff for context, rule, or skill edits; the full content for a new file; the **why** — what went wrong and how the change prevents it. A diff that deletes or rewrites a rule lists under it each removed rule's new home (file:line) or `dropped: <why>`.
 
 - **Be specific.** "Add a rule about X" is not a proposal. Show the exact text.
 - **Be minimal.** Target the smallest change that fixes the gap; never rewrite a section.

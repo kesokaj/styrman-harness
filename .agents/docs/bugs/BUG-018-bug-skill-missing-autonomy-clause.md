@@ -2,7 +2,7 @@
 owner: bugs
 date: 2026-09-15
 id: BUG-018
-status: open
+status: fixed
 area: skills/bug (gates)
 ---
 # BUG-018: the bug skill's missing-repro gate no longer holds against an "autonomous" instruction

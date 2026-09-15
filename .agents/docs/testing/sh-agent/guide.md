@@ -19,7 +19,7 @@ go test -race ./...
 ## 2. Harness self-check (every change to `context/`, `agents/`, or `skills/`)
 
 ```bash
-go run ./cmd/sh-agent list      # sanity: 27 skills, 7 agents parse; counts change only when a skill/agent is added or removed
+go run ./cmd/sh-agent list      # sanity: every skill and agent parses; its section headers print the counts
 go run ./cmd/sh-agent render | wc -l   # rendered context/AGENTS.md must stay under 100 lines
 ```
 

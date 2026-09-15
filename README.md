@@ -1,6 +1,6 @@
 # styrman-harness
 
-A personal agent harness for **Claude Code** and the **Antigravity CLI** (`agy`): one global context file in the [agents.md](https://agents.md) standard, 27 skills in the [Agent Skills](https://agentskills.io) `SKILL.md` standard, seven subagents, and `sh-agent` — a small Go binary that installs, resyncs, inspects, and removes all of it. No hooks, no gates, no CI.
+A personal agent harness for **Claude Code** and the **Antigravity CLI** (`agy`): one global context file in the [agents.md](https://agents.md) standard, skills in the [Agent Skills](https://agentskills.io) `SKILL.md` standard, subagents, and `sh-agent` — a small Go binary that installs, resyncs, inspects, and removes all of it. No hooks, no gates, no CI.
 
 ## Install
 
@@ -83,8 +83,8 @@ Record third-party provenance in `skills/VENDORED.md`. A skill you already insta
 
 ```
 context/     AGENTS.md (the global context) and dev-setup.md (environment, stack, GCP rule)
-agents/      seven subagents in Claude Code format — the single source; Antigravity's flavour is derived
-skills/      27 skills, each a directory with SKILL.md (+ references/, assets/); `feature` and `bug` are the work protocols and load themselves; `review` is the review command on both CLIs
+agents/      subagents in Claude Code format — the single source; Antigravity's flavour is derived
+skills/      skills, each a directory with SKILL.md (+ references/, assets/); `feature` and `bug` are the work protocols and load themselves; `review` is the review command on both CLIs
 commands/    markdown prompts invoked as /name (empty; prefer skills)
 rules/       extra always-on or path-scoped rules (empty)
 cmd/sh-agent  the binary; internal/harness is its logic and tests

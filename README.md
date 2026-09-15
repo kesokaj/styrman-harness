@@ -29,7 +29,7 @@ Harness state (feedback log, retro proposals and index) lives in `~/.config/sh-a
 | `sh-agent adopt <name\|path>` | Copies a skill installed elsewhere (for example by `npx skills add -g`) into `skills/`. `--force` replaces an existing skill of the same name. |
 | `sh-agent version` | Prints the build version. |
 
-Every command accepts `--vendor VENDOR` (target `antigravity` / `agy` or `claude`; default is the vendor recorded by the existing install, else `all` — `--vendor all` widens a single-vendor install to both), `--home DIR` (install somewhere other than `$HOME`, used by the tests) and `--repo DIR`. Without `--repo`, sh-agent finds the checkout from `$SH_AGENT_REPO`, then the working directory or any of its parents, then the path it recorded at the last install — so `sh-agent update` works from anywhere.
+Every command accepts `--vendor VENDOR` (target `antigravity` / `agy` or `claude`; default is the vendor recorded by the existing install, else `all` — `--vendor all` widens a single-vendor install to both through `install`; `update` keeps the recorded vendor instead), `--home DIR` (install somewhere other than `$HOME`, used by the tests) and `--repo DIR`. Without `--repo`, sh-agent finds the checkout from `$SH_AGENT_REPO`, then the working directory or any of its parents, then the path it recorded at the last install — so `sh-agent update` works from anywhere.
 
 ## The loop: edit on one machine, pull on another
 

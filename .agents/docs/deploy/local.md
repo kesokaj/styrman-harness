@@ -9,7 +9,7 @@ target: local
 
 ## Prerequisites
 
-Go 1.24+ and git. `~/.local/bin` on `PATH`. Claude Code and/or the Antigravity CLI installed; both are optional, the installer writes for both by default or selectively with `--vendor`.
+Go 1.24+ and git. `~/.local/bin` on `PATH`. Claude Code and/or the Antigravity CLI installed; both are optional — the installer writes for the vendor recorded by the existing install, else both, or selectively with `--vendor`.
 
 ## Build and install
 
@@ -24,7 +24,7 @@ sh-agent status                                      # must end with "drift none
 
 ## Configure
 
-Nothing to configure. `--vendor VENDOR` selects the target CLI: `antigravity` (or `agy`) or `claude`; the default is the vendor recorded by the existing install, else `all` — passing `--vendor all` explicitly widens a single-vendor install to both. `--repo DIR` overrides where the checkout is; `$SH_AGENT_REPO` does the same persistently. `--home DIR` installs elsewhere and is what every development run uses (a scratch home under `.agents/scratch/`, never `/tmp`). From its own git checkout, `install` rebuilds the binary with `go build` first; the running binary is installed as is when `go` is missing (with a warning) or when the tree is a plain copy with no `.git` — a downstream mirror (BUG-015).
+Nothing to configure. `--vendor VENDOR` selects the target CLI: `antigravity` (or `agy`) or `claude`; the default is the vendor recorded by the existing install, else `all` — passing `--vendor all` explicitly widens a single-vendor install to both through `install`; `update` keeps the recorded vendor instead. `--repo DIR` overrides where the checkout is; `$SH_AGENT_REPO` does the same persistently. `--home DIR` installs elsewhere and is what every development run uses (a scratch home under `.agents/scratch/`, never `/tmp`). From its own git checkout, `install` rebuilds the binary with `go build` first; the running binary is installed as is when `go` is missing (with a warning) or when the tree is a plain copy with no `.git` — a downstream mirror (BUG-015).
 
 ## Verify
 

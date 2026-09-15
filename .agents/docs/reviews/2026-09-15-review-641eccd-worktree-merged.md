@@ -34,3 +34,13 @@ Range reviewed: `641eccd..fe21671` (`git diff 641eccd..fe21671 -- context agents
 - U2 — `rebutted:` `/home/kesokaj/workspace/argolis-devbox/AGENTS.md:160` says the git commit hash is that project's version, and its `deploy/harness/VENDORED.md` refresh ends in a commit and a push with no bump.
 
 After the fixes: `go test -race ./...` exit 0, `go vet ./...` exit 0, `gofmt -l` clean, a scratch install with `status` drift none and a `binary` line with no warning, `render` 93 lines.
+
+## Outcome
+
+- P1, P2, P3 — `fixed` by replacement in e31c3a2: the operator chose option C, so `/preflight` Step 4 no longer carries rebuttals forward or blocks on docs findings; its docs gaps are advisory (`skills/preflight/SKILL.md:65`, `:77`, `:81`; ADR-024 supersedes ADR-023; BUG-026 fixed). The replacement's own docs review is `reviews/2026-09-15-review-c514936-preflight-advisory-docs.md`, APPROVE WITH NITS, with its Outcome.
+- P4 — `fixed` in c514936 at `internal/harness/apply.go:37` and `cmd/sh-agent/main.go:309`, asserted at `internal/harness/harness_test.go:257`.
+- P5 — `fixed` in c514936 at `README.md:32` and `.agents/docs/deploy/local.md:27`.
+- P6 — `fixed` in c514936 at `.agents/docs/deploy/local.md:12`.
+- P7 — `fixed` in c514936 at `cmd/sh-agent/main.go:124`.
+- U1 — `rebutted`: `.agents/docs/architecture/DECISIONS.md:39` records which file each CLI reads.
+- U2 — `rebutted`: `/home/kesokaj/workspace/argolis-devbox/AGENTS.md:160` makes the git commit hash that project's version.

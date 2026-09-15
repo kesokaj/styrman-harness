@@ -5,7 +5,7 @@ description: "Scaffold a new project with the standard agent directory structure
 
 # Init Project Workflow
 
-Scaffold a new project so both Claude Code and Antigravity find the same rules, skills, and agents, and so a zero-context agent can resume from the `.agents/docs/` trail. The templates ship with this skill in its `assets/` directory.
+Scaffold a new project whose rules, skills and agents live in `.agents/`, linked for Claude Code through `.claude/*`, and whose `.agents/docs/` trail lets a zero-context agent resume. The templates ship with this skill in its `assets/` directory.
 
 ## Usage
 
@@ -41,7 +41,7 @@ done
 ```
 
 - `AGENTS.md` — ask the user for a one-paragraph project overview and the deploy target (none, a remote box, or GCP); when `go.mod`, a `web/` or `ui/` `package.json`, or a Dockerfile exists, derive the build, run and test commands from them, print them and ask "confirm or correct", otherwise ask for them; delete every template command line the user did not confirm; fill the sections; `## Deploy` names the targets that exist and points at `.agents/docs/deploy/`. Only list standards that **differ** from the global context; delete the section if nothing differs.
-- `CLAUDE.md` — the single line `@AGENTS.md`, so Claude Code reads the agents.md file. If it already existed with content, never overwrite it: ask whether to fold that content into `AGENTS.md`; on yes, fold it and make `CLAUDE.md` the single line; on no, keep the content and add `@AGENTS.md` as its first line. Say which in the summary.
+- `CLAUDE.md` — the single line `@AGENTS.md`, so Claude Code reads the agents.md file. If it already existed with content, never overwrite it: ask whether to fold that content into `AGENTS.md`; on yes, fold it and make `CLAUDE.md` the single line; on no, leave it untouched. Say in the summary which it was, and on no that Claude Code does not import `AGENTS.md` until `CLAUDE.md` is that single line.
 - `REQUIREMENTS.md` — leave the tables for the user; note that agents never edit it.
 - `ROADMAP.md` — set `Last reviewed:` from `date +%F`, never memory.
 - `TODO.md` — empty sections are fine.
@@ -63,7 +63,7 @@ That yields:
     ├── changes/  architecture/DECISIONS.md  specs/  testing/  deploy/{local,remote,gcp}.md  plans/  bugs/INDEX.md  handoffs/  reviews/  retros/
 ```
 
-Antigravity reads `.agents/` natively (rules, skills, agents). `workflows/` is kept for older Antigravity versions; new slash commands are skills. `docs/bugs/INDEX.md` starts empty and is the project's memory of what went wrong; `docs/retros/` receives every `/retro` and `/distill` record, the project's learning history; `scratch/` is where every generated or temporary file goes. `docs/testing/<app>/guide.md` is not scaffolded: the verifier writes it the first time it runs the project's procedure. `docs/deploy/` holds the three deploy guides: fill `local.md` now from the build/run/test answers and set its `date:` from `date +%F`; `remote.md` and `gcp.md` keep their *Not applicable yet* line until the user names a target — the GCP guide is where the defaults the global context asks for get recorded, never invented.
+Antigravity is meant to read `.agents/` natively, but in the harness's 2026-09-15 precedence test Antigravity CLI 1.2.3 loaded no project skill or agent (project rules were not tested): check its `/skills` and `/agents` before relying on one. `workflows/` is kept for older Antigravity versions; new slash commands are skills. `docs/bugs/INDEX.md` starts empty and is the project's memory of what went wrong; `docs/retros/` receives every `/retro` and `/distill` record, the project's learning history; `scratch/` is where every generated or temporary file goes. `docs/testing/<app>/guide.md` is not scaffolded: the verifier writes it the first time it runs the project's procedure. `docs/deploy/` holds the three deploy guides: fill `local.md` now from the build/run/test answers and set its `date:` from `date +%F`; `remote.md` and `gcp.md` keep their *Not applicable yet* line until the user names a target — the GCP guide is where the defaults the global context asks for get recorded, never invented.
 
 ## Step 5: Claude Code discovery — symlinks
 

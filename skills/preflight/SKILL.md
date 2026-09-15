@@ -62,7 +62,7 @@ Check by inspection and record each as pass or finding:
 
 ## Step 4: Docs freshness
 
-Run the `--docs` lens of `/review` over `<base>..HEAD` — the `reviewer` agent with the docs brief exactly as `/review` Step 3 gives it, and the slug `<base>-<head>-docs`. Its findings are the docs gaps: dispatch the `documentation` agent for those in its files, fix those in skills, agents, rules, the context or other `AGENTS.md` sections yourself, and record each in the gate report with its fix; the fixes ride in the release commit (Step 6).
+Run the `--docs` lens of `/review` over `<base>..HEAD` — the `reviewer` agent with the docs brief exactly as `/review` Step 3 gives it, and the slug `<base>-<head>-docs`. Its findings are the docs gaps, and each one blocks the release (Step 5): the gate never edits the tree after it has run. After NO-SHIP they are fixed as ordinary work — `documentation` for those in its files, the main agent for those in skills, agents, rules, the context or other `AGENTS.md` sections — and `/preflight` runs again.
 
 ## Step 5: Write the merged gate report
 
@@ -74,7 +74,7 @@ Write to `<docs-root>/reviews/$(date +%F)-preflight-<version>.md` with frontmatt
 - An explicit verdict line: `VERDICT: SHIP` or `VERDICT: NO-SHIP`.
 - A **"What was not checked"** section — name the gaps honestly.
 
-Never restate a failure as success. Any blocking finding from Steps 2–4 means NO-SHIP. Blocking means any of: a verifier FAIL or BLOCKED; a security finding of high severity; a Step 2 reviewer REQUEST CHANGES verdict or high-severity finding; a `REQUIREMENTS.md` violation; a Step 4 docs finding still unfixed. A project's `AGENTS.md` may add blocking conditions; it cannot remove these.
+Never restate a failure as success. Any blocking finding from Steps 2–4 means NO-SHIP. Blocking means any of: a verifier FAIL or BLOCKED; a security finding of high severity; a Step 2 reviewer REQUEST CHANGES verdict or high-severity finding; a `REQUIREMENTS.md` violation; a Step 4 docs finding. A project's `AGENTS.md` may add blocking conditions; it cannot remove these.
 
 ## Step 6: Ship or stop
 
@@ -82,11 +82,11 @@ Never restate a failure as success. Any blocking finding from Steps 2–4 means 
 - **SHIP:** the gate has already run against the clean source tree; now assemble **one release commit**:
   1. Dispatch the `changelog` agent with today's date for the release entry.
   2. Bump the version **only where the repo already tracks one** (do not introduce version tracking).
-  3. Commit the gate artifacts (gate report, verification logs, reviews), Step 4's docs fixes, the changelog entry, and the version bump together as a single release commit — re-running the Step 1 secret scan on the staged diff first, never pushing on a hit — and tag **that** commit.
+  3. Commit the gate artifacts (gate report, verification logs, reviews), the changelog entry, and the version bump together as a single release commit — re-running the Step 1 secret scan on the staged diff first, never pushing on a hit — and tag **that** commit.
   4. Push the branch and the tag — a plain push, never `--force`. If the project's `AGENTS.md` asks for a confirmation before deploy, ask once here; otherwise the user's ship request is the approval.
   5. Deploy via the project's deploy guide — `<docs-root>/deploy/gcp.md` (its recorded defaults plus the `cloud-run-deploy` skill), `remote.md` for a box reached over SSH, or `local.md` when the project is local-only: build for `linux/amd64`, push to Artifact Registry, deploy, then verify the live revision (health check, logs) and report the revision and URL. If no deploy path — or no rollback procedure for it — is documented, stop after the push and say exactly what is missing.
   6. If deploy verification fails, roll back per the deploy path's documented rollback procedure (`cloud-run-deploy` has one); if the path documents none, report the failed deploy and the last good revision and stop — never improvise a rollback, and never report it as a shipped release.
 
-  The tagged commit is the gated tree plus its records and Step 4's docs fixes — nothing else rides along.
+  The tagged commit is the gated tree plus its records — nothing else rides along.
 
 This gate is additive: the Definition of Done still applies to the work being released — preflight runs the rows still owed (Step 1) and verifies the rest happened.

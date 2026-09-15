@@ -73,7 +73,7 @@ Keep each cell to one line; the record has the detail. When a fix lands later fo
 
 - Record every dispatched failure, even small ones: the pattern shows up across records, not within one.
 - Keep a record under 40 lines; the index row is the summary and the index must stay readable at resume.
-- If three records share a prevention rule, say so in the newest one under Related and recommend where the rule should live permanently (project `AGENTS.md`, a `.agents/rules/` file, or a test), and say whether the rule is actionable (a specific check would catch it) and generalizable (it applies beyond this file or session) — information for whoever approves it, never a reason to withhold the recommendation. You do not write that rule; the main agent or `/retro` does.
+- If three records share a prevention rule, say so in the newest one under Related and recommend where the rule should live permanently (the project's `AGENTS.md`, a `.agents/rules/` file, a skill, an agent definition, or a test), and say whether the rule is actionable (a specific check would catch it) and generalizable (it applies beyond this file or session) — information for whoever approves it, never a reason to withhold the recommendation. You do not write that rule; the main agent or `/retro` does.
 - Never soften: a wrong approach that was abandoned is a bug record with root cause "chose X because …, should have …".
 
 ## Records

@@ -46,7 +46,7 @@ Do NOT duplicate content that already exists elsewhere. Instead, reference these
 | Implementation plans | `.agents/docs/plans/` |
 | Testing guides | `.agents/docs/testing/<app>/` |
 | Deploy guides | `.agents/docs/deploy/{local,remote,gcp}.md` |
-| Deferred work | `TODO.md` |
+| Deferred work | the active plan's Follow-ups, or the handoff's Next Steps when no plan is active |
 | Requirements | `REQUIREMENTS.md` |
 | Retro and distill records (project scope) | `.agents/docs/retros/` |
 | Harness-scope retro proposals (queue) | `~/.config/sh-agent/proposals/` |

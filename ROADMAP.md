@@ -6,7 +6,7 @@ Last reviewed: 2026-09-15
 
 ## Now
 
-- `.agents/docs/plans/2026-09-15-harness-practices-g01-g26.md` — harness practices G01–G26 from the 2026-09-15 research; next: the cold-reader check.
+- `.agents/docs/plans/2026-09-15-harness-practices-g01-g26.md` — harness practices G01–G26 from the 2026-09-15 research; Phases 1–5 done; next: the Phase 6 matrix rows on both CLIs (6.4), then the Done list.
 
 ## Next
 

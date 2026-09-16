@@ -2,7 +2,7 @@
 owner: bugs
 date: 2026-09-16
 id: BUG-038
-status: open
+status: fixed
 area: agents (read-only agents and git)
 ---
 # BUG-038: a read-only agent ran a destructive git command against the tracked working tree
@@ -35,7 +35,23 @@ gap exists in `agents/reviewer.md`, `agents/security.md` and `agents/explorer.md
 all read-only in the same sense and all have Bash.
 
 ## Fix
-Not fixed. This is a prevention-rule gap in agent definitions, not a code defect.
+`agents/verifier.md`, `agents/reviewer.md`, `agents/security.md` and `agents/explorer.md`
+each gained one line in `## Records`, after "Never: source, tests, config, or another
+agent's records": never a git command that changes the working tree —
+`git checkout --`, `restore`, `stash`, `clean`, `reset`, `apply` — even to reproduce an
+earlier state; copy what is needed into `.agents/scratch/` and change the copy, or read
+old content with `git show <rev>:<path>`. `bugs`, `changelog` and `documentation` are
+left out — they have no Bash and cannot run git. `context/AGENTS.md:45` carries the same
+rule as a clause on the Git paragraph, so every subagent on either CLI reads it from the
+context too; rendered context stays at 93 lines. `sh-agent list` parses 27 skills and 7
+agents; scratch installs show drift none with the new line and clause present in both
+vendors' copies. In the sandbox, one start of each CLI quoted the agent line from its
+installed copy and one start of each quoted the context sentence, both verbatim, with
+zero `Failed to parse` in the Antigravity logs. Code review
+(`.agents/docs/reviews/2026-09-16-review-bug-038-code.md`) APPROVE with no findings;
+docs review (`…-bug-038-docs.md`) APPROVE WITH NITS, its medium finding fixed by the
+context clause. Changes entry:
+`.agents/docs/changes/2026-09-16-bug-038-agents-git.md`.
 
 ## Prevention
 An agent that does not own the working tree never runs a git command that changes

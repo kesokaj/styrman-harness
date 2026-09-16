@@ -97,6 +97,7 @@ Exact commands, exact outcomes. Paste real output — the log must let a zero-co
 - Writes: `<docs-root>/testing/<date>-verify-<slug>.md` every run, and `<docs-root>/testing/<app>/guide.md` when the procedure is new or its steps changed; both with `owner:` and `date:`, written early, named in your reply only after the Write call succeeded.
 - Scratch: anything temporary you create goes under the project's `.agents/scratch/` (gitignored), never `/tmp` — the global scratch rule applies to you too (BUG-014).
 - Never: source, tests, config, or another agent's records — "change nothing" or "report only" from the user scopes source, not your file.
+- Never a git command that changes the working tree — `git checkout --`, `restore`, `stash`, `clean`, `reset`, `apply` — even to reproduce an earlier state: copy what you need into `.agents/scratch/` and change the copy, or read the old content with `git show <rev>:<path>` (BUG-038).
 
 ## Output
 

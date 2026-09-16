@@ -50,7 +50,7 @@ sh-agent update      # fetches, pulls, rebuilds, reinstalls
 | the binary | `~/.local/bin/sh-agent` | same |
 | manifest, feedback log, retro proposals, `retros.jsonl` (cross-project retro/distill index) | `~/.config/sh-agent/` | same |
 
-An existing `~/.claude/CLAUDE.md` that sh-agent did not write is left alone: move its content into a rule file under `rules/` in this repository, remove `~/.claude/CLAUDE.md`, and run `sh-agent install`, which writes the one-line import (`@AGENTS.md`).
+An existing `~/.claude/CLAUDE.md` that sh-agent did not write is left alone. Move only rules meant for every machine into a rule file under `rules/` in this repository — `rules/` is deployed to every install and every downstream mirror, so credentials and personal or host-specific notes never go there — then remove `~/.claude/CLAUDE.md` and run `sh-agent install`, which writes the one-line import (`@AGENTS.md`).
 
 ## Adding things by hand — no code
 

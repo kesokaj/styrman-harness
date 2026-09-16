@@ -306,7 +306,7 @@ func status(repo, home, vendorFlag string, out io.Writer) error {
 		}
 	}
 	if report.Counts["foreign"] > 0 {
-		fmt.Fprintln(out, "note       ~/.claude/CLAUDE.md is yours; move its content into a rule file under rules/ in the harness repo, remove it, and run install to write the one-line import")
+		fmt.Fprintln(out, "note       ~/.claude/CLAUDE.md is yours; move only rules meant for every machine into a rule file under rules/ in the harness repo — rules/ ships to every install and mirror, never credentials or personal or host-specific notes — then remove it and run install to write the one-line import")
 	}
 	if !report.Drift() {
 		fmt.Fprintf(out, "drift      none — %d files match the repo\n", report.Counts["ok"])

@@ -344,7 +344,7 @@ func TestStatusNamesForeignClaudeMD(t *testing.T) {
 	if err := run([]string{"status", "--repo", repo, "--home", home}, &out); err != nil {
 		t.Fatalf("status: %v\n%s", err, out.String())
 	}
-	want := "note       ~/.claude/CLAUDE.md is yours; move its content into a rule file under rules/ in the harness repo"
+	want := "note       ~/.claude/CLAUDE.md is yours; move only rules meant for every machine into a rule file under rules/ in the harness repo — rules/ ships to every install and mirror, never credentials or personal or host-specific notes"
 	if !strings.Contains(out.String(), want) {
 		t.Errorf("status missing %q:\n%s", want, out.String())
 	}

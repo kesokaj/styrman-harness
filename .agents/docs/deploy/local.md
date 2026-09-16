@@ -28,7 +28,7 @@ Nothing to configure. `--vendor VENDOR` selects the target CLI: `antigravity` (o
 
 ## Verify
 
-- `sh-agent status` shows the current commit, a `binary` line carrying the same revision (a warning there means the installed binary is older than the checkout or unstamped: run `sh-agent update`), and no drift.
+- `sh-agent status` shows the current commit, a `binary` line carrying the same revision (a warning there means the installed binary is older than the checkout or unstamped: run `sh-agent update`), and no drift. `install` and `status` also print a note (advisory only, never a failure) when `~/.claude/settings.json` does not set `"attribution": {"commit": ""}`, since Claude Code adds a Co-Authored-By trailer until that operator-owned file sets it.
 - `sh-agent render | head -3` prints the assembled context.
 - Start each CLI once and check it read the files: Claude Code `/memory` lists `~/.claude/CLAUDE.md` importing `AGENTS.md`, `/skills` and `/agents` list the harness entries; Antigravity `/skills` and `/agents` do the same, and `grep 'Failed to parse' ~/.gemini/antigravity-cli/log/cli-*.log` is empty (BUG-004).
 

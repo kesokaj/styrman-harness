@@ -2,12 +2,14 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
 	"runtime/debug"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/kesokaj/styrman-harness/internal/harness"
@@ -347,5 +349,81 @@ func TestStatusNamesForeignClaudeMD(t *testing.T) {
 	want := "note       ~/.claude/CLAUDE.md is yours; move only rules meant for every machine into a rule file under rules/ in the harness repo — rules/ ships to every install and mirror, never credentials or personal or host-specific notes"
 	if !strings.Contains(out.String(), want) {
 		t.Errorf("status missing %q:\n%s", want, out.String())
+	}
+}
+
+// Claude Code adds a Co-Authored-By trailer to every commit unless its own
+// attribution setting is off; the context's Git rule alone did not stop it in
+// the sandbox (three of three commits). install and status say so until the
+// setting is there (settings.json is the operator's file: never written).
+func TestAttributionNote(t *testing.T) {
+	t.Setenv(harness.ChildEnv, "1")
+	repo, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// %s is the settings.json path under the scratch home: the note names the file it read.
+	const body = `%s does not set "attribution": {"commit": ""}; Claude Code adds a Co-Authored-By trailer to every commit until it does (context § Git)`
+	prefix := map[string]string{"install": "note: ", "status": "note       "}
+	cases := []struct {
+		name     string
+		settings string // "" means no file; "DIR" makes settings.json a directory, unreadable as a file
+		vendor   string // extra --vendor flag, "" for the default (all)
+		want     string // the note body expected after the command's prefix; "" means no note line at all
+	}{
+		{"no settings file", "", "", body},
+		{"trailer switched off", `{"attribution": {"commit": "", "pr": ""}}` + "\n", "", ""},
+		{"trailer switched off with false", `{"attribution": {"commit": false}}` + "\n", "", ""},
+		{"custom trailer", `{"attribution": {"commit": "Co-Authored-By: me"}}` + "\n", "", body},
+		{"other settings only", `{"permissions": {"allow": ["Bash(git:*)"]}}` + "\n", "", body},
+		{"antigravity only never notes", "", "agy", ""},
+		{"malformed json is advisory, no echo", `{"attribution": ` + "\n", "", "%s is not valid JSON, so the attribution setting could not be checked; Claude Code adds"},
+		{"a directory is advisory", "DIR", "", "%s is not a regular file, so the attribution setting could not be checked"},
+		{"a fifo is advisory and never opened", "FIFO", "", "%s is not a regular file, so the attribution setting could not be checked"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			home := t.TempDir()
+			settingsPath := filepath.Join(home, harness.ClaudeRoot, "settings.json")
+			if c.settings != "" {
+				dir := filepath.Join(home, harness.ClaudeRoot)
+				if err := os.MkdirAll(dir, 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if c.settings == "DIR" {
+					if err := os.Mkdir(filepath.Join(dir, "settings.json"), 0o755); err != nil {
+						t.Fatal(err)
+					}
+				} else if c.settings == "FIFO" {
+					// opening a FIFO with no writer blocks forever: the Stat guard must keep the command from opening it
+					if err := syscall.Mkfifo(filepath.Join(dir, "settings.json"), 0o600); err != nil {
+						t.Fatal(err)
+					}
+				} else if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(c.settings), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, cmd := range []string{"install", "status"} {
+				args := []string{cmd, "--repo", repo, "--home", home}
+				if c.vendor != "" {
+					args = append(args, "--vendor", c.vendor)
+				}
+				var out bytes.Buffer
+				if err := run(args, &out); err != nil {
+					t.Fatalf("%s: %v\n%s", cmd, err, out.String())
+				}
+				noted := strings.Contains(out.String(), prefix[cmd]+settingsPath)
+				if c.want == "" && noted {
+					t.Errorf("%s: unexpected settings.json note:\n%s", cmd, out.String())
+				}
+				want := prefix[cmd] + fmt.Sprintf(c.want, settingsPath)
+				if c.want != "" && !strings.Contains(out.String(), want) {
+					t.Errorf("%s: missing note %q:\n%s", cmd, want, out.String())
+				}
+				if strings.Contains(out.String(), "invalid character") || strings.Contains(out.String(), "unexpected end") {
+					t.Errorf("%s: the note echoes the JSON error:\n%s", cmd, out.String())
+				}
+			}
+		})
 	}
 }

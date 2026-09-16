@@ -15,6 +15,7 @@ package main
 
 import (
 	"debug/buildinfo"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -157,7 +158,13 @@ func run(args []string, out io.Writer) error {
 		if err := harness.Install(repo, home, files, vendor, *dryRun, out); err != nil {
 			return err
 		}
-		return pathHint(home, out)
+		if err := pathHint(home, out); err != nil {
+			return err
+		}
+		if vendor == harness.VendorAll || vendor == harness.VendorClaude {
+			return attributionHint(home, "note: ", out)
+		}
+		return nil
 
 	case "status":
 		return status(repo, home, *vendorFlag, out)
@@ -307,6 +314,11 @@ func status(repo, home, vendorFlag string, out io.Writer) error {
 	}
 	if report.Counts["foreign"] > 0 {
 		fmt.Fprintln(out, "note       ~/.claude/CLAUDE.md is yours; move only rules meant for every machine into a rule file under rules/ in the harness repo — rules/ ships to every install and mirror, never credentials or personal or host-specific notes — then remove it and run install to write the one-line import")
+	}
+	if vendor == harness.VendorAll || vendor == harness.VendorClaude {
+		if err := attributionHint(home, "note       ", out); err != nil {
+			return err
+		}
 	}
 	if !report.Drift() {
 		fmt.Fprintf(out, "drift      none — %d files match the repo\n", report.Counts["ok"])
@@ -458,6 +470,66 @@ func pathHint(home string, out io.Writer) error {
 	}
 	fmt.Fprintf(out, "note: %s is not on PATH; add it so `sh-agent` is available everywhere\n", bin)
 	return nil
+}
+
+// attributionHint says when Claude Code will still add its Co-Authored-By
+// trailer. The context's Git rule forbids the trailer, but in the sandbox the
+// rule alone did not hold (three of three headless commits carried it); the
+// CLI's own setting is what stops it, and settings.json is the operator's
+// file, so install and status only say so. prefix is each command's note
+// style ("note: " for install, "note       " for status). Advisory only: no
+// state of that file may fail install or status, and nothing from it is
+// echoed.
+func attributionHint(home, prefix string, out io.Writer) error {
+	path := filepath.Join(home, harness.ClaudeRoot, "settings.json")
+	off, problem := attributionOff(path)
+	switch {
+	case problem != "":
+		fmt.Fprintf(out, "%s%s %s, so the attribution setting could not be checked; Claude Code adds a Co-Authored-By trailer to every commit unless it sets \"attribution\": {\"commit\": \"\"} (context § Git)\n", prefix, path, problem)
+	case !off:
+		fmt.Fprintf(out, "%s%s does not set \"attribution\": {\"commit\": \"\"}; Claude Code adds a Co-Authored-By trailer to every commit until it does (context § Git)\n", prefix, path)
+	}
+	return nil
+}
+
+// attributionOff reads the operator's settings file, bounded to a regular
+// file of at most one megabyte. off is true when attribution.commit is "" or
+// false; problem names why the file could not be judged, without a byte of
+// its contents (a JSON error string carries the input it choked on).
+func attributionOff(path string) (off bool, problem string) {
+	info, err := os.Stat(path)
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		return false, ""
+	case err != nil:
+		return false, "could not be read"
+	case !info.Mode().IsRegular():
+		return false, "is not a regular file"
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return false, "could not be read"
+	}
+	defer f.Close()
+	data, err := io.ReadAll(io.LimitReader(f, 1<<20))
+	if err != nil {
+		return false, "could not be read"
+	}
+	var settings struct {
+		Attribution struct {
+			Commit any `json:"commit"`
+		} `json:"attribution"`
+	}
+	if err := json.Unmarshal(data, &settings); err != nil {
+		return false, "is not valid JSON"
+	}
+	switch v := settings.Attribution.Commit.(type) {
+	case string:
+		return v == "", ""
+	case bool:
+		return !v, ""
+	}
+	return false, ""
 }
 
 // buildVersion describes the running process, for `sh-agent version`.

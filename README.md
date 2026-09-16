@@ -11,7 +11,7 @@ go run ./cmd/sh-agent install     # builds the binary from the checkout, deploys
 sh-agent status                   # should end with "drift none"
 ```
 
-Make sure `~/.local/bin` is on your `PATH`. Requires Go 1.24+ and git; nothing else.
+Make sure `~/.local/bin` is on your `PATH`. Requires Go 1.24+ and git; nothing else. If `~/.claude/settings.json` does not set `"attribution": {"commit": ""}` (add `"pr": ""` beside it to keep the same line out of PR descriptions; the note checks `commit` only), `install` and `status` print a note that Claude Code will keep adding a Co-Authored-By trailer to commits until you add it yourself (sh-agent never writes vendor settings — see context § Git).
 
 Harness state (feedback log, retro proposals and index) lives in `~/.config/sh-agent/`, outside any project, so Claude Code asks once per session before the first read or write there. To stop the prompt, add the directory yourself to `permissions.additionalDirectories` in `~/.claude/settings.json`; the installer never touches vendor settings (ADR-010).
 
@@ -19,7 +19,7 @@ Harness state (feedback log, retro proposals and index) lives in `~/.config/sh-a
 
 | Command | What it does |
 |---|---|
-| `sh-agent status` | Shows what is installed, from which commit, the running binary's build (with a warning when it is older than the checkout), and every file that drifted. Exit 1 on drift. |
+| `sh-agent status` | Shows what is installed, from which commit, the running binary's build (with a warning when it is older than the checkout), a note when `~/.claude/settings.json` does not disable the Co-Authored-By trailer, and every file that drifted. Exit 1 on drift. |
 | `sh-agent diff` | Unified diff of every drifted file (installed vs repo). |
 | `sh-agent install` (or `sync`) | From its own git checkout, rebuilds the binary with `go build`, then deploys the repo; from a plain copy (no `.git`) deploys the running binary as is (`--vendor antigravity\|claude\|all`). Idempotent; removes files a previous install wrote that the repo no longer has. `--dry-run` prints what would change without changing anything. |
 | `sh-agent update` | `git fetch` the harness repo; if behind, `pull --ff-only`, rebuild, and reinstall. `--check` only reports (exit 2 when behind). |

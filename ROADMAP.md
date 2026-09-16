@@ -2,9 +2,11 @@
 
 <!-- Division of labor: ROADMAP.md = where the project is going while work is in progress; TODO.md = items the active plan will consume; .agents/docs/plans/ = how. Both ROADMAP sections and TODO are empty when the work is done; operator actions and ideas live in the newest handoff. -->
 
-Last reviewed: 2026-09-15
+Last reviewed: 2026-09-16
 
 ## Now
+
+- `.agents/docs/plans/2026-09-16-linkshelf-simulation.md` — both CLIs build linkshelf under the harness; compare, fix, retro, install, handoff
 
 ## Next
 

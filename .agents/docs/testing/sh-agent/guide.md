@@ -11,7 +11,8 @@ it and record outcomes only. Update this file in the same run that changes the s
 ## 1. Go checks (every change; skip only when no `.go` file is in the diff — say so)
 
 ```bash
-gofmt -l .                # must print nothing
+gofmt -l cmd internal     # must print nothing; NOT `gofmt -l .` — it walks .agents/scratch,
+                          # where a stray Go file fails a gate that has nothing to do with it (BUG-048)
 go vet ./...
 go test -race ./...
 ```

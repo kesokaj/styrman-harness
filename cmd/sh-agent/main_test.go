@@ -663,6 +663,28 @@ func TestAttributionSet(t *testing.T) {
 	})
 }
 
+// gitCleanEnv strips the caller's git environment. GIT_DIR or GIT_WORK_TREE
+// set in the parent would point every fixture command at the operator's own
+// checkout — the shape of BUG-045, where a probe's commands fell through to
+// the real repository — and GIT_CONFIG_* would let their config decide what
+// the fixture does.
+func gitCleanEnv() []string {
+	var env []string
+	for _, kv := range os.Environ() {
+		switch {
+		case strings.HasPrefix(kv, "GIT_DIR="),
+			strings.HasPrefix(kv, "GIT_WORK_TREE="),
+			strings.HasPrefix(kv, "GIT_INDEX_FILE="),
+			strings.HasPrefix(kv, "GIT_OBJECT_DIRECTORY="),
+			strings.HasPrefix(kv, "GIT_COMMON_DIR="),
+			strings.HasPrefix(kv, "GIT_CONFIG"):
+			continue
+		}
+		env = append(env, kv)
+	}
+	return env
+}
+
 // gitFixture builds a real checkout with an upstream: a bare origin, a clone
 // with a trivial cmd/sh-agent that records that it ran, and a first commit
 // pushed. Behind() needs a real remote, and Reinstall() needs something to
@@ -684,7 +706,7 @@ func gitFixture(t *testing.T) (repo, marker string) {
 		t.Helper()
 		cmd := exec.Command(args[0], args[1:]...)
 		cmd.Dir = dir
-		cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL="+filepath.Join(base, "gitconfig"), "GIT_CONFIG_NOSYSTEM=1")
+		cmd.Env = append(gitCleanEnv(), "GIT_CONFIG_GLOBAL="+filepath.Join(base, "gitconfig"), "GIT_CONFIG_NOSYSTEM=1")
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("%v: %v\n%s", args, err, out)
 		}
@@ -739,7 +761,7 @@ func TestUpdateNeverInstallsDirtyTree(t *testing.T) {
 			t.Helper()
 			cmd := exec.Command(args[0], args[1:]...)
 			cmd.Dir = dir
-			cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL="+filepath.Join(base, "gitconfig"), "GIT_CONFIG_NOSYSTEM=1")
+			cmd.Env = append(gitCleanEnv(), "GIT_CONFIG_GLOBAL="+filepath.Join(base, "gitconfig"), "GIT_CONFIG_NOSYSTEM=1")
 			if out, err := cmd.CombinedOutput(); err != nil {
 				t.Fatalf("%v: %v\n%s", args, err, out)
 			}

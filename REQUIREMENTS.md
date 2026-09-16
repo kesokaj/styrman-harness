@@ -16,7 +16,7 @@ The harness is context, skills, and subagents. Behaviour comes from what is writ
 
 ## R4 — One binary, stdlib only, easy on and off
 
-`sh-agent` is a single Go binary with no dependencies. `install` is idempotent and overwrites only files it manages; `uninstall` removes exactly what its manifest lists; `update` pulls the repo from git and reinstalls. A hand-written `~/.claude/CLAUDE.md` is never overwritten. `install` also sets one key in the operator's `~/.claude/settings.json`, `attribution` (commit and PR trailers off), only when the key is absent; it never changes or removes another key, and `uninstall` leaves it.
+`sh-agent` is a single Go binary with no dependencies. `install` is idempotent and overwrites only files it manages; `uninstall` removes exactly what its manifest lists; `update` pulls the repo from git and reinstalls. `update` refuses a checkout with uncommitted changes on every path, because it deploys the working tree rather than the commit it fetched; `install` stays the deliberate way to deploy a dirty tree. A hand-written `~/.claude/CLAUDE.md` is never overwritten. `install` also sets one key in the operator's `~/.claude/settings.json`, `attribution` (commit and PR trailers off), only when the key is absent; it never changes or removes another key, and `uninstall` leaves it.
 
 ## R5 — Hand-added customizations are first class
 

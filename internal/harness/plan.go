@@ -111,6 +111,15 @@ func Plan(repo string, selfExe []byte, vendor string) ([]File, error) {
 			if d.IsDir() || d.Name() == ".DS_Store" {
 				return nil
 			}
+			// A secret-shaped file is refused rather than copied into both
+			// vendor directories on every machine. The repo's .gitignore
+			// keeps these out of git, which means review never sees them and
+			// they can sit in a skill directory unnoticed; install is the one
+			// step that would spread them (security review 2026-09-16). The
+			// names match the context's Git rule.
+			if secretShaped(d.Name()) {
+				return fmt.Errorf("%s is a secret-shaped file — install refuses to deploy it; move it out of the skill", path)
+			}
 			rel, err := filepath.Rel(s.Dir, path)
 			if err != nil {
 				return err
@@ -189,4 +198,17 @@ func Plan(repo string, selfExe []byte, vendor string) ([]File, error) {
 // IsOurs reports whether deployed content was written by sh-agent.
 func IsOurs(data []byte) bool {
 	return strings.HasPrefix(string(data), Marker)
+}
+
+// secretShaped reports whether a filename matches the credential shapes the
+// context's Git rule stops a commit for. install deploys a skill's files to
+// every vendor directory on every machine, so one that slipped past
+// .gitignore into a skill directory would be spread rather than caught.
+func secretShaped(name string) bool {
+	for _, pattern := range []string{".env", ".env.*", "*.pem", "*.key", "*.tfvars", "*.tfstate", "*credentials*.json", "*-key.json"} {
+		if ok, _ := filepath.Match(pattern, name); ok {
+			return true
+		}
+	}
+	return false
 }

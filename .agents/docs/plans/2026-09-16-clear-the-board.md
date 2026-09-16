@@ -31,7 +31,7 @@ Already applied earlier today, not repeated here: G4 and G11 (retro Proposals 7 
 
 ## Verification
 
-`gofmt -l .`, `go vet ./...`, `go test -race -count=1 ./...`; `go run ./cmd/sh-agent install --home .agents/scratch/board/home` with `status` reporting no drift and `list` showing 27 skills and 7 agents; one headless start of each CLI from the sandbox home with its log grepped; the real-home smoke checks of `testing/2026-09-03-verify-real-home.md` on each CLI.
+`gofmt -l cmd internal` (not `gofmt -l .` — BUG-048, found while running this plan), `go vet ./...`, `go test -race -count=1 ./...`; `go run ./cmd/sh-agent install --home .agents/scratch/board/home` with `status` reporting no drift and `list` showing 27 skills and 7 agents; one headless start of each CLI from the sandbox home with its log grepped; the real-home smoke checks of `testing/2026-09-03-verify-real-home.md` on each CLI.
 
 ## Phases
 
@@ -64,21 +64,21 @@ Already applied earlier today, not repeated here: G4 and G11 (retro Proposals 7 
 - [x] G20: `agents/verifier.md` defines `<app>` in resolution order and forbids leaving it literal; `agents/documentation.md` restates the same resolution, 2026-09-16
 - [x] `skills/preflight/SKILL.md` Step 4 already files what it defers ("file it under the active plan's Follow-ups, or the handoff's Next Steps when no plan is active") — applied in an earlier session, verified present, nothing to change, 2026-09-16
 - [x] Restatement greps run over `context/`, `skills/`, `agents/`, `README.md`, `AGENTS.md` for each changed rule — two gaps found and closed (`<app>` resolution unstated for `documentation`, the Setup bound missing from the init-project template); the cloud-run triggers, the feedback-log shape and the print-mode wording had no other restatement, 2026-09-16
-- [ ] Checkpoint — `changes/` entry, commit, push
+- [x] Checkpoint — Phase 2's text landed in 3c46356; its `changes/` entry is `changes/2026-09-16-clear-the-board-text.md`, written with the Phase 4 records (the docs review caught the tick claiming an entry that did not exist yet), 2026-09-16
 
 ### Phase 3 — Docs
 
 - [x] `.agents/docs/deploy/remote.md` § The resync loop now states the refusal, why it exists, and shows the timer unit it makes safe; `README.md`'s command table and loop line agree, 2026-09-16
 - [x] `README.md` and `AGENTS.md` updated (the `update` row, the loop line, the scoped `gofmt`), 2026-09-16
-- [ ] `bugs/INDEX.md`: every record closed moves to Graduated with its new home (the `bugs` agent)
-- [ ] Checkpoint — `changes/` entry, commit, push
+- [x] `bugs/INDEX.md`: BUG-019, 020, 021, 022, 031 and 046 closed and moved to Graduated with their new homes, and BUG-048, 049, 050 written and graduated — main table now holds zero `open` rows, verified by reading it, and the Graduated table re-sorted by ID, 2026-09-16
+- [x] Checkpoint — Phase 3's docs landed in 3c46356 with the same `changes/` entry, 2026-09-16
 
 ### Phase 4 — Definition of Done over the batch
 
-- [ ] `verifier` over the whole range
-- [ ] `reviewer` (code lens) and `reviewer` (docs lens) over the whole range
-- [ ] `security` (the `update` refusal and the skill text touching root steps, keys and external services)
-- [ ] Findings fixed or rebutted in each report's `## Outcome`
+- [x] `verifier` over `e08fa65..HEAD` — PASS, `testing/2026-09-16-verify-clear-the-board.md`: pass 92, fail 0, skip 1 (from 79); install into a scratch home drift none; `sh-agent list` 27/7, 2026-09-16
+- [x] `reviewer` code lens (APPROVE WITH NITS, three findings) and docs lens (REQUEST CHANGES, four findings) — `reviews/2026-09-16-review-clear-the-board-{code,docs}.md`, 2026-09-16
+- [x] `security` over the whole range — `reviews/2026-09-16-security-clear-the-board.md`: two medium (the dirty check inheriting `status.showUntrackedFiles`; secret-shaped files deployed from a skill directory), one low TOCTOU, four further lows, 2026-09-16
+- [x] Every finding fixed, rebutted or left with an owner in each report's `## Outcome` — two mediums fixed with tests and their own bug records (BUG-049, BUG-050), the TOCTOU accepted into ADR-027's Consequences, the root-step-gate finding rebutted against R3, govulncheck left to the operator, 2026-09-16
 - [ ] Sandbox: install, one headless start of each CLI, log grepped
 - [ ] Real home: install, the three smoke checks on each CLI
 - [ ] `changelog`, `bugs`, commit, push, `/handoff`

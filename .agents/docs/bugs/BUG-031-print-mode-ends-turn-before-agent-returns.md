@@ -2,7 +2,7 @@
 owner: bugs
 date: 2026-09-15
 id: BUG-031
-status: open
+status: fixed
 area: context (headless runs)
 ---
 # BUG-031: a print-mode run ends its turn while a dispatched agent is still running
@@ -32,12 +32,15 @@ background/in-flight/print-mode/`claude -p`/`agy -p`/wait-for-an-agent wording f
 run to collect dispatched agents' results before ending its turn; the gap predates this plan.
 
 ## Fix
-Not fixed. No change in this plan; a follow-up for a future plan.
+Fixed 2026-09-16 (Phases 2-3, clear the board): `context/AGENTS.md` now
+states a headless run waits for every dispatched agent to return before
+ending its turn, and says so if one has not.
 
 ## Prevention
-A headless run waits for every agent it dispatched to return before it ends its turn, and says so in
-its output when one has not. Natural home: `context/AGENTS.md`, next to "Unattended runs on Claude
-Code set a `/goal` naming the check that must pass."
+A headless run waits for every agent it dispatched to return before it ends
+its turn, and says so in its output when one has not. Graduated:
+`context/AGENTS.md`, next to "Unattended runs on Claude Code set a `/goal`
+naming the check that must pass."
 
 ## Related
 BUG-013 (headless run's own status must be read before trusting a green run). This is the third

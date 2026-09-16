@@ -2,7 +2,7 @@
 owner: bugs
 date: 2026-09-15
 id: BUG-021
-status: open
+status: fixed
 area: skills/distill
 ---
 # BUG-021: distill's feedback.jsonl entry omits the `project` field, breaking retro's cross-project filter
@@ -17,10 +17,14 @@ Not reproduced as a failure in a live run; found by review — the JSON shape at
 `distill`'s own feedback-append example was written independently of the `feedback` skill's entry shape and never included the `project` field the retro filter depends on.
 
 ## Fix
-Not fixed. This task only records the finding; no source changed.
+Fixed 2026-09-16 (Phases 2-3, clear the board): `skills/distill/SKILL.md`
+now defers to `skills/feedback/SKILL.md` for the entry's shape instead of
+carrying its own drafted example missing `project`.
 
 ## Prevention
-Every writer of `~/.config/sh-agent/feedback.jsonl` uses the `feedback` skill's entry shape (`skills/feedback/SKILL.md`) rather than a locally drafted example; a skill that writes to a shared log points at the canonical schema instead of restating it.
+Every writer of `~/.config/sh-agent/feedback.jsonl` uses the `feedback`
+skill's entry shape rather than a locally drafted example. Graduated:
+`skills/distill/SKILL.md`.
 
 ## Related
 2026-09-15 docs-lens sweep, `.agents/docs/reviews/2026-09-15-review-sweep-merged.md` F21.

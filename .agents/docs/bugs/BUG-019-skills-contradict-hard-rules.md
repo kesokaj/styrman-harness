@@ -2,7 +2,7 @@
 owner: bugs
 date: 2026-09-15
 id: BUG-019
-status: open
+status: fixed
 area: skills (hard rules)
 ---
 # BUG-019: skill texts and references instruct against the global hard rules
@@ -25,10 +25,16 @@ Not reproduced as a failure; found by review (grep sweep against `context/AGENTS
 Imported and older skill guidance was never cross-checked against the global hard rules when those rules were written or later tightened. `TestNoTmpInHarnessProse` (the existing `/tmp` prose check) scans only `SKILL.md` files, not their `references/` subdirectories, so drift in reference docs goes undetected.
 
 ## Fix
-Not fixed. This task (sweep task 1.6) only records the findings; no source changed.
+Fixed 2026-09-16 (Phases 2-3, clear the board): the contradicting lines in
+`skills/*/references/` were corrected in text, and `TestNoTmpInHarnessProse`
+now walks every non-vendored skill directory's `references/`, `commands/`
+and `rules/`, not just `SKILL.md` (terraform's Terraform-native `/tmp` usage
+exempted).
 
 ## Prevention
-A change to a global hard rule greps `skills/*/SKILL.md` **and** `skills/*/references/` for guidance that contradicts it. Extend `TestNoTmpInHarnessProse` (and any similar prose check) to cover `references/`, not just `SKILL.md`.
+A change to a global hard rule greps `skills/*/SKILL.md` **and**
+`skills/*/references/` for guidance that contradicts it. Graduated:
+`TestNoTmpInHarnessProse` — its prevention rule is now a test, not prose.
 
 ## Related
 BUG-003 and BUG-007 have the same shape: a rule moved or tightened and its old wording survived elsewhere. BUG-014 is a neighbour: a global rule did not reach an agent definition. With this record the shape recurs three times, which makes it retro input for a standing project rule or a broader prose test in `internal/harness`. Source: `.agents/docs/reviews/2026-09-15-review-sweep-merged.md`.

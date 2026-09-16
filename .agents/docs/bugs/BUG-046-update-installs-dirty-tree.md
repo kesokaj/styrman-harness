@@ -2,7 +2,7 @@
 owner: bugs
 date: 2026-09-16
 id: BUG-046
-status: open
+status: fixed
 area: cmd/sh-agent (update)
 ---
 # BUG-046: `sh-agent update` reinstalled an uncommitted, dirty checkout
@@ -35,19 +35,21 @@ behind: pull --ff-only, rebuild, reinstall", which is not what the code
 does — the "not behind" path has no dirty-tree guard.
 
 ## Fix
-Not fixed. Candidate: `update` reinstalls only after a successful `Pull`,
-or refuses a dirty checkout the way `Pull` does and says so;
-`remote.md` § The resync loop then matches the code; add a test for
-"not behind, dirty → no install".
+Fixed 2026-09-16 (Phase 1, clear the board): `cmd/sh-agent/main.go`
+`update()` refuses a dirty checkout on every path, not just "behind
+upstream" (`cmd/sh-agent/main.go:350`, "A dirty checkout is never
+installed, on either path"); `remote.md` § The resync loop and `README.md`
+updated to match; `ADR-027` records the resync loop's shape; `REQUIREMENTS.md`
+R4 references the fix. See BUG-049 for a gap the same day in the dirty
+check this fix relies on.
 
 ## Prevention
-Before relying on `sh-agent update` (via a timer or manually) on a
-checkout used for active development, confirm it refuses a dirty tree on
-every path, not just the "behind upstream" path — R6 ("development never
-touches the real home") is defeated by any timer that installs from a
-dirty working tree. Until fixed, a handoff on this box states the timer
-exists so a session does not lose hours attributing a mystery write to
-its own agents.
+`update` refuses a dirty checkout on every path, not just "behind
+upstream" — graduated into `cmd/sh-agent/main.go`, `ADR-027`, and
+`REQUIREMENTS.md` R4. Before relying on `sh-agent update` on a checkout used
+for active development, confirm the dirty check itself is pinned (see
+BUG-049): a guard that trusts git's configurable default can still pass a
+dirty-looking-clean tree.
 
 ## Related
 Investigation cost four rounds before the timer was found (agent

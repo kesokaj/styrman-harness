@@ -166,6 +166,13 @@ func LoadSkills(repo string) ([]Skill, error) {
 		return nil, fmt.Errorf("reading %s: %w", root, err)
 	}
 	var skills []Skill
+	// Two skills of the same name install to one destination, so the second
+	// silently overwrites the first and `list` shows a roster that is not
+	// what was deployed. A duplicate means something is wrong in skills/ —
+	// an interrupted copy, a directory whose frontmatter name belongs to
+	// another skill — and is refused rather than resolved by walk order
+	// (code review 2026-09-16).
+	byName := map[string]string{}
 	for _, e := range entries {
 		dir, err := filepath.EvalSymlinks(filepath.Join(root, e.Name()))
 		if err != nil {
@@ -203,6 +210,10 @@ func LoadSkills(repo string) ([]Skill, error) {
 		if fm["description"] == "" {
 			return nil, fmt.Errorf("skill %s: SKILL.md has no description", e.Name())
 		}
+		if first, dup := byName[name]; dup {
+			return nil, fmt.Errorf("two skills are named %q: skills/%s and skills/%s — one install destination, so one would silently overwrite the other", name, first, e.Name())
+		}
+		byName[name] = e.Name()
 		skills = append(skills, Skill{
 			Name:        name,
 			Description: fm["description"],

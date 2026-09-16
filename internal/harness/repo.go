@@ -86,7 +86,12 @@ func Inspect(repo string) RepoInfo {
 	}
 	branch, _ := gitOut(repo, "rev-parse", "--abbrev-ref", "HEAD")
 	commit, _ := gitOut(repo, "rev-parse", "--short", "HEAD")
-	status, _ := gitOut(repo, "status", "--porcelain")
+	// --untracked-files=all, never the bare form: `status.showUntrackedFiles`
+	// is an ordinary git setting, and with `no` a plain `--porcelain` reports
+	// a tree holding a whole new, wholly untracked skill directory as clean —
+	// which `update` would then deploy to every vendor directory, the exact
+	// outcome the dirty check exists to stop (security review 2026-09-16).
+	status, _ := gitOut(repo, "status", "--porcelain", "--untracked-files=all")
 	return RepoInfo{Branch: branch, Commit: commit, Dirty: status != ""}
 }
 
@@ -116,6 +121,10 @@ func Pull(repo string, out io.Writer) error {
 	if !IsCheckout(repo) {
 		return errPlainCopy
 	}
+	// `update` refuses a dirty checkout before it gets here, with a message
+	// that also covers the up-to-date path (BUG-046); this one guards a
+	// direct call to Pull. Both say the same thing: uncommitted work is never
+	// pulled over and never deployed.
 	if Inspect(repo).Dirty {
 		return errors.New("the harness repo has uncommitted changes; commit or stash them before `sh-agent update`")
 	}

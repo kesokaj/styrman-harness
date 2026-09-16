@@ -1117,9 +1117,7 @@ func TestAdoptFailedCopyKeepsTheExistingSkill(t *testing.T) {
 	if string(got) != original {
 		t.Errorf("the existing skill was modified: %q", got)
 	}
-	if _, err := os.Stat(dest + ".adopt-staging"); !errors.Is(err, os.ErrNotExist) {
-		t.Errorf("the staging directory must be removed on failure, stat gave %v", err)
-	}
+	assertSkillsClean(t, repo, "after a failed adopt")
 
 	// The happy path still replaces the skill and leaves no staging behind.
 	if err := os.Remove(filepath.Join(src, "linked.md")); err != nil {
@@ -1131,7 +1129,148 @@ func TestAdoptFailedCopyKeepsTheExistingSkill(t *testing.T) {
 	if got, _ := os.ReadFile(filepath.Join(dest, "SKILL.md")); !strings.Contains(string(got), "new body") {
 		t.Errorf("the skill should have been replaced, got %q", got)
 	}
-	if _, err := os.Stat(dest + ".adopt-staging"); !errors.Is(err, os.ErrNotExist) {
-		t.Errorf("no staging directory may survive a successful adopt, stat gave %v", err)
+	assertSkillsClean(t, repo, "after a successful adopt")
+
+	// The staging directory lives in .agents/scratch and is removed either
+	// way; if one survived there with a complete SKILL.md, LoadSkills would
+	// not see it (it walks skills/ only), which is the point of the move.
+	leftovers, _ := filepath.Glob(filepath.Join(repo, ".agents", "scratch", "adopt-*"))
+	if len(leftovers) != 0 {
+		t.Errorf("staging directories left in scratch: %v", leftovers)
+	}
+}
+
+// assertSkillsClean fails if skills/ holds anything but real skill
+// directories: a staging or partial copy there would be loaded as a second
+// skill of the same name and installed over the real one (code review
+// 2026-09-16).
+func assertSkillsClean(t *testing.T, repo, when string) {
+	t.Helper()
+	entries, err := os.ReadDir(filepath.Join(repo, "skills"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		if strings.Contains(e.Name(), "staging") || strings.Contains(e.Name(), "adopt-") || strings.HasPrefix(e.Name(), ".") {
+			t.Errorf("%s: skills/ holds %q, which is not a skill", when, e.Name())
+		}
+	}
+	skills, err := LoadSkills(repo)
+	if err != nil {
+		t.Fatalf("%s: LoadSkills: %v", when, err)
+	}
+	seen := map[string]bool{}
+	for _, s := range skills {
+		if seen[s.Name] {
+			t.Errorf("%s: two skills named %q are loaded", when, s.Name)
+		}
+		seen[s.Name] = true
+	}
+}
+
+// TestLoadSkillsRefusesDuplicateNames: two directories whose frontmatter
+// claims one name install to a single destination, so the walk order alone
+// would decide which text every machine reads. That is what an interrupted
+// `adopt` used to be able to leave behind (its staging now lives outside
+// skills/), and what a hand-copied directory can still produce.
+func TestLoadSkillsRefusesDuplicateNames(t *testing.T) {
+	repo := newRepo(t)
+	dup := filepath.Join(repo, "skills", "alpha-copy")
+	if err := os.MkdirAll(dup, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := "---\nname: alpha\ndescription: a second directory claiming the same name\n---\nbody\n"
+	if err := os.WriteFile(filepath.Join(dup, "SKILL.md"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := LoadSkills(repo)
+	if err == nil {
+		t.Fatal("two skills named alpha must be refused")
+	}
+	for _, want := range []string{"alpha", "alpha-copy"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the error should name %s, got %v", want, err)
+		}
+	}
+}
+
+// TestPlanRefusesSecretShapedFiles: a credential that slipped past
+// .gitignore into a skill directory is invisible to review (git never shows
+// it) and install is the one step that would copy it into both vendor
+// directories on every machine (security review 2026-09-16).
+func TestPlanRefusesSecretShapedFiles(t *testing.T) {
+	for _, name := range []string{".env", ".env.local", "server.key", "cert.pem", "creds.tfvars", "application_default_credentials.json", "sa-key.json"} {
+		t.Run(name, func(t *testing.T) {
+			repo := newRepo(t)
+			if err := os.WriteFile(filepath.Join(repo, "skills", "alpha", name), []byte("secret\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := Plan(repo, nil, VendorAll); err == nil {
+				t.Fatalf("%s must not be deployed", name)
+			} else if !strings.Contains(err.Error(), name) {
+				t.Errorf("the error should name the file, got %v", err)
+			}
+		})
+	}
+	t.Run("an ordinary reference file still plans", func(t *testing.T) {
+		repo := newRepo(t)
+		if err := os.WriteFile(filepath.Join(repo, "skills", "alpha", "keys-explained.md"), []byte("about keys\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		files, err := Plan(repo, nil, VendorAll)
+		if err != nil {
+			t.Fatalf("a normal file must still plan: %v", err)
+		}
+		var found bool
+		for _, f := range files {
+			if strings.HasSuffix(f.Rel, "keys-explained.md") {
+				found = true
+			}
+		}
+		if !found {
+			t.Error("the reference file should have been planned")
+		}
+	})
+}
+
+// TestInspectCountsUntrackedFiles: `status.showUntrackedFiles=no` used to
+// make a tree holding a whole new untracked skill read as clean, which
+// `update` would then deploy everywhere (security review 2026-09-16).
+func TestInspectCountsUntrackedFiles(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not on PATH")
+	}
+	repo := newRepo(t)
+	env := append(os.Environ(), "GIT_CONFIG_GLOBAL="+filepath.Join(t.TempDir(), "gitconfig"), "GIT_CONFIG_NOSYSTEM=1")
+	git := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", repo}, args...)...)
+		cmd.Env = env
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	git("init", "--quiet", "-b", "main")
+	git("config", "user.email", "fixture@example.invalid")
+	git("config", "user.name", "fixture")
+	git("add", "-A")
+	git("commit", "--quiet", "-m", "fixture")
+	if Inspect(repo).Dirty {
+		t.Fatal("a freshly committed tree is clean")
+	}
+
+	// The operator's own setting, which Inspect must not inherit.
+	git("config", "status.showUntrackedFiles", "no")
+	if err := os.MkdirAll(filepath.Join(repo, "skills", "smuggled"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, "skills", "smuggled", "SKILL.md"), []byte("---\nname: smuggled\ndescription: never committed\n---\nbody\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !Inspect(repo).Dirty {
+		t.Error("an untracked skill directory makes the checkout dirty, whatever status.showUntrackedFiles says")
 	}
 }

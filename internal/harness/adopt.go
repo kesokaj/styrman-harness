@@ -60,14 +60,27 @@ func Adopt(repo, home, src string, force bool) (string, error) {
 	case err != nil && !errors.Is(err, os.ErrNotExist):
 		return "", err
 	}
-	// Copy into a staging directory beside dest and rename it into place, so
-	// a copy that fails part-way — a symlink refused mid-walk, a read error,
-	// a full disk — leaves the existing skill untouched instead of a
-	// half-written one. Nothing is removed until the replacement is whole.
-	staging := dest + ".adopt-staging"
+	// Copy into a staging directory and rename it into place, so a copy that
+	// fails part-way — a symlink refused mid-walk, a read error, a full disk
+	// — leaves the existing skill untouched instead of a half-written one.
+	// Nothing is removed until the replacement is whole.
+	//
+	// Staging lives in .agents/scratch, NOT beside dest inside skills/: a
+	// process killed between the copy and the rename would otherwise leave a
+	// directory holding a complete SKILL.md whose frontmatter name matches
+	// the real skill, and LoadSkills would then carry two entries of the same
+	// name into every install, status and diff (code review 2026-09-16). It
+	// also means no real skill directory can ever collide with the staging
+	// name. Same filesystem as skills/, so the rename stays atomic.
+	scratch := filepath.Join(repo, ".agents", "scratch")
+	if err := os.MkdirAll(scratch, 0o755); err != nil {
+		return "", err
+	}
+	staging := filepath.Join(scratch, fmt.Sprintf("adopt-%s-%d", name, os.Getpid()))
 	if err := os.RemoveAll(staging); err != nil {
 		return "", err
 	}
+	defer os.RemoveAll(staging)
 	if err := copyTree(from, staging); err != nil {
 		os.RemoveAll(staging)
 		return "", err

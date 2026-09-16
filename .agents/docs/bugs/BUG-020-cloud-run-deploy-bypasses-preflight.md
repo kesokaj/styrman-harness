@@ -2,7 +2,7 @@
 owner: bugs
 date: 2026-09-15
 id: BUG-020
-status: open
+status: fixed
 area: skills/cloud-run-deploy
 ---
 # BUG-020: cloud-run-deploy skill's own triggers bypass the /preflight gate
@@ -17,10 +17,14 @@ Not reproduced as a failure; found by review — the skill's `description:` fron
 The skill predates the `/preflight` release-gate rule and restates its own entry triggers instead of deferring to the gate.
 
 ## Fix
-Not fixed. This task only records the finding; no source changed.
+Fixed 2026-09-16 (Phases 2-3, clear the board): `skills/cloud-run-deploy/SKILL.md`
+description now defers to `/preflight` as the entry point for
+ship/deploy/release triggers instead of restating them.
 
 ## Prevention
-A skill whose triggers overlap a gated command (here, the "Ship/deploy/release/cut vX.Y.Z" words that mean `/preflight`) names that gate as the entry point rather than restating the trigger words itself.
+A skill whose triggers overlap a gated command names that gate as the entry
+point rather than restating the trigger words itself. Graduated:
+`skills/cloud-run-deploy/SKILL.md` description.
 
 ## Related
 2026-09-15 docs-lens sweep, `.agents/docs/reviews/2026-09-15-review-sweep-merged.md` F20.

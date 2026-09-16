@@ -68,7 +68,9 @@ unused_but_intentional="value"
 source "${SCRIPT_DIR}/lib/common.sh"
 ```
 
-### CI Integration
+### Running shellcheck in a pipeline
+
+**This harness runs no CI and no hooks (`context/AGENTS.md`): run `shellcheck ./scripts/*.sh` locally before you claim a script works.** The block below is for a project that already has a pipeline of its own.
 
 ```yaml
 # GitHub Actions
@@ -279,7 +281,9 @@ lint-sh:  ## Lint shell scripts
 
 ---
 
-## CI Pipeline Example
+## Pipeline example — for projects that have one
+
+**Not the path here: the harness has no CI.** Locally the same coverage is `shellcheck`, `shfmt -d`, and the project's own test script, each run bare and its exit status read.
 
 ```yaml
 # GitHub Actions

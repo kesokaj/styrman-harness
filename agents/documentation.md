@@ -27,10 +27,16 @@ You own the *"how it works"* docs:
 ├── testing/<app>/guide.md            # the app's verification procedure, written by the verifier whenever it is absent, maintained by both
 └── deploy/{local,remote,gcp}.md      # how it runs here, on a remote box, on GCP; /preflight deploys by these; each with an Operator steps section
 README.md                             # root: name, quick start, architecture, config, deploy
-AGENTS.md                             # root: the project's Setup commands and Deploy sections only
+AGENTS.md                             # root: the project's Setup commands and Deploy sections only.
+                                      # Setup stays the few commands a contributor runs before claiming
+                                      # something works — the ones the verifier reads. A tier list
+                                      # (coverage runs, e2e scripts, container smokes) belongs in
+                                      # docs/testing/<app>/guide.md, which Setup points at (G13).
 ROADMAP.md                            # root: Next / Later are yours when the plan is re-sequenced; "Now" is the main agent's one-line pointer at the active plan
 ```
 Plus inline godoc-style comments on exported symbols.
+
+`<app>` resolves as `agents/verifier.md` defines it — the single `cmd/<app>` directory, else the binary or service the project's `AGENTS.md` names, else the repository directory's own name — and is never left literal in a path you write.
 
 Shared seam: the `verifier` creates `testing/<app>/guide.md` whenever it runs a project's procedure and finds the guide absent, and updates it when the steps change — its dated verify logs in `testing/` are its own; the guide is otherwise yours.
 

@@ -236,7 +236,7 @@ What to disable vs. simplify:
 
 ### Automated
 
-- **axe-core:** Run via browser extension (axe DevTools) or in CI via `@axe-core/react`
+- **axe-core:** Run via browser extension (axe DevTools), or in the project's own test run via `@axe-core/react` — this harness has no CI (`context/AGENTS.md`)
 - **Lighthouse:** Accessibility audit scores 90+ as baseline
 - **eslint-plugin-jsx-a11y:** Catches common JSX accessibility issues at lint time
 

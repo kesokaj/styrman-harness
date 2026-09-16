@@ -126,12 +126,19 @@ The `help` target above scans for `## comments` after target names. Always add `
 DOCKER     := docker
 IMAGE_NAME := myapp
 IMAGE_TAG  := $(VERSION)
-REGISTRY   := us-docker.pkg.dev/$(GCP_PROJECT)/$(REPO_NAME)
+# REGION, GCP_PROJECT and REPO_NAME are the operator's to supply — never a value
+# carried over from another project (`context/dev-setup.md`).
+REGION     ?= $(error set REGION, e.g. europe-north1)
+IMAGE_TAG  := $(shell git rev-parse --short HEAD)
+REGISTRY   := $(REGION)-docker.pkg.dev/$(GCP_PROJECT)/$(REPO_NAME)
 
 .PHONY: docker-build docker-push docker-run
 
-docker-build:  ## Build Docker image
+docker-build:  ## Build the image natively, for local testing only
 	$(DOCKER) build -t $(IMAGE_NAME):$(IMAGE_TAG) .
+
+docker-build-amd64:  ## Build what ships to Google — an arm64 image fails on Cloud Run with `exec format error`
+	$(DOCKER) buildx build --platform linux/amd64 --load -t $(IMAGE_NAME):$(IMAGE_TAG) .
 	$(DOCKER) tag $(IMAGE_NAME):$(IMAGE_TAG) $(IMAGE_NAME):latest
 
 docker-push:  ## Push to Artifact Registry
@@ -190,10 +197,10 @@ ENV ?= development
 deploy:  ## Deploy to the target environment
 ifeq ($(ENV),production)
 	@echo "Deploying to production..."
-	gcloud run deploy $(APP_NAME) --image=$(REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG) --region=us-central1
+	gcloud run deploy $(APP_NAME) --image=$(REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG) --region=$(REGION)
 else
 	@echo "Deploying to staging..."
-	gcloud run deploy $(APP_NAME)-staging --image=$(REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG) --region=us-central1
+	gcloud run deploy $(APP_NAME)-staging --image=$(REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG) --region=$(REGION)
 endif
 ```
 

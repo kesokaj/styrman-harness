@@ -6,7 +6,9 @@
 
 ## Setup Commands
 
-<!-- Project-specific build, run, and test commands. -->
+<!-- The few commands a contributor runs before claiming something works — build, run, test.
+     Keep it to those: coverage runs, e2e scripts and container smoke tests belong in
+     .agents/docs/testing/<app>/guide.md, which this section points at once it exists. -->
 
 ```bash
 # Install dependencies

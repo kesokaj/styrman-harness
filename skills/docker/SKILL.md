@@ -47,9 +47,12 @@ Tagging, Artifact Registry, and the deploy itself live in `cloud-run-deploy`.
 
 ### 4. Smoke test before anything leaves the machine
 ```bash
-docker run --rm -p 8080:8080 <app>:dev &
-curl -fsS http://localhost:8080/healthz
+cid=$(docker run --rm -d -p 8080:8080 <app>:dev)
+docker ps --filter id=$cid --format '{{.Status}}'   # the container you started is the thing under test
+curl -fsS http://localhost:8080/healthz              # a reply from something else on :8080 is not evidence
+docker logs $cid; docker stop $cid
 ```
+Probe the container you started, not whatever answers on the port: a stale container, another project's service, or a tunnel all return 200 and prove nothing (`context/AGENTS.md`, the instrumentation rule).
 
 ## Dockerfile: Go multi-stage
 
@@ -102,7 +105,7 @@ docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
 | Problem | Fix |
 |---|---|
-| `Cannot connect to the Docker daemon` | macOS: `colima start`; Linux: `sudo -n systemctl start docker` |
+| `Cannot connect to the Docker daemon` | macOS: `colima start`. Linux needs a root step: run `sudo -n systemctl start docker` yourself only when the operator asked for it AND the project's `.claude/settings.json` records the standing permission, and record the command plus its verification in the change entry; otherwise hand that exact command back to them (`context/dev-setup.md`) |
 | `exec format error` on Cloud Run | arm64 image was pushed — rebuild with `--platform linux/amd64 --load` |
 | buildx complains about the builder | `docker buildx create --use` once, then retry |
 | amd64 build slow on Apple Silicon | Expected: QEMU emulation. `CGO_ENABLED=0` keeps it a pure Go cross-compile in practice |

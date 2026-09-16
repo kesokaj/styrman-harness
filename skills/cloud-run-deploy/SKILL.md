@@ -3,10 +3,13 @@ name: cloud-run-deploy
 description: |
   End-to-end release workflow for Google Cloud Run: build container images locally with
   Colima/Docker (ARM for local testing, AMD64 for deploy), push to GCP Artifact Registry,
-  deploy to Cloud Run, verify, and roll back. Use when the user says "deploy this service",
-  "push to Cloud Run", "release", "push the image", "publish to Artifact Registry", or asks
-  to get a local container running in GCP. Activate for any Cloud Run deploy or Artifact
-  Registry push — even a "just redeploy it" request.
+  deploy to Cloud Run, verify, and roll back. This is the HOW of a Cloud Run deploy, not
+  the decision to do one: "ship", "deploy", "release" or "cut vX.Y.Z" in the user's own turn
+  means `/preflight`, which runs its gate and then calls this skill's steps at its deploy row
+  — so enter through `/preflight` and never run these steps in its place. Use directly for the
+  mechanics: an image build or Artifact Registry push, a rollback, a `gcloud run` flag, a
+  failed revision, or a deploy `/preflight` has already gated.
+  Do NOT use to answer a ship/deploy/release request on its own — that is `/preflight`.
   Do NOT use for Kubernetes/GKE workloads (use gke-basics), local-only container work
   (use docker), gcloud auth problems (use gcloud-setup), or Terraform-managed
   infrastructure (use terraform).

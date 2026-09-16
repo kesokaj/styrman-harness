@@ -197,7 +197,7 @@ func Contains[T comparable](slice []T, target T) bool  // not []any
 ## Philosophy
 
 - **"A little copying is better than a little dependency"**
-- **Use `slices` and `maps` standard packages**; for filter/group-by/chunk, use `github.com/samber/lo`
+- **Use `slices` and `maps` standard packages**; filter, group-by and chunk are each a short loop over them, which is the default. `github.com/samber/lo` is a dependency to justify against that loop, not a starting point (`context/AGENTS.md`)
 - **"Reflection is never clear"** — avoid `reflect` unless necessary
 - **Don't abstract prematurely** — extract when the pattern is stable
 - **Minimize public surface** — every exported name is a commitment

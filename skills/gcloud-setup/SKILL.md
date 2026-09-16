@@ -75,9 +75,11 @@ gcloud services list --enabled --limit=5
 
 ### Set Default Region/Zone
 
+The region is the operator's to give, never assumed and never carried over from another project (`context/dev-setup.md`); a project records its own in `docs/deploy/gcp.md`.
+
 ```bash
-gcloud config set compute/region us-central1
-gcloud config set compute/zone us-central1-a
+gcloud config set compute/region "$REGION"      # e.g. europe-north1 — ask, do not guess
+gcloud config set compute/zone "$REGION-a"
 ```
 
 ### Multiple Configurations (Named Profiles)
@@ -122,9 +124,9 @@ Application Default Credentials are stored at:
 
 To reset: delete that file and re-run `gcloud auth application-default login`.
 
-### Service Account Keys (CI/CD only)
+### Service account keys — last resort, not the path here
 
-For CI/CD pipelines (not local dev):
+**The harness runs no CI (`context/AGENTS.md`), and a downloaded key file is a credential on disk that outlives the session.** Use `gcloud auth login` plus `gcloud auth application-default login` locally, and attached service-account identity on Cloud Run or GCE. Only when a platform offers neither, and the operator says so:
 ```bash
 # Activate service account
 gcloud auth activate-service-account --key-file=key.json

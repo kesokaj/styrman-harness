@@ -48,28 +48,28 @@ Already applied earlier today, not repeated here: G4 and G11 (retro Proposals 7 
 
 ### Phase 2 — Instruction text: the six open records and the rest of the Follow-ups
 
-- [ ] BUG-019 a: `skills/bash/references/makefile-patterns.md` — region and registry come from variables the operator supplies, amd64 for Google, `${REGION}-docker.pkg.dev/...:${GIT_SHA}`
-- [ ] BUG-019 b: `skills/docker/SKILL.md` — the root step follows `dev-setup.md` (standing permission recorded, else hand the command back); the health probe probes the container it started
-- [ ] BUG-019 c: the three CI sections (`skills/bash/references/testing-linting.md`, `skills/gcloud-setup/SKILL.md`, `skills/frontend/references/accessibility.md`) say the harness runs no CI and name the local form
-- [ ] BUG-019 d: the four dependency defaults in `skills/golang/references/` are marked as choices that need justifying against stdlib first
-- [ ] BUG-019 e: `skills/golang/references/golang-ecosystem.md` benchmark baselines go to `.agents/scratch/`
-- [ ] BUG-020: `skills/cloud-run-deploy/SKILL.md` names `/preflight` as the entry point for ship/deploy/release words from the operator's own turn
-- [ ] BUG-021: `skills/distill/SKILL.md` points at the `feedback` skill's canonical entry shape instead of restating it, and its example carries `project`
-- [ ] BUG-022: `skills/golang/references/golang-ecosystem.md` scopes third-party registration to public work and names what must never be sent
-- [ ] BUG-031: `context/AGENTS.md` — a headless run waits for every agent it dispatched before ending its turn, and says so when one has not
-- [ ] G5: `skills/init-project/SKILL.md` says what an empty template section becomes
-- [ ] G10: `skills/review/SKILL.md` — the round after fixes re-reads the changed declarations, not only the findings
-- [ ] G12: a runtime data file defaults outside the repository or is gitignored (`context/AGENTS.md` or the golang skill)
-- [ ] G13: `AGENTS.md` § Setup Commands stays the commands a contributor runs; tiers live in the testing guide (`agents/documentation.md` or the init-project template)
-- [ ] G20: `agents/verifier.md` defines `<app>` (the `cmd/<app>` name; the repository name when there is none)
-- [ ] `skills/preflight/SKILL.md` Step 4: option C files what it defers (handoff Follow-up)
-- [ ] After each: grep the subject nouns across `context/`, `skills/`, `agents/`, `README.md`, `AGENTS.md` for restatements
+- [x] BUG-019 a: `skills/bash/references/makefile-patterns.md` — `REGION` is required of the operator, `REGISTRY` derives from it, `IMAGE_TAG` is the git short SHA, both deploy targets take `--region=$(REGION)`, and a `docker-build-amd64` target names what actually ships to Google; `skills/gcloud-setup/SKILL.md` region/zone likewise, 2026-09-16
+- [x] BUG-019 b: `skills/docker/SKILL.md` — the daemon-start row states the standing-permission condition and otherwise hands the command back; the smoke test captures the container id and probes that container, with `docker logs`/`stop`, 2026-09-16
+- [x] BUG-019 c: the three CI sections say the harness runs no CI and name the local form first (`bash/references/testing-linting.md` ×2, `gcloud-setup/SKILL.md` service-account keys reframed as a last resort, `frontend/references/accessibility.md` axe), 2026-09-16
+- [x] BUG-019 d: Cobra+Viper, `samber/lo`, `samber/oops` and `goleak` (in both `golang-testing.md` and `golang-core.md`) are stated as dependencies to justify against a named stdlib alternative; the skill's own entry points already said so, which is why only these rule-lines had drifted, 2026-09-16
+- [x] BUG-019 e: benchmark baselines go to `.agents/scratch/` — fixed in Phase 1 with the test that found them, 2026-09-16
+- [x] BUG-020: `skills/cloud-run-deploy/SKILL.md` description now says ship/deploy/release in the user's own turn means `/preflight`, that this skill is the HOW it calls at its deploy row, and adds a Do NOT line for answering a ship request on its own, 2026-09-16
+- [x] BUG-021: `skills/distill/SKILL.md` points at the `feedback` skill as the owner of the log's shape, says to include every field, and its example carries `project` with the reason (`/retro`'s exclusion filter) spelled out, 2026-09-16
+- [x] BUG-022: `golang-ecosystem.md` scopes registration to a public library, forbids it for private or internal code, and says it is never done on the agent's own initiative, 2026-09-16
+- [x] BUG-031: `context/AGENTS.md` — a headless or print-mode run ends its turn only after every dispatched agent has returned and its artifact is on disk, and names any that has not, 2026-09-16
+- [x] G5: `skills/init-project/SKILL.md` says what filling a section means and what an empty one becomes (one line saying so and what would go there), 2026-09-16
+- [x] G10: `skills/review/SKILL.md` re-dispatch brief now asks the agent to re-read each declaration a fix touched and every reference to it, not only the finding's lines, 2026-09-16
+- [x] G12: `context/AGENTS.md` scratch rule — a service's runtime data path comes from configuration with a default outside the repository, or is gitignored in the same change; a plain `go run` never dirties the tree, 2026-09-16
+- [x] G13: `agents/documentation.md` bounds the Setup section to the commands a contributor runs, tiers to the testing guide; the same bound added to `skills/init-project/assets/AGENTS.md`, 2026-09-16
+- [x] G20: `agents/verifier.md` defines `<app>` in resolution order and forbids leaving it literal; `agents/documentation.md` restates the same resolution, 2026-09-16
+- [x] `skills/preflight/SKILL.md` Step 4 already files what it defers ("file it under the active plan's Follow-ups, or the handoff's Next Steps when no plan is active") — applied in an earlier session, verified present, nothing to change, 2026-09-16
+- [x] Restatement greps run over `context/`, `skills/`, `agents/`, `README.md`, `AGENTS.md` for each changed rule — two gaps found and closed (`<app>` resolution unstated for `documentation`, the Setup bound missing from the init-project template); the cloud-run triggers, the feedback-log shape and the print-mode wording had no other restatement, 2026-09-16
 - [ ] Checkpoint — `changes/` entry, commit, push
 
 ### Phase 3 — Docs
 
-- [ ] `.agents/docs/deploy/remote.md` § The resync loop describes what `update` now does
-- [ ] `README.md` and `AGENTS.md` where a command's behaviour changed
+- [x] `.agents/docs/deploy/remote.md` § The resync loop now states the refusal, why it exists, and shows the timer unit it makes safe; `README.md`'s command table and loop line agree, 2026-09-16
+- [x] `README.md` and `AGENTS.md` updated (the `update` row, the loop line, the scoped `gofmt`), 2026-09-16
 - [ ] `bugs/INDEX.md`: every record closed moves to Graduated with its new home (the `bugs` agent)
 - [ ] Checkpoint — `changes/` entry, commit, push
 

@@ -24,7 +24,7 @@ Go's concurrency model is built on goroutines and channels. Goroutines are cheap
 6. **Default to unbuffered channels** — larger buffers mask backpressure; use them only with measured justification
 7. **Always include `ctx.Done()` in select** — without it, goroutines leak after caller cancellation
 8. **Never use `time.After` in loops** — each call creates a timer that lives until it fires, accumulating memory. Use `time.NewTimer` + `Reset`
-9. **Track goroutine leaks in tests** with `go.uber.org/goleak`
+9. **Track goroutine leaks in tests** by closing what the test starts and asserting the shutdown path returned; `go.uber.org/goleak` is a dependency to justify like any other (`context/AGENTS.md`)
 
 For detailed channel/select code examples, see Channels and Select Patterns.
 
@@ -370,7 +370,7 @@ This skill guides the creation of robust, idiomatic error handling in Go applica
 8. **Use sentinel errors** for expected conditions, custom types for carrying data
 9. **NEVER use `panic` for expected error conditions** — reserve for truly unrecoverable states
 10. **SHOULD use `slog`** (Go 1.21+) for structured error logging — not `fmt.Println` or `log.Printf`
-11. **Use `samber/oops`** for production errors needing stack traces, user/tenant context, or structured attributes
+11. **Errors carry context through `fmt.Errorf("...: %w", err)` and `slog` attributes** — that is the stdlib-first default. `samber/oops` is a dependency to justify in writing (what the wrapping plus `slog` could not give you), never the first reach (`context/AGENTS.md`)
 12. **Log HTTP requests** with structured middleware capturing method, path, status, and duration
 13. **Use log levels** to indicate error severity
 14. **Never expose technical errors to users** — translate internal errors to user-friendly messages, log technical details separately

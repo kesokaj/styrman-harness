@@ -24,7 +24,7 @@ This skill guides the creation of production-ready tests for Go applications. Fo
 3. Tests MUST NOT depend on execution order -- each test MUST be independently runnable
 4. Independent tests SHOULD use `t.Parallel()` when possible
 5. NEVER test implementation details -- test observable behavior and public API contracts
-6. Packages with goroutines SHOULD use `goleak.VerifyTestMain` in `TestMain` to detect goroutine leaks
+6. Packages with goroutines MAY use `goleak.VerifyTestMain` in `TestMain` to detect leaks — a dependency to justify like any other (`context/AGENTS.md`); the stdlib alternative is a test that closes what it starts and asserts the shutdown path returned
 7. Use the standard `testing` package; assertion and mock libraries are dependencies to justify, and the default is none
 8. Mock interfaces, not concrete types
 9. Keep unit tests fast (< 1ms), use build tags for integration tests

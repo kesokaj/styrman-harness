@@ -1027,7 +1027,7 @@ For Go libraries, add these on top of the basics:
 - **Generous code examples** — include multiple examples in doc comments showing common use cases.
 - **godoc** — your doc comments render on [pkg.go.dev](https://pkg.go.dev). Use `go doc` locally to preview.
 - **Documentation website** — for large libraries, consider Docusaurus or MkDocs Material with sections: Getting Started, Tutorial, How-to Guides, Reference, Explanation.
-- **Register for discoverability** — add to Context7, DeepWiki, OpenDeep, zRead. Even for private libraries.
+- **Register for discoverability** — for a PUBLIC, open-source library only: Context7, DeepWiki, OpenDeep, zRead. Never for private or internal code, and never on your own initiative: registering uploads the source to a third party, which no private repository consents to by default. If the operator has not said the library is public and should be listed, skip this step.
 
 See Library Documentation for details.
 

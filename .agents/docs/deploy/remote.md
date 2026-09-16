@@ -24,11 +24,23 @@ sh-agent status
 # machine A: change, verify, install, commit, push
 sh-agent install && git commit -am "context: tweak" && git push
 # machine B
-sh-agent update            # fetch; if behind: pull --ff-only, rebuild, reinstall
-sh-agent update --check    # only reports; exit 2 when behind
+sh-agent update            # fetch; refuse a dirty checkout; if behind: pull --ff-only; rebuild and reinstall
+sh-agent update --check    # only reports; exit 2 when behind; works on a dirty checkout
 ```
 
 `sh-agent update` finds the checkout from `$SH_AGENT_REPO`, then the working directory or any of its parents, then the path recorded at the last install, so it works from anywhere. It refuses a non-fast-forward pull; resolve that by hand in the checkout.
+
+**`update` refuses a checkout with uncommitted changes, whether or not it is behind.** It deploys the WORKING TREE, not the commit it just fetched, so on a machine where the harness is also being edited it would put half-finished work into the live context — which is what an hourly timer did here on 2026-09-16 (BUG-046). Commit or stash, or run `sh-agent install` to deploy a dirty tree deliberately. That makes `update` safe to run from a timer:
+
+```ini
+# ~/.config/systemd/user/sh-agent-update.service  — with the matching hourly .timer
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/sh-agent update --repo %h/workspace/styrman-harness
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+```
+
+On a box where nobody edits the checkout the timer simply keeps it current; on a box where somebody does, it now declines instead of deploying their draft.
 
 ## Downstream mirrors
 

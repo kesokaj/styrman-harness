@@ -890,7 +890,7 @@ Do not rely on triggers, views, materialized views, stored procedures, or row-le
 
 # Go CLI Best Practices
 
-Use Cobra + Viper as the default stack for Go CLI applications. Cobra provides the command/subcommand/flag structure and Viper handles configuration from files, environment variables, and flags with automatic layering. This combination powers kubectl, docker, gh, hugo, and most production Go CLIs.
+The default here is the standard library: `flag` for arguments and `os.Getenv` for configuration carry a surprising number of real CLIs, and stdlib first is the rule every dependency is measured against (`context/AGENTS.md`). Reach for Cobra + Viper when the CLI genuinely needs nested subcommands, shell completion, or layered configuration from files, environment and flags at once — and say in the change which of those `flag` could not do. That combination powers kubectl, docker, gh and hugo, which are the scale it is built for.
 
 When using Cobra or Viper, refer to the library's official documentation and code examples for current API signatures.
 

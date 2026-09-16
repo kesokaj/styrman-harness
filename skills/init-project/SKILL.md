@@ -36,7 +36,7 @@ If none exists, say so and stop — do not improvise the templates from memory. 
 
 ## Step 3: Root files
 
-Copy each template only when the file does not already exist, then fill in the ones this run copied; a file that existed keeps its content:
+Copy each template only when the file does not already exist, then fill in the ones this run copied; a file that existed keeps its content. Filling a section means replacing its template comment with the project's own text, or — when the project genuinely has nothing there yet — one line saying so and what would go in it ("No test framework yet; the first test command lands here."). A section left as the template's comment lines reads as scaffolding nobody finished and tells the next session nothing; every `##` heading the run copied ends with a sentence a cold reader can act on:
 
 ```bash
 for f in AGENTS.md REQUIREMENTS.md TODO.md ROADMAP.md CLAUDE.md; do

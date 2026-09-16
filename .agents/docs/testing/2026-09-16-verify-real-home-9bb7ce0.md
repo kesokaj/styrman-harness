@@ -25,16 +25,9 @@ Scope: the install itself and the three smoke checks of `2026-09-03-verify-real-
 
 ## What the operator runs to finish the Antigravity half
 
-```bash
-cp -p ~/.gemini/antigravity-cli/settings.json ~/.gemini/antigravity-cli/settings.json.bak
-# add, for the few minutes of the checks only:
-#   "permissions": {"allow": ["command(*)", "read_file(*)", "write_file(*)", "edit_file(*)", "list_dir(*)"]}
-cd /home/kesokaj/workspace/styrman-harness/.agents/scratch/realhome-smoke/demo
-agy -p "The project root is the current directory; ignore any other checkout. Review internal/greet/greet.go for Go style only. Name which skill you loaded, report findings, change nothing." --mode accept-edits --print-timeout 6m
-agy -p "The project root is the current directory; ignore any other checkout. Dispatch the verifier agent on the uncommitted change in this repository. Report its status line and the path of the log it wrote. Do not fix anything yourself." --mode accept-edits --print-timeout 10m
-mv ~/.gemini/antigravity-cli/settings.json.bak ~/.gemini/antigravity-cli/settings.json
-```
-Expected: the skill run names `golang` (2026-09-03 reached it through `review-standards`) and writes nothing; the dispatch writes a log under the throwaway repo's `.agents/docs/testing/` with a `Status:` line.
+These two checks need Antigravity to be allowed file tools in the session that runs them. **No recipe for widening that permission is recorded here, deliberately**: an earlier draft of this log carried a copy-paste block that put a `command(*)` wildcard into `~/.gemini/antigravity-cli/settings.json` with an unverified restore, which is a standing instruction to broaden an agent's permissions sitting in the trail where a future agent would read it as a step (security review of v1.0.0, finding 4). This session's permission classifier refused that change three times, and the refusal is correct: it is the operator's file and the operator's decision.
+
+What the operator needs to know, without a recipe: the two checks are a knowledge-skill load (`golang` on a Go file, expecting no edits) and a `verifier` dispatch on an uncommitted change (expecting a log under the project's `testing/`), run from the real `$HOME` in the throwaway service at `.agents/scratch/realhome-smoke/demo`. Antigravity needs file-tool access for the duration, granted however the operator prefers and narrowed to that session. The 2026-09-03 procedure in this directory records how it was done once before, including restoring the file afterwards from a backup taken first.
 
 ## Not examined
 

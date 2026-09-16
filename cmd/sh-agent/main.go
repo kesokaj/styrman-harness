@@ -354,8 +354,12 @@ func update(repo, home string, checkOnly bool, homeFlag, vendorFlag string, out 
 	// and an hourly timer installed a session's half-finished edits into the
 	// operator's real home (BUG-046). `install` stays the deliberate way to
 	// deploy a dirty tree.
-	if harness.Inspect(repo).Dirty {
-		return fmt.Errorf("%s has uncommitted changes and `update` installs the working tree, not the fetched commit; commit or stash them, or run `sh-agent install` to deploy them deliberately", repo)
+	if info := harness.Inspect(repo); info.Dirty || info.StatusUnknown {
+		what := "has uncommitted changes"
+		if info.StatusUnknown {
+			what = "could not be checked for uncommitted changes (git did not report its status)"
+		}
+		return fmt.Errorf("%s %s and `update` installs the working tree, not the fetched commit; commit or stash them, or run `sh-agent install` to deploy them deliberately", repo, what)
 	}
 	if behind > 0 {
 		if err := harness.Pull(repo, out); err != nil {

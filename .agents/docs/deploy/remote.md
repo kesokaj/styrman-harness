@@ -62,9 +62,9 @@ Procedure — what `/preflight` runs at its Step 6 here (the skill's Step 6.3 fo
 ```bash
 test "$(ssh-keygen -y -f ~/.ssh/id_ed25519 | ssh-keygen -lf - | cut -d' ' -f2)" = SHA256:5HpYQJjpG+yE1xXBTOIZPsTkbkgkVnV8z0eG8hBawyU   # exit 0: the signing key is here, derived from the PRIVATE key — else stop: this machine cannot sign
 # gate passed and the release commit made (preflight Step 6.3): HEAD is that commit; <gated head> is the head SHA of the gate report's `Range reviewed:` line
-test -z "$(git status --porcelain)"                                                                    # exit 0: clean tree
-test "$(git rev-parse HEAD^)" = "<gated head>"                                                         # exit 0: the release commit sits on the gated head
-git diff --quiet <gated head> HEAD -- . ':!.agents/docs'                                               # exit 0: it changed records only — the source tree is the gated one
+test -z "$(git status --porcelain --untracked-files=all)"                                              # exit 0: clean tree — the bare form inherits status.showUntrackedFiles (BUG-049)
+test "$(git rev-parse HEAD^)" = "$(git rev-parse <gated head>)"                                        # exit 0: the release commit sits on the gated head
+git diff --quiet <gated head> HEAD -- ':(top)' ':(top,exclude).agents/docs'                            # exit 0: records only — ':(top)' because a bare '.' is relative to the cwd and misses a change in a sibling directory (measured)
 git -c gpg.format=ssh -c user.signingkey="$HOME/.ssh/id_ed25519.pub" tag -s vX.Y.Z -m "styrman-harness vX.Y.Z"   # no target argument: tags HEAD
 # check the tag the way the consumer does — every line carries its verdict in its exit status; before any push:
 test "$(git rev-parse vX.Y.Z^{commit})" = "$(git rev-parse HEAD)"                                      # exit 0: the tag is on the release commit

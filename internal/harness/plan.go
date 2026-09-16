@@ -132,7 +132,13 @@ func Plan(repo string, selfExe []byte, vendor string) ([]File, error) {
 			if err != nil {
 				return err
 			}
-			mode := info.Mode().Perm() | 0o600
+			// Mask off group and other WRITE before deploying. A repo file
+			// that is 0664 or 0666 — a loose umask, a copied archive —
+			// would otherwise land group-writable in ~/.claude, where its
+			// contents are instructions every session reads: another local
+			// account could rewrite the harness without touching the repo
+			// (security review of v1.0.0). Read and execute bits are kept.
+			mode := info.Mode().Perm()&0o755 | 0o600
 			// Both CLIs get their own copy: neither is documented to read the
 			// other's directory, and a copy has no dangling-symlink failure mode.
 			if wantClaude {
@@ -205,7 +211,12 @@ func IsOurs(data []byte) bool {
 // every vendor directory on every machine, so one that slipped past
 // .gitignore into a skill directory would be spread rather than caught.
 func secretShaped(name string) bool {
-	for _, pattern := range []string{".env", ".env.*", "*.pem", "*.key", "*.tfvars", "*.tfstate", "*credentials*.json", "*-key.json"} {
+	for _, pattern := range []string{
+		".env", ".env.*", "*.env", ".envrc", ".netrc", ".npmrc", ".pypirc",
+		"*.pem", "*.key", "*.p12", "*.pfx", "*.keystore", "*.jks",
+		"*.tfvars", "*.tfstate", "*.tfstate.backup",
+		"*credentials*.json", "*-key.json", "id_rsa", "id_ed25519", "id_ecdsa", "id_dsa",
+	} {
 		if ok, _ := filepath.Match(pattern, name); ok {
 			return true
 		}

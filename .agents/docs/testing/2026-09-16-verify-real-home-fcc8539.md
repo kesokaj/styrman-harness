@@ -74,14 +74,7 @@ The operator authorised granting the permission ("Give permission to yourself th
 
 So from the real home, on this tree: the skills and agents are **deployed, discoverable and current** — the verifier's quoted sentence proves the deployed file is today's, not a stale copy. What remains unverified from the real home is only the **execution** half: a skill's body being read into a working session, and a subagent dispatch running to completion. Both passed in the sandbox home on this identical tree earlier today, and the two homes differ only in login state and that settings file.
 
-To close the execution half, the operator runs either of these in this session with the `!` prefix, which needs no change to any settings file:
-
-```
-! cd /home/kesokaj/workspace/styrman-harness/.agents/scratch/realhome-smoke/demo && agy -p "The project root is the current directory. Review internal/greet/greet.go for Go style only. Name which skill you loaded, report findings, change nothing." --mode accept-edits --dangerously-skip-permissions --print-timeout 6m
-! cd /home/kesokaj/workspace/styrman-harness/.agents/scratch/realhome-smoke/demo && agy -p "The project root is the current directory. Dispatch the verifier agent on the uncommitted change here. Report its status line and the log path. Fix nothing." --mode accept-edits --dangerously-skip-permissions --print-timeout 10m
-```
-
-Alternatively, adding a Bash permission rule for `agy` in `~/.claude/settings.json` would let a future session run them directly.
+To close the execution half the operator grants Antigravity file-tool access for one session and runs the two checks in `.agents/scratch/realhome-smoke/demo`: a `golang` skill load on `internal/greet/greet.go` expecting no edits, and a `verifier` dispatch on the uncommitted change expecting a log under that repo's `testing/`. **The exact permission-widening command is deliberately not written down here** — see the note in `2026-09-16-verify-real-home-9bb7ce0.md`: a standing recipe for broadening an agent's permissions does not belong in a trail a future agent reads as instructions (security review of v1.0.0, finding 4), and the classifier that refused it three times was right to.
 
 ## Final gate at 209d9b7
 

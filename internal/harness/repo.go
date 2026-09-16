@@ -61,6 +61,10 @@ type RepoInfo struct {
 	Branch string
 	Commit string
 	Dirty  bool
+	// StatusUnknown is set when git could not report the tree's state at all.
+	// A caller deciding whether to DEPLOY treats it as dirty: "git failed" is
+	// not "the tree is clean" (release review of v1.0.0, finding 4).
+	StatusUnknown bool
 }
 
 // errPlainCopy is returned by Behind and Pull for a tree git cannot update.
@@ -91,8 +95,8 @@ func Inspect(repo string) RepoInfo {
 	// a tree holding a whole new, wholly untracked skill directory as clean —
 	// which `update` would then deploy to every vendor directory, the exact
 	// outcome the dirty check exists to stop (security review 2026-09-16).
-	status, _ := gitOut(repo, "status", "--porcelain", "--untracked-files=all")
-	return RepoInfo{Branch: branch, Commit: commit, Dirty: status != ""}
+	status, statusErr := gitOut(repo, "status", "--porcelain", "--untracked-files=all")
+	return RepoInfo{Branch: branch, Commit: commit, Dirty: status != "", StatusUnknown: statusErr != nil}
 }
 
 // Behind fetches the upstream and reports how many commits HEAD lags it.
@@ -124,9 +128,10 @@ func Pull(repo string, out io.Writer) error {
 	// `update` refuses a dirty checkout before it gets here, with a message
 	// that also covers the up-to-date path (BUG-046); this one guards a
 	// direct call to Pull. Both say the same thing: uncommitted work is never
-	// pulled over and never deployed.
-	if Inspect(repo).Dirty {
-		return errors.New("the harness repo has uncommitted changes; commit or stash them before `sh-agent update`")
+	// pulled over and never deployed, and an unreadable status counts as
+	// dirty rather than clean.
+	if info := Inspect(repo); info.Dirty || info.StatusUnknown {
+		return errors.New("the harness repo has uncommitted changes, or git could not report its state; commit or stash them before `sh-agent update`")
 	}
 	cmd := exec.Command("git", "-C", repo, "pull", "--ff-only", "--quiet")
 	cmd.Stdout, cmd.Stderr = out, out
@@ -158,6 +163,15 @@ func Reinstall(repo string, args []string, out io.Writer) error {
 	fmt.Fprintf(out, "building sh-agent from %s\n", repo)
 	build := exec.Command("go", "build", "-o", bin, "./cmd/sh-agent")
 	build.Dir = repo
+	// GOTOOLCHAIN=local, always. go.mod pins a patched toolchain (ADR-028)
+	// and the DEFAULT GOTOOLCHAIN=auto honours that pin by DOWNLOADING it —
+	// measured: on a host with neither that toolchain cached nor a reachable
+	// proxy, `go build` exits 1 with "toolchain not available". This build is
+	// how every consumer installs, including a host with no outbound network,
+	// so it must never need to fetch a compiler. The pin still does its work
+	// where builds are developed and gated; a consumer's binary is built with
+	// the Go that host has (release review of v1.0.0, finding 1).
+	build.Env = append(os.Environ(), "GOTOOLCHAIN=local")
 	build.Stdout, build.Stderr = out, out
 	if err := build.Run(); err != nil {
 		return fmt.Errorf("go build ./cmd/sh-agent: %w", err)

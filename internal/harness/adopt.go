@@ -85,14 +85,33 @@ func Adopt(repo, home, src string, force bool) (string, error) {
 		os.RemoveAll(staging)
 		return "", err
 	}
-	if err := os.RemoveAll(dest); err != nil {
-		os.RemoveAll(staging)
+	// Move the existing skill aside rather than deleting it, and put it back
+	// if the replacement cannot be moved into place. The earlier shape —
+	// RemoveAll(dest) then Rename, with RemoveAll(staging) on the error path
+	// — could delete BOTH the original and its prepared replacement when the
+	// rename failed, for instance across a filesystem boundary (release
+	// review of v1.0.0, finding 3). staging is never deleted on a failure:
+	// whatever else goes wrong, the prepared copy survives and is named.
+	backup := staging + ".previous"
+	if _, err := os.Stat(dest); err == nil {
+		if err := os.RemoveAll(backup); err != nil {
+			return "", err
+		}
+		if err := os.Rename(dest, backup); err != nil {
+			return "", fmt.Errorf("could not move the existing %s aside: %w; the prepared copy is at %s", dest, err, staging)
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
 		return "", err
 	}
 	if err := os.Rename(staging, dest); err != nil {
-		os.RemoveAll(staging)
-		return "", err
+		if _, statErr := os.Stat(backup); statErr == nil {
+			if restoreErr := os.Rename(backup, dest); restoreErr != nil {
+				return "", fmt.Errorf("could not install %s (%v) and could not restore the previous skill (%v); the previous copy is at %s and the new one at %s", dest, err, restoreErr, backup, staging)
+			}
+		}
+		return "", fmt.Errorf("could not install %s: %w; the previous skill is back in place and the prepared copy is at %s", dest, err, staging)
 	}
+	os.RemoveAll(backup)
 	return dest, nil
 }
 

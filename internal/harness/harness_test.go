@@ -3,6 +3,7 @@ package harness
 import (
 	"bytes"
 	"errors"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -1119,10 +1120,39 @@ func TestAdoptFailedCopyKeepsTheExistingSkill(t *testing.T) {
 	}
 	assertSkillsClean(t, repo, "after a failed adopt")
 
-	// The happy path still replaces the skill and leaves no staging behind.
-	if err := os.Remove(filepath.Join(src, "linked.md")); err != nil {
-		t.Fatal(err)
+	// A rename that cannot complete must leave the ORIGINAL in place, never
+	// delete both copies: dest is moved aside and put back (release review of
+	// v1.0.0, finding 3). Forced here by making the destination's parent
+	// read-only so the rename into it fails.
+	if os.Geteuid() != 0 {
+		if err := os.Remove(filepath.Join(src, "linked.md")); err != nil {
+			t.Fatal(err)
+		}
+		skillsDir := filepath.Join(repo, "skills")
+		if err := os.Chmod(skillsDir, 0o500); err != nil {
+			t.Fatal(err)
+		}
+		_, err := Adopt(repo, home, src, true)
+		if chmodErr := os.Chmod(skillsDir, 0o755); chmodErr != nil {
+			t.Fatal(chmodErr)
+		}
+		if err == nil {
+			t.Error("a rename into an unwritable skills/ should fail")
+		}
+		got, readErr := os.ReadFile(filepath.Join(dest, "SKILL.md"))
+		if readErr != nil {
+			t.Fatalf("the original skill must survive a failed rename: %v", readErr)
+		}
+		if string(got) != original {
+			t.Errorf("the original skill changed: %q", got)
+		}
+		if err != nil && !strings.Contains(err.Error(), ".agents/scratch") {
+			t.Errorf("the error should name where the prepared copy is, got %v", err)
+		}
 	}
+
+	// The happy path still replaces the skill and leaves no staging behind.
+	os.Remove(filepath.Join(src, "linked.md"))
 	if _, err := Adopt(repo, home, src, true); err != nil {
 		t.Fatal(err)
 	}
@@ -1272,5 +1302,85 @@ func TestInspectCountsUntrackedFiles(t *testing.T) {
 	}
 	if !Inspect(repo).Dirty {
 		t.Error("an untracked skill directory makes the checkout dirty, whatever status.showUntrackedFiles says")
+	}
+}
+
+// TestInspectFailsClosedOnUnknownStatus: "git could not answer" must never
+// read as "the tree is clean" to a caller deciding whether to deploy
+// (release review of v1.0.0, finding 4).
+func TestInspectFailsClosedOnUnknownStatus(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not on PATH")
+	}
+	repo := newRepo(t)
+	// A .git that is a file, not a directory: IsCheckout is satisfied, and
+	// every git command then fails rather than reporting a clean tree.
+	if err := os.WriteFile(filepath.Join(repo, ".git"), []byte("not a git dir\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	info := Inspect(repo)
+	if !info.StatusUnknown {
+		t.Error("a git status that failed must be reported as unknown")
+	}
+	if err := Pull(repo, io.Discard); err == nil {
+		t.Error("Pull must refuse a checkout whose status git cannot report")
+	}
+}
+
+// TestReinstallBuildsWithTheLocalToolchain is the blocking finding of the
+// v1.0.0 release review: go.mod pins a patched toolchain, and the default
+// GOTOOLCHAIN=auto honours that pin by DOWNLOADING it, so on a host without
+// that toolchain and without a reachable proxy `go build` exits 1 with
+// "toolchain not available" — and Reinstall is how every consumer installs.
+func TestReinstallBuildsWithTheLocalToolchain(t *testing.T) {
+	data, err := os.ReadFile("repo.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(data)
+	idx := strings.Index(src, `exec.Command("go", "build"`)
+	if idx < 0 {
+		t.Fatal("Reinstall no longer shells out to `go build`; re-check this guard")
+	}
+	rest := src[idx:]
+	end := strings.Index(rest, "build.Run()")
+	if end < 0 {
+		t.Fatal("could not find the build invocation")
+	}
+	if !strings.Contains(rest[:end], `"GOTOOLCHAIN=local"`) {
+		t.Error("Reinstall must build with GOTOOLCHAIN=local so installing never needs to download a toolchain")
+	}
+}
+
+// TestPlanDropsGroupAndOtherWrite: a skill file that is group-writable in
+// the repo must not land group-writable in ~/.claude, where its contents are
+// instructions every session reads (security review of v1.0.0).
+func TestPlanDropsGroupAndOtherWrite(t *testing.T) {
+	repo := newRepo(t)
+	loose := filepath.Join(repo, "skills", "alpha", "loose.md")
+	if err := os.WriteFile(loose, []byte("reference\n"), 0o666); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(loose, 0o666); err != nil {
+		t.Fatal(err)
+	}
+	files, err := Plan(repo, nil, VendorAll)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var seen int
+	for _, f := range files {
+		if f.Mode&0o022 != 0 {
+			t.Errorf("%s would be deployed mode %o — group or other writable", f.Rel, f.Mode)
+		}
+		if strings.HasSuffix(f.Rel, "loose.md") {
+			seen++
+			if f.Mode.Perm() != 0o644 {
+				t.Errorf("loose.md mode = %o, want 644", f.Mode.Perm())
+			}
+		}
+	}
+	if seen == 0 {
+		t.Error("the loose file should still be planned")
 	}
 }

@@ -918,7 +918,14 @@ func TestReadSettingsProblems(t *testing.T) {
 	if len(data) != 0 {
 		t.Errorf("no bytes may be returned when the open failed, got %q", data)
 	}
-	if strings.Contains(problem, "SECRET") {
-		t.Error("the problem string must never carry the file's contents")
+	// The problem strings are a closed set of fixed phrases, so asserting one
+	// does not contain the secret proves nothing; what is worth asserting is
+	// that the set IS closed — a future reader returning the OS error verbatim
+	// would leak a path, and returning file bytes would leak the file.
+	for _, allowed := range []string{"could not be read", "is not a regular file", ""} {
+		if problem == allowed {
+			return
+		}
 	}
+	t.Errorf("readSettings returned an unrecognised problem string %q; it must stay a closed set so nothing from the file or the OS error escapes", problem)
 }

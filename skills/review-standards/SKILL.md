@@ -52,7 +52,7 @@ Installers count as callers. A change that an installer, updater or converge ste
 
 - [ ] Prefer the standard library; every new dependency is justified in the PR description or the changelog entry — "saves 20 lines" is not a justification.
 - [ ] Flag speculative abstraction: interfaces with one implementation and no test double, config for values that never vary, layers that only forward calls.
-- [ ] **Security exemption (mandatory, overrides stdlib-first):** never hand-rolled auth, crypto, password hashing, session handling, or JWT/OIDC — vetted libraries only. DIY code in these areas is a high-severity finding regardless of quality.
+- [ ] **Security exemption (mandatory, overrides stdlib-first):** never hand-rolled auth, crypto, password hashing, session handling, or JWT/OIDC — vetted libraries only. DIY code in these areas is a high-severity finding regardless of quality. Hand-rolled means a primitive or protocol implemented or composed here — a cipher, hash, MAC, signature, key derivation, random-number generator, token or session format, an auth flow — and the finding names it. Consuming the standard library's `crypto/*` as designed — bytes or an identifier from `crypto/rand`, a `sha256` checksum, `crypto/tls` — is stdlib use, not DIY, and is no finding. A finding that asks for a new dependency names the stdlib alternative it rejected and why it does not do (Go 1.24: `crypto/rand.Text()` for identifiers).
 - [ ] The simplest correct solution wins; complexity must buy something observable (performance, correctness, a real second caller).
 
 ## 6. Decoupling

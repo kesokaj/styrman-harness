@@ -46,7 +46,7 @@ Backup and versioning only: no CI, no hooks, ever. Commit and push to the curren
 
 ## Hard rules
 
-- Never commit or hardcode secrets. Never hand-roll auth, crypto, hashing, sessions, or JWT/OIDC; vetted libraries only. Otherwise stdlib first, every dependency justified.
+- Never commit or hardcode secrets. Never hand-roll auth, crypto, password hashing, sessions, or JWT/OIDC — a primitive or protocol implemented or composed here; vetted libraries only. Calling the standard library's `crypto/*` as designed (bytes or an identifier from `crypto/rand`, a checksum, TLS) is not hand-rolling and needs no library. Otherwise stdlib first, every dependency justified — a review finding that asks for one names the stdlib alternative it rejected.
 - Dates come from `date +%F`, never memory.
 - Ask git what actually changed before committing. After a heredoc or generated write, `git diff --numstat <path>`: a `-` in both columns means the file is BINARY and invisible to every reviewer — a raw control byte where an escape was meant, which a silent target language (TypeScript, Markdown) accepts and a strict one (Go) rejects outright. Before `rm -r`, `git ls-files <dir>` and delete the single file by name. After any delete, a ` D` on a path you did not name is a stop sign, as is a non-zero deletion count on a commit described as "added".
 - `REQUIREMENTS.md` is immutable without the user's explicit approval. A trajectory change goes: propose the exact edit → approval → ADR → update `REQUIREMENTS.md` and `ROADMAP.md` in one commit.

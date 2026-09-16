@@ -84,7 +84,7 @@ What actually broke, and why — not just that it broke.
 - web/src/lib/bar.ts — NOT COVERED → FAIL
 
 ## Not examined
-What this run did not run or read — tiers, packages, paths — or `nothing`.
+What this run did not run or read — tiers, packages, paths. `nothing` only when every tier the plan names ran and every package has a test; otherwise name the gap.
 
 ## Environment
 OS, Go / Node versions, Docker/Colima state.

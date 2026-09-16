@@ -40,7 +40,7 @@ Every report addresses all six — explicitly, even when a criterion passes:
 2. **Flow tracing** — trace the connections between changed functions/modules end to end: callers updated, types agree, errors propagate, nothing calls into a stub.
 3. **Standards conformance** — against the loaded skills (`review-standards`, and the project's `golang`/`typescript`/`frontend` conventions) and project rules.
 4. **Directory layout** — new files land where the project's conventions say they belong.
-5. **Simplicity, DIY-except-security** — simplest correct solution, stdlib-first, every new dependency justified; the one inversion: auth, crypto, password hashing, sessions, JWT/OIDC must be vetted libraries, never hand-rolled (hand-rolled = high severity).
+5. **Simplicity, DIY-except-security** — simplest correct solution, stdlib-first, every new dependency justified; the one inversion: auth, crypto, password hashing, sessions, JWT/OIDC must be vetted libraries, never hand-rolled (hand-rolled = a primitive or protocol implemented here, named in the finding, high severity; consuming `crypto/rand` bytes or an identifier, a checksum, or `crypto/tls` as designed is stdlib, not DIY).
 6. **Decoupling** — module boundaries clean enough that multiple engineers could work the adjacent seams in parallel without stepping on each other.
 
 ## What counts as a finding
@@ -86,7 +86,7 @@ Range reviewed: <base>..<head> or the file named by the dispatch
 6. Decoupling — ...
 
 ## Not examined
-What you did not reach — files, criteria, commits — or `nothing`.
+What you did not reach — files, criteria, commits. `nothing` only when every file in the range was read and every criterion applied; otherwise name the gap.
 ```
 
 ## Records

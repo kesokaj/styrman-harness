@@ -2,7 +2,7 @@
 owner: bugs
 date: 2026-09-15
 id: BUG-023
-status: open
+status: fixed
 area: skills/preflight
 ---
 # BUG-023: preflight's security trigger list omits crypto, so a crypto-only release skips security review
@@ -17,10 +17,18 @@ Not reproduced as an executed skip; found by review — the trigger list at `ski
 The security trigger list is restated locally in `skills/preflight/SKILL.md` instead of referencing the canonical list, and drifted when crypto was added elsewhere.
 
 ## Fix
-Not fixed. This task only records the finding; no source changed.
+2026-09-16: `skills/preflight/SKILL.md` Step 2's Security bullet now reads
+"...touches auth, crypto, secrets, IAM, input parsing, or dependencies...",
+matching `context/AGENTS.md` § Definition of Done step 2 and
+`agents/security.md:3`.
 
 ## Prevention
 A trigger-list change greps every restatement of it (here, `context/AGENTS.md`, `agents/security.md`, and `skills/preflight/SKILL.md` all needed the same edit); a restated list should instead point at the canonical source.
+Graduated: this rule has lived in `skills/review-standards/SKILL.md` § 3's
+last bullet ("a rule, ban, threshold or trigger the diff changes has every
+other restatement of it in the repository changed too...") since the
+2026-09-16 commit applying Proposal 5 of `retros/2026-09-16-retro.md`.
 
 ## Related
 2026-09-15 docs-lens sweep, `.agents/docs/reviews/2026-09-15-review-sweep-merged.md` F76.
+`.agents/docs/retros/2026-09-16-retro.md` Proposal 5.

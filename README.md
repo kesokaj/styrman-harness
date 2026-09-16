@@ -98,4 +98,4 @@ gofmt -l . && go vet ./... && go test -race ./...
 go run ./cmd/sh-agent install --home .agents/scratch/home   # never test against your real $HOME; scratch lives in the repo, never /tmp
 ```
 
-See `AGENTS.md` for the repo rules and `.agents/docs/plans/2026-09-03-rebuild.md` for the rebuild checklist.
+See `AGENTS.md` for the repo rules and `.agents/docs/plans/2026-09-03-rebuild.md` for the rebuild checklist. To cut a release, see `.agents/docs/deploy/remote.md` § Releases — signed `vX.Y.Z` tags via `/preflight`; styrman-crew consumes them.

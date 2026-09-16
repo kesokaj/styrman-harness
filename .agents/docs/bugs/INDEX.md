@@ -26,7 +26,6 @@
 | BUG-020 | 2026-09-15 | skills/cloud-run-deploy | open | skill's own trigger words ("deploy", "release", "just redeploy it") bypass the `/preflight` release gate | a skill whose triggers overlap a gated command names that gate as the entry point |
 | BUG-021 | 2026-09-15 | skills/distill | open | distill's feedback.jsonl example entry has no `project` field, so retro's cross-project exclusion filter never matches it | every writer of feedback.jsonl uses the feedback skill's canonical entry shape |
 | BUG-022 | 2026-09-15 | skills/golang (references) | open | golang-ecosystem reference tells agents to register private libraries with third-party indexers (Context7, DeepWiki, etc.) | imported skill text is checked for steps that send code/data to an external service |
-| BUG-023 | 2026-09-15 | skills/preflight | open | preflight's security-dispatch trigger list omits crypto, unlike context/AGENTS.md and agents/security.md | a trigger-list change greps every restatement of it |
 | BUG-024 | 2026-09-15 | testing (skill-matrix kit) | fixed | `explorer` and `init-deploy` matrix rows failed on Claude Code although the run did what the row asks: `\|` in a Markdown code span stayed literal in the built kit | a kit built from a Markdown table unescapes `\|`; validate a check against a must-pass state, not only a must-fail one |
 | BUG-025 | 2026-09-15 | skills/init-project | fixed | I-23b's "keep content, add `@AGENTS.md`" edit left project `CLAUDE.md` not a one-line import, violating REQUIREMENTS.md R2 | a plan's cold-reader check and rehearsal compare every edit against REQUIREMENTS.md before it lands |
 | BUG-026 | 2026-09-15 | skills/preflight (Step 4 routing) | fixed | Step 4 docs-freshness routing patched three times across review rounds, each patch introducing a new contradiction; round 4 review found four more defects in the same coverage-rule mechanism | two consecutive rounds of findings on one mechanism stop the patching and go to the operator before a third change |
@@ -44,12 +43,16 @@
 | BUG-039 | 2026-09-16 | context/Git + cmd/sh-agent | fixed | Claude Code headless commits carried a Co-Authored-By trailer the context said not to add | a rule overriding a CLI's built-in behaviour names the CLI's own setting and the command that reports it missing |
 | BUG-041 | 2026-09-16 | agents/security, agents/reviewer, review-standards, context | fixed | security agent graded a stdlib `crypto/rand` UUID as hand-rolled cryptography, contradicting the reviewer | a ban names the thing banned precisely enough its stdlib counterpart isn't caught; two harness agents disagreeing means the rule is the defect |
 | BUG-042 | 2026-09-16 | skills/feature | fixed | cold-read cap allowed a 4th round, plan scope grew past the brief, decision rows outlived the behaviour they described | cap counts reports not "convergence"; an ambiguity resolves to one recorded D-row; a reversing fix updates its D-row in the same change |
-| BUG-044 | 2026-09-16 | agents/security (probe files outside scratch) | fixed | security agent's crafted-input probe loop wrote 7 stray untracked files in the repo root, named after their own content | probe inputs go under `.agents/scratch/<slug>/` with chosen names, per the agent's own rule (`agents/security.md:77`); main agent runs `git status --short --untracked-files=all` after any probe dispatch |
+| BUG-046 | 2026-09-16 | cmd/sh-agent (update) | open | timer-triggered `update` reinstalled the real home from a dirty, up-to-date checkout | `update` reinstalls only after a successful `Pull`, or refuses a dirty tree on every path, not just "behind upstream" |
 
 ## Graduated
 
 | ID | Area | Graduated to |
 |---|---|---|
+| BUG-023 | skills/preflight | `skills/review-standards/SKILL.md` § 3 (every other restatement of a changed rule is changed with it) |
 | BUG-029 | testing (Phase 6 kit and staging scripts) | `context/AGENTS.md` § Hard rules, "Silence from your own instrumentation" bullet |
 | BUG-040 | skills/init-project | `skills/init-project/SKILL.md` Step 4 and `skills/init-project/assets/agents-tree/docs/deploy/local.md` |
 | BUG-043 | agents/verifier | `agents/verifier.md` § What to run (`-count=1` always) and § Records (guide sentence) |
+| BUG-044 | agents/security (probe files outside scratch) | `context/AGENTS.md` § Hard rules, "Ask git what actually changed before committing" bullet (sentence beginning "After any dispatch that can write") |
+| BUG-045 | agents/security (probe repositories) | `context/AGENTS.md` § Hard rules ("Ask git what actually changed" bullet, `git log`/`git tag` check) and `agents/security.md` (probe repo bound with `git init <dir>` / `git -C <dir>`) |
+| BUG-047 | docs/deploy (release procedure) | `.agents/docs/deploy/remote.md` § Releases (tag sits on HEAD; checks bind to HEAD and the gate report's `Range reviewed:` head) |

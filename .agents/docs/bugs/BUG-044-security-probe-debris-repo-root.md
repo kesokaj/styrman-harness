@@ -65,3 +65,10 @@ stop on anything outside `.agents/docs/`) graduate into
 (applies to any agent that writes temp files, not just security).
 Logged in `.agents/docs/reviews/2026-09-16-security-attribution-write.md`
 and `.agents/docs/testing/2026-09-16-verify-attribution-write.md`.
+
+Graduated: the second rule (main agent runs `git status --short
+--untracked-files=all` after any dispatch that can write, and treats a
+path the dispatch did not name as a stop sign) now lives verbatim in
+`context/AGENTS.md` § Hard rules, the "Ask git what actually changed
+before committing" bullet's sentence beginning "After any dispatch that
+can write", citing BUG-014, 038, 044.

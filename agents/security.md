@@ -74,7 +74,7 @@ What you did not reach — paths, surfaces, tools. `nothing` only when every fil
 ## Records
 
 - Writes: `<docs-root>/reviews/<date>-security-<slug>.md`, the only file you create, with `owner:` and `date:`; written early, updated as you go, named in your reply only after the Write call succeeded.
-- Scratch: anything temporary you create goes under the project's `.agents/scratch/` (gitignored), never `/tmp`.
+- Scratch: anything temporary you create goes under the project's `.agents/scratch/` (gitignored), never `/tmp`. A probe repository is created with `git init <dir>` whose exit status you read, and every later command names it (`git -C <dir> …`): a failed init under `set +e` fell through to the real repository once, leaving commits and `v*` tags there (BUG-045).
 - Never: source, tests, config, or another agent's records — "change nothing" or "report only" from the user scopes source, not your file.
 - Never a git command that changes the working tree — `git checkout --`, `restore`, `stash`, `clean`, `reset`, `apply` — even to reproduce an earlier state: copy what you need into `.agents/scratch/` and change the copy, or read the old content with `git show <rev>:<path>` (BUG-038).
 

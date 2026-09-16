@@ -45,6 +45,10 @@ Nothing generated is committed. The deployed files are assembled by `sh-agent in
 
 There is no test framework beyond `go test`. A change to `context/`, `agents/`, or `skills/` is verified by `go run ./cmd/sh-agent install --home .agents/scratch/x` succeeding and `go run ./cmd/sh-agent status --home .agents/scratch/x` reporting no drift, then by one start of each CLI in the sandbox (`.agents/docs/testing/2026-09-03-verify-sandbox.md`) with its log grepped for parse errors. A verification log states what it did not exercise; "complete" or "all skills" is said only after the full matrix in `.agents/docs/testing/skill-matrix.md` has run. Tested means tested from where it runs: after any install into a real home, the three smoke checks in `.agents/docs/testing/2026-09-03-verify-real-home.md` (context questions, one skill load, one agent dispatch) run from that home on each CLI before the install is called done. A change to `context/`, `agents/` or `skills/` also gets `/review --docs` over its range; here the living docs also include `context/`, `agents/`, and every skill directory under `skills/` not listed in `skills/VENDORED.md`, searched at `skills/` because `.agents/skills` is a symlink.
 
+## Release
+
+Releases are SSH-signed annotated `vX.Y.Z` tags on `main`, cut only by `/preflight vX.Y.Z` from the operator's own turn, from this checkout, on a machine holding the operator's ed25519 key. The tag is signed per command (`-c gpg.format=ssh -c user.signingkey=...`, never a `git config` change, and `git` never under `sudo`) and checked before the push exactly as styrman-crew's channel checks it — bound first (the tag takes no target and sits on HEAD, the release commit, whose parent is the gated head and whose source tree is the gated one, on `main`), then annotated, last armor header `-----BEGIN SSH SIGNATURE-----`, `verify-tag` against the allowed-signers line — with the exact commands in `.agents/docs/deploy/remote.md` § Releases. The tag is the only version tracking (no version file; preflight Step 6.2); a pushed tag is never moved; a bad release gets the next PATCH. There is no deploy step after the push.
+
 ## Key files
 
 | Path | Purpose |
@@ -54,3 +58,4 @@ There is no test framework beyond `go test`. A change to `context/`, `agents/`, 
 | `internal/harness/derive.go` | Claude → Antigravity agent translation |
 | `REQUIREMENTS.md` | Non-negotiables for the harness |
 | `.agents/docs/plans/2026-09-03-rebuild.md` | The rebuild checklist |
+| `.agents/docs/deploy/remote.md` | Machines, mirrors, and the signed-tag release procedure (ADR-026) |

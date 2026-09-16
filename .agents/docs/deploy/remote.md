@@ -92,7 +92,7 @@ Standing by-hand procedures, never pending items (those live in the newest hando
 - On the Mac after a push from the Linux box: `sh-agent update`, `sh-agent status`, then the three smoke checks on each CLI (`.agents/docs/testing/2026-09-03-verify-real-home.md`; the Mac procedure is `2026-09-04-verify-mac-real-home.md`).
 - After any change to `context/`, `skills/`, or `agents/`: refresh argolis-devbox's mirror from its project; styrman-crew receives the next signed tag (§ Releases).
 - On a new machine, `ssh-keygen -y -f ~/.ssh/id_ed25519 | ssh-keygen -lf -` must print the fingerprint in § Releases before that machine cuts a release (derived from the private key: a copied `.pub` alone proves nothing).
-- Go upgrades on the Mac: `brew upgrade go`.
+- Go upgrades on the Mac: `brew upgrade go`. On the Linux box the distribution had nothing newer, so it runs a user-level SDK on PATH ahead of `/usr/bin/go` — the procedure is in `local.md` § Operator steps, and it needs no root.
 
 ## Roll back
 

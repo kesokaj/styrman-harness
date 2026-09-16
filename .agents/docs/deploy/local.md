@@ -42,7 +42,17 @@ Standing by-hand procedures on this box, never pending items (those live in the 
 
 - After a push from another machine: `sh-agent update`, then `sh-agent status` shows a stamped `binary` line and no drift.
 - After any change to `context/`, `agents/`, or `skills/` reaches this home: the three smoke checks of `.agents/docs/testing/2026-09-03-verify-real-home.md` on each CLI, from a fresh clone of the demo service.
-- When `govulncheck ./...` names a toolchain-fixed advisory: upgrade Go with the system package manager (this box: apt), never by raising the `go` directive in `go.mod`.
+- When `govulncheck ./...` names a toolchain-fixed advisory: get a newer Go, never raise the `go` directive or add a `toolchain` line in `go.mod` (ADR-029 — a pin makes the module unbuildable on a host that cannot fetch a toolchain). Try the system package manager first; when it has nothing newer, as Debian trixie did on 2026-09-16 (`golang-1.24-go 1.24.4-1` and no later package), install a user-level SDK instead, which needs no root:
+
+```bash
+go install golang.org/dl/go1.27.1@latest     # the wrapper lands in ~/.go/bin
+go1.27.1 download                            # the SDK lands in ~/sdk/go1.27.1
+ln -sfn "$HOME/sdk/go1.27.1/bin/go" "$HOME/.local/bin/go"   # ~/.local/bin is first on PATH here
+go install golang.org/x/vuln/cmd/govulncheck@latest         # rebuild it, or it cannot parse the newer sources
+go version && govulncheck ./...
+```
+
+  Undo by deleting that one symlink; `/usr/bin/go` is untouched and the system package stays where it was. After the switch, run the full gate and `sh-agent install`, so the deployed binary is built by the new toolchain — `go version -m ~/.local/bin/sh-agent` names it.
 
 ## Roll back
 

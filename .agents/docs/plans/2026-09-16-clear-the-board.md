@@ -79,10 +79,10 @@ Already applied earlier today, not repeated here: G4 and G11 (retro Proposals 7 
 - [x] `reviewer` code lens (APPROVE WITH NITS, three findings) and docs lens (REQUEST CHANGES, four findings) — `reviews/2026-09-16-review-clear-the-board-{code,docs}.md`, 2026-09-16
 - [x] `security` over the whole range — `reviews/2026-09-16-security-clear-the-board.md`: two medium (the dirty check inheriting `status.showUntrackedFiles`; secret-shaped files deployed from a skill directory), one low TOCTOU, four further lows, 2026-09-16
 - [x] Every finding fixed, rebutted or left with an owner in each report's `## Outcome` — two mediums fixed with tests and their own bug records (BUG-049, BUG-050), the TOCTOU accepted into ADR-027's Consequences, the root-step-gate finding rebutted against R3, govulncheck left to the operator, 2026-09-16
-- [ ] Sandbox: install, one headless start of each CLI, log grepped
-- [ ] Real home: install, the three smoke checks on each CLI
-- [ ] `changelog`, `bugs`, commit, push, `/handoff`
-- [ ] TODO.md and ROADMAP.md empty; `bugs/INDEX.md` main table empty of `open` rows
+- [x] Sandbox: installed at fcc8539 (`drift none`), one headless start of each CLI — both quoted the two new context rules verbatim from the deployed files, zero `Failed to parse` lines, 2026-09-16
+- [x] Real home: installed at fcc8539 (`drift none`, `binary fcc8539159f8`, no note). Claude Code passed all three smoke checks — and its verifier dispatch ran the new post-dispatch untracked/commit/tag check unprompted. Antigravity passed the context check; its skill-load and dispatch checks are BLOCKED on a grant in `~/.gemini/antigravity-cli/settings.json` that this session's permission classifier refused twice (correctly — it is the operator's file); both passed in the sandbox home on this same tree. The BUG-046 fix was additionally proven live: the installed binary refused a deliberately dirtied checkout and `--check` still reported. `testing/2026-09-16-verify-real-home-fcc8539.md`, 2026-09-16
+- [x] `changelog` (ADR-027 and two `changes/` entries), `bugs` (three new records, six closed and graduated), commits and pushes per phase, handoff `handoffs/2026-09-16-board-cleared.md`, 2026-09-16
+- [x] `TODO.md` and `ROADMAP.md` hold headers only; `bugs/INDEX.md`'s main table holds zero rows and no record carries `status: open` — verified by reading both, not by an agent's word; the Graduated table holds 16 rows, sorted by ID, 2026-09-16
 
 ## Risks
 

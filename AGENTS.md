@@ -12,7 +12,10 @@ The agent harness: one global context (agents.md standard), skills (Agent Skills
 gofmt -l cmd internal && go vet ./... && go test -race ./...   # before any completion claim; gofmt takes the source dirs, not `.`, because it walks .agents/scratch and the Go tool does not (BUG-048)
 go run ./cmd/sh-agent install --home .agents/scratch/home  # exercise the installer against a scratch home (gitignored)
 go run ./cmd/sh-agent list                              # sanity-check skills and agents parse
+govulncheck ./...                                       # expect "0 vulnerabilities" for this code
 ```
+
+`go.mod` pins `toolchain go1.25.8` (ADR-028): the two stdlib advisories reachable from this code are fixed there and Debian trixie ships no newer Go. The `go` directive stays at 1.24.4, so `GOTOOLCHAIN=local` on an older toolchain still builds — a mirror building offline is unaffected. Raising the pin is one line plus a `govulncheck` re-run.
 
 ## Layout
 

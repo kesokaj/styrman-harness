@@ -95,6 +95,7 @@ cmd/sh-agent  the binary; internal/harness is its logic and tests
 
 ```bash
 gofmt -l cmd internal && go vet ./... && go test -race ./...   # gofmt takes the source dirs: unlike the Go tool it walks .agents/scratch
+# go.mod pins `toolchain go1.25.8` for two stdlib advisories (ADR-028); GOTOOLCHAIN=local still builds on older Go
 go run ./cmd/sh-agent install --home .agents/scratch/home   # never test against your real $HOME; scratch lives in the repo, never /tmp
 ```
 

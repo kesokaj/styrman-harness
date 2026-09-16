@@ -31,7 +31,7 @@ All dates come from `date +%F` — never from memory.
 ## Step 1: Determine the release diff
 
 ```bash
-git status --porcelain          # dirty SOURCE paths go through the Definition of Done + commit first
+git status --porcelain --untracked-files=all   # dirty SOURCE paths go through the Definition of Done + commit first; the bare form inherits status.showUntrackedFiles and can report a wholly untracked directory as clean
 git describe --tags --abbrev=0  # last tag = default base ref
 git log <base>..HEAD --oneline
 git diff <base>..HEAD --stat

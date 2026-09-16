@@ -236,7 +236,11 @@ func resolveVendor(flagVal, home string) (string, error) {
 func status(repo, home, vendorFlag string, out io.Writer) error {
 	info := harness.Inspect(repo)
 	dirty := "clean"
-	if info.Dirty {
+	if info.StatusUnknown {
+		// Never render an unreadable tree as clean: git failing to report is
+		// not evidence of anything (round-2 release review).
+		dirty = "state unknown — git could not report it"
+	} else if info.Dirty {
 		dirty = "uncommitted changes"
 	}
 	if info.Commit == "" {

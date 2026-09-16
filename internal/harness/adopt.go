@@ -80,8 +80,13 @@ func Adopt(repo, home, src string, force bool) (string, error) {
 	if err := os.RemoveAll(staging); err != nil {
 		return "", err
 	}
-	defer os.RemoveAll(staging)
+	// NO `defer os.RemoveAll(staging)`: on every failure path below the
+	// prepared copy is what the operator is told to recover from, so deleting
+	// it on the way out would make each of those messages name a path that no
+	// longer exists (round-2 release review). staging is removed only when it
+	// has been renamed into place, which is when it no longer exists anyway.
 	if err := copyTree(from, staging); err != nil {
+		// Nothing has been moved yet, so a partial copy is the only debris.
 		os.RemoveAll(staging)
 		return "", err
 	}
@@ -90,26 +95,28 @@ func Adopt(repo, home, src string, force bool) (string, error) {
 	// RemoveAll(dest) then Rename, with RemoveAll(staging) on the error path
 	// — could delete BOTH the original and its prepared replacement when the
 	// rename failed, for instance across a filesystem boundary (release
-	// review of v1.0.0, finding 3). staging is never deleted on a failure:
-	// whatever else goes wrong, the prepared copy survives and is named.
+	// review of v1.0.0, finding 3).
 	backup := staging + ".previous"
+	hadPrevious := false
 	if _, err := os.Stat(dest); err == nil {
 		if err := os.RemoveAll(backup); err != nil {
 			return "", err
 		}
 		if err := os.Rename(dest, backup); err != nil {
-			return "", fmt.Errorf("could not move the existing %s aside: %w; the prepared copy is at %s", dest, err, staging)
+			return "", fmt.Errorf("could not move the existing %s aside: %w; it is untouched and the prepared copy is at %s", dest, err, staging)
 		}
+		hadPrevious = true
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return "", err
 	}
 	if err := os.Rename(staging, dest); err != nil {
-		if _, statErr := os.Stat(backup); statErr == nil {
+		if hadPrevious {
 			if restoreErr := os.Rename(backup, dest); restoreErr != nil {
-				return "", fmt.Errorf("could not install %s (%v) and could not restore the previous skill (%v); the previous copy is at %s and the new one at %s", dest, err, restoreErr, backup, staging)
+				return "", fmt.Errorf("could not install %s (%v) and could not put the previous skill back (%v); the previous copy is at %s and the new one at %s — move one of them into place by hand", dest, err, restoreErr, backup, staging)
 			}
+			return "", fmt.Errorf("could not install %s: %w; the previous skill is back in place and the prepared copy is at %s", dest, err, staging)
 		}
-		return "", fmt.Errorf("could not install %s: %w; the previous skill is back in place and the prepared copy is at %s", dest, err, staging)
+		return "", fmt.Errorf("could not install %s: %w; there was no previous skill of that name and the prepared copy is at %s", dest, err, staging)
 	}
 	os.RemoveAll(backup)
 	return dest, nil
@@ -145,6 +152,14 @@ func copyTree(src, dest string) error {
 		}
 		if d.Name() == ".DS_Store" {
 			return nil
+		}
+		// Refuse a credential at the ENTRANCE too, not only in Plan's deploy
+		// walk: adopt copies a directory into skills/, where it is committed
+		// and pushed, and the install-time refusal would then fire on every
+		// consumer rather than here, after the secret had already been
+		// published (security review of v1.0.0, round 2).
+		if secretShaped(d.Name()) {
+			return fmt.Errorf("%s is a secret-shaped file — adopt refuses to copy it into the repo; remove it from the skill first", path)
 		}
 		info, err := d.Info()
 		if err != nil {

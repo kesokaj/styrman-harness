@@ -38,6 +38,21 @@ func Install(repo, home string, files []File, vendor string, dryRun bool, out io
 			continue
 		case readErr == nil && bytes.Equal(existing, f.Data):
 			counts["unchanged"]++
+			// Same bytes is not the same file: a deployed copy that someone
+			// (or an older sh-agent) left group- or world-writable stays that
+			// way forever on this branch, because nothing rewrites it. The
+			// machine that HAS the problem is exactly the one that never gets
+			// the fix (security review of v1.0.0, round 2, measured on a real
+			// install). Correct the mode in place; the contents are already
+			// right, and a chmod that fails is not worth failing an install
+			// over — the next run with changed bytes will set it.
+			if !dryRun {
+				if info, statErr := os.Stat(dest); statErr == nil && info.Mode().Perm() != f.Mode.Perm() {
+					if err := os.Chmod(dest, f.Mode.Perm()); err != nil {
+						fmt.Fprintf(out, "note: could not correct the mode of ~/%s (%v)\n", f.Rel, err)
+					}
+				}
+			}
 		default:
 			counts["written"]++
 			if dryRun {
@@ -78,7 +93,14 @@ func Install(repo, home string, files []File, vendor string, dryRun bool, out io
 	sort.Strings(manifest)
 	info := Inspect(repo) // empty for a plain copy: no commit of another repo is recorded
 	commit := info.Commit
-	if commit != "" && info.Dirty {
+	switch {
+	case commit == "":
+	case info.StatusUnknown:
+		// Never record a bare commit for a tree git could not describe: the
+		// files came from a working tree of unknown state, and the manifest
+		// is what every later `status` compares against.
+		commit += "+status-unknown"
+	case info.Dirty:
 		commit += "+dirty" // the files came from the working tree, not from this commit
 	}
 	st := State{Repo: repo, Commit: commit, InstalledAt: time.Now().Format(time.RFC3339), Vendor: v, Files: manifest}

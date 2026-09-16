@@ -163,14 +163,15 @@ func Reinstall(repo string, args []string, out io.Writer) error {
 	fmt.Fprintf(out, "building sh-agent from %s\n", repo)
 	build := exec.Command("go", "build", "-o", bin, "./cmd/sh-agent")
 	build.Dir = repo
-	// GOTOOLCHAIN=local, always. go.mod pins a patched toolchain (ADR-028)
-	// and the DEFAULT GOTOOLCHAIN=auto honours that pin by DOWNLOADING it —
-	// measured: on a host with neither that toolchain cached nor a reachable
-	// proxy, `go build` exits 1 with "toolchain not available". This build is
-	// how every consumer installs, including a host with no outbound network,
-	// so it must never need to fetch a compiler. The pin still does its work
-	// where builds are developed and gated; a consumer's binary is built with
-	// the Go that host has (release review of v1.0.0, finding 1).
+	// GOTOOLCHAIN=local, always, and not because of anything in go.mod —
+	// the toolchain directive that prompted this was withdrawn in ADR-029.
+	// The rule stands on its own: installing must never depend on fetching a
+	// compiler. Under the default GOTOOLCHAIN=auto, any future `toolchain`
+	// line, or a `go` directive above the host's version, makes this build
+	// try to DOWNLOAD a toolchain, which exits 1 with "toolchain not
+	// available" on a host with no cached copy and no reachable proxy —
+	// measured. This is how every consumer installs, so it is pinned to what
+	// the host already has.
 	build.Env = append(os.Environ(), "GOTOOLCHAIN=local")
 	build.Stdout, build.Stderr = out, out
 	if err := build.Run(); err != nil {

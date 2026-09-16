@@ -32,7 +32,7 @@ Fixed by deletion of the placeholder: the tag takes no target argument
 and sits on HEAD; the checks compare the tag with `git rev-parse HEAD`,
 HEAD's parent with `<gated head>` (the head SHA from the gate report's
 `Range reviewed:` line — the one external input), and assert
-`git diff --quiet <gated head> HEAD -- . ':!.agents/docs'` (records
+`git diff --quiet <gated head> HEAD -- ':(top)' ':(top,exclude).agents/docs'` (records
 only). Rehearsed must-pass and must-fail in
 `.agents/scratch/tagcheck/`.
 

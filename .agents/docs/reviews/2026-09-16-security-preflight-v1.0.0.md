@@ -377,3 +377,368 @@ corroborates theirs.** Stated plainly, and without softening the severity split:
 9. [low] `sudo -n cmp` sits inside the agent-followed block and fails open off the crew host — **fixed** by the condition added earlier (`test ! -d /etc/styrman ||`), and the line is marked crew-host-only. It remains the one root step in the procedure and has never been executed here.
 10. [low] c7e3688 shipped with "changelog only, no reviewer or security dispatch" although it touched dependencies — **fair, and this gate is the correction**: the toolchain pin went in as a one-line change with its own ADR and no independent read, and the first independent read of it found the high finding above. The lesson is recorded here rather than left implicit: a change to `go.mod` is a dependency change and takes the security row, however few lines it is.
 11. Remaining lows not individually actioned — `/retro`'s unescaped grep interpolation, the gcloud key-file lifecycle wording, `<gated head>` transcription (now derived, see 6) — are recorded in the report body; the first two are ordinary follow-ups, filed in the handoff rather than fixed inside a release gate.
+
+---
+
+## Round 2
+
+Range reviewed: `c7e3688..787e15c` (the fixes made in response to round 1 and the release
+reviewer), plus the **uncommitted working-tree change** that withdraws `toolchain go1.25.8`
+from `go.mod` (`git diff 787e15c -- go.mod`, one deletion) and a modified
+`.agents/docs/testing/2026-09-16-verify-preflight-v1.0.0.md`. The whole release range
+`4aa19be..HEAD` is round 1's; this section judges only the response.
+
+Blobs pinned at read time: `HEAD=787e15cdbf52b1443cfcdd760ee6bc185f215716`, working tree
+carrying ` M go.mod` and ` M .agents/docs/testing/2026-09-16-verify-preflight-v1.0.0.md`.
+
+### Verdict: FINDINGS — none blocking. **Ship.**
+
+Every one of the seven fixes closes the substance of what it answers, and none of them opens a
+hole. Two, though, are wired only half-way, and both half-wirings sit exactly where the finding
+was: `Inspect`'s new `StatusUnknown` fails closed in `update` and `Pull` but still reads as the
+word **"clean"** in `sh-agent status` and as an unqualified commit in the install manifest; and
+the new mode mask applies only to files `Install` actually writes, so a file already deployed
+`0666` whose content has not changed is **never chmodded** and keeps the loose mode the fix
+exists to remove. Neither is a new hole; both mean the remediation does not fully remediate.
+
+The sharpest new thing this round is not in the fixes themselves but in the gap the widened
+`secretShaped` list makes visible: the list is enforced on the way **out** (`Plan` refuses to
+deploy) and not on the way **in** (`Adopt`/`copyTree` copies anything into the tracked
+`skills/`), and `.gitignore` covers none of the newly added names. `sh-agent adopt` of a
+third-party skill carrying an `id_ed25519`, a `.netrc` or an `.npmrc` therefore lands it in a
+git-tracked directory of a repository that is pushed to GitHub, and the only guard that fires
+is the install-time refusal on every consumer — after the push.
+
+Beside it, one clause of round 1's finding 4 was never removed: the handoff — the file the next
+session reads first — still recommends adding a Bash permission rule for `agy`, and now points at a
+log whose commands were deleted. The two logs were cleaned; the file with the most authority over
+the next session was not.
+
+On the specific questions asked: the widened list **cannot** refuse any file in this repo's 27
+skills today (checked by `find`); the mode mask **cannot** strip an execute bit (`0o755` keeps
+all three); `adopt`'s backup leaves nothing new readable, but its error messages name a prepared
+copy the deferred cleanup has already deleted; and `GOTOOLCHAIN=local` has no download-side
+supply-chain consequence at all — its consequence is the opposite one, judged below.
+
+### On shipping v1.0.0 with GO-2026-4602 and GO-2025-3956 present
+
+**Ship. Do not hold the release for the toolchain upgrade** — and not because "it is only a
+local developer tool", which is not a security argument. Because both advisories are matched by
+symbol and **unreachable by precondition** in this module. I read the advisory records
+themselves (`https://vuln.go.dev/ID/GO-2026-4602.json`, `.../GO-2025-3956.json`), not the
+titles:
+
+- **GO-2026-4602 / CVE-2026-27139** — *"when listing the contents of a directory using
+  File.ReadDir or File.Readdir the returned FileInfo could reference a file outside of **the Root
+  in which the File was opened**… limited to reading metadata provided by lstat."* The escape is
+  an escape **from an `os.Root`**. This module constructs none: `grep -rn "os\.Root\|OpenRoot\|os\.DirFS"`
+  over every `.go` file returns nothing. The three `os.ReadDir` call sites
+  (`inventory.go:125`, `inventory.go:164`, `apply.go:290`) pass plain path strings with no
+  containment boundary to breach, and `LoadSkills` already leaves the tree deliberately through
+  `filepath.EvalSymlinks`. There is no confinement here for the bug to break.
+- **GO-2025-3956 / CVE-2025-47906** — *"passing certain strings to LookPath (`""`, `"."`, and
+  `".."`) can result in the binaries listed in the PATH being unexpectedly returned."* The
+  trigger is the **argument value**. Every `LookPath` in non-test code is a literal:
+  `exec.LookPath("go")` at `cmd/sh-agent/main.go:129` and `internal/harness/repo.go:154`. Every
+  `exec.Command` name is a literal (`"diff"`, `"git"`, `"go"`) or `bin`, an absolute path. No
+  call site can produce `""`, `"."` or `".."`, so the vulnerable branch is not reachable.
+
+So the residual risk of shipping is: a consumer binary built on a go1.24.x host carries two
+stdlib defects neither of which this code can trigger. Against that, the pin's measured cost was
+that the harness could not be **built at all** on an offline host with an older Go — the outer
+`go run` is itself subject to the directive, so the `Reinstall` fix never gets a chance. Withdrawing
+the pin is the right trade and I endorse it: an unbuildable tool is a worse security property
+than two unreachable symbol matches, because the tool is how every later fix is delivered.
+
+Two conditions on that endorsement, neither blocking:
+
+1. **`govulncheck ./...` now reports 2 affecting again** (run here, output quoted under *Checked*).
+   Any future gate that keys on "govulncheck clean" will fail from now on. Record the exception
+   in the trail with the reachability argument above, or a later session reads the red output,
+   re-adds the pin, and re-breaks the offline build. Note also *why* the number moved, measured rather than
+   assumed: with the pin withdrawn, `go version` in this checkout is **go1.24.4** — the system Go
+   (`/usr/bin/go`, Debian's) — and `go env GOVERSION` agrees. go1.25.8 ran here only because the
+   pin made the `go` command re-exec a toolchain it had downloaded. So govulncheck is reporting the
+   toolchain that actually compiles, and the earlier "0 affecting" was a true measurement of a build
+   that existed only because of the pin's download. Both numbers are honest; they describe different
+   builds.
+2. **The operator's system Go upgrade stays the only real fix** and belongs in the handoff's Next
+   Steps, not in a plan file waiting on this release. Debian trixie shipping no patched package
+   makes it a manual toolchain install; that is an operator action, correctly outside the gate.
+
+### Findings
+
+- **[medium / confidence: high]** `cmd/sh-agent/main.go:237-241` and `internal/harness/apply.go:79-82`
+  — **the `StatusUnknown` fix is wired into 2 of its 4 call sites.** `update` and `Pull` now fail
+  closed, which is the deploy decision and the important half. But `status` still computes
+  `dirty := "clean"; if info.Dirty { dirty = "uncommitted changes" }`, so a tree whose state git
+  could not report prints as **`(main @ abc1234, clean)`**; and `Install` still writes
+  `if commit != "" && info.Dirty { commit += "+dirty" }`, so the manifest records the bare commit
+  as the provenance of files that came from a working tree of unknown state. Reachable without any
+  attacker, **measured in the probe repo**: with `.git/index` unreadable (`chmod 000`)
+  `git rev-parse --short HEAD` exits 0 while `git status --porcelain --untracked-files=all` exits
+  **128** (`fatal: .git/index: index file open failed`), and with a truncated/corrupt `.git/index`
+  the same pair gives 0 and **128** (`index file smaller than expected`) — a killed git, a full
+  disk, an unclean shutdown. So `Commit` is populated (the "plain copy" branch is not taken) and the
+  tree's real state is unknown. A stale `.git/index.lock`, which I expected to do this, **does not**
+  — git 2.x still answers `status` read-only with the lock present, exit 0; probed and negative. The harness's own `AGENTS.md` makes
+  `sh-agent status` the check the operator reads before calling an install done, and BUG-046's
+  whole lesson is that a wrong "clean" is what makes a bad deploy invisible. Remediation, two
+  lines, no new mechanism: `if info.StatusUnknown { dirty = "status unknown — git could not report it" }`
+  in `status`, and `commit += "+unknown"` in `Install`, mirroring the existing `+dirty`.
+
+- **[medium / confidence: high]** `internal/harness/adopt.go:128-158` (`copyTree`) and `.gitignore:9-15`
+  versus `internal/harness/plan.go:213-225` — **the widened credential list guards the exit and not
+  the entrance, and git's own guard was not widened with it.** `Plan` refuses to deploy the new
+  names; `Adopt` copies a foreign skill directory — including whatever `npx skills add -g` fetched
+  from the internet — into the repo's **git-tracked** `skills/<name>/` with no such refusal. The
+  repo's `.gitignore` lists only `.env`, `.env.*`, `*.pem`, `*.key`, `*.tfvars`, `*.tfstate`: it
+  does **not** list `id_rsa`, `id_ed25519`, `id_ecdsa`, `id_dsa`, `.netrc`, `.npmrc`, `.pypirc`,
+  `.envrc`, `*.env`, `*.p12`, `*.pfx`, `*.jks`, `*.keystore`, `*.tfstate.backup`,
+  `*credentials*.json` or `*-key.json` — that is, exactly the shapes this change just taught the
+  installer to fear, plus two that were there before. So the path is: adopt → file sits in
+  `skills/<name>/` → `git add skills/<name>` (the documented follow-up to adopt) → pushed to a
+  GitHub remote → and only *then* does the install-time refusal fire, on every consumer, after the
+  secret is public. The comment above `secretShaped` says the names "match the context's Git rule";
+  the file that mechanises that rule does not. Remediation, no code design question: call
+  `secretShaped(d.Name())` in `copyTree`'s walk so adopt refuses at ingest with the same message,
+  and mirror the full pattern list into `.gitignore`. Both are the stdlib/`filepath.Match` already
+  present; no dependency.
+
+- **[medium / confidence: high]** `internal/harness/apply.go:36-47` (`Install`) with
+  `internal/harness/plan.go:141` — **the mode mask never reaches a file that is already deployed.**
+  `Install` short-circuits on `readErr == nil && bytes.Equal(existing, f.Data)` and counts
+  "unchanged"; it does not chmod. `writeAtomic`'s `tmp.Chmod(mode)` runs only on the write path. A
+  machine that already has `~/.claude/skills/x/SKILL.md` at `0666` from an install before this fix
+  therefore keeps `0666` through every future `sh-agent install` and `update` for as long as that
+  file's bytes do not change — which, for a stable skill, is indefinitely. The new
+  `TestPlanDropsGroupAndOtherWrite` asserts `Plan`'s output, so it is green while the deployed file
+  on the affected machine is not. Exploitable in principle exactly as round 1 stated it: another
+  local account rewrites instructions every session reads, without touching the repo. Remediation:
+  on the unchanged branch, `os.Stat(dest)` and `os.Chmod(dest, f.Mode)` when `info.Mode().Perm() != f.Mode.Perm()`,
+  counting it as written or as its own "tightened" line so the operator sees it happen.
+
+- **[low / confidence: high]** `internal/harness/adopt.go:83` versus `:93-94` and the error strings
+  at `:101`, `:109`, `:112` — **the failure messages name a prepared copy that `defer os.RemoveAll(staging)`
+  deletes before the caller reads them.** The comment states the invariant in as many words —
+  *"staging is never deleted on a failure: whatever else goes wrong, the prepared copy survives and
+  is named"* — and the defer registered at line 83 runs on every return, including all three
+  failure returns. The substance of the release reviewer's finding 3 **is** fixed (the original is
+  moved aside and renamed back, so it is never lost); what is wrong is the promise. The new test
+  asserts only `strings.Contains(err.Error(), ".agents/scratch")` — that the message names a path,
+  never that the path exists — so the test enshrines the false claim. This is the "description that
+  outlives its behaviour" case from the global rules, in a message the operator is meant to act on
+  after a failed replace. Remediation: keep the copy (`keep := false` … `defer func(){ if !keep { os.RemoveAll(staging) } }()`)
+  or delete the promise from the comment and the three messages.
+
+- **[low / confidence: medium]** `internal/harness/plan.go:120-122, 213-225` — **the refusal is
+  whole-plan fatal and its trigger is now much wider.** One matching filename anywhere in any skill
+  makes `Plan` return an error, so `install`, `status` and `diff` all fail for **every** vendor and
+  every file, not just the offending one. Fail-closed is right for a credential; the newly added
+  `.npmrc`, `.envrc`, `.pypirc`, `.netrc` and `*.env` are *configuration* shapes that appear in
+  legitimate skill scaffolding and templates, and skills are vendored verbatim from third parties
+  (`skills/VENDORED.md`). A future `npx skills add` of an upstream skill that ships a template
+  `.npmrc` would break `sh-agent update` on every box running the hourly timer at once, until a
+  human intervenes. Checked and clean today: `find skills -type f` matching all fourteen new
+  patterns returns **nothing** across the 27 skills, and no skill text even mentions those names,
+  so there is **no false positive in this release**. Remediation if it ever bites: keep the hard
+  refusal for the unambiguous credential shapes and skip-with-a-loud-line for the rc-file shapes,
+  or name the offending file in a `--force`-able error.
+
+- **[low / confidence: medium]** `internal/harness/repo.go:174` with `cmd/sh-agent/main.go:258-275`
+  — **`GOTOOLCHAIN=local` moves the choice of stdlib to the consumer's host and nothing records
+  which toolchain was used.** The fix is right and its download-side supply chain is *better*, not
+  worse: with the pin withdrawn nothing is fetched from the toolchain endpoint at all, and with the
+  pin still present `GOTOOLCHAIN=local` would have suppressed the only fetch. The residue is
+  provenance: each consumer's binary is built with whatever `go` that box has (≥ the `go 1.24.4`
+  directive, or the build fails — see the next finding), and `sh-agent status`'s `binary` line
+  prints only the VCS revision from `versionFromInfo`. `debug.BuildInfo.GoVersion` is already in
+  the `bi` the line reads. Remediation, one field, no dependency: print it, so
+  "which Go built the thing that installs my agent context" is answerable on the box.
+
+- **[low / confidence: medium]** `internal/harness/repo.go:174` — **`GOTOOLCHAIN=local` also removes
+  the escape hatch for a host *below* the `go` directive.** With `auto`, a box on go1.23 built this
+  module by downloading a toolchain; with `local` it cannot, and `go build` fails with
+  `go.mod requires go >= 1.24.4`. That is a deliberate and correct trade (the alternative is a
+  compiler download on every install), but it is a *new* failure for a host the old behaviour
+  served, and neither `deploy/remote.md` nor the `Reinstall` comment states the resulting floor.
+  Remediation: one sentence wherever the install prerequisites are listed — "Go ≥ 1.24.4 must be
+  installed on the host; sh-agent never downloads a toolchain."
+
+- **[low / confidence: low]** `internal/harness/plan.go:111` — `d.IsDir()` returns before
+  `secretShaped(d.Name())`, so a **directory** named like a credential (`secrets.env/`,
+  `credentials.json/`) is descended into and its contents deployed under a name the refusal was
+  meant to stop. Contrived, and the files inside are each checked on their own names; recorded for
+  completeness because the list-widening invites exactly this shape of miss.
+
+- **[low / confidence: medium]** `internal/harness/adopt.go:157` (`copyTree`'s
+  `info.Mode().Perm()|0o600`) — round 1's mode finding named `plan.go` **and** `adopt.go`; only
+  `plan.go` was masked. A `0666` file adopted from `~/.agents/skills` lands `0666` inside the
+  repo's `skills/`, where it stays until someone re-clones (git tracks only the execute bit), and
+  where any local account can rewrite it between `adopt` and the next `install` — at which point
+  `Plan` masks the *deployed* copy but faithfully ships whatever bytes that account wrote.
+  Remediation: the same `&0o755 | 0o600` mask in `copyTree`.
+
+### Fix-by-fix judgement
+
+| # | Fix | Closes it? |
+|---|---|---|
+| 1 | `secretShaped` widened (14 new patterns) | **Yes** for the deploy boundary — `id_ed25519`, `id_rsa`, `id_ecdsa`, `id_dsa`, `.netrc`, `.npmrc`, `.pypirc`, `.envrc`, `*.env`, `*.p12`, `*.pfx`, `*.jks`, `*.keystore`, `*.tfstate.backup` all match via `filepath.Match`. No false positive in the 27 skills today. **Gaps:** the ingest boundary and `.gitignore` (finding 2), whole-plan fatality (finding 5), case sensitivity (already named residual — `ID_RSA`, `server.KEY` still pass; `.PEM` too). |
+| 2 | `Perm()&0o755 \| 0o600` | **Partly.** New writes are correct — `0664→0644`, `0666→0644`, `0777→0755`, `0600→0600` — and **no execute bit is stripped**: `0o755` retains owner, group and other execute, so a script skill still ships executable. But already-deployed files are never chmodded (finding 3). |
+| 3 | release block: `--untracked-files=all`, `':(top)'`, `rev-parse` both sides | **Yes.** Re-read in `deploy/remote.md` and ADR-026; both assertions are now cwd-independent and untracked-visible, and the gated head is derived rather than transcribed. |
+| 4 | permission-widening recipes removed from the two testing logs | **Mostly.** Both `command(*)` wildcard blocks and the `--dangerously-skip-permissions` pair are gone from the two logs, replaced by what the check needs plus an explicit statement that the permission is the operator's decision. **But** the `agy` Bash-permission-rule suggestion survives verbatim in `handoffs/2026-09-16-board-cleared.md:72` (medium finding above), and the replacement paragraph adds a pointer to the 2026-09-03 log, which still lists the five permission strings (low finding above). |
+| 5 | `Reinstall` builds with `GOTOOLCHAIN=local` | **Yes**, and the `append(os.Environ(), …)` override is correct — `exec.Cmd` de-duplicates keeping the last entry, so an inherited `GOTOOLCHAIN=auto` loses. Residues in findings 6 and 7. |
+| 6 | `adopt` keeps a restorable backup | **Yes** for the data loss; the messages are wrong (finding 4). |
+| 7 | `Inspect` → `StatusUnknown`, `update`/`Pull` fail closed | **Partly** (finding 1). |
+
+### Two more findings on fix #4 (the permission-widening removal)
+
+- **[medium / confidence: high]** `.agents/docs/handoffs/2026-09-16-board-cleared.md:72` — **the sentence
+  round 1 asked to drop survives verbatim in the handoff, which is the file the next session reads
+  first.** The testing logs were cleaned; this was not: *"The two `!` commands that close it are in
+  `testing/2026-09-16-verify-real-home-fcc8539.md`; **a Bash permission rule for `agy` would let a
+  future session run them directly**."* Round 1's Outcome records this fix as done. It is done in
+  two of the three places. The global resume order puts the newest handoff ahead of the dated
+  testing logs, so the one file that still carries the suggestion is the one with the most
+  authority over the next session's first move — and it recommends exactly the action this
+  session's permission classifier refused three times. Its pointer is also now stale: the two `!`
+  commands it names were removed from that log, so a future agent follows it, finds nothing, and is
+  left with only the permission-rule suggestion. Remediation: strike the clause after the semicolon
+  and repoint the sentence at the log's new paragraph, in the same edit.
+
+- **[low / confidence: high]** `.agents/docs/testing/2026-09-16-verify-real-home-9bb7ce0.md`, the
+  replacement paragraph — the new text ends *"The 2026-09-03 procedure in this directory records how
+  it was done once before, including restoring the file afterwards from a backup taken first."*
+  `.agents/docs/testing/2026-09-03-verify-real-home.md:11` still spells out the five permission
+  strings (`command(*)`, `read_file(*)`, `write_file(*)`, `edit_file(*)`, `list_dir(*)`) in prose.
+  The block is gone; a signpost to where it still lives was added in its place. Weaker than the
+  copy-paste block it replaced — past tense, no JSON, no commands — but it converts a dated record
+  into a pointer, which is the direction the finding asked not to go. Remediation: drop the last
+  sentence, or say what the earlier log shows *without* naming it as the place to look.
+  Checked and **acceptable** by contrast: `.agents/docs/testing/skill-matrix.md:14` also carries the
+  `command(*)` set, for a **sandbox** `HOME` under `.agents/scratch/`, never the operator's real
+  home — a different action with a different blast radius, and correctly left alone.
+
+### Live-fix status — the tree moved during this review
+
+Two of the findings above were fixed in the working tree while I was writing, and the corrections
+are correct. Recorded rather than deleted, because the record of what was found is the point:
+
+- **`adopt`'s `defer os.RemoveAll(staging)`** (finding 4) — **fixed** in the working tree: the defer
+  is gone, replaced by an explicit `os.RemoveAll(staging)` on the copy-failure path only (where
+  nothing has been moved yet) and a `hadPrevious` flag that picks the right message. Re-read at
+  `internal/harness/adopt.go:83-122`; every failure path now names a path that exists. One residue,
+  **[low / confidence: high]**: a failed adopt now leaves a full copy of the source skill in
+  `.agents/scratch/adopt-<name>-<pid>` indefinitely, and `copyTree` still applies no `secretShaped`
+  refusal, so a credential inside an adopted third-party skill is now *persisted* there as well as
+  landing in `skills/`. Same remediation as the medium finding above: refuse at ingest.
+- **`sh-agent status` rendering `StatusUnknown`** (half of finding 1) — **fixed** in the working
+  tree: `dirty = "state unknown — git could not report it"`. The other half stands:
+  `internal/harness/apply.go:79-82` still writes the bare commit into the manifest, with no
+  `+unknown` beside the existing `+dirty`. That manifest is the provenance record `sh-agent status`
+  reads back.
+- `go.mod`'s `toolchain` withdrawal and ADR-029, and the `AGENTS.md`/`README.md` lines describing
+  it, are read and judged above; the ADR is honest about all three mismeasurements and names the
+  third corner (`go run` under `auto` + `GOPROXY=off`) that only the last measurement covered.
+
+### Proof of the mode finding (finding 3), end to end on the real install path
+
+Run against a scratch home, never the operator's own (`--home .agents/scratch/security-v1.0.0-r2/home`):
+
+```
+install #1 exit 0 → ~/.claude/skills/bash/SKILL.md mode 644
+chmod 666 that file
+install #2 exit 0 → "0 written, 260 unchanged, 0 removed, 0 kept — 260 files managed"
+mode after install #2: 666
+find <home>/.claude <home>/.gemini -type f -perm /022 → .claude/skills/bash/SKILL.md
+```
+
+So the mask protects the first write and nothing else. A machine that already carries a loose mode
+keeps it through every install and update, and the file stays group- and world-writable in the
+directory whose contents every session reads as instructions.
+
+## Checked (round 2)
+
+- **Secrets** — `git diff c7e3688..787e15c` plus the uncommitted `go.mod`/docs changes scanned for
+  private-key armor, `ssh-`/`AKIA`/`ghp_`/`github_pat_`/`xox`/`sk-`/`AIza`/`Bearer` and
+  password/token assignments: none. The one long token in the range is the same ed25519 **public**
+  key round 1 verified. `cmd/sh-agent/main_test.go`'s `"SECRET"` fixture changed shape — it now
+  asserts the problem string belongs to a closed set rather than merely "does not contain SECRET",
+  which is a **stronger** leak test and the right correction; the fixture is still a test of a leak,
+  not a leak. The scratch home created for the mode probe holds a deployed copy of the harness and
+  no credential.
+- **Injection** — nothing new parses external input. `secretShaped` widened its `filepath.Match`
+  pattern list; `filepath.Match` takes no regex metacharacters and every pattern is a literal, so no
+  pattern injection. `Reinstall`'s new `build.Env` is an env assignment, not a shell; verified
+  empirically that `exec.Cmd` de-duplicates keeping the **last** entry — a probe program that set
+  `GOTOOLCHAIN=auto` in its own environment and appended `GOTOOLCHAIN=local` saw the child print
+  `local`. All `exec.Command`/`LookPath` names remain literals.
+- **Authz/authn** — the release procedure's three corrected assertions re-read in
+  `deploy/remote.md` and ADR-026; both sides of the parent check now go through `git rev-parse`
+  (a non-existent `<gated head>` makes `rev-parse` exit 128 and the `test` fail, so it fails
+  closed), `--untracked-files=all` overrides `status.showUntrackedFiles`, and `':(top)'` makes the
+  source-tree assertion cwd-independent as round 1's probe required. No change to the trust chain.
+- **Crypto** — **nothing hand-rolled**, again. This round's diff implements or composes no cipher,
+  hash, MAC, signature, KDF, RNG, token or session format and no auth flow; it adds a filename
+  pattern list, a permission mask, an env var, a rename-with-backup and a boolean. Signing stays
+  entirely inside `git` + OpenSSH. No `crypto/*` import in the module at all.
+- **Dependencies** — `go.mod` still `require`s nothing; the withdrawal *removes* a directive rather
+  than adding anything. `govulncheck ./...` run here, **2 affecting**: `GO-2026-4602` (`os`, via
+  `LoadSkills` → `os.ReadDir`, `inventory.go:164`) and `GO-2025-3956` (`os/exec`, via `Reinstall` →
+  `exec.LookPath`, `repo.go:154`), both matched against `os@go1.24.4`, which is this host's actual
+  toolchain (`go version` → go1.24.4, `/usr/bin/go` → go1.24.4, `go env GOVERSION` → go1.24.4).
+  Both judged unreachable by precondition above, from the advisory JSON rather than the titles.
+  `npm audit` not applicable: no `package.json`, no JavaScript, in the repo or the range.
+- **GCP surface** — untouched by this round's diff: no IAM, service account, Cloud Run flag,
+  Terraform or deploy config. The only deploy-adjacent edits are the release-block assertions.
+- **The two behaviour questions the dispatch asked** — (a) *can the widened list refuse a legitimate
+  skill file?* Not in this release: `find skills -type f` against all fourteen new patterns plus the
+  seven old ones returns nothing across 27 skills, and no skill body even mentions those filenames.
+  The exposure is future and third-party, recorded as a low finding. (b) *can the mask strip a
+  needed execute bit?* No: `0o755` keeps owner, group and other execute; only `0o022` is dropped.
+  Verified arithmetically for `0600/0640/0644/0664/0666/0700/0755/0777` and observed on 260 deployed
+  files, of which the only `perm /022` hit was the one I chmodded by hand.
+
+## Not examined (round 2)
+
+- **`internal/harness/harness_test.go`'s 113 added lines were read in the diff, not run.** I did not
+  execute `go test -race ./...`, `go vet` or `gofmt` this round — that is the verifier's row, and
+  the tree was being edited while I read, so a green run here would not have described the tree the
+  gate will see. `TestPlanDropsGroupAndOtherWrite` I read and judged: it asserts `Plan`'s output and
+  therefore cannot catch the `Install` gap proven above.
+- **The uncommitted working tree is a moving target.** Between my first and last read, `adopt.go`,
+  `repo.go`, `cmd/sh-agent/main.go`, `main_test.go`, `harness_test.go`, `go.mod`, `AGENTS.md`,
+  `README.md` and three trail files all changed under me. Everything above was re-checked against
+  the tree as of my last read; anything committed after that is unreviewed. **Nothing in this
+  section has been re-verified against a commit**, because there is none yet — a re-gate should
+  confirm the final commit matches what is described here.
+- **The consumer side remains unread** — crew's channel, `/etc/styrman/allowed_signers`,
+  argolis-devbox's setup script. Unchanged from round 1.
+- **Not measured: a host with Go older than the `go 1.24.4` directive.** The floor finding was
+  measured with a throwaway module declaring `go 1.99.0`: `GOTOOLCHAIN=local` exits 1 with
+  `go.mod requires go >= 1.99.0 (running go 1.24.4; GOTOOLCHAIN=local)`, and `GOTOOLCHAIN=auto` with
+  `GOPROXY=off` exits 1 with `toolchain not available`. That demonstrates the two failure shapes but
+  is not a real go1.23 host, and I did not build the harness on one.
+- **The release procedure was not executed** and no tag was made, signed or pushed. Probes ran only
+  in `.agents/scratch/security-v1.0.0-r2/probe` (`git init` exit status read as 0; every later
+  command `git -C <probe>`). For the record: one of those probe commands was a
+  `git -C <probe> checkout-index -f -a` to undo my own probe edit **inside the probe repo only** —
+  the real checkout received no tree-changing git command, and `git tag` in it is still empty.
+- **`core.fsmonitor` as a way to make a dirty tree read clean: probed and negative.** A broken hook
+  path and a hook that answers "nothing changed" both left
+  `git status --porcelain --untracked-files=all` reporting ` M` and `??` lines with exit 0. The
+  probe was validated in both states — the baseline showed the dirty lines, so the instrument could
+  emit. No finding.
+- Not re-read this round: the whole `4aa19be..c7e3688` range (round 1's scope), the 27 skill bodies,
+  and the trail files outside the response diff except the four I grepped for permission recipes.
+
+## Outcome — round 2
+
+- **The advisory judgement is accepted as the basis for shipping, and recorded here so no later session silently re-adds the pin.** `GO-2026-4602` is an escape from an `os.Root`, and this module constructs none — no `os.Root`, `os.OpenRoot` or `os.DirFS` anywhere in it. `GO-2025-3956` triggers when `LookPath` is passed `""`, `"."` or `".."`, and the only call in this code passes the literal `"go"`. Both are symbol matches that `govulncheck` reports as affecting and neither is reachable in this program. Against that, the pin made the tool unbuildable offline, and an unbuildable tool is the worse property because it is how every later fix ships. v1.0.0 ships with both advisories listed and unreachable; the standing operator toolchain upgrade remains the way to clear the report itself.
+- [medium] the mode mask never reached an already-deployed file — **fixed and reproduced end to end**: `Install`'s unchanged branch now corrects the mode in place, a failed chmod is a note rather than an install failure, and `--dry-run` changes nothing. The review's own scenario, run again: install → 644, `chmod 666`, install → "0 written, 260 unchanged", mode back to **644**. `TestInstallCorrectsTheModeOfAnUnchangedFile` covers it, including the dry-run leg.
+- [medium] `secretShaped` guarded the exit but not the entrance — **fixed**: `copyTree` refuses a secret-shaped name as it copies, so `adopt` stops a credential before it reaches `skills/` rather than after it has been committed and pushed, and `TestAdoptRefusesSecretShapedFiles` asserts nothing lands. `.gitignore` now mirrors all twenty-one patterns with a comment naming `secretShaped` as the thing it is kept in step with.
+- [medium] the handoff still carried the "a Bash permission rule for `agy`" clause after the testing logs were cleaned — **fixed**: that sentence is replaced by what the checks need, whose decision it is, and why no recipe is recorded. This was round 1's finding 4 surviving in the one file the next session reads first, which is exactly where it would have done the most harm.
+- [medium] the manifest recorded a bare commit for a tree git could not describe — **fixed**: `+status-unknown`, alongside the `status` output fix.
+- The review's four direct questions, answered by its own measurements and confirmed here: the widened list refuses no file in the 27 skills today; the mode mask strips no execute bit; `adopt`'s backup leaves nothing newly readable; `GOTOOLCHAIN=local` has no download-side supply-chain cost.
+
+**Not re-reviewed:** no third security pass ran over these fixes. What replaced it is named above — the end-to-end reproduction of the mode scenario, and the new tests.

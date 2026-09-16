@@ -1327,28 +1327,66 @@ func TestInspectFailsClosedOnUnknownStatus(t *testing.T) {
 	}
 }
 
-// TestReinstallBuildsWithTheLocalToolchain is the blocking finding of the
-// v1.0.0 release review: go.mod pins a patched toolchain, and the default
-// GOTOOLCHAIN=auto honours that pin by DOWNLOADING it, so on a host without
-// that toolchain and without a reachable proxy `go build` exits 1 with
-// "toolchain not available" — and Reinstall is how every consumer installs.
-func TestReinstallBuildsWithTheLocalToolchain(t *testing.T) {
-	data, err := os.ReadFile("repo.go")
-	if err != nil {
-		t.Fatal(err)
+// TestReinstallNeverNeedsToDownloadAToolchain exercises Reinstall in the
+// environment that broke it: a module whose go.mod asks for a toolchain that
+// is not present, with no proxy to fetch it from. Under the default
+// GOTOOLCHAIN=auto that build exits 1 with "toolchain not available"; the
+// same build must succeed through Reinstall, which pins GOTOOLCHAIN=local.
+// Asserted by running it, not by grepping the source (round-2 release review).
+func TestReinstallNeverNeedsToDownloadAToolchain(t *testing.T) {
+	for _, bin := range []string{"go", "git"} {
+		if _, err := exec.LookPath(bin); err != nil {
+			t.Skipf("%s is not on PATH", bin)
+		}
 	}
-	src := string(data)
-	idx := strings.Index(src, `exec.Command("go", "build"`)
-	if idx < 0 {
-		t.Fatal("Reinstall no longer shells out to `go build`; re-check this guard")
+	repo := t.TempDir()
+	write := func(rel, content string) {
+		t.Helper()
+		p := filepath.Join(repo, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
-	rest := src[idx:]
-	end := strings.Index(rest, "build.Run()")
-	if end < 0 {
-		t.Fatal("could not find the build invocation")
+	// A toolchain that will never exist locally, so auto must try to fetch it.
+	write("go.mod", "module fixture\n\ngo 1.24.4\n\ntoolchain go1.99.0\n")
+	write("cmd/sh-agent/main.go", "package main\n\nfunc main() {}\n")
+	// A real repository: IsCheckout needs .git, and `go build` stamps VCS
+	// information, which fails on a .git that is not one.
+	for _, args := range [][]string{
+		{"init", "--quiet", "-b", "main"},
+		{"config", "user.email", "fixture@example.invalid"},
+		{"config", "user.name", "fixture"},
+		{"add", "-A"},
+		{"commit", "--quiet", "-m", "fixture"},
+	} {
+		cmd := exec.Command("git", append([]string{"-C", repo}, args...)...)
+		cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL="+filepath.Join(t.TempDir(), "gitconfig"), "GIT_CONFIG_NOSYSTEM=1")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
 	}
-	if !strings.Contains(rest[:end], `"GOTOOLCHAIN=local"`) {
-		t.Error("Reinstall must build with GOTOOLCHAIN=local so installing never needs to download a toolchain")
+	cache := t.TempDir()
+	t.Setenv("GOMODCACHE", cache)
+	t.Setenv("GOPROXY", "off")
+	t.Setenv("GOFLAGS", "")
+
+	// Must-fail: the same build under the default auto.
+	t.Setenv("GOTOOLCHAIN", "auto")
+	probe := exec.Command("go", "build", "-o", filepath.Join(t.TempDir(), "probe"), "./cmd/sh-agent")
+	probe.Dir = repo
+	if out, err := probe.CombinedOutput(); err == nil {
+		t.Skipf("this environment resolved go1.99.0, so the failure cannot be staged: %s", out)
+	}
+
+	// Must-pass: through Reinstall, which forces the local toolchain. The
+	// child install is the fixture's own no-op main, so success means the
+	// BUILD succeeded, which is what this test is about.
+	var out bytes.Buffer
+	if err := Reinstall(repo, []string{"--home", t.TempDir()}, &out); err != nil {
+		t.Fatalf("Reinstall must not need to download a toolchain: %v\n%s", err, out.String())
 	}
 }
 
@@ -1382,5 +1420,80 @@ func TestPlanDropsGroupAndOtherWrite(t *testing.T) {
 	}
 	if seen == 0 {
 		t.Error("the loose file should still be planned")
+	}
+}
+
+// TestInstallCorrectsTheModeOfAnUnchangedFile: same bytes is not the same
+// file. A deployed copy left group-writable stays that way on the
+// "unchanged" branch, so the machine that has the problem is the one that
+// never gets the fix (security review of v1.0.0, round 2, which measured it
+// on a real install).
+func TestInstallCorrectsTheModeOfAnUnchangedFile(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root's umask games make the mode assertions meaningless")
+	}
+	repo := newRepo(t)
+	home := t.TempDir()
+	files, err := Plan(repo, nil, VendorAll)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	if err := Install(repo, home, files, VendorAll, false, &buf); err != nil {
+		t.Fatal(err)
+	}
+	victim := filepath.Join(home, ClaudeRoot, "skills", "alpha", "SKILL.md")
+	if err := os.Chmod(victim, 0o666); err != nil {
+		t.Fatal(err)
+	}
+	buf.Reset()
+	if err := Install(repo, home, files, VendorAll, false, &buf); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(victim)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm()&0o022 != 0 {
+		t.Errorf("a second install left %s mode %o — group or other writable", victim, info.Mode().Perm())
+	}
+	// And a dry run changes nothing.
+	if err := os.Chmod(victim, 0o666); err != nil {
+		t.Fatal(err)
+	}
+	buf.Reset()
+	if err := Install(repo, home, files, VendorAll, true, &buf); err != nil {
+		t.Fatal(err)
+	}
+	if info, _ := os.Stat(victim); info.Mode().Perm() != 0o666 {
+		t.Errorf("--dry-run changed a mode: %o", info.Mode().Perm())
+	}
+}
+
+// TestAdoptRefusesSecretShapedFiles guards the entrance: Plan refuses a
+// credential on the way out, but adopt copies into skills/, where it would
+// be committed and pushed before any consumer's install ever refused it.
+func TestAdoptRefusesSecretShapedFiles(t *testing.T) {
+	repo := newRepo(t)
+	home := t.TempDir()
+	src := filepath.Join(t.TempDir(), "widget")
+	if err := os.MkdirAll(src, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "SKILL.md"), []byte("---\nname: widget\ndescription: has a key beside it\n---\nbody\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "id_ed25519"), []byte("PRIVATE\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Adopt(repo, home, src, false)
+	if err == nil {
+		t.Fatal("adopt must refuse a skill carrying a private key")
+	}
+	if !strings.Contains(err.Error(), "id_ed25519") {
+		t.Errorf("the error should name the file, got %v", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(repo, "skills", "widget")); !errors.Is(statErr, os.ErrNotExist) {
+		t.Error("nothing should have been copied into skills/")
 	}
 }

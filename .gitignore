@@ -5,12 +5,30 @@
 /sh-agent
 
 # Secret-shaped paths never belong here (the global git rule stops the commit; this stops the add).
+# Kept in step with secretShaped() in internal/harness/plan.go — that function
+# refuses these at install and adopt time; these lines stop them being added.
 .env
 .env.*
+*.env
+.envrc
+.netrc
+.npmrc
+.pypirc
 *.pem
 *.key
+*.p12
+*.pfx
+*.keystore
+*.jks
 *.tfvars
 *.tfstate
+*.tfstate.backup
+*credentials*.json
+*-key.json
+id_rsa
+id_ed25519
+id_ecdsa
+id_dsa
 
 # Claude Code's view of the repo's own skills, created by `npx skills add` (symlinks into .agents/skills).
 /.claude/

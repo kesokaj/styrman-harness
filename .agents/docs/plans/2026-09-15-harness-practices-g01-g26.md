@@ -351,7 +351,7 @@ any deferred work the main agent should file under the active plan's Follow-ups 
 
 #### I-11a — .agents/docs/plans/2026-09-03-rebuild.md
 ```old
-- [ ] **(you)** On the Mac: check that Antigravity CLI lists the skills (`/skills`) and the seven agents (`/agents`) and that `~/.gemini/config/rules/AGENTS.md` is picked up (ask agy what its rules say) — all three verified on the Linux box 2026-09-03; Mac only
+- [-] **(you)** On the Mac: check that Antigravity CLI lists the skills (`/skills`) and the seven agents (`/agents`) and that `~/.gemini/config/rules/AGENTS.md` is picked up (ask agy what its rules say) — all three verified on the Linux box 2026-09-03; Mac only — moved to handoffs/2026-09-16-session-done.md Next Steps 3 (2026-09-16)
 ```
 ```new
 - [x] **(you)** On the Mac: check that Antigravity CLI lists the skills (`/skills`) and the seven agents (`/agents`) and that `~/.gemini/config/rules/AGENTS.md` is picked up (ask agy what its rules say) — all three verified on the Linux box 2026-09-03; Mac only — verified 2026-09-04 (`testing/2026-09-04-verify-mac-real-home.md`)
@@ -359,7 +359,7 @@ any deferred work the main agent should file under the active plan's Follow-ups 
 
 #### I-11b — .agents/docs/plans/2026-09-03-rebuild.md
 ```old
-- [ ] **(you)** Verified on the Mac: `go run ./cmd/sh-agent install` the first time (clone `~/workspace/styrman-harness` if absent), `sh-agent update` after that, then `sh-agent status` (done on the Linux box 2026-09-03; Mac only — see section 12)
+- [-] **(you)** Verified on the Mac: `go run ./cmd/sh-agent install` the first time (clone `~/workspace/styrman-harness` if absent), `sh-agent update` after that, then `sh-agent status` (done on the Linux box 2026-09-03; Mac only — see section 12) — moved to handoffs/2026-09-16-session-done.md Next Steps 3 (2026-09-16)
 ```
 ```new
 - [-] **(you)** Verified on the Mac: `go run ./cmd/sh-agent install` the first time (clone `~/workspace/styrman-harness` if absent), `sh-agent update` after that, then `sh-agent status` (done on the Linux box 2026-09-03; Mac only — see section 12) — superseded by `plans/2026-09-15-harness-practices-g01-g26.md` § Done (2026-09-15)
@@ -367,7 +367,7 @@ any deferred work the main agent should file under the active plan's Follow-ups 
 
 #### I-11c — .agents/docs/plans/2026-09-03-rebuild.md
 ```old
-- [ ] **(you)** `sh-agent update` on the other machines (the Mac — see section 12)
+- [-] **(you)** `sh-agent update` on the other machines (the Mac — see section 12) — moved to handoffs/2026-09-16-session-done.md Next Steps 3 (2026-09-16)
 ```
 ```new
 - [-] **(you)** `sh-agent update` on the other machines (the Mac — see section 12) — superseded by `plans/2026-09-15-harness-practices-g01-g26.md` § Done (2026-09-15)
@@ -375,7 +375,7 @@ any deferred work the main agent should file under the active plan's Follow-ups 
 
 #### I-11d — .agents/docs/plans/2026-09-03-rebuild.md
 ```old
-- [ ] **(you)** On the Mac: check Claude Code `/memory` shows `~/.claude/CLAUDE.md` importing `AGENTS.md`, and `/skills` lists the 28
+- [-] **(you)** On the Mac: check Claude Code `/memory` shows `~/.claude/CLAUDE.md` importing `AGENTS.md`, and `/skills` lists the 28 — moved to handoffs/2026-09-16-session-done.md Next Steps 3 (2026-09-16)
 ```
 ```new
 - [-] **(you)** On the Mac: check Claude Code `/memory` shows `~/.claude/CLAUDE.md` importing `AGENTS.md`, and `/skills` lists the 28 — superseded by `plans/2026-09-15-harness-practices-g01-g26.md` § Done (2026-09-15)
@@ -383,7 +383,7 @@ any deferred work the main agent should file under the active plan's Follow-ups 
 
 #### I-11e — .agents/docs/plans/2026-09-03-rebuild.md
 ```old
-- [ ] **(you)** Run `sh-agent update --check` from another machine after a push to confirm the resync loop (the Mac — see section 12)
+- [-] **(you)** Run `sh-agent update --check` from another machine after a push to confirm the resync loop (the Mac — see section 12) — moved to handoffs/2026-09-16-session-done.md Next Steps 3 (2026-09-16)
 ```
 ```new
 - [-] **(you)** Run `sh-agent update --check` from another machine after a push to confirm the resync loop (the Mac — see section 12) — superseded by `plans/2026-09-15-harness-practices-g01-g26.md` § Done (2026-09-15)
@@ -391,7 +391,7 @@ any deferred work the main agent should file under the active plan's Follow-ups 
 
 #### I-11f — .agents/docs/plans/2026-09-03-rebuild.md
 ```old
-- [ ] **(you, later)** Live check on the Mac: Claude Code `/memory` and `/skills`; Antigravity `/skills`, `/agents`, and a question that only the global context can answer (headless equivalents pass on the Linux box; Mac only — see section 12)
+- [-] **(you, later)** Live check on the Mac: Claude Code `/memory` and `/skills`; Antigravity `/skills`, `/agents`, and a question that only the global context can answer (headless equivalents pass on the Linux box; Mac only — see section 12) — moved to handoffs/2026-09-16-session-done.md Next Steps 3 (2026-09-16)
 ```
 ```new
 - [-] **(you, later)** Live check on the Mac: Claude Code `/memory` and `/skills`; Antigravity `/skills`, `/agents`, and a question that only the global context can answer (headless equivalents pass on the Linux box; Mac only — see section 12) — superseded by `plans/2026-09-15-harness-practices-g01-g26.md` § Done (2026-09-15)
@@ -399,7 +399,7 @@ any deferred work the main agent should file under the active plan's Follow-ups 
 
 #### I-11g — .agents/docs/plans/2026-09-13-learning-loop-project-level.md
 ```old
-- [ ] Operator: on this box run `sh-agent update` (or `go run ./cmd/sh-agent install`) once, since the installed 2026-09-03 binary cannot rebuild itself; on the Mac `sh-agent update` — who: user
+- [-] Operator: on this box run `sh-agent update` (or `go run ./cmd/sh-agent install`) once, since the installed 2026-09-03 binary cannot rebuild itself; on the Mac `sh-agent update` — who: user — this box done 2026-09-16 (installed from every commit of the day, `drift none`); the Mac part moved to handoffs/2026-09-16-session-done.md Next Steps 3 (2026-09-16)
 ```
 ```new
 - [-] Operator: on this box run `sh-agent update` (or `go run ./cmd/sh-agent install`) once, since the installed 2026-09-03 binary cannot rebuild itself; on the Mac `sh-agent update` — who: user — superseded by `plans/2026-09-15-harness-practices-g01-g26.md` § Done (2026-09-15)

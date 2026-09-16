@@ -28,13 +28,13 @@ Nothing to configure. `--vendor VENDOR` selects the target CLI: `antigravity` (o
 
 ## Verify
 
-- `sh-agent status` shows the current commit, a `binary` line carrying the same revision (a warning there means the installed binary is older than the checkout or unstamped: run `sh-agent update`), and no drift. `install` and `status` also print a note (advisory only, never a failure) when `~/.claude/settings.json` does not set `"attribution": {"commit": ""}`, since Claude Code adds a Co-Authored-By trailer until that operator-owned file sets it.
+- `sh-agent status` shows the current commit, a `binary` line carrying the same revision (a warning there means the installed binary is older than the checkout or unstamped: run `sh-agent update`), and no drift. `install` writes `"attribution": {"commit": "", "pr": ""}` in `~/.claude/settings.json` when the key is absent (creating the file when needed, every other key untouched) and prints a `settings:` line saying so; `status` prints an advisory note when the file is missing or the key is present with a different value.
 - `sh-agent render | head -3` prints the assembled context.
 - Start each CLI once and check it read the files: Claude Code `/memory` lists `~/.claude/CLAUDE.md` importing `AGENTS.md`, `/skills` and `/agents` list the harness entries; Antigravity `/skills` and `/agents` do the same, and `grep 'Failed to parse' ~/.gemini/antigravity-cli/log/cli-*.log` is empty (BUG-004).
 
 ## First session after install
 
-Claude Code asks once per session before the first read or write under `~/.config/sh-agent/` (feedback log, proposals, the retro index), because it is outside the project. Approve it, or add the directory to `permissions.additionalDirectories` in `~/.claude/settings.json` yourself — the installer never edits vendor settings (ADR-010). Antigravity prompts the same way for paths outside the workspace.
+Claude Code asks once per session before the first read or write under `~/.config/sh-agent/` (feedback log, proposals, the retro index), because it is outside the project. Approve it, or add the directory to `permissions.additionalDirectories` in `~/.claude/settings.json` yourself — the installer touches no vendor setting except the attribution key (ADR-025). Antigravity prompts the same way for paths outside the workspace.
 
 ## Operator steps
 

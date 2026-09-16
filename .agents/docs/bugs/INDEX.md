@@ -44,6 +44,7 @@
 | BUG-039 | 2026-09-16 | context/Git + cmd/sh-agent | fixed | Claude Code headless commits carried a Co-Authored-By trailer the context said not to add | a rule overriding a CLI's built-in behaviour names the CLI's own setting and the command that reports it missing |
 | BUG-041 | 2026-09-16 | agents/security, agents/reviewer, review-standards, context | fixed | security agent graded a stdlib `crypto/rand` UUID as hand-rolled cryptography, contradicting the reviewer | a ban names the thing banned precisely enough its stdlib counterpart isn't caught; two harness agents disagreeing means the rule is the defect |
 | BUG-042 | 2026-09-16 | skills/feature | fixed | cold-read cap allowed a 4th round, plan scope grew past the brief, decision rows outlived the behaviour they described | cap counts reports not "convergence"; an ambiguity resolves to one recorded D-row; a reversing fix updates its D-row in the same change |
+| BUG-044 | 2026-09-16 | agents/security (probe files outside scratch) | fixed | security agent's crafted-input probe loop wrote 7 stray untracked files in the repo root, named after their own content | probe inputs go under `.agents/scratch/<slug>/` with chosen names, per the agent's own rule (`agents/security.md:77`); main agent runs `git status --short --untracked-files=all` after any probe dispatch |
 
 ## Graduated
 

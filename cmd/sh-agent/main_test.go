@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -371,11 +373,12 @@ func TestAttributionNote(t *testing.T) {
 		vendor   string // extra --vendor flag, "" for the default (all)
 		want     string // the note body expected after the command's prefix; "" means no note line at all
 	}{
-		{"no settings file", "", "", body},
+		// install writes the key when it is absent (attributionSet), so the note is never printed for these two
+		{"no settings file", "", "", ""},
 		{"trailer switched off", `{"attribution": {"commit": "", "pr": ""}}` + "\n", "", ""},
 		{"trailer switched off with false", `{"attribution": {"commit": false}}` + "\n", "", ""},
 		{"custom trailer", `{"attribution": {"commit": "Co-Authored-By: me"}}` + "\n", "", body},
-		{"other settings only", `{"permissions": {"allow": ["Bash(git:*)"]}}` + "\n", "", body},
+		{"other settings only", `{"permissions": {"allow": ["Bash(git:*)"]}}` + "\n", "", ""},
 		{"antigravity only never notes", "", "agy", ""},
 		{"malformed json is advisory, no echo", `{"attribution": ` + "\n", "", "%s is not valid JSON, so the attribution setting could not be checked; Claude Code adds"},
 		{"a directory is advisory", "DIR", "", "%s is not a regular file, so the attribution setting could not be checked"},
@@ -426,4 +429,236 @@ func TestAttributionNote(t *testing.T) {
 			}
 		})
 	}
+}
+
+// install writes Claude Code's attribution setting when the key is absent —
+// the one vendor setting the harness owns (R4, ADR-025): the file is created
+// when missing, every other byte of an existing file stays, a present key of
+// any value is left alone, and nothing about the file fails the install.
+func TestAttributionSet(t *testing.T) {
+	t.Setenv(harness.ChildEnv, "1")
+	repo, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const fragment = `"attribution": {"commit": "", "pr": ""}`
+	pretty := "{\n  \"model\": \"claude-fable-5-1[1m]\",\n  \"theme\": \"dark\",\n  \"autoMode\": {\n    \"environment\": [\"**Repository visibility**: Not queryable here — assume private\"]\n  }\n}\n"
+	run1 := func(t *testing.T, home string, args ...string) string {
+		t.Helper()
+		var out bytes.Buffer
+		if err := run(append([]string{"install", "--repo", repo, "--home", home}, args...), &out); err != nil {
+			t.Fatalf("install: %v\n%s", err, out.String())
+		}
+		return out.String()
+	}
+	write := func(t *testing.T, home, content string, mode os.FileMode) string {
+		t.Helper()
+		dir := filepath.Join(home, harness.ClaudeRoot)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		p := filepath.Join(dir, "settings.json")
+		if err := os.WriteFile(p, []byte(content), mode); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	keys := func(t *testing.T, data []byte) map[string]json.RawMessage {
+		t.Helper()
+		var m map[string]json.RawMessage
+		if err := json.Unmarshal(data, &m); err != nil {
+			t.Fatalf("not a JSON object: %v\n%s", err, data)
+		}
+		return m
+	}
+
+	t.Run("missing file is created with only the key", func(t *testing.T) {
+		home := t.TempDir()
+		out := run1(t, home)
+		p := filepath.Join(home, harness.ClaudeRoot, "settings.json")
+		if !strings.Contains(out, "settings: "+p+" created with "+fragment) {
+			t.Errorf("missing settings line:\n%s", out)
+		}
+		if strings.Contains(out, "note: "+p) {
+			t.Errorf("note printed although the key was just written:\n%s", out)
+		}
+		data, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		m := keys(t, data)
+		if len(m) != 1 || string(m["attribution"]) != `{"commit": "", "pr": ""}` {
+			t.Errorf("file holds %s", data)
+		}
+		if again := run1(t, home); strings.Contains(again, "settings:") {
+			t.Errorf("second install wrote again:\n%s", again)
+		}
+	})
+
+	t.Run("other keys, formatting and mode stay", func(t *testing.T) {
+		home := t.TempDir()
+		p := write(t, home, pretty, 0o600)
+		out := run1(t, home)
+		if !strings.Contains(out, "settings: "+p+" — "+fragment+" added; other keys untouched") {
+			t.Errorf("missing settings line:\n%s", out)
+		}
+		data, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// everything before the closing brace of the original object is untouched, byte for byte
+		prefix := strings.TrimRight(strings.TrimSuffix(strings.TrimRight(pretty, "\n"), "}"), " \n")
+		if !strings.HasPrefix(string(data), prefix) {
+			t.Errorf("original bytes changed:\n%s", data)
+		}
+		before, after := keys(t, []byte(pretty)), keys(t, data)
+		for k, v := range before {
+			if string(after[k]) != string(v) {
+				t.Errorf("key %q changed: %s -> %s", k, v, after[k])
+			}
+		}
+		if len(after) != len(before)+1 || string(after["attribution"]) != `{"commit": "", "pr": ""}` {
+			t.Errorf("attribution not added exactly once: %s", data)
+		}
+		if !strings.HasSuffix(string(data), "}\n") {
+			t.Errorf("trailing newline lost: %q", data[len(data)-3:])
+		}
+		info, err := os.Stat(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode().Perm() != 0o600 {
+			t.Errorf("mode changed to %v", info.Mode().Perm())
+		}
+	})
+
+	t.Run("crlf file keeps its line endings", func(t *testing.T) {
+		home := t.TempDir()
+		p := write(t, home, "{\r\n  \"model\": \"x\"\r\n}\r\n", 0o644)
+		run1(t, home)
+		data, _ := os.ReadFile(p)
+		if strings.Count(string(data), "\n") != strings.Count(string(data), "\r\n") {
+			t.Errorf("mixed line endings: %q", data)
+		}
+		if m := keys(t, data); string(m["model"]) != `"x"` || m["attribution"] == nil {
+			t.Errorf("file holds %s", data)
+		}
+	})
+
+	t.Run("empty object", func(t *testing.T) {
+		home := t.TempDir()
+		p := write(t, home, "{}\n", 0o644)
+		run1(t, home)
+		data, _ := os.ReadFile(p)
+		m := keys(t, data)
+		if len(m) != 1 || m["attribution"] == nil {
+			t.Errorf("file holds %s", data)
+		}
+	})
+
+	for _, c := range []struct{ name, content, line string }{
+		{"custom value is left alone", `{"attribution": {"commit": "Co-Authored-By: me"}}` + "\n", "note: "},
+		{"off value is left alone", `{"attribution": {"commit": ""}}` + "\n", ""},
+		{"malformed is left alone", `{"attribution": ` + "\n", "note: "},
+		{"not an object is left alone", `["x"]` + "\n", "note: "},
+		{"null is left alone", "null\n", "note: "},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			home := t.TempDir()
+			p := write(t, home, c.content, 0o644)
+			out := run1(t, home)
+			data, _ := os.ReadFile(p)
+			if string(data) != c.content {
+				t.Errorf("file changed:\n%s", data)
+			}
+			if strings.Contains(out, "settings: "+p+" —") || strings.Contains(out, "created with") {
+				t.Errorf("a write was reported:\n%s", out)
+			}
+			if c.line != "" && !strings.Contains(out, c.line+p) {
+				t.Errorf("expected a %q line for %s:\n%s", c.line, p, out)
+			}
+			if c.line == "" && strings.Contains(out, p) {
+				t.Errorf("unexpected line about the file:\n%s", out)
+			}
+		})
+	}
+
+	t.Run("a file over the read bound is left alone", func(t *testing.T) {
+		home := t.TempDir()
+		big := `{"pad": "` + strings.Repeat("x", 1<<20) + `"}` + "\n"
+		p := write(t, home, big, 0o644)
+		out := run1(t, home)
+		if !strings.Contains(out, "settings: "+p+" is larger than 1 MiB") {
+			t.Errorf("missing size line:\n%s", out)
+		}
+		data, _ := os.ReadFile(p)
+		if string(data) != big {
+			t.Errorf("file changed (len %d)", len(data))
+		}
+	})
+
+	t.Run("a symlinked settings.json is never written through", func(t *testing.T) {
+		home := t.TempDir()
+		target := filepath.Join(t.TempDir(), "dotfiles-settings.json")
+		if err := os.WriteFile(target, []byte("{}\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		dir := filepath.Join(home, harness.ClaudeRoot)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		p := filepath.Join(dir, "settings.json")
+		if err := os.Symlink(target, p); err != nil {
+			t.Fatal(err)
+		}
+		out := run1(t, home)
+		if !strings.Contains(out, "settings: "+p+" is a symlink; add the key to its target by hand") {
+			t.Errorf("missing symlink line:\n%s", out)
+		}
+		if info, err := os.Lstat(p); err != nil || info.Mode()&os.ModeSymlink == 0 {
+			t.Errorf("the symlink was replaced: %v %v", info, err)
+		}
+		if data, _ := os.ReadFile(target); string(data) != "{}\n" {
+			t.Errorf("the target was written: %s", data)
+		}
+	})
+
+	t.Run("dry run writes nothing", func(t *testing.T) {
+		home := t.TempDir()
+		out := run1(t, home, "--dry-run")
+		p := filepath.Join(home, harness.ClaudeRoot, "settings.json")
+		if _, err := os.Stat(p); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("dry run created %s", p)
+		}
+		if !strings.Contains(out, "[dry-run] would create "+p) {
+			t.Errorf("missing dry-run line:\n%s", out)
+		}
+	})
+
+	t.Run("antigravity only writes nothing", func(t *testing.T) {
+		home := t.TempDir()
+		out := run1(t, home, "--vendor", "agy")
+		if _, err := os.Stat(filepath.Join(home, harness.ClaudeRoot, "settings.json")); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("settings.json created for the agy vendor")
+		}
+		if strings.Contains(out, "settings:") {
+			t.Errorf("settings line for the agy vendor:\n%s", out)
+		}
+	})
+
+	t.Run("status alone keeps the note", func(t *testing.T) {
+		home := t.TempDir()
+		run1(t, home) // a full install writes the key …
+		p := filepath.Join(home, harness.ClaudeRoot, "settings.json")
+		if err := os.Remove(p); err != nil { // … and an operator can delete the file again
+			t.Fatal(err)
+		}
+		var out bytes.Buffer
+		if err := run([]string{"status", "--repo", repo, "--home", home}, &out); err != nil {
+			t.Fatalf("status: %v\n%s", err, out.String())
+		}
+		if !strings.Contains(out.String(), "note       "+filepath.Join(home, harness.ClaudeRoot, "settings.json")+" does not set") {
+			t.Errorf("status lost the note:\n%s", out.String())
+		}
+	})
 }

@@ -16,7 +16,7 @@ go run ./cmd/sh-agent install
 sh-agent status
 ```
 
-If `sh-agent status` prints a note that `~/.claude/settings.json` does not set `"attribution": {"commit": ""}`, add that setting on this machine (user scope, sh-agent never writes it) to stop Claude Code adding a Co-Authored-By trailer to commits.
+`install` writes the `attribution` key on this machine; check `sh-agent status` prints no note.
 
 ## The resync loop
 

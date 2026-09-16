@@ -74,7 +74,7 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
 
 **Consequences:** About 3.5k fewer tokens per session before the first prompt. Procedures now compete for nothing until they are needed. The risk moves from "rule lost in a long file" to "skill not triggered"; the description of each procedural skill is therefore written as a trigger list, and the context keeps a one-line pointer per kind of work. The split between slash-only and auto-triggering skills is superseded by ADR-014.
 
-## ADR-010: Harness state stays outside the project and is approved, not pre-authorised; the skill matrix is a documented procedure, not a script     (2026-09-03) — Accepted
+## ADR-010: Harness state stays outside the project and is approved, not pre-authorised; the skill matrix is a documented procedure, not a script     (2026-09-03) — Accepted, superseded in part by ADR-025
 
 **Context:** The sandbox matrix showed that Claude Code denies headless access to `~/.config/sh-agent/` (feedback log, retro proposals, global handoffs) and prompts for it interactively. Two ways out were on the table: have `sh-agent install` add the directory to `permissions.additionalDirectories` in `~/.claude/settings.json`, or move the state into projects. The matrix itself is a bash driver, prompts, and checks under gitignored scratch, which exists on one machine only.
 
@@ -193,3 +193,11 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
 **Decision:** Step 4 still runs the `--docs` lens of `/review` over `<base>..HEAD` and records each docs gap in the gate report with severity, confidence and an owner, who fixes it as ordinary work. No docs gap blocks the release. A docs finding blocks where the Definition of Done's `/review --docs` runs, in the task that made the change.
 
 **Consequences:** `skills/preflight/SKILL.md` Step 4 loses the rebuttal carry-forward, and Step 5's blocking list loses its docs clause, so the gate keeps no state across runs for docs findings. A release can ship with a recorded docs gap; the task-time docs review is the docs gate. This supersedes ADR-023.
+
+## ADR-025: `install` writes Claude Code's attribution setting, the one vendor setting the harness touches     (2026-09-16) — Accepted
+
+**Context:** BUG-039 — the context's Git rule forbids the `Co-Authored-By` trailer, yet three of three headless Claude Code commits carried it. The trailer is the CLI's own `attribution` setting, and prose cannot switch a vendor setting off. Since commit 7b8743f, `install` and `status` have printed an advisory note asking the operator to set `"attribution": {"commit": ""}` by hand. The operator asked the installer to write it instead (2026-09-16) and approved the one-sentence change to R4 that this requires.
+
+**Decision:** `install` (vendor `all` or `claude` only; `sync` uses the same code path) sets `"attribution": {"commit": "", "pr": ""}` in the operator's `~/.claude/settings.json` only when the key is absent, creating the file if it is missing. A present key of any value is left alone and the advisory note stays. File edits are textual insertions re-parsed before writing so the operator's other keys and formatting stay byte-identical. `--dry-run` reports and writes nothing. No state of the file fails `install`; the setting is advisory. `uninstall` leaves the key (the harness's Git rule wants the trailer off with or without the harness installed).
+
+**Consequences:** ADR-010's "never touch vendor settings" clause is superseded on this one point only — the permission write it refused stays refused (R4, the Non-goals exception). R4 and the Non-goals § gain the approved sentence and exception so no second key can ride on it (both in the same commit as this ADR). The Mac receives the key on its next `sh-agent update`. A project's `.claude/settings.json` is never touched; only the operator's home is affected.

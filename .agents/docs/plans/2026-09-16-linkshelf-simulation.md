@@ -56,9 +56,9 @@ E2E criteria: both repositories hold a service that answers POST, GET and DELETE
 - [x] Checkpoint — expect: every gap fixed or filed — evidence: `git log` 10c2155..7a6ea90 and the testing log § Gaps and § Re-runs, 2026-09-16
 ### Phase 4 — Close
 - [x] `/retro` at harness scope — expect: a record in `retros/` and a line in `~/.config/sh-agent/retros.jsonl` — done 2026-09-16: `retros/2026-09-16-retro.md`, eight proposals queued in `~/.config/sh-agent/proposals/2026-09-16-retro.md`, index line appended; applying them is the gate this session stops at
-- [ ] Install into this box (`sh-agent install`), `sh-agent status` — expect: `binary <HEAD>`, `drift none`; the three real-home smoke checks
-- [ ] `/handoff` — expect: a cold-readable handoff, `TODO.md` and `ROADMAP.md` empty
-- [ ] Checkpoint — expect: pushed, trail closed — evidence: `git status` clean, <date>
+- [x] Install into this box (`sh-agent install`), `sh-agent status` — expect: `binary <HEAD>`, `drift none`; the three real-home smoke checks — done 2026-09-16: installed at a634c3d then f51461d, `binary f51461dc1d95`, `drift none`; six smoke checks in `testing/2026-09-16-verify-real-home-3.md` (PASS; check 3 on Claude Code exposed BUG-043's incomplete first wording, fixed and re-verified in f51461d)
+- [x] `/handoff` — expect: a cold-readable handoff, `TODO.md` and `ROADMAP.md` empty — `handoffs/2026-09-16-linkshelf-simulation-done.md`, 2026-09-16
+- [x] Checkpoint — expect: pushed, trail closed — evidence: `git status` clean after the handoff commit; the retro's eight proposals are the one open gate, 2026-09-16
 
 ## Risks
 Assumptions: the sandbox home is still logged in to both CLIs — checked by the dry run, first task of Phase 0. A full feature run may exceed an hour on either CLI — the driver is detached with `setsid nohup` and a status file (BUG-013).

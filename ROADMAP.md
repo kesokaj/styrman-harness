@@ -6,8 +6,6 @@ Last reviewed: 2026-09-16
 
 ## Now
 
-- `.agents/docs/plans/2026-09-16-linkshelf-simulation.md` — both CLIs build linkshelf under the harness; compare, fix, retro, install, handoff
-
 ## Next
 
 ## Later / Ideas

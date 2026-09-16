@@ -13,6 +13,8 @@ Out: `uninstall` leaves the key (documented, not built); Antigravity has no such
 Follow-ups noted, not built:
 - `internal/harness/apply.go:240-263` writes managed files through a temp file and rename without `Sync`, the pattern the security review flagged on this change; add the `Sync` there in its own task — found in: security review finding 2
 - `abandonTemp`'s write-error paths and `readSettings`'s open failure have no test that forces them (the verifier's coverage gap) — found in: verifier log
+- a SIGTERM between `CreateTemp` and the rename (argolis runs install under `timeout 60`) orphans `~/.claude/.settings-*.json`, which nothing removes: use one fixed temp name that the next run replaces — found in: argolis-devbox security review of the 4aa19be refresh, finding 2
+- `attributionOff` reports a valid settings.json larger than 1 MiB as "is not valid JSON" (the bounded read truncates it) while `attributionSet` names the size; check the size once, before either reads — found in: the same review, finding 3
 
 ## Surfaces touched
 `cmd/sh-agent/main.go` (the install case, `attributionHint`, `attributionOff`), `cmd/sh-agent/main_test.go` (`TestAttributionNote`), `REQUIREMENTS.md` R4 and § Non-goals line 43, `.agents/docs/architecture/DECISIONS.md` (ADR-025; ADR-010's heading marked "Superseded in part by ADR-025"), `context/AGENTS.md` § Git (the sentence that says the note is printed "while it is missing"), `README.md` § Install (the attribution sentence and line 16's "the installer never touches vendor settings (ADR-010)") and the `status` row, `.agents/docs/deploy/local.md` § Verify, `.agents/docs/deploy/remote.md` § First install.

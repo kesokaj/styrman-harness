@@ -45,7 +45,7 @@ Continuation of `2026-09-16-linkshelf-simulation-done.md` (read it for the simul
 - Branch: main, clean, pushed at 2b0dd38 plus this handoff.
 - Running processes: none.
 - Sandbox home: 2b0dd38, `drift none`; its `~/.claude/settings.json` holds `{"attribution": {"commit": "", "pr": ""}}`.
-- This box: the commit carrying this handoff, `drift none`; `sh-agent status` prints the attribution note (Next Steps 1).
+- This box: the commit carrying this handoff, `drift none`; `sh-agent status` prints no note since the attribution setting was added (Next Steps 1, done).
 - Pending: nothing uncommitted.
 
 ## Artifacts to Read
@@ -56,7 +56,7 @@ Continuation of `2026-09-16-linkshelf-simulation-done.md` (read it for the simul
 
 ## Next Steps
 
-1. **On this box:** add `"attribution": {"commit": "", "pr": ""}` to `~/.claude/settings.json`; `sh-agent status` then prints no note.
+1. ~~On this box: add the attribution setting~~ — done 2026-09-16 on the operator's word ("add the attribution setting to my settings.json"): `~/.claude/settings.json` now holds `"attribution": {"commit": "", "pr": ""}`, other keys untouched, and `sh-agent status` prints no note.
 2. **On the Mac:** `sh-agent update --check`, `sh-agent update`, `sh-agent status`, the three smoke checks of `testing/2026-09-03-verify-real-home.md`.
 3. **The mirrors** (styrman-crew, argolis-devbox) are at a81ef4b: refresh from this HEAD by each `VENDORED.md` recipe; argolis pushes deploy, crew ships by release (v1.34.0 recommended in its handoff).
 4. **Tasks when convenient:** G20 (define `<app>` in the verifier); the simulation plan's other Follow-ups (G5, G10, G12, G13); option C's filing clause in `/preflight` Step 4 and BUG-031's wait rule from earlier handoffs; adopt's temp-directory copy and the direct `RenderContext` symlink test.

@@ -52,7 +52,7 @@ The operator asked for a harness simulation: in the sandbox home, have Claude Co
 - Branch: main, clean, pushed at f51461d plus this handoff.
 - Running processes: none (all detached drivers finished; `pgrep -f sim-kit` is empty).
 - Sandbox home: installed from the working tree at a634c3d+the BUG-043 wording (`rerun3.sh`), `drift none` at the time; its `~/.claude/settings.json` now holds `{"attribution": {"commit": "", "pr": ""}}` (the `attribution-off` row) — delete it to reproduce BUG-039 there. Its Antigravity settings are unchanged.
-- This box: installed from f51461d, `drift none`; Antigravity settings restored identical to their backup.
+- This box: installed from f51461d, `drift none`, then reinstalled from the commit that carries the cold-read brief so the `binary` line matches HEAD (the commits after f51461d change only docs); Antigravity settings restored identical to their backup.
 - Pending: nothing uncommitted.
 
 ## Artifacts to Read

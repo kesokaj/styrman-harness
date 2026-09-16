@@ -346,6 +346,18 @@ func update(repo, home string, checkOnly bool, homeFlag, vendorFlag string, out 
 		if checkOnly {
 			return exitCode(2)
 		}
+	}
+	// A dirty checkout is never installed, on either path. `update` deploys
+	// the WORKING TREE, not the commit it just fetched, so uncommitted work
+	// reaches every vendor directory — which is R6 defeated. Pull already
+	// refused it on the behind path; the up-to-date path had no guard at all,
+	// and an hourly timer installed a session's half-finished edits into the
+	// operator's real home (BUG-046). `install` stays the deliberate way to
+	// deploy a dirty tree.
+	if harness.Inspect(repo).Dirty {
+		return fmt.Errorf("%s has uncommitted changes and `update` installs the working tree, not the fetched commit; commit or stash them, or run `sh-agent install` to deploy them deliberately", repo)
+	}
+	if behind > 0 {
 		if err := harness.Pull(repo, out); err != nil {
 			return err
 		}

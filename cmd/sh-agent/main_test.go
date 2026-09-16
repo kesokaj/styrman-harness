@@ -662,3 +662,241 @@ func TestAttributionSet(t *testing.T) {
 		}
 	})
 }
+
+// gitFixture builds a real checkout with an upstream: a bare origin, a clone
+// with a trivial cmd/sh-agent that records that it ran, and a first commit
+// pushed. Behind() needs a real remote, and Reinstall() needs something to
+// build, so the guard under test is exercised on the path it actually
+// guards. Returns the work tree and the marker path the built binary writes.
+func gitFixture(t *testing.T) (repo, marker string) {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not on PATH")
+	}
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("go is not on PATH")
+	}
+	base := t.TempDir()
+	origin := filepath.Join(base, "origin.git")
+	repo = filepath.Join(base, "work")
+	marker = filepath.Join(base, "installed.txt")
+	run := func(dir string, args ...string) {
+		t.Helper()
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL="+filepath.Join(base, "gitconfig"), "GIT_CONFIG_NOSYSTEM=1")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("%v: %v\n%s", args, err, out)
+		}
+	}
+	run(base, "git", "init", "--quiet", "--bare", "-b", "main", origin)
+	run(base, "git", "clone", "--quiet", origin, repo)
+	run(repo, "git", "config", "user.email", "fixture@example.invalid")
+	run(repo, "git", "config", "user.name", "fixture")
+	write := func(rel, content string) {
+		t.Helper()
+		p := filepath.Join(repo, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("go.mod", "module fixture\n\ngo 1.24\n")
+	// Stands in for the real installer: records that an install ran at all.
+	write("cmd/sh-agent/main.go", "package main\n\nimport \"os\"\n\nfunc main() {\n\tos.WriteFile(os.Getenv(\"FIXTURE_MARKER\"), []byte(\"installed\"), 0o644)\n}\n")
+	write("context/AGENTS.md", "# AGENTS.md\n")
+	run(repo, "git", "add", "-A")
+	run(repo, "git", "commit", "--quiet", "-m", "fixture")
+	run(repo, "git", "push", "--quiet", "-u", "origin", "HEAD:refs/heads/main")
+	run(repo, "git", "branch", "--quiet", "--set-upstream-to=origin/main")
+	t.Setenv("FIXTURE_MARKER", marker)
+	return repo, marker
+}
+
+// TestUpdateNeverInstallsDirtyTree is BUG-046: `update` deploys the working
+// tree, not the commit it fetched, so a dirty checkout must not be installed
+// on EITHER path. Pull already refused it when behind; the up-to-date path
+// had no guard, and an hourly timer put a session's uncommitted edits into
+// the operator's real home. --check only reports, so it still works dirty.
+func TestUpdateNeverInstallsDirtyTree(t *testing.T) {
+	installed := func(marker string) bool {
+		_, err := os.Stat(marker)
+		return err == nil
+	}
+	dirty := func(t *testing.T, repo string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(repo, "context", "AGENTS.md"), []byte("# edited, not committed\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	behind := func(t *testing.T, repo string) {
+		t.Helper()
+		other := t.TempDir()
+		base := filepath.Dir(repo)
+		run := func(dir string, args ...string) {
+			t.Helper()
+			cmd := exec.Command(args[0], args[1:]...)
+			cmd.Dir = dir
+			cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL="+filepath.Join(base, "gitconfig"), "GIT_CONFIG_NOSYSTEM=1")
+			if out, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("%v: %v\n%s", args, err, out)
+			}
+		}
+		run(other, "git", "clone", "--quiet", filepath.Join(base, "origin.git"), filepath.Join(other, "c"))
+		c := filepath.Join(other, "c")
+		run(c, "git", "config", "user.email", "fixture@example.invalid")
+		run(c, "git", "config", "user.name", "fixture")
+		if err := os.WriteFile(filepath.Join(c, "context", "AGENTS.md"), []byte("# upstream moved\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		run(c, "git", "commit", "--quiet", "-am", "upstream")
+		run(c, "git", "push", "--quiet", "origin", "HEAD:refs/heads/main")
+	}
+
+	t.Run("clean and up to date installs", func(t *testing.T) {
+		repo, marker := gitFixture(t)
+		var out bytes.Buffer
+		if err := update(repo, t.TempDir(), false, "", "", &out); err != nil {
+			t.Fatalf("clean update: %v\n%s", err, out.String())
+		}
+		if !installed(marker) {
+			t.Error("a clean checkout should have been installed")
+		}
+	})
+
+	t.Run("dirty and up to date refuses", func(t *testing.T) {
+		repo, marker := gitFixture(t)
+		dirty(t, repo)
+		var out bytes.Buffer
+		err := update(repo, t.TempDir(), false, "", "", &out)
+		if err == nil {
+			t.Fatal("a dirty checkout must not be installed")
+		}
+		if !strings.Contains(err.Error(), "uncommitted changes") {
+			t.Errorf("error should name the uncommitted changes, got %v", err)
+		}
+		if installed(marker) {
+			t.Error("nothing should have been installed from a dirty tree")
+		}
+	})
+
+	t.Run("dirty and behind refuses without pulling", func(t *testing.T) {
+		repo, marker := gitFixture(t)
+		before := harness.Inspect(repo).Commit
+		behind(t, repo)
+		dirty(t, repo)
+		var out bytes.Buffer
+		err := update(repo, t.TempDir(), false, "", "", &out)
+		if err == nil || !strings.Contains(err.Error(), "uncommitted changes") {
+			t.Fatalf("dirty and behind must refuse, got %v", err)
+		}
+		if installed(marker) {
+			t.Error("nothing should have been installed")
+		}
+		if after := harness.Inspect(repo).Commit; after != before {
+			t.Errorf("the tree moved from %s to %s; a refused update pulls nothing", before, after)
+		}
+	})
+
+	t.Run("clean and behind pulls then installs", func(t *testing.T) {
+		repo, marker := gitFixture(t)
+		before := harness.Inspect(repo).Commit
+		behind(t, repo)
+		var out bytes.Buffer
+		if err := update(repo, t.TempDir(), false, "", "", &out); err != nil {
+			t.Fatalf("clean and behind: %v\n%s", err, out.String())
+		}
+		if after := harness.Inspect(repo).Commit; after == before {
+			t.Error("a clean checkout behind upstream should have been fast-forwarded")
+		}
+		if !installed(marker) {
+			t.Error("it should have been installed after the pull")
+		}
+	})
+
+	t.Run("--check reports on a dirty tree and installs nothing", func(t *testing.T) {
+		repo, marker := gitFixture(t)
+		dirty(t, repo)
+		var out bytes.Buffer
+		if err := update(repo, t.TempDir(), true, "", "", &out); err != nil {
+			t.Fatalf("--check only reports, it must not fail on a dirty tree: %v", err)
+		}
+		if !strings.Contains(out.String(), "up to date") {
+			t.Errorf("--check should report the state, got %q", out.String())
+		}
+		if installed(marker) {
+			t.Error("--check installs nothing")
+		}
+	})
+}
+
+// TestAbandonTempReportsRemoveFailure forces the error path the verifier
+// reported as uncovered: the settings write failed AND its temp file could
+// not be removed. Both lines must reach the operator; neither may panic.
+func TestAbandonTempReportsRemoveFailure(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores the directory permissions this test relies on")
+	}
+	dir := t.TempDir()
+	tmp := filepath.Join(dir, ".settings-tmp.json")
+	if err := os.WriteFile(tmp, []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o700) })
+
+	var out bytes.Buffer
+	abandonTemp(tmp, filepath.Join(dir, "settings.json"), errors.New("disk full"), &out)
+	got := out.String()
+	if !strings.Contains(got, "disk full") {
+		t.Errorf("the cause should be reported, got %q", got)
+	}
+	if !strings.Contains(got, "left behind") {
+		t.Errorf("a temp file that could not be removed should be named, got %q", got)
+	}
+	if !strings.Contains(got, tmp) {
+		t.Errorf("the temp path should be named so the operator can remove it, got %q", got)
+	}
+}
+
+// TestReadSettingsProblems covers the reader's refusals, including the open
+// failure the verifier reported as untested. A problem is named without a
+// byte of the file's contents.
+func TestReadSettingsProblems(t *testing.T) {
+	dir := t.TempDir()
+
+	if _, problem := readSettings(filepath.Join(dir, "absent.json")); problem != "could not be read" {
+		t.Errorf("missing file: %q", problem)
+	}
+
+	sub := filepath.Join(dir, "adirectory.json")
+	if err := os.Mkdir(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, problem := readSettings(sub); problem != "is not a regular file" {
+		t.Errorf("directory: %q", problem)
+	}
+
+	if os.Geteuid() == 0 {
+		t.Skip("root can open a mode-000 file, so the open-failure leg cannot run")
+	}
+	unreadable := filepath.Join(dir, "unreadable.json")
+	secret := `{"attribution":{"commit":"SECRET"}}`
+	if err := os.WriteFile(unreadable, []byte(secret), 0o000); err != nil {
+		t.Fatal(err)
+	}
+	data, problem := readSettings(unreadable)
+	if problem != "could not be read" {
+		t.Errorf("unreadable regular file: %q", problem)
+	}
+	if len(data) != 0 {
+		t.Errorf("no bytes may be returned when the open failed, got %q", data)
+	}
+	if strings.Contains(problem, "SECRET") {
+		t.Error("the problem string must never carry the file's contents")
+	}
+}

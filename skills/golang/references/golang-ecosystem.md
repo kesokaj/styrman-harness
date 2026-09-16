@@ -789,14 +789,14 @@ Before optimizing Go code, verify the bottleneck is in your process — if 90% o
 
 1. **Define your metric** — latency, throughput, memory, or CPU? Without a target, optimizations are random
 2. **Write an atomic benchmark** — isolate one function per benchmark to avoid result contamination (→ See the Testing (unit tests, benchmarks) reference (`golang-testing.md`))
-3. **Measure baseline** — `go test -bench=BenchmarkMyFunc -benchmem -count=6 ./pkg/... | tee /tmp/report-1.txt`
+3. **Measure baseline** — `go test -bench=BenchmarkMyFunc -benchmem -count=6 ./pkg/... | tee .agents/scratch/report-1.txt`
 4. **Diagnose** — use the **Diagnose** lines in each deep-dive section to pick the right tool
 5. **Improve** — apply ONE optimization at a time with an explanatory comment
-6. **Compare** — `benchstat /tmp/report-1.txt /tmp/report-2.txt` to confirm statistical significance
+6. **Compare** — `benchstat .agents/scratch/report-1.txt .agents/scratch/report-2.txt` to confirm statistical significance
 7. **Commit** — paste the benchstat output in the commit body so reviewers and future readers see the exact improvement; follow the `perf(scope): summary` commit type
 8. **Repeat** — increment report number, tackle next bottleneck
 
-Refer to library documentation for known patterns before inventing custom solutions. Keep all `/tmp/report-*.txt` files as an audit trail.
+Refer to library documentation for known patterns before inventing custom solutions. Keep all `.agents/scratch/report-*.txt` files as an audit trail — scratch is the project's gitignored scratch directory, never `/tmp`.
 
 ## Decision Tree: Where Is Time Spent?
 

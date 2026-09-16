@@ -817,19 +817,55 @@ func TestReinstallBuildsAndInstalls(t *testing.T) {
 	}
 }
 
+// vendoredSkills reads skills/VENDORED.md and returns the skill directories
+// listed there. Vendored text is never edited in place (AGENTS.md), so a
+// prose check that walks it would report a defect nobody may fix; the fix
+// for those is a re-fetch or a fork under another name.
+func vendoredSkills(t *testing.T, repo string) map[string]bool {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(repo, "skills", "VENDORED.md"))
+	if err != nil {
+		t.Fatalf("reading VENDORED.md: %v", err)
+	}
+	out := map[string]bool{}
+	for _, line := range strings.Split(string(data), "\n") {
+		if !strings.HasPrefix(strings.TrimSpace(line), "|") {
+			continue
+		}
+		cell := strings.TrimSpace(strings.Trim(strings.SplitN(strings.TrimSpace(line), "|", 3)[1], " `"))
+		if cell == "" || strings.Contains(cell, " ") || strings.HasPrefix(cell, "-") {
+			continue
+		}
+		if info, err := os.Stat(filepath.Join(repo, "skills", cell)); err == nil && info.IsDir() {
+			out[cell] = true
+		}
+	}
+	if len(out) == 0 {
+		t.Fatal("VENDORED.md named no skill directory; the parser or the file changed shape")
+	}
+	return out
+}
+
 // TestNoTmpInHarnessProse guards the scratch rule at the source: the
-// context, the agents, the skills, and the repo docs may mention /tmp only
-// to forbid it. Three records (BUG-003, BUG-007, BUG-014) are the reason
-// this is a test and not a reminder.
+// context, the agents, the skills — their SKILL.md AND their references,
+// where the rule drifted unseen (BUG-019) — the commands, the rules, and the
+// repo docs may mention /tmp only to forbid it. Four records (BUG-003,
+// BUG-007, BUG-014, BUG-019) are the reason this is a test and not a
+// reminder. Vendored skills are exempt: their text may not be edited here.
 func TestNoTmpInHarnessProse(t *testing.T) {
 	repo, err := filepath.Abs("../..")
 	if err != nil {
 		t.Fatal(err)
 	}
-	roots := []string{"context", "agents", "README.md", "AGENTS.md"}
-	skills, _ := filepath.Glob(filepath.Join(repo, "skills", "*", "SKILL.md"))
-	for _, s := range skills {
-		rel, _ := filepath.Rel(repo, s)
+	roots := []string{"context", "agents", "commands", "rules", "README.md", "AGENTS.md"}
+	vendored := vendoredSkills(t, repo)
+	dirs, _ := filepath.Glob(filepath.Join(repo, "skills", "*"))
+	for _, d := range dirs {
+		info, err := os.Stat(d)
+		if err != nil || !info.IsDir() || vendored[filepath.Base(d)] {
+			continue
+		}
+		rel, _ := filepath.Rel(repo, d)
 		roots = append(roots, rel)
 	}
 	allowed := func(line string) bool {
@@ -951,5 +987,151 @@ func TestWithin(t *testing.T) {
 		if got := within(c.parent, c.child); got != c.want {
 			t.Errorf("within(%q, %q) = %v, want %v", c.parent, c.child, got, c.want)
 		}
+	}
+}
+
+// TestWriteAtomicIsAtomicAndDurable covers the write every deployed file
+// goes through: the bytes land whole under the asked-for mode, and no temp
+// file is left beside them on either outcome. The Sync added on 2026-09-16
+// is not directly observable from a test — a crash is what would show it —
+// so what is asserted here is the contract it protects: after the call
+// returns, the destination holds exactly the bytes and nothing else does.
+func TestWriteAtomicIsAtomicAndDurable(t *testing.T) {
+	dir := t.TempDir()
+	dest := filepath.Join(dir, "nested", "context.md")
+	data := []byte("# AGENTS.md\n\nwhole file\n")
+	if err := writeAtomic(dest, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, data) {
+		t.Errorf("content = %q, want %q", got, data)
+	}
+	info, err := os.Stat(dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o644 {
+		t.Errorf("mode = %v, want 0644", info.Mode().Perm())
+	}
+	entries, err := os.ReadDir(filepath.Dir(dest))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), ".sh-agent-") {
+			t.Errorf("temp file %s left beside the destination", e.Name())
+		}
+	}
+	// Overwriting an existing file keeps the same guarantee.
+	if err := writeAtomic(dest, []byte("second\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(dest); string(got) != "second\n" {
+		t.Errorf("after overwrite = %q", got)
+	}
+}
+
+// TestRenderContextRefusesSymlinks is BUG-036's class, tested directly on
+// RenderContext rather than only through Plan: a symlinked context directory
+// or context file would let a tree outside the repo decide what every
+// machine reads.
+func TestRenderContextRefusesSymlinks(t *testing.T) {
+	t.Run("context directory is a link", func(t *testing.T) {
+		repo := newRepo(t)
+		outside := t.TempDir()
+		if err := os.WriteFile(filepath.Join(outside, "AGENTS.md"), []byte("# hostile\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.RemoveAll(filepath.Join(repo, "context")); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(outside, filepath.Join(repo, "context")); err != nil {
+			t.Skipf("symlinks unavailable: %v", err)
+		}
+		inv, _ := LoadInventory(repo)
+		if _, err := RenderContext(repo, inv); err == nil {
+			t.Fatal("a symlinked context directory must be refused")
+		} else if !strings.Contains(err.Error(), "symlink") {
+			t.Errorf("the error should name the symlink, got %v", err)
+		}
+	})
+
+	t.Run("a file inside context is a link", func(t *testing.T) {
+		repo := newRepo(t)
+		outside := filepath.Join(t.TempDir(), "extra.md")
+		if err := os.WriteFile(outside, []byte("# hostile\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(outside, filepath.Join(repo, "context", "extra.md")); err != nil {
+			t.Skipf("symlinks unavailable: %v", err)
+		}
+		inv, _ := LoadInventory(repo)
+		if _, err := RenderContext(repo, inv); err == nil {
+			t.Fatal("a symlinked context file must be refused")
+		} else if !strings.Contains(err.Error(), "symlink") {
+			t.Errorf("the error should name the symlink, got %v", err)
+		}
+	})
+}
+
+// TestAdoptFailedCopyKeepsTheExistingSkill: adopt --force used to delete the
+// destination and then copy, so a copy that failed part-way left the operator
+// with neither the old skill nor the new one. The copy is staged and renamed
+// into place, so a refusal mid-walk changes nothing.
+func TestAdoptFailedCopyKeepsTheExistingSkill(t *testing.T) {
+	repo := newRepo(t)
+	home := t.TempDir()
+
+	dest := filepath.Join(repo, "skills", "widget")
+	if err := os.MkdirAll(dest, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	original := "---\nname: widget\ndescription: the version already here\n---\nold body\n"
+	if err := os.WriteFile(filepath.Join(dest, "SKILL.md"), []byte(original), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// A source whose copy fails part-way: copyTree refuses symlinks.
+	src := filepath.Join(t.TempDir(), "widget")
+	if err := os.MkdirAll(src, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "SKILL.md"), []byte("---\nname: widget\ndescription: replacement\n---\nnew body\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("/etc/passwd", filepath.Join(src, "linked.md")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	if _, err := Adopt(repo, home, src, true); err == nil {
+		t.Fatal("a source holding a symlink must be refused")
+	}
+	got, err := os.ReadFile(filepath.Join(dest, "SKILL.md"))
+	if err != nil {
+		t.Fatalf("the existing skill must survive a failed adopt: %v", err)
+	}
+	if string(got) != original {
+		t.Errorf("the existing skill was modified: %q", got)
+	}
+	if _, err := os.Stat(dest + ".adopt-staging"); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the staging directory must be removed on failure, stat gave %v", err)
+	}
+
+	// The happy path still replaces the skill and leaves no staging behind.
+	if err := os.Remove(filepath.Join(src, "linked.md")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Adopt(repo, home, src, true); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(filepath.Join(dest, "SKILL.md")); !strings.Contains(string(got), "new body") {
+		t.Errorf("the skill should have been replaced, got %q", got)
+	}
+	if _, err := os.Stat(dest + ".adopt-staging"); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("no staging directory may survive a successful adopt, stat gave %v", err)
 	}
 }

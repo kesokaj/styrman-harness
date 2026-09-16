@@ -45,7 +45,7 @@ mkdir -p "$docs_root/testing"
 
 When `AGENTS.md` names nothing, auto-detect:
 
-- **Go** (`go.mod` at the root): `gofmt -l .` (must print nothing), `go vet ./...`, `go test -race ./...`. On a failure, rerun the failing target directly — `go test ./<pkg>/... -race -run <Test>` — to narrow it.
+- **Go** (`go.mod` at the root): `gofmt -l .` (must print nothing), `go vet ./...`, `go test -race ./...`. When the project keeps Go files under `.agents/scratch/` — a rehearsal repo, a vendored sample — run `gofmt` on the source directories instead (`gofmt -l cmd internal`): the Go tool skips dot-directories and `gofmt` does not, so one stray scratch file fails a gate that has nothing to do with it (BUG-048); the project's own `AGENTS.md` command wins over this default. On a failure, rerun the failing target directly — `go test ./<pkg>/... -race -run <Test>` — to narrow it.
 - **Frontend** (`web/` or `ui/` with a `package.json`): the project's own runner (`npm test`, `vitest`, `npm run lint`, `npm run build` when present) — never introduce a new one.
 - **Containers** (only when a Dockerfile changed): on macOS `colima status || colima start`; then `docker build .` natively and `docker buildx build --platform linux/amd64 .` because that is what ships to Google.
 - **Coverage of changed code:** map every changed source file to the test that covers it (`go test -cover ./...`, presence of `_test.go` / `*.test.ts` beside it). A changed file with no covering test is a FAIL line naming the file — reported, never patched.

@@ -53,17 +53,31 @@ func Adopt(repo, home, src string, force bool) (string, error) {
 	if within(from, dest) || within(dest, from) {
 		return "", fmt.Errorf("%s and %s overlap; adopt copies a skill directory from outside the repo's skills/", from, dest)
 	}
-	if _, err := os.Stat(dest); err == nil {
-		if !force {
-			return "", fmt.Errorf("%s already exists; pass --force to replace it", dest)
-		}
-		if err := os.RemoveAll(dest); err != nil {
-			return "", err
-		}
-	} else if !errors.Is(err, os.ErrNotExist) {
+	_, err = os.Stat(dest)
+	switch {
+	case err == nil && !force:
+		return "", fmt.Errorf("%s already exists; pass --force to replace it", dest)
+	case err != nil && !errors.Is(err, os.ErrNotExist):
 		return "", err
 	}
-	if err := copyTree(from, dest); err != nil {
+	// Copy into a staging directory beside dest and rename it into place, so
+	// a copy that fails part-way — a symlink refused mid-walk, a read error,
+	// a full disk — leaves the existing skill untouched instead of a
+	// half-written one. Nothing is removed until the replacement is whole.
+	staging := dest + ".adopt-staging"
+	if err := os.RemoveAll(staging); err != nil {
+		return "", err
+	}
+	if err := copyTree(from, staging); err != nil {
+		os.RemoveAll(staging)
+		return "", err
+	}
+	if err := os.RemoveAll(dest); err != nil {
+		os.RemoveAll(staging)
+		return "", err
+	}
+	if err := os.Rename(staging, dest); err != nil {
+		os.RemoveAll(staging)
 		return "", err
 	}
 	return dest, nil

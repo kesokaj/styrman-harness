@@ -668,7 +668,7 @@ Options:
 
 Examples:
     $SCRIPT_NAME input.txt
-    $SCRIPT_NAME -v -o /tmp/output input.txt
+    $SCRIPT_NAME -v -o .agents/scratch/output input.txt
 EOF
 }
 

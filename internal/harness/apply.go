@@ -252,6 +252,16 @@ func writeAtomic(dest string, data []byte, mode fs.FileMode) error {
 		os.Remove(name)
 		return err
 	}
+	// Sync before the rename: without it a crash between the two can leave
+	// the rename durable and the bytes not, so the deployed file is a
+	// zero-length or truncated context that no reader can tell from a real
+	// one (security review of the settings write, 2026-09-16, finding 2 —
+	// the same pattern was fixed there first).
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		os.Remove(name)
+		return err
+	}
 	if err := tmp.Close(); err != nil {
 		os.Remove(name)
 		return err

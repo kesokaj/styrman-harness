@@ -9,7 +9,7 @@ The agent harness: one global context (agents.md standard), skills (Agent Skills
 ## Setup commands
 
 ```bash
-gofmt -l . && go vet ./... && go test -race ./...     # before any completion claim
+gofmt -l cmd internal && go vet ./... && go test -race ./...   # before any completion claim; gofmt takes the source dirs, not `.`, because it walks .agents/scratch and the Go tool does not (BUG-048)
 go run ./cmd/sh-agent install --home .agents/scratch/home  # exercise the installer against a scratch home (gitignored)
 go run ./cmd/sh-agent list                              # sanity-check skills and agents parse
 ```

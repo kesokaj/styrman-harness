@@ -15,7 +15,7 @@ Go 1.24+ and git. `~/.local/bin` on `PATH`. Claude Code and/or the Antigravity C
 
 ```bash
 cd ~/workspace/styrman-harness
-gofmt -l . && go vet ./... && go test -race ./...   # before deploying anything
+gofmt -l cmd internal && go vet ./... && go test -race ./...   # before deploying anything; gofmt takes the source dirs, not `.` (it walks .agents/scratch, BUG-048)
 go run ./cmd/sh-agent install                        # builds the binary from this checkout, writes ~/.claude and ~/.gemini/config, installs the build to ~/.local/bin/sh-agent
 # or for Antigravity only:
 # go run ./cmd/sh-agent install --vendor antigravity

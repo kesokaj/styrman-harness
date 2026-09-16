@@ -50,11 +50,11 @@ E2E criteria: both repositories hold a service that answers POST, GET and DELETE
 - [x] Testing log `testing/2026-09-16-linkshelf-simulation.md` written — expect: both CLIs' results side by side, every gap numbered — done 2026-09-16, G1–G19; § Re-runs filled as the rows land
 - [x] Checkpoint — expect: gap list closed, each gap tagged fix or Follow-up — evidence: the testing log § Gaps (7 fixed under BUG-039..043, 6 Follow-ups, 6 informational), 2026-09-16
 ### Phase 3 — Fixes
-- [ ] One bug-skill pass per fixable gap (failing test or reproduction, smallest fix, reviewer, verifier, bugs record), committed and pushed each — expect: BUG rows in `INDEX.md`, one commit per fix — in progress: BUG-039 (7b8743f), BUG-040 (ff83cf3), BUG-041 (10c2155), BUG-042 (140650c) committed and pushed on the Antigravity and init evidence while the Claude lane ran (D4); blocker: the sandbox re-run rows (`security-rand-id` a2, `/init-project` per CLI, `attribution-off`, one CLI start each) wait for the Claude lane, and any Claude-only gap is still to be triaged
-- [x] Follow-ups for the rest under Scope — expect: each names the gap and why it is not fixed now — G4, G5, G10–G13 filed 2026-09-16 (Claude-only gaps to follow)
-- [ ] Checkpoint — expect: every gap fixed or filed — evidence: `git log`, <date>
+- [x] One bug-skill pass per fixable gap (failing test or reproduction, smallest fix, reviewer, verifier, bugs record), committed and pushed each — expect: BUG rows in `INDEX.md`, one commit per fix — done 2026-09-16: BUG-039 (7b8743f), BUG-040 (ff83cf3), BUG-041 (10c2155), BUG-042 (140650c), BUG-043 (7a6ea90); every owed sandbox row run at the fixed tree (testing log § Re-runs)
+- [x] Follow-ups for the rest under Scope — expect: each names the gap and why it is not fixed now — G4, G5, G10–G13 filed 2026-09-16; the Claude-only gaps became BUG-043, no further Follow-up
+- [x] Checkpoint — expect: every gap fixed or filed — evidence: `git log` 10c2155..7a6ea90 and the testing log § Gaps and § Re-runs, 2026-09-16
 ### Phase 4 — Close
-- [ ] `/retro` at harness scope — expect: a record in `retros/` and a line in `~/.config/sh-agent/retros.jsonl`
+- [x] `/retro` at harness scope — expect: a record in `retros/` and a line in `~/.config/sh-agent/retros.jsonl` — done 2026-09-16: `retros/2026-09-16-retro.md`, eight proposals queued in `~/.config/sh-agent/proposals/2026-09-16-retro.md`, index line appended; applying them is the gate this session stops at
 - [ ] Install into this box (`sh-agent install`), `sh-agent status` — expect: `binary <HEAD>`, `drift none`; the three real-home smoke checks
 - [ ] `/handoff` — expect: a cold-readable handoff, `TODO.md` and `ROADMAP.md` empty
 - [ ] Checkpoint — expect: pushed, trail closed — evidence: `git status` clean, <date>

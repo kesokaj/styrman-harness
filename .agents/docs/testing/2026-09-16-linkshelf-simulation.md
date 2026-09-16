@@ -72,7 +72,24 @@ The needle was validated in both states before the a2 verdicts counted: the a1 r
 
 ## Re-runs at the fixed tree
 
-<filled at the Phase 3 checkpoint: the G6 row above, an `/init-project` run per CLI for G2/G3, one start of each CLI with the CLI log grepped for parse errors>
+Pass 1 (`rerun.sh`, sandbox reinstalled at 7b8743f, `drift none`, the new `note:` line printed by the install itself):
+
+| Row | Claude Code | Antigravity |
+|---|---|---|
+| `security-rand-id` a2 | NOT REPRODUCED (table above) | NOT REPRODUCED (table above) |
+| `/init-project` on a fresh empty repository (`-g2`), same prompt as the first run | rc 0, 155 s, 1 commit; `local.md`: 0 lines with `8080`, `## Test` with the real command, no placeholder left, the Configure row deleted with a sentence saying nothing is read yet | rc 0, 168 s, 1 commit; `local.md`: 0 lines with `8080`, `## Test` with the real command, no placeholder left, the Configure row deleted (empty table kept) |
+| `attribution-off` — `{"attribution": {"commit": "", "pr": ""}}` written to the sandbox home's `settings.json`, then a headless commit in a throwaway repository | rc 0; `git log --format=%B` shows two commits with no trailer (`NO-TRAILER commits=2`); the setting stays in the sandbox home from here on | not applicable |
+| Antigravity CLI log after the pass | — | `cli-20260916_091518.log`: 0 `Failed to parse` |
+
+Pass 2 (`rerun2.sh`, sandbox reinstalled at 4268166 — the tree with BUG-043 — `binary 426816664d9a`, `drift none`):
+
+| Row | Claude Code | Antigravity |
+|---|---|---|
+| `verifier-43` — a verifier dispatch on a fresh clone of the demo service with an uncommitted `extra_test.go` and no `testing/<app>/guide.md` | rc 0, 86 s; wrote `testing/demo-app/guide.md` (`owner: verifier`) and a log with `counts: pass 14, fail 0, skip 0 … for go test -race -v -count=1 ./...` | rc 0, 131 s; wrote `testing/demo-app/guide.md` and a log with `counts: pass 11, fail 0, skip 0 … for go test -race -v -count=1 ./...` |
+| one no-tools start per CLI (`noop`) | rc 0: `ok` and the context's first heading | rc 0: the same |
+| Antigravity CLI log after the pass | — | `cli-20260916_092049.log`: 0 `Failed to parse` |
+
+Every owed row is done: BUG-039 (`attribution-off`), BUG-040 (`init -g2` ×2), BUG-041 (`security-rand-id` a2 ×2), BUG-043 (`verifier-43` ×2); BUG-042 by reading. Not re-run: a full `/feature` at the fixed tree (see Not verified).
 
 ## Not verified here
 

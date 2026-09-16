@@ -89,7 +89,9 @@ Pass 2 (`rerun2.sh`, sandbox reinstalled at 4268166 — the tree with BUG-043 �
 | one no-tools start per CLI (`noop`) | rc 0: `ok` and the context's first heading | rc 0: the same |
 | Antigravity CLI log after the pass | — | `cli-20260916_092049.log`: 0 `Failed to parse` |
 
-Every owed row is done: BUG-039 (`attribution-off`), BUG-040 (`init -g2` ×2), BUG-041 (`security-rand-id` a2 ×2), BUG-043 (`verifier-43` ×2); BUG-042 by reading. Not re-run: a full `/feature` at the fixed tree (see Not verified).
+Pass 3 (`rerun3.sh`, after the real-home smoke found BUG-043's first wording still skippable): sandbox reinstalled from the working tree with the unconditional wording; `verifier-43b` on both CLIs wrote `testing/demo-app/guide.md` with `-count=1` logs (Claude 88 s, Antigravity 162 s); this box reinstalled and Claude's check 3 repeated: guide written, at `testing/guide.md` (Follow-up G20). Details in `testing/2026-09-16-verify-real-home-3.md`.
+
+Every owed row is done: BUG-039 (`attribution-off`), BUG-040 (`init -g2` ×2), BUG-041 (`security-rand-id` a2 ×2), BUG-043 (`verifier-43` ×2, `verifier-43b` ×2, real-home 3b); BUG-042 by reading. Not re-run: a full `/feature` at the fixed tree (see Not verified).
 
 ## Not verified here
 

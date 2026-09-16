@@ -16,6 +16,7 @@ Follow-ups noted, not built:
 - G10 — a `store.Store` interface stayed exported with no caller after the reviewer had it declared in the consumer; the one-round review after fixes (ADR-022) does not re-read — found in: feature run, Antigravity
 - G11 — the golang skill's reference table was not consulted headless (only `SKILL.md` read; `golang-io-web.md` names method-pattern routing, `DisallowUnknownFields`, timeouts); consider naming the two files every HTTP service needs in `SKILL.md` — found in: feature run, Antigravity
 - G12 — default data path `data/links.json` inside the repository and not gitignored; a plain `go run` dirties the tree; no harness rule names runtime files — found in: feature run, Antigravity
+- G20 — the verifier's `testing/<app>/guide.md` leaves `<app>` unresolved when the binary (`cmd/server`) and the repository (`demo-app`) are named differently: one of three runs at BUG-043's second wording wrote `testing/guide.md`; define `<app>` in the verifier (the `cmd/<app>` name; the repository name when there is none) — found in: real-home check 3b, Claude Code
 - G13 — `AGENTS.md` § Setup Commands grew from one test command to a six-tier list (`go test -cover`, `bash scripts/e2e_test.sh`); the documentation agent's lane allows it, no rule bounds it — found in: feature run, Antigravity
 
 Brief given to both CLIs, verbatim: *a local-only Go HTTP service, linkshelf, that stores bookmarks — POST, GET and DELETE /links, JSON, an in-memory store saved to a file — with tests and the deploy guide filled in.*

@@ -25,7 +25,7 @@ honest edges is useful; silence is not.
 
 ## Scope
 
-Default to the current change set, not the whole repo. Establish the diff with `git diff`, `git diff --staged`, or `git diff <base>...HEAD` (`gh pr diff <n>` for a PR), and name it in the report on a `Range reviewed:` line. If the dispatch hands you a plan file instead of a diff (the cold-reader check), review that document and the code surfaces it names, and answer the two questions the dispatch asks. If no diff is discernible, say so and review what the dispatch names — never silently review everything.
+Default to the current change set, not the whole repo. Establish the diff with `git diff`, `git diff --staged`, or `git diff <base>...HEAD` (`gh pr diff <n>` for a PR), and name it in the report on a `Range reviewed:` line. If the dispatch hands you a plan file instead of a diff (the cold-reader check), review that document and the code surfaces it names, and answer the questions the dispatch asks, in its numbering. If no diff is discernible, say so and review what the dispatch names — never silently review everything.
 
 ## Pre-flight
 

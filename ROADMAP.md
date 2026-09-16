@@ -6,8 +6,6 @@ Last reviewed: 2026-09-16
 
 ## Now
 
-- `.agents/docs/plans/2026-09-16-attribution-write.md` — `sh-agent install` writes the attribution setting when absent (R4 sentence approved)
-
 ## Next
 
 ## Later / Ideas

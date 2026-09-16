@@ -2,7 +2,7 @@
 owner: bugs
 date: 2026-09-16
 id: BUG-037
-status: open
+status: fixed
 area: internal/harness/adopt.go
 ---
 # BUG-037: `sh-agent adopt --force` can delete the harness checkout
@@ -17,7 +17,15 @@ Not reproduced destructively. `argolis-devbox/.agents/scratch/security-worktree-
 `Adopt` builds `dest` from `filepath.Base(from)` without validating that `from` names a genuine skill subdirectory distinct from `repo` or `repo/skills` — `.` and `..` are valid path syntax that survive `EvalSymlinks` unchanged and collide with the destination root. The bug predates this plan's diff; this diff only added `copyTree`'s symlink refusal without touching the destination computation it wraps.
 
 ## Fix
-Not fixed. Remediation named by the finding: make `from` absolute; run `validName` on `filepath.Base(from)`; refuse when `from` and `dest` are equal or one contains the other; copy into a temp directory under `skills/` and rename it over `dest` only after the copy succeeds; a test for `.`, `..`, and a self-adopt. Until it lands, never pass `--force` to `adopt`.
+`internal/harness/adopt.go`: after the candidate loop resolves `from`, `Adopt` now calls `filepath.Abs` on `from`, runs `validName("skill", src, filepath.Base(from))` on the resolved name, computes `dest` as an absolute path, and refuses — before any `os.RemoveAll` — when either path contains the other, via a new unexported helper `within(parent, child string) bool` (built on `filepath.Rel`, true when child is parent itself or lies inside it). The refusal reads `%s and %s overlap; adopt copies a skill directory from outside the repo's skills/`.
+
+`internal/harness/harness_test.go` adds `TestAdoptRefusesDestructiveSources` (four subtests: `.`, `..`, a skill adopted onto itself, a relative `skills/alpha` from the repo root) and `TestWithin` (a table test for the helper). Both fail without the fix: run against `git show HEAD:internal/harness/adopt.go` in a scratch copy, all four subtests fail (reporting `skills/` removed, the repo removed, and the source removed), and `TestWithin` fails when `within` is replaced by `strings.HasPrefix(child, parent)` on `/a/skills-old` vs `/a/skillsdelta`.
+
+Verification: `gofmt -l .` empty, `go vet ./...` exit 0, `go test -race ./...` exit 0 — logged in `.agents/docs/testing/2026-09-16-verify-bug-037-adopt.md`. Reviewed at `.agents/docs/reviews/2026-09-16-review-bug-037-code.md` and `…-bug-037-docs.md`, both APPROVE.
+
+Independent diagnosis: `.agents/docs/plans/2026-09-16-recon-diagnose-adopt-force-deletion.md` agreed with the hypothesis and sharpened it — `filepath.EvalSymlinks` does not absolutize a relative path, so `.`, `..`, and `skills/<name>` reached `filepath.Base` unchanged. One root cause, three symptoms.
+
+Follow-up, deferred (not part of this fix, addresses a different failure): copy into a temporary directory under `skills/` and rename it over `dest`, so a `--force` replacement can't lose the old skill when the copy fails halfway.
 
 ## Prevention
 A command that composes a deletion path from user-typed input validates the resolved path is inside its intended subtree and distinct from any ancestor of the deletion root before calling `RemoveAll` — `.` and `..` are not edge cases to special-case after the fact, they are the default inputs `EvalSymlinks` passes through unchanged.

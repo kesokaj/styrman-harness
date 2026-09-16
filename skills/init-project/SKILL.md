@@ -32,7 +32,7 @@ done
 echo "$ASSETS"
 ```
 
-If none exists, say so and stop — do not improvise the templates from memory. The templates live outside the project, so reading them may take one permission approval; a headless run passes the skill directory explicitly (`--add-dir` on Claude Code, a `read_file` allow-rule on Antigravity).
+If none exists, say so and stop — do not improvise the templates from memory. The templates live outside the project, so reading them may take one permission approval; a headless run passes the skill directory explicitly (`--add-dir` on Claude Code, a `read_file` allow-rule on Antigravity); on Claude Code a headless run may also refuse the loops below for their `$var` expansion ("Contains simple_expansion") — copy file by file with the Write tool then, and say so in the summary.
 
 ## Step 3: Root files
 

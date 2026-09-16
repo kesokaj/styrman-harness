@@ -41,3 +41,5 @@ Review: `.agents/docs/reviews/2026-09-16-review-bug-g2-deploy-template.md`. Test
 `.agents/docs/testing/2026-09-16-verify-linkshelf-sim-fixes.md`. Sandbox re-run owed (not yet run):
 per-CLI `/init-project` re-run at the fixed tree for G2/G3, per
 `.agents/docs/testing/2026-09-16-linkshelf-simulation.md` § Re-runs.
+
+Graduated 2026-09-16 to `skills/init-project/SKILL.md` Step 4 and `skills/init-project/assets/agents-tree/docs/deploy/local.md`.

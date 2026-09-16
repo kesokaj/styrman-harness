@@ -45,3 +45,5 @@ An agent's "first time" duty is keyed to whether a specific file exists, never t
 
 ## Related (update)
 `.agents/docs/reviews/2026-09-16-review-bug-043-guide-wording.md` (REQUEST CHANGES, all findings fixed). BUG-027 (same prevention rule, first recurrence). Retro `.agents/docs/retros/2026-09-16-retro.md` Proposal 5 (a grep-by-subject check for restated duties).
+
+Graduated 2026-09-16 to `agents/verifier.md` § What to run (`-count=1` always) and § Records (the guide sentence).

@@ -48,3 +48,5 @@ BUG-024 (a matrix check validated only against a must-fail state), BUG-010, BUG-
 third record with "validate a check in both states" as its prevention (BUG-024, BUG-013, here);
 recommend it graduate into a `.agents/rules/` file or a testing-skill checklist item — actionable
 and generalizable to any check/guard added in this repo.
+
+Graduated 2026-09-16 to `context/AGENTS.md` § Hard rules, the "Silence from your own instrumentation" bullet.

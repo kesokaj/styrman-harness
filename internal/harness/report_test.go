@@ -284,7 +284,7 @@ func TestReportRecord(t *testing.T) {
 
 	// With a plain-copy harness and an install, only harness_commit is null.
 	repo, home := newRepo(t), t.TempDir()
-	files, err := Plan(repo, nil, VendorAll)
+	files, err := Plan(DirSource(repo), nil, VendorAll)
 	if err != nil {
 		t.Fatal(err)
 	}

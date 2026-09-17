@@ -159,7 +159,7 @@ func run(args []string, out io.Writer) error {
 		if err != nil {
 			return err
 		}
-		files, err := harness.Plan(repo, self, vendor)
+		files, err := harness.Plan(harness.DirSource(repo), self, vendor)
 		if err != nil {
 			return err
 		}
@@ -183,7 +183,7 @@ func run(args []string, out io.Writer) error {
 		if err != nil {
 			return err
 		}
-		files, err := harness.Plan(repo, nil, vendor)
+		files, err := harness.Plan(harness.DirSource(repo), nil, vendor)
 		if err != nil {
 			return err
 		}
@@ -196,7 +196,7 @@ func run(args []string, out io.Writer) error {
 		return update(repo, home, *check, *homeFlag, *vendorFlag, out)
 
 	case "list":
-		inv, err := harness.LoadInventory(repo)
+		inv, err := harness.LoadInventory(harness.DirSource(repo))
 		if err != nil {
 			return err
 		}
@@ -204,11 +204,11 @@ func run(args []string, out io.Writer) error {
 		return nil
 
 	case "render":
-		inv, err := harness.LoadInventory(repo)
+		inv, err := harness.LoadInventory(harness.DirSource(repo))
 		if err != nil {
 			return err
 		}
-		data, err := harness.RenderContext(repo, inv)
+		data, err := harness.RenderContext(harness.DirSource(repo), inv)
 		if err != nil {
 			return err
 		}
@@ -319,7 +319,7 @@ func status(repo, home, vendorFlag string, out io.Writer) error {
 		return err
 	}
 
-	inv, err := harness.LoadInventory(repo)
+	inv, err := harness.LoadInventory(harness.DirSource(repo))
 	if err != nil {
 		return err
 	}
@@ -331,7 +331,7 @@ func status(repo, home, vendorFlag string, out io.Writer) error {
 		fmt.Fprintf(out, "agy        ~/%s  (rules/AGENTS.md, skills/, agents/, workflows/, rules/)\n", harness.AgyRoot)
 	}
 
-	files, err := harness.Plan(repo, nil, vendor)
+	files, err := harness.Plan(harness.DirSource(repo), nil, vendor)
 	if err != nil {
 		return err
 	}

@@ -348,13 +348,13 @@ func BuildRecord(home, repo, host string, now time.Time, redactions []Redaction)
 	} else {
 		notes = append(notes, "harness is a plain copy, not a git checkout: harness_commit is null")
 	}
-	if inv, err := LoadInventory(repo); err != nil {
+	if inv, err := LoadInventory(DirSource(repo)); err != nil {
 		notes = append(notes, fmt.Sprintf("inventory unreadable (%v): skills and agents are null", err))
 	} else {
 		skills, agents := len(inv.Skills), len(inv.Agents)
 		rec.Skills, rec.Agents = &skills, &agents
 	}
-	files, err := Plan(repo, nil, vendor)
+	files, err := Plan(DirSource(repo), nil, vendor)
 	if err == nil {
 		var r Report
 		if r, err = Status(home, files); err == nil {

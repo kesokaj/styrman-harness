@@ -109,7 +109,7 @@ func TestLoadSkillsRejectsUnquotedComment(t *testing.T) {
 	if err := os.WriteFile(p, []byte("---\nname: gamma\ndescription: Gamma\nargument-hint: [topic or #issue]\n---\nbody\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := LoadSkills(repo)
+	_, err := LoadSkills(DirSource(repo))
 	if err == nil || !strings.Contains(err.Error(), "gamma") || !strings.Contains(err.Error(), "argument-hint") {
 		t.Fatalf("LoadSkills should name the skill and the key, got %v", err)
 	}
@@ -126,7 +126,7 @@ func TestSplitRejectsMissingFrontmatter(t *testing.T) {
 
 func TestDeriveAgy(t *testing.T) {
 	repo := newRepo(t)
-	agents, err := LoadAgents(repo)
+	agents, err := LoadAgents(DirSource(repo))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +163,7 @@ func TestDeriveAgy(t *testing.T) {
 
 func TestInventoryAndRender(t *testing.T) {
 	repo := newRepo(t)
-	skills, err := LoadSkills(repo)
+	skills, err := LoadSkills(DirSource(repo))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +173,7 @@ func TestInventoryAndRender(t *testing.T) {
 	if !skills[1].SlashOnly || skills[0].SlashOnly {
 		t.Errorf("SlashOnly wrong: %+v", skills)
 	}
-	inv, err := LoadInventory(repo)
+	inv, err := LoadInventory(DirSource(repo))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +183,7 @@ func TestInventoryAndRender(t *testing.T) {
 	if len(inv.Rules) != 1 || inv.Rules[0].Description != "Go style" {
 		t.Errorf("rules = %+v", inv.Rules)
 	}
-	ctx, err := RenderContext(repo, inv)
+	ctx, err := RenderContext(DirSource(repo), inv)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +221,7 @@ func TestInstallStatusResyncUninstall(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	files, err := Plan(repo, self, VendorAll)
+	files, err := Plan(DirSource(repo), self, VendorAll)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -270,7 +270,7 @@ func TestInstallStatusResyncUninstall(t *testing.T) {
 		t.Errorf("fresh install should be clean apart from the foreign CLAUDE.md: %+v", report.Counts)
 	}
 	// status and diff plan without the binary; the installed one is not stale.
-	noSelf, err := Plan(repo, nil, VendorAll)
+	noSelf, err := Plan(DirSource(repo), nil, VendorAll)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -294,7 +294,7 @@ func TestInstallStatusResyncUninstall(t *testing.T) {
 	if err := os.RemoveAll(filepath.Join(repo, "skills", "beta")); err != nil {
 		t.Fatal(err)
 	}
-	files, err = Plan(repo, self, VendorAll)
+	files, err = Plan(DirSource(repo), self, VendorAll)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -344,7 +344,7 @@ func TestInstallStatusResyncUninstall(t *testing.T) {
 func TestInstallWritesOwnClaudeStub(t *testing.T) {
 	repo := newRepo(t)
 	home := t.TempDir()
-	files, err := Plan(repo, nil, VendorAll)
+	files, err := Plan(DirSource(repo), nil, VendorAll)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -385,7 +385,7 @@ func TestVendorSelection(t *testing.T) {
 	self := []byte("#!/bin/sh\necho sh-agent\n")
 
 	// Plan for antigravity only
-	agyPlan, err := Plan(repo, self, VendorAntigravity)
+	agyPlan, err := Plan(DirSource(repo), self, VendorAntigravity)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -405,7 +405,7 @@ func TestVendorSelection(t *testing.T) {
 	}
 
 	// Plan for claude only
-	claudePlan, err := Plan(repo, self, VendorClaude)
+	claudePlan, err := Plan(DirSource(repo), self, VendorClaude)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -441,7 +441,7 @@ func TestVendorSelection(t *testing.T) {
 	}
 
 	// Status check with antigravity plan has no drift
-	noSelfAgy, err := Plan(repo, nil, VendorAntigravity)
+	noSelfAgy, err := Plan(DirSource(repo), nil, VendorAntigravity)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -455,7 +455,7 @@ func TestVendorSelection(t *testing.T) {
 
 	// Switch from antigravity to all, then back to antigravity:
 	// Verify resync removes Claude files when returning to antigravity
-	allPlan, err := Plan(repo, self, VendorAll)
+	allPlan, err := Plan(DirSource(repo), self, VendorAll)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -694,7 +694,7 @@ func TestLastRetro(t *testing.T) {
 
 func TestSlashNoteOnlyWhenSomeSkillIsSlashOnly(t *testing.T) {
 	repo := newRepo(t)
-	inv, err := LoadInventory(repo)
+	inv, err := LoadInventory(DirSource(repo))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -751,7 +751,7 @@ func TestInstallMarksDirtyTree(t *testing.T) {
 	gitIn(t, repo, "commit", "-q", "-m", "fixture")
 	short := gitIn(t, repo, "rev-parse", "--short", "HEAD")
 	home := t.TempDir()
-	files, err := Plan(repo, nil, VendorAll)
+	files, err := Plan(DirSource(repo), nil, VendorAll)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -769,7 +769,7 @@ func TestInstallMarksDirtyTree(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(repo, "context", "AGENTS.md"), []byte("# AGENTS.md\n\nBe honest and brief.\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	files, err = Plan(repo, nil, VendorAll)
+	files, err = Plan(DirSource(repo), nil, VendorAll)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1053,8 +1053,8 @@ func TestRenderContextRefusesSymlinks(t *testing.T) {
 		if err := os.Symlink(outside, filepath.Join(repo, "context")); err != nil {
 			t.Skipf("symlinks unavailable: %v", err)
 		}
-		inv, _ := LoadInventory(repo)
-		if _, err := RenderContext(repo, inv); err == nil {
+		inv, _ := LoadInventory(DirSource(repo))
+		if _, err := RenderContext(DirSource(repo), inv); err == nil {
 			t.Fatal("a symlinked context directory must be refused")
 		} else if !strings.Contains(err.Error(), "symlink") {
 			t.Errorf("the error should name the symlink, got %v", err)
@@ -1070,8 +1070,8 @@ func TestRenderContextRefusesSymlinks(t *testing.T) {
 		if err := os.Symlink(outside, filepath.Join(repo, "context", "extra.md")); err != nil {
 			t.Skipf("symlinks unavailable: %v", err)
 		}
-		inv, _ := LoadInventory(repo)
-		if _, err := RenderContext(repo, inv); err == nil {
+		inv, _ := LoadInventory(DirSource(repo))
+		if _, err := RenderContext(DirSource(repo), inv); err == nil {
 			t.Fatal("a symlinked context file must be refused")
 		} else if !strings.Contains(err.Error(), "symlink") {
 			t.Errorf("the error should name the symlink, got %v", err)
@@ -1188,7 +1188,7 @@ func assertSkillsClean(t *testing.T, repo, when string) {
 			t.Errorf("%s: skills/ holds %q, which is not a skill", when, e.Name())
 		}
 	}
-	skills, err := LoadSkills(repo)
+	skills, err := LoadSkills(DirSource(repo))
 	if err != nil {
 		t.Fatalf("%s: LoadSkills: %v", when, err)
 	}
@@ -1216,7 +1216,7 @@ func TestLoadSkillsRefusesDuplicateNames(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dup, "SKILL.md"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := LoadSkills(repo)
+	_, err := LoadSkills(DirSource(repo))
 	if err == nil {
 		t.Fatal("two skills named alpha must be refused")
 	}
@@ -1238,7 +1238,7 @@ func TestPlanRefusesSecretShapedFiles(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(repo, "skills", "alpha", name), []byte("secret\n"), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := Plan(repo, nil, VendorAll); err == nil {
+			if _, err := Plan(DirSource(repo), nil, VendorAll); err == nil {
 				t.Fatalf("%s must not be deployed", name)
 			} else if !strings.Contains(err.Error(), name) {
 				t.Errorf("the error should name the file, got %v", err)
@@ -1250,7 +1250,7 @@ func TestPlanRefusesSecretShapedFiles(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(repo, "skills", "alpha", "keys-explained.md"), []byte("about keys\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		files, err := Plan(repo, nil, VendorAll)
+		files, err := Plan(DirSource(repo), nil, VendorAll)
 		if err != nil {
 			t.Fatalf("a normal file must still plan: %v", err)
 		}
@@ -1402,7 +1402,7 @@ func TestPlanDropsGroupAndOtherWrite(t *testing.T) {
 	if err := os.Chmod(loose, 0o666); err != nil {
 		t.Fatal(err)
 	}
-	files, err := Plan(repo, nil, VendorAll)
+	files, err := Plan(DirSource(repo), nil, VendorAll)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1434,7 +1434,7 @@ func TestInstallCorrectsTheModeOfAnUnchangedFile(t *testing.T) {
 	}
 	repo := newRepo(t)
 	home := t.TempDir()
-	files, err := Plan(repo, nil, VendorAll)
+	files, err := Plan(DirSource(repo), nil, VendorAll)
 	if err != nil {
 		t.Fatal(err)
 	}

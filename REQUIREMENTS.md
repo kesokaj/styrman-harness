@@ -30,6 +30,10 @@ Every test and every development run of the installer uses `--home` with a scrat
 
 Every project keeps its scratch in `.agents/scratch/` (gitignored), its failures as numbered records in `.agents/docs/bugs/`, its progress in plan files with task checkboxes, and its retro and distill records in `.agents/docs/retros/`, so a zero-context session can resume and does not repeat a mistake. The harness's own state (manifest, feedback log, the harness proposal queue, the cross-project index) lives in `~/.config/sh-agent/` and nowhere else; a project's retro and distill records are the project's own state, in its trail (ADR-015, clarified 2026-09-13 with the operator's approval).
 
+## R8 — One delivery channel, and it is `sh-agent`
+
+The harness reaches a machine one way: a checkout the operator owns, kept current with `sh-agent update`, or an unpacked bundle installed with `sh-agent install`. There is no other channel — no vendored mirror inside a consumer project, no per-project copy, no service. A project that wants the harness uses `sh-agent`; this repository names no consumer project and depends on none. Experience flows back the one way too: `sh-agent report` sends a COPY of this machine's corrections, proposals and a metrics record to the private feedback repository. The originals stay in `~/.config/sh-agent/`, which R7 keeps as the one place that state lives; a copy leaving for the operator's own private index is not a second home for it. (Approved by the operator 2026-09-17, on the exact text above; ADR-030.)
+
 ## Known limits
 
 - **Antigravity global rules path.** The CLI's customization root is `~/.gemini/config/`; rules there are documented for the workspace form (`.agents/rules/*.md`) and by analogy for the global one. Verified on the Linux box 2026-09-03 (`.agents/docs/testing/2026-09-03-verify-real-home.md`): the CLI reads rules, skills, and agents from there. Confirmed on the Mac for Antigravity on 2026-09-04 (`.agents/docs/testing/2026-09-04-verify-mac-real-home.md`); Claude Code on the Mac is unverified.

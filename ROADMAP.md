@@ -6,6 +6,8 @@ Last reviewed: 2026-09-17
 
 ## Now
 
+- Close the dashed gaps on the harness map — `.agents/docs/plans/2026-09-17-close-map-gaps.md`
+
 ## Next
 
 ## Later / Ideas

@@ -45,7 +45,7 @@ sh-agent status                      # first line names a plain copy with no com
 
 ## Report back
 
-`sh-agent report` sends this machine's experience to the private `styrman-harness-feedback` repository so the harness can be improved from it. What leaves: a COPY of `~/.config/sh-agent/feedback.jsonl`, `retros.jsonl`, `state.json` and `proposals/*.md`, redacted, plus `report.json` — host, OS and arch, vendor, installed file count and time, the harness checkout's commit, drift, skill and agent counts, the Go that built the running binary, and the list of redactions. The originals are never modified. A symlink among them is skipped and named, never followed.
+`sh-agent report` sends this machine's experience to the private `styrman-harness-feedback` repository so the harness can be improved from it. In the harness checkout, `/retro --harness` consumes the queued proposals in each other place's newest report — this machine's own reports skipped — and uses their correction logs only for its promotion check; nothing writes back into the feedback repository. What leaves: a COPY of `~/.config/sh-agent/feedback.jsonl`, `retros.jsonl`, `state.json` and `proposals/*.md`, redacted, plus `report.json` — host, OS and arch, vendor, installed file count and time, the harness checkout's commit, drift, skill and agent counts, the Go that built the running binary, and the list of redactions. The originals are never modified. A symlink among them is skipped and named, never followed.
 
 ```bash
 sh-agent report --dry-run     # prints where it would write, every file, and every redaction; writes nothing, clones nothing

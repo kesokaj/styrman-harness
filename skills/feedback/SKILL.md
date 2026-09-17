@@ -85,7 +85,7 @@ Append one JSON object per line to `~/.config/sh-agent/feedback.jsonl`. If the d
 
 ## Where the loop's outputs land
 
-This skill only logs. `/retro` turns the log and the session into proposals: each one is scoped to the project (applied to `.agents/rules/`, the project `AGENTS.md`, `.agents/skills/` or `.agents/agents/`) or to the harness (queued in `~/.config/sh-agent/proposals/`), and every run leaves a record in the project's `<docs-root>/retros/` plus one line in `~/.config/sh-agent/retros.jsonl`, the cross-project index. `/distill` records there too. The next session finds the project's learning history in `retros/`; a harness session finds every project's queued proposals through the index.
+This skill only logs. `/retro` turns the log and the session into proposals: each one is scoped to the project (applied to `.agents/rules/`, the project `AGENTS.md`, `.agents/skills/` or `.agents/agents/`) or to the harness (queued in `~/.config/sh-agent/proposals/`), and every run leaves a record in the project's `<docs-root>/retros/` plus one line in `~/.config/sh-agent/retros.jsonl`, the cross-project index. `/distill` records there too. The next session finds the project's learning history in `retros/`; a harness session finds this machine's queued proposals through the index, and every other place's through its newest `sh-agent report`.
 
 ## Cross-References
 

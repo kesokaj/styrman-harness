@@ -48,6 +48,8 @@ It refuses any checkout whose origin is not that repository, and pushes to the f
 
 Originals never leave `~/.config/sh-agent/`. R7 keeps that as the one place harness state lives; a copy going to the operator's own private index is not a second home for it, and R8 says so explicitly so the two rules do not contradict.
 
+`/retro --harness`, run in the harness checkout, is what consumes the reports' queued proposals — it pulls the feedback checkout and reads the newest run directory per place, skipping this machine's own reports, and records each proposal it applies or rejects with a `Source:` line in the harness repository's own retro record, the ledger across machines. Nothing writes back into the feedback repository.
+
 ## What is deliberately NOT being built
 
 - **A webservice**, for delivery or for feedback. Git already carries both halves. A service adds hosting, per-machine authentication and an attack surface, for one user, against R3, R4 and local-by-default. A dashboard over collected data stays possible later without changing how any machine reports.
@@ -67,7 +69,7 @@ This is easy to get wrong when several of those repositories sit side by side on
 
 **Built and shipped:** `sh-agent` with install, update, status, diff, uninstall, list, render, adopt, report and version; `update` refusing a dirty checkout on every path; the installer refusing secret-shaped files and duplicate skill names; `v1.0.0` tagged and signed. 27 skills, 7 agents.
 
-**The loop back is built:** `sh-agent report` since 2026-09-17, run end to end from the Linux box into the private `styrman-harness-feedback` repository (`.agents/docs/testing/2026-09-17-delivery-rework-e2e.md`). How to run it and what fails: `.agents/docs/deploy/local.md` § Report back. Not yet exercised on real data: a redaction firing, and any place but that one box.
+**The loop back is built:** `sh-agent report` since 2026-09-17, run end to end from the Linux box into the private `styrman-harness-feedback` repository (`.agents/docs/testing/2026-09-17-delivery-rework-e2e.md`). How to run it and what fails: `.agents/docs/deploy/local.md` § Report back. The consuming half is also built: `/retro --harness` pulls the feedback checkout and consumes queued proposals from every other place's newest report, recording each with a `Source:` line in the harness repository's own retro record — on branch `close-map-gaps` until another place's report proves it. Not yet exercised on real data: that consumption of another place's report, a redaction firing, and any place but that one box.
 
 **Open, defaulting to no:** whether this repository becomes public. Only that would let a machine bootstrap with no credential at all, and it is a question about content rather than packaging.
 

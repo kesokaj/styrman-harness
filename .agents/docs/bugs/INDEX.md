@@ -50,6 +50,9 @@
 | BUG-063 | 2026-09-17 | agents/verifier | fixed | verifier's `mkdir` for the testing guide was denied, never retried, no guide written, log said `Scope: complete` | a duty an agent must perform is a numbered step, not a paragraph beside the steps; "complete" is defined by artifacts owed, not commands run |
 | BUG-064 | 2026-09-17 | agents/verifier | fixed | after BUG-063's fix, Claude's verifier still skipped writing the guide with no denial or error, though it reported the gap honestly | a duty a subagent must not skip goes in the dispatch text the main agent writes, not only in the subagent's own definition |
 | BUG-065 | 2026-09-17 | skills/feedback | fixed | `/feedback` loaded the harness's `feedback` skill instead of Claude Code's built-in feedback command | a skill/agent/command name never shadows a built-in slash command of either CLI; check the CLI's built-in list before naming one |
+| BUG-066 | 2026-09-17 | embed.go / release build | fixed | `go:embed all:` compiled a gitignored `rules/.env` into the release binary while embed tests stayed green | an embedded artifact's test must assert BOTH directions against its source (extra content is a defect too), pinned to what git tracks |
+| BUG-067 | 2026-09-17 | cmd/sh-agent/main.go (knownCheckout) | fixed | `knownCheckout` resolved an `embedded:vX.Y.Z` manifest value as a filesystem path via `samePath` | when a field gains a value of a new kind, grep every reader of that field in the same change, not just the one that prompted it |
+| BUG-068 | 2026-09-17 | process / mutation testing | fixed | a must-fail mutation hit a duplicate text pattern in `status`, not the intended `knownCheckout` guard; text-replacement restore left it broken | a must-fail mutation asserts its target text is unique before writing; undo by restoring the saved file copy, never a reverse text replacement |
 
 ## Graduated
 

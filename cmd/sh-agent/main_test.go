@@ -1162,16 +1162,51 @@ func TestReleaseBinaryWithoutCheckout(t *testing.T) {
 	if err := run([]string{"adopt", "anything", "--home", home}, &out); err == nil || err.Error() != "adopt needs a harness checkout; this install is a release binary" {
 		t.Errorf("adopt: err = %v", err)
 	}
+	// `update` on a release binary goes to the release flow (Phase 4). PATH is
+	// emptied for this call so the real gh is never reached: an earlier version
+	// of this test called the real repository over the network (2026-09-17).
 	out.Reset()
-	if err := run([]string{"update", "--home", home}, &out); err == nil || !strings.Contains(err.Error(), "release binary") {
-		t.Errorf("update: err = %v, want a refusal naming the release binary", err)
-	}
+	func() {
+		t.Setenv("PATH", t.TempDir())
+		if err := run([]string{"update", "--home", home}, &out); err == nil || !strings.Contains(err.Error(), "install gh and run gh auth login") {
+			t.Errorf("update with no gh: err = %v, want the gh refusal", err)
+		}
+	}()
 	out.Reset()
 	// The record's notes print before the feedback checkout is resolved, so
 	// they show whether or not this non-checkout feedback path is refused.
 	_ = run([]string{"report", "--home", home, "--dry-run", "--feedback-repo", t.TempDir()}, &out)
 	if !strings.Contains(out.String(), "release binary v9.9.9") {
 		t.Errorf("report does not say the harness is a release binary:\n%s", out.String())
+	}
+}
+
+// TestReleaseBinaryUpdateCheckExitsTwo: on a release binary, `update --check`
+// reports a newer release and exits 2, the same code a checkout that is behind
+// gives (plan § Per command with an embedded source).
+func TestReleaseBinaryUpdateCheckExitsTwo(t *testing.T) {
+	t.Setenv("SH_AGENT_REPO", "")
+	t.Chdir(t.TempDir())
+	defer func(v string) { version = v }(version)
+	version = "v1.0.0"
+
+	// A gh that answers the one call --check makes, and nothing else on PATH.
+	bin := t.TempDir()
+	gh := filepath.Join(bin, "gh")
+	script := "#!/bin/sh" + "\n" + "printf " + "'v9.9.9" + "\\n" + "'" + "\n"
+	if err := os.WriteFile(gh, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+
+	var out bytes.Buffer
+	err := run([]string{"update", "--check", "--home", t.TempDir()}, &out)
+	var code exitCode
+	if !errors.As(err, &code) || int(code) != 2 {
+		t.Fatalf("err = %v, want exit code 2", err)
+	}
+	if !strings.Contains(out.String(), "newer release v9.9.9 available") {
+		t.Errorf("output: %q", out.String())
 	}
 }
 

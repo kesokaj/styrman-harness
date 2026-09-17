@@ -5,7 +5,7 @@
 //	sh-agent install [--dry-run]     deploy the repo into ~/.claude and ~/.gemini/config
 //	sh-agent status                  show drift between the repo and what is installed
 //	sh-agent diff                    unified diff of every drifted file
-//	sh-agent update [--check]        git fetch; pull --ff-only and reinstall when behind
+//	sh-agent update [--check]        checkout: git pull and reinstall; release binary: download and verify the newest release
 //	sh-agent uninstall [--dry-run]   remove exactly what install wrote
 //	sh-agent list                    print the skill and agent inventory
 //	sh-agent render                  print the assembled context file
@@ -38,7 +38,7 @@ Commands:
   install [--vendor V] [--dry-run]  deploy context, skills, and agents into ~/.claude and/or ~/.gemini/config (alias: sync)
   status                  show what is installed and whether it drifted from the repo (exit 1 on drift)
   diff                    unified diff of every drifted file
-  update [--check]        git fetch the harness repo; pull --ff-only and reinstall when behind (--check only reports, exit 2 when behind)
+  update [--check]        checkout: git fetch, pull --ff-only and reinstall when behind; release binary: download the newest release, verify its signed checksums, replace the binary and reinstall (--check only reports, exit 2 when behind)
   uninstall [--dry-run]   remove exactly the files install wrote, nothing else
   list                    print the skill and agent inventory
   render                  print the assembled context file
@@ -190,7 +190,20 @@ func run(args []string, out io.Writer) error {
 
 	case "update":
 		if repo == "" {
-			return fmt.Errorf("this install is the release binary %s and has no checkout; download a newer release by hand (README § Install without cloning)", src.Version)
+			// A release binary has no source to build from: the newest
+			// release is downloaded and verified instead (Phase 4).
+			args, err := installPassArgs(*homeFlag, home, *vendorFlag)
+			if err != nil {
+				return err
+			}
+			err = harness.UpdateFromRelease(home, src.Version, *check, args, out)
+			if errors.Is(err, harness.ErrNewerRelease) {
+				return exitCode(2)
+			}
+			if err != nil {
+				return fmt.Errorf("update: %w", err)
+			}
+			return nil
 		}
 		if err := knownCheckout(*repoFlag, home, repo); err != nil {
 			return err
@@ -452,18 +465,28 @@ func update(repo, home string, checkOnly bool, homeFlag, vendorFlag string, out 
 		}
 		fmt.Fprintf(out, "pulled to %s\n", harness.Inspect(repo).Commit)
 	}
+	args, err := installPassArgs(homeFlag, home, vendorFlag)
+	if err != nil {
+		return err
+	}
+	return harness.Reinstall(repo, args, out)
+}
+
+// installPassArgs are the flags an update hands to the install it runs: the
+// home it was told to use, and a vendor narrower than "all".
+func installPassArgs(homeFlag, home, vendorFlag string) ([]string, error) {
 	var args []string
 	if homeFlag != "" {
 		args = append(args, "--home", home)
 	}
 	vendor, err := resolveVendor(vendorFlag, home)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if vendor != harness.VendorAll {
 		args = append(args, "--vendor", vendor)
 	}
-	return harness.Reinstall(repo, args, out)
+	return args, nil
 }
 
 // knownCheckout refuses to build and install from a checkout that was only

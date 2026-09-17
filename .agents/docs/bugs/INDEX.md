@@ -56,6 +56,7 @@
 | BUG-069 | 2026-09-17 | internal/harness/report.go (RemoveKeptClone) | fixed | unpushed-commit guard failed open, deleting an operator's only local copy when `@{upstream}` couldn't resolve | a destructive guard's `err != nil` case keeps the data, never falls through to delete; test the case where the check itself can't run |
 | BUG-070 | 2026-09-17 | cmd/sh-agent/main.go (update) | fixed | `sh-agent update --check` deleted the kept feedback clone despite its read-only contract | place a new side effect below a command's read-only/dry-run early returns; test asserts the read-only mode does NOT perform it |
 | BUG-071 | 2026-09-17 | internal/harness/report_test.go (test premises) | fixed | two Phase 3 tests set up conditions (a pid, an unreadable ref dir) that didn't actually hold, so they passed/failed for the wrong reason | prove an unusual test-setup condition actually holds (measure it in a scratch fixture) before trusting the test; BUG-024's rule applied to setup |
+| BUG-072 | 2026-09-17 | process/verifier-dispatch | fixed | verifier dispatched at 4d45155, then main agent edited its files mid-run; PASS result matched no commit, log marked inconclusive | while a verifier dispatch is in flight, freeze its files; stop the run (TaskStop) if a fix can't wait, then re-dispatch after committing |
 
 ## Graduated
 

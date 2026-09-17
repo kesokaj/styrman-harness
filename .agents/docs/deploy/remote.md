@@ -23,11 +23,13 @@ sh-agent status
 The operator installs the harness in four places: the work Mac (Antigravity only), the home Mac (both CLIs), and two Linux hosts where they work on other projects (both CLIs). Every one is reached on the operator's own SSH key and `gh` login — there are no deploy keys and no per-machine credentials, because the operator authenticates as themselves everywhere and a key would restrict nothing (ADR-030 D1). A place gets the harness one of two ways:
 
 - **A checkout the operator owns** — the normal path. First install as above; after that, `sh-agent update` whenever the operator decides the harness has changed. A timer (§ The resync loop) is a convenience a machine may add, not the mechanism.
-- **An unpacked bundle** — a copy of the repository with no `.git`, for a major remodel or a machine that cannot authenticate. `go run ./cmd/sh-agent install` from the unpacked directory installs the running binary as is and never rebuilds (BUG-015); `sh-agent status` names it a plain copy with no commit; `update` refuses it, by design. To move it forward, unpack a newer bundle and install again. See `local.md` § From an unpacked bundle.
+- **A release binary** — one downloaded `sh-agent` with `context/`, `skills/`, `agents/`, `commands/` and `rules/` built into it, for a place that only USES the harness and should not have a checkout of it sitting beside its projects. `sh-agent install` installs what the binary carries and copies the binary itself; `sh-agent status` shows `source embedded vX.Y.Z`; `sh-agent update` downloads the newest release, verifies its signed checksums and replaces the binary, so the place changes only when a release is cut. `sh-agent adopt` needs a checkout and says so. See `README.md` § Install without cloning and `local.md` § Update a release-binary install.
+
+A plain copy with no `.git` — an unpacked bundle — still installs, and `update` still refuses it (`local.md` § From a plain copy); it is no longer one of the ways in, it is the fallback when neither of the two can reach GitHub.
 
 Nothing else carries the harness: no copy vendored inside a project, no per-project copy, no service. A project that wants the harness installs it with `sh-agent` into a home. That home receives installed FILES — `sh-agent install` writes the context, skills, agents, commands and rules and creates no repository. That alone does not stop a change flowing back: changing the harness takes a credential that can push to this repository, not a checkout, and anything that reaches the operator's SSH key or `gh` login can clone and push. A home seeded for agents is therefore read-only only when it reaches no such credential — no forwarded ssh-agent, no `gh` token, no readable key. This repository names no consumer project and depends on none (R8).
 
-Experience flows back the one way too: each place runs `sh-agent report`, which sends a redacted copy of its `~/.config/sh-agent/` and a metrics record to the private `styrman-harness-feedback` repository (`local.md` § Report back).
+Experience flows back the one way too: each place runs `sh-agent report`, which sends a redacted copy of its `~/.config/sh-agent/` and a metrics record to the private `styrman-harness-feedback` repository through a throwaway clone holding only that place's own folder, removed after the push — so no place holds any other place's reports (`local.md` § Report back).
 
 ## The resync loop
 
@@ -57,7 +59,7 @@ The timer follows `main` by fast-forward: its trust root is whoever can push to 
 
 ## Releases — signed tags, as release markers
 
-A release is an SSH-signed annotated `vX.Y.Z` tag on `main`. It is a MARKER naming a version, not a way the harness reaches a machine: every place follows `main` with `sh-agent update`, and a tag changes nothing for any of them (ADR-030 D2, withdrawing ADR-026's tag channel). A release is cut by `/preflight vX.Y.Z` from the operator's own turn, from this checkout (never a plain copy), on a machine holding the signing key. Nothing else is tagged: no lightweight tag, no `-rc` suffix, no other prefix. The tag is the only version tracking; there is no version file.
+A release is an SSH-signed annotated `vX.Y.Z` tag on `main`, and the binaries published with it. A tag marks a version; it also carries the `sh-agent` binaries that a BINARY-ONLY place updates to, while a checkout place still follows `main` with `sh-agent update` and a tag changes nothing for it (ADR-033, superseding ADR-030 D2's "a tag delivers nothing"; ADR-030 D2 withdrew ADR-026's tag channel, and this restores a narrower one: the assets, verified by signature, never a push to a machine). A release is cut by `/preflight vX.Y.Z` from the operator's own turn, from this checkout (never a plain copy), on a machine holding the signing key. Nothing else is tagged: no lightweight tag, no `-rc` suffix, no other prefix. The tag is the only version tracking; there is no version file.
 
 The signer — the allowed-signers line `verify-tag` checks against:
 ```
@@ -83,6 +85,54 @@ git -c gpg.ssh.allowedSignersFile=.agents/scratch/allowed_signers verify-tag vX.
 git push origin main
 git push origin vX.Y.Z                                                                                  # plain pushes, never --force
 ```
+
+Then the release's binaries, which is how a binary-only place updates (R9, ADR-033). Built here, from the tagged tree, never by a service:
+```bash
+# 0. `go:embed` reads the WORKING TREE, so a stray file under the five embedded
+#    directories would be compiled into every released binary (D23, BUG-066)
+test -z "$(git status --porcelain --ignored --untracked-files=all -- context skills agents commands rules)"   # exit 0: nothing untracked or ignored there
+go test -run TestEmbedHoldsOnlyTrackedFiles ./...                          # exit 0: embedded set == git's
+# 1. the three platforms, from the tag's own tree, reproducible flags
+for target in linux/amd64 darwin/arm64 linux/arm64; do
+  GOOS="${target%/*}" GOARCH="${target#*/}" CGO_ENABLED=0 GOTOOLCHAIN=local \
+    go build -trimpath -ldflags "-X main.version=vX.Y.Z" \
+    -o ".agents/scratch/release-vX.Y.Z/sh-agent-${target%/*}-${target#*/}" ./cmd/sh-agent
+done
+# 2. the checksums, with the VERSION as the first line — `sh-agent update` refuses a
+#    release whose signed SHA256SUMS names another version or none (D26 of the
+#    release-binary plan), and `sha256sum -c` ignores a '#' line
+cd .agents/scratch/release-vX.Y.Z
+printf '# styrman-harness %s\n' vX.Y.Z > SHA256SUMS
+sha256sum sh-agent-linux-amd64 sh-agent-darwin-arm64 sh-agent-linux-arm64 >> SHA256SUMS
+sha256sum -c SHA256SUMS                                                    # exit 0: the file describes these files
+# 3. signed with the same key as the tag, in the namespace the binary verifies
+ssh-keygen -Y sign -f ~/.ssh/id_ed25519 -n sh-agent-release SHA256SUMS
+printf '%s\n' 'ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR' > allowed_signers
+ssh-keygen -Y verify -f allowed_signers -I ostling.simon@gmail.com -n sh-agent-release -s SHA256SUMS.sig < SHA256SUMS   # exit 0: what the places will check, checked here first
+# 4. the release, with notes read by the operator before the upload
+gh release create vX.Y.Z --repo kesokaj/styrman-harness --verify-tag --title "styrman-harness vX.Y.Z" \
+  --notes-file ../release-notes-vX.Y.Z.md \
+  sh-agent-linux-amd64 sh-agent-darwin-arm64 sh-agent-linux-arm64 SHA256SUMS SHA256SUMS.sig
+cd -
+```
+`allowed_signers` is written here only to check the signature before upload; the line the PLACES verify against is compiled into the binary (`internal/harness/release.go`), so a file on any machine cannot decide what a genuine release is. The release notes are built as § Release notes below says. After the upload: `gh release view vX.Y.Z --repo kesokaj/styrman-harness --json assets --jq '.assets[].name'` lists the five assets, and nothing further is pushed anywhere — a binary-only place picks the release up the next time the operator runs `sh-agent update` there.
+
+### Release notes
+
+Every release carries notes, built from the `changes/` entries dated after the previous tag's commit and read by the operator before the upload (D19). Write `.agents/scratch/release-notes-vX.Y.Z.md` with one line per entry under the groups that have any:
+
+```markdown
+## New features
+- <entry title> — <one line, from the entry's Summary>
+## Improvements and optimisation
+## Fixes
+- <entry title> (BUG-NNN)
+## Other updates
+## Install
+Download: see README § Install without cloning. Existing binary-only places: `sh-agent update`.
+```
+
+An entry's `## Type` decides its group: `feature` → New features; `task` or `refactor` that changes behaviour → Improvements and optimisation; `bugfix` → Fixes, with its BUG id; rules, skills, docs and context → Other updates. An empty group is left out. The same text goes into the release's own `changes/` entry.
 A tag that fails any check: `git tag -d vX.Y.Z`, fix, re-gate. A pushed tag is never moved or deleted; a bad release gets the next PATCH. `git` is never run under `sudo`. Rehearsed 2026-09-16 in `.agents/scratch/tagcheck/`: the operator's key passes; a lightweight tag reads `commit`, an unsigned annotated tag has no armor line and fails `verify-tag` with "no signature found", a foreign key fails with "No principal matched". The stricter forms above (`test` assertions, tag-on-HEAD, parent-is-gated-head, records-only diff, ancestor, the private-key-derived fingerprint) were rehearsed the same day in the same scratch repo: passing on a records-only release commit tagged at HEAD, failing on a tag made on the earlier commit, on a release commit carrying a source change, on a dirty tree, and on the unsigned tag.
 
 Version: MINOR for anything an installed place gains (a new or changed skill, agent, command, rule, context rule or installer behaviour), PATCH for a fix to released behaviour only, MAJOR for what an existing deployment must react to (a moved install path, a dropped vendor, a `state.json` or manifest shape change, a new required flag) — the context's Git rule. First tag `v1.0.0`, base ref for its gate 4aa19be. The gate's verification row: the `AGENTS.md` Setup commands, `go run ./cmd/sh-agent install --home .agents/scratch/home` with `status` reporting no drift, and `sh-agent list` — 27 skills and 7 agents today; a release that changes them says so in its changelog entry. There is no deploy step after the push: each place picks the commit up with `sh-agent update` when the operator runs it. The handoff after a release names the live tag.
@@ -103,7 +153,7 @@ Standing by-hand procedures, never pending items (those live in the newest hando
 
 ## Roll back
 
-`git checkout <last good commit> && go run ./cmd/sh-agent install` on the affected machine; `sh-agent update` will refuse to move until the branch is fast-forwardable again, so push a fix or reset the branch first. An unpacked bundle rolls back by installing the earlier bundle.
+`git checkout <last good commit> && go run ./cmd/sh-agent install` on the affected machine; `sh-agent update` will refuse to move until the branch is fast-forwardable again, so push a fix or reset the branch first. A plain copy rolls back by installing the earlier copy. A release-binary place rolls back by downloading the previous release's binary by hand and running `sh-agent install` — `update` never goes backwards, on purpose (README § Install without cloning).
 
 ## Access
 

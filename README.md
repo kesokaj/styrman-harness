@@ -11,30 +11,33 @@ flowchart LR
     subgraph checkoutLane["Your harness checkout"]
         edit["Edit context/, skills/, agents/, commands/, rules/"]
         ship["gofmt, vet, test -race<br/>commit and push main"]
-        preflight["/preflight vX.Y.Z<br/>SSH-signed tag"]
+        preflight["/preflight vX.Y.Z<br/>SSH-signed tag, signed binaries"]
         retroHarness["/retro --harness<br/>applies the proposals queued on this machine"]
         readReports["Read reports/HOST/RUN/<br/>by hand: not built yet"]
     end
     subgraph githubLane["GitHub, private"]
-        harnessRepo[("styrman-harness<br/>main: what every place follows<br/>tags: release markers only")]
+        harnessRepo[("styrman-harness<br/>main: what checkout places follow<br/>tags: release markers")]
+        releases[("Releases<br/>platform binaries + signed SHA256SUMS")]
         feedbackRepo[("styrman-harness-feedback<br/>reports/HOST/RUN/")]
     end
-    subgraph placeLane["Each of the four places"]
+    subgraph placeLane["Each place"]
         checkoutPlace["Checkout<br/>the normal path"]
-        bundle["Unpacked bundle<br/>no .git"]
+        binaryPlace["Release binary<br/>harness built in, no repository"]
         installer["sh-agent install / sh-agent update"]
         homeFiles["~/.claude and ~/.gemini/config<br/>installed files, no repository"]
         sessions["Claude Code and Antigravity sessions<br/>feedback-log skill logs, /retro queues"]
         configDir["~/.config/sh-agent/<br/>feedback.jsonl, retros.jsonl, proposals/, state.json"]
-        reporter["sh-agent report<br/>copy, redact, commit, push to the feedback URL"]
+        reporter["sh-agent report<br/>throwaway clone, pushed, then removed"]
     end
     edit --> ship
     ship -- "git push" --> harnessRepo
     ship --> preflight
     preflight -- "tag marks a version" --> harnessRepo
+    preflight -- "signed binaries" --> releases
     harnessRepo -- "clone once, update pulls" --> checkoutPlace
+    releases -- "update downloads and verifies" --> binaryPlace
     checkoutPlace --> installer
-    bundle -- "install only" --> installer
+    binaryPlace --> installer
     installer -- "writes files" --> homeFiles
     homeFiles -- "read at session start" --> sessions
     sessions -- "logs" --> configDir
@@ -44,18 +47,18 @@ flowchart LR
     configDir -. "same machine only" .-> retroHarness
     readReports -.-> edit
     retroHarness --> edit
-    linkStyle 0,1,4 stroke:#0B7A74,stroke-width:2px
-    linkStyle 2,3 stroke:#8A3A78,stroke-width:2px
-    linkStyle 5,6,7,8 stroke:#3B4FB8,stroke-width:2px
-    linkStyle 9,10,11,12,13,14,15 stroke:#A8660F,stroke-width:2px
+    linkStyle 0,1,5,6 stroke:#0B7A74,stroke-width:2px
+    linkStyle 2,3,4 stroke:#8A3A78,stroke-width:2px
+    linkStyle 7,8,9,10 stroke:#3B4FB8,stroke-width:2px
+    linkStyle 11,12,13,14,15,16,17 stroke:#A8660F,stroke-width:2px
 ```
 
 Teal is **update**, indigo **install**, amber **report back**, plum **release**. A dashed line is a gap: done by hand, or limited to one machine.
 
-- **Install:** clone `styrman-harness` with your own SSH key or `gh` login, or unpack a bundle with no `.git`, then `go run ./cmd/sh-agent install`. It writes installed files into `~/.claude` and `~/.gemini/config`, and the next session reads them.
-- **Update:** edit and push `main` in your checkout. At each place, when you decide, `sh-agent update` fetches, refuses a dirty checkout, fast-forwards, rebuilds and reinstalls. A bundle place unpacks a newer bundle and installs again. Nothing pushes to a machine.
-- **Report back:** sessions log corrections and retros under `~/.config/sh-agent/`. Before each report, read what was added since the last one. `sh-agent report` sends a redacted copy and a metrics record to `styrman-harness-feedback`. Back at the harness, `/retro --harness` applies the proposals queued on that machine; other places' reports are read by hand.
-- **Release:** `/preflight vX.Y.Z` in your own turn gates, then pushes an SSH-signed tag. A tag marks a version and delivers nothing; places follow `main`.
+- **Install:** clone `styrman-harness` with your own SSH key or `gh` login and run `go run ./cmd/sh-agent install`, or download a release's `sh-agent` binary with that credential and run `sh-agent install`, which installs the harness built into it (§ Install without cloning). Either way installed files go into `~/.claude` and `~/.gemini/config`, no repository is created, and the next session reads them.
+- **Update:** edit and push `main` in your checkout. At a checkout place, when you decide, `sh-agent update` fetches, refuses a dirty checkout, fast-forwards, rebuilds and reinstalls. At a binary-only place, `sh-agent update` downloads the newest release, verifies its signed checksums, replaces the binary and reinstalls — so that place changes only when you cut a release. Nothing pushes to a machine.
+- **Report back:** sessions log corrections and retros under `~/.config/sh-agent/`. Before each report, read what was added since the last one. `sh-agent report` sends a redacted copy and a metrics record to `styrman-harness-feedback` through a throwaway clone holding only this machine's own reports, removed after the push — no machine keeps a copy of any other's. Back at the harness, `/retro --harness` applies the proposals queued on that machine; other places' reports are read by hand.
+- **Release:** `/preflight vX.Y.Z` in your own turn gates, pushes an SSH-signed tag on `main`, and publishes that tag's binaries with checksums signed by the same key. Checkout places follow `main`; binary-only places update to the newest release.
 
 ## Install
 
@@ -70,6 +73,39 @@ Make sure `~/.local/bin` is on your `PATH`. Requires Go 1.24+ and git; nothing e
 
 Harness state (feedback log, retro proposals and index) lives in `~/.config/sh-agent/`, outside any project, so Claude Code asks once per session before the first read or write there. To stop the prompt, add the directory yourself to `permissions.additionalDirectories` in `~/.claude/settings.json`; the installer touches no vendor setting except the attribution key (ADR-025).
 
+## Install without cloning
+
+A machine that only USES the harness needs no checkout: a release binary carries `context/`, `skills/`, `agents/`, `commands/` and `rules/` inside it, and installs them. Any of these gets you the binary, all with your own GitHub credential — the repository is private, so a download works only when you are logged in or hold the key:
+
+```bash
+# gh, the shortest path
+gh release download --repo kesokaj/styrman-harness --pattern 'sh-agent-linux-amd64' --dir ~/.local/bin
+mv ~/.local/bin/sh-agent-linux-amd64 ~/.local/bin/sh-agent && chmod +x ~/.local/bin/sh-agent
+
+# or go install, over SSH, for v1.1.0 or newer (v1.0.0 has no harness built in)
+GOPRIVATE=github.com/kesokaj/* go install github.com/kesokaj/styrman-harness/cmd/sh-agent@v1.1.0
+
+# or the Releases page in a browser, then make it executable
+chmod +x ~/Downloads/sh-agent-darwin-arm64 && mv ~/Downloads/sh-agent-darwin-arm64 ~/.local/bin/sh-agent
+```
+
+Then:
+
+```bash
+sh-agent install     # installs the harness built into the binary
+sh-agent status      # "source embedded vX.Y.Z" and "drift none"
+```
+
+Make sure `~/.local/bin` is on your `PATH`. The assets are `sh-agent-linux-amd64`, `sh-agent-darwin-arm64` and `sh-agent-linux-arm64`, beside `SHA256SUMS` and `SHA256SUMS.sig`.
+
+On macOS, a binary downloaded **in a browser** is quarantined; one fetched by `gh` or `go install` is not:
+
+```bash
+xattr -d com.apple.quarantine ~/.local/bin/sh-agent   # only after a browser download
+```
+
+To move such a place forward, run `sh-agent update` there: it asks GitHub for the newest release, refuses anything that is not a `vX.Y.Z` tag newer than what is installed, verifies `SHA256SUMS.sig` against the key compiled into the binary and each binary against its checksum, and only then replaces itself and reinstalls. It needs `gh` on `PATH` (`gh auth login` once) and `ssh-keygen`, which every machine with OpenSSH has. `sh-agent update --check` only reports, exiting 2 when a newer release exists. `sh-agent adopt` needs a checkout and says so.
+
 ## Daily commands
 
 | Command | What it does |
@@ -77,12 +113,12 @@ Harness state (feedback log, retro proposals and index) lives in `~/.config/sh-a
 | `sh-agent status` | Shows what is installed, from which commit, the running binary's build (with a warning when it is older than the checkout), a note when `~/.claude/settings.json` is missing or sets `attribution.commit` to anything but `""` (install writes the key when it is absent), and every file that drifted. Exit 1 on drift. |
 | `sh-agent diff` | Unified diff of every drifted file (installed vs repo). |
 | `sh-agent install` (or `sync`) | From its own git checkout, rebuilds the binary with `go build`, then deploys the repo; from a plain copy (no `.git`) deploys the running binary as is (`--vendor antigravity\|claude\|all`). Idempotent; removes files a previous install wrote that the repo no longer has. `--dry-run` prints what would change without changing anything. |
-| `sh-agent update` | `git fetch` the harness repo; refuses a checkout with uncommitted changes, because it deploys the working tree rather than the fetched commit (BUG-046); if behind, `pull --ff-only`, rebuild, and reinstall. `--check` only reports (exit 2 when behind) and works on a dirty checkout. |
+| `sh-agent update` | At a checkout: `git fetch`; refuses a checkout with uncommitted changes, because it deploys the working tree rather than the fetched commit (BUG-046); if behind, `pull --ff-only`, rebuild, and reinstall. At a release-binary install: downloads the newest release, refuses a tag that is not `vX.Y.Z` or is not newer, verifies the signed `SHA256SUMS` and the binary's own checksum, replaces the binary and reinstalls. Either way `--check` only reports (exit 2 when behind or when a newer release exists). It also removes the full feedback clone older versions kept at `~/.config/sh-agent/feedback`, when that clone is clean and fully pushed. |
 | `sh-agent uninstall` | Removes exactly the files it installed (from its manifest) and nothing else. `--dry-run` prints what would be removed without removing anything. |
 | `sh-agent list` | Prints the skill and agent inventory. |
 | `sh-agent render` | Prints the assembled context file. |
 | `sh-agent adopt <name\|path>` | Copies a skill installed elsewhere (for example by `npx skills add -g`) into `skills/`. `--force` replaces an existing skill of the same name. |
-| `sh-agent report` | Sends a redacted copy of `~/.config/sh-agent/` (feedback log, retro index, proposals, manifest) and a `report.json` metrics record to the private feedback repository, one directory per machine per run; clones that repository into `~/.config/sh-agent/feedback` on first use. `--dry-run` prints every file and redaction and writes nothing; `--feedback-repo DIR` names a checkout to use instead. See `.agents/docs/deploy/local.md` § Report back. |
+| `sh-agent report` | Sends a redacted copy of `~/.config/sh-agent/` (feedback log, retro index, proposals, manifest) and a `report.json` metrics record to the private feedback repository, one directory per machine per run. It clones a throwaway holding only this machine's reports, pushes, and removes it — nothing of that repository stays on the machine. `--dry-run` prints every file and redaction and writes nothing; `--feedback-repo DIR` names a checkout to use instead, which is written into and never removed. See `.agents/docs/deploy/local.md` § Report back. |
 | `sh-agent version` | Prints the build version. |
 
 Every command accepts `--vendor VENDOR` (target `antigravity` / `agy` or `claude`; default is the vendor recorded by the existing install, else `all` — `--vendor all` widens a single-vendor install to both through `install`; `update` keeps the recorded vendor instead), `--home DIR` (install somewhere other than `$HOME`, used by the tests) and `--repo DIR`. Without `--repo`, sh-agent finds the checkout from `$SH_AGENT_REPO`, then the working directory or any of its parents, then the path it recorded at the last install — so `sh-agent update` works from anywhere.
@@ -108,7 +144,7 @@ And back: `sh-agent report --dry-run` lists every file and every redaction it wo
 | `skills/<name>/` | `~/.claude/skills/<name>/` | `~/.gemini/config/skills/<name>/` |
 | `agents/<name>.md` (Claude format) | `~/.claude/agents/<name>.md` | `~/.gemini/config/agents/<name>/agent.md` (tool and model names translated at install) |
 | the binary | `~/.local/bin/sh-agent` | same |
-| manifest, feedback log, retro proposals, `retros.jsonl` (cross-project retro/distill index), and the feedback checkout `sh-agent report` clones (`feedback/`) | `~/.config/sh-agent/` | same |
+| manifest, feedback log, retro proposals, and `retros.jsonl` (cross-project retro/distill index) | `~/.config/sh-agent/` | same |
 
 An existing `~/.claude/CLAUDE.md` that sh-agent did not write is left alone. Move only rules meant for every machine into a rule file under `rules/` in this repository — `rules/` is deployed to every install on every machine, so credentials and personal or host-specific notes never go there — then remove `~/.claude/CLAUDE.md` and run `sh-agent install`, which writes the one-line import (`@AGENTS.md`).
 

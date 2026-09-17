@@ -31,7 +31,18 @@ sh-agent update --check    # only reports; exit 2 when behind
 
 The normal way a checkout moves forward, run whenever the operator decides the harness has changed; `remote.md` § The resync loop covers the timer and the dirty-checkout refusal.
 
-## From an unpacked bundle
+## Update a release-binary install
+
+A place installed from a release binary (README § Install without cloning) has no checkout and nothing to build from, so `update` moves it to the newest RELEASE instead:
+
+```bash
+sh-agent update --check    # only reports; exit 2 when a newer release exists
+sh-agent update            # download the newest release, verify it, replace the binary, reinstall
+```
+
+What it does, in order: asks `gh` for the newest release's tag; refuses anything that is not a `vX.Y.Z` tag, and anything not numerically newer than the installed version — an older release is signed just as honestly as a newer one, so nothing but this check stops a downgrade; downloads this platform's binary with `SHA256SUMS` and `SHA256SUMS.sig` into a temporary directory under `~/.config/sh-agent/`, removed on every path out; verifies the signature with `ssh-keygen -Y verify` against the allowed-signers line compiled INTO the binary, in the namespace `sh-agent-release`; checks that the signed `SHA256SUMS` names this release and that the binary matches its line in it; and only then replaces `~/.local/bin/sh-agent` through a rename and runs the new binary's `install`. Any failure leaves the installed binary untouched and names the check that failed. It needs `gh` on `PATH` and `ssh-keygen`; a development build is never overwritten from a release.
+
+## From a plain copy (no `.git`)
 
 A copy of the repository with no `.git` — for a major remodel, or a machine that cannot authenticate to GitHub. It needs Go, and nothing else:
 
@@ -41,7 +52,7 @@ go run ./cmd/sh-agent install        # installs the running binary as is; never 
 sh-agent status                      # first line names a plain copy with no commit; must end with "drift none"
 ```
 
-`sh-agent update` refuses a plain copy, by design. To move it forward, unpack a newer copy and run `install` from it again; to roll back, install the earlier one.
+`sh-agent update` refuses a plain copy, by design. To move it forward, unpack a newer copy and run `install` from it again; to roll back, install the earlier one. This path is no longer one of the two ways in (R8 names a checkout and a release binary); it stays because the code path does and because it is the fallback when neither of those can reach GitHub.
 
 ## Report back
 

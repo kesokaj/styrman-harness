@@ -21,6 +21,7 @@ In (the operator's numbered list):
 8. macOS quarantine documented, for a browser download only.
 10. The unpacked bundle leaves the docs and the map; its code path stays.
 11. README "Install without cloning": `gh`, `go install` over SSH, the browser; PATH.
+13. Every release carries release notes grouped as New features, Improvements and optimisation, Fixes, and Other updates (D19).
 12. `report` makes a throwaway partial clone holding only this place's folder, deletes it after the push; `update` removes an old kept clone.
 
 Out: 9 — a download page, a timer, Windows. Apple code signing. Changing `adopt`, `uninstall` or `diff` beyond reading from a source.
@@ -86,6 +87,8 @@ With a checkout or plain-copy source every command behaves exactly as today.
 4. `os.RemoveAll` of the clone on every exit path (deferred). A rejected push: remove, re-clone, re-apply the same run once; a second rejection → `push rejected twice; re-run sh-agent report — nothing is kept locally`, exit 1.
 `--dry-run` clones nothing, as today.
 
+**Release notes** (D19): `/preflight` Step 6 writes `.agents/scratch/release-notes-vX.Y.Z.md` from the `changes/` entries dated after the previous tag's commit, one line per entry under `## New features` (Type feature), `## Improvements and optimisation` (Type task or refactor that changes behaviour), `## Fixes` (Type bugfix, with its BUG id), `## Other updates` (rules, skills, docs, context), plus `## Install` pointing at README § Install without cloning; an empty group is omitted. The operator reads it before the upload; `gh release create vX.Y.Z --notes-file <it>` attaches it. The same text goes into the release's `changes/` entry.
+
 **Old kept clone cleanup** (`update`, both kinds of place): `~/.config/sh-agent/feedback` is removed when it is a git checkout whose origin is `FeedbackURL`, with a clean `git status --porcelain` and no commits ahead of its upstream; the output says `removed the kept feedback clone ~/.config/sh-agent/feedback (report no longer keeps one)`. Otherwise it is left and named with the reason.
 
 ## Failure modes
@@ -126,8 +129,8 @@ Tiers: unit, integration (local bare repositories, fake `gh` on PATH), e2e (a re
 
 ### Phase 2 — the embedded source
 
-- [ ] `embed.go` at the module root and a test that every file under the five directories is in `styrman.Files`, the 15 `.gitkeep` files included — verify: unit, `go test ./...`, who: AI — expect: fails before `embed.go` exists, passes after
-- [ ] `Source` type; every reader takes it; link refusal kept for `Dir != ""` — verify: unit against `fstest.MapFS` plus the existing symlink tests, who: AI — expect: all existing tests pass unchanged in meaning
+- [x] `embed.go` at the module root and a test that every file under the five directories is in `styrman.Files`, the 15 `.gitkeep` files included — verify: unit, `go test ./...`, who: AI — expect: fails before `embed.go` exists, passes after. Evidence: `embed_test.go` `TestFilesMatchTree` failed with 133 `not embedded` errors against an `embed.go` holding an empty `Files`, passed after `//go:embed all:context all:skills all:agents all:commands all:rules`; `go list` reports 133 embedded files, equal to the files under the five directories, 2026-09-17
+- [ ] `Source` type; every reader takes it; link refusal kept for `Dir != ""` — verify: unit against `fstest.MapFS` plus the existing symlink tests, who: AI — expect: all existing tests pass unchanged in meaning — in progress: not started; blocker: none
 - [ ] `Plan` from embedded equals `Plan` from checkout — verify: unit, who: AI — expect: identical file lists and bytes
 - [ ] `ResolveSource`, the per-command table (install, status, diff, list, render, adopt, report record), `state.json` `embedded:<version>`, `version` from ldflags or build info — verify: integration, install from embedded into `.agents/scratch/embed-home`, `status`, who: AI — expect: drift none, `source embedded` — docs: `README.md`
 - [ ] Checkpoint — gofmt, vet, `go test -race -count=1 ./...` clean; verifier log; branch commit and push
@@ -148,6 +151,7 @@ Tiers: unit, integration (local bare repositories, fake `gh` on PATH), e2e (a re
 ### Phase 5 — release, docs, map (lands on `main` as ONE commit, R9)
 
 - [ ] `skills/preflight/SKILL.md` Step 6 and `.agents/docs/deploy/remote.md` § Releases: cross-compile the three binaries, `SHA256SUMS`, `SHA256SUMS.sig`, `gh release create vX.Y.Z` with the assets — verify: `/review --docs`, who: AI — expect: exact commands, the signer check before upload — docs: `.agents/docs/deploy/remote.md`
+- [ ] Release notes in `/preflight` Step 6 and `remote.md` § Releases (Interfaces § Release notes) — verify: `/review --docs`, and a dry build of the notes for v1.1.0 from today's `changes/` entries, read by the operator, who: both — expect: four groups as specified, no empty group — docs: `.agents/docs/deploy/remote.md`
 - [ ] README § Install without cloning (the operator-approved draft of 2026-09-17: `gh`, `go install` over SSH, the browser with `xattr`, PATH), § How it works map (the binary as the second way in, the bundle gone, report's throwaway clone), `AGENTS.md` rule 1, `local.md`, `remote.md` § The four places, `delivery.md` — verify: `/review --docs`, who: AI — expect: no living doc describes a kept feedback clone or the bundle as a way in — docs: `README.md`
 - [ ] R8 and R9 edits as approved; `TestHarnessMap` passes; ADR-033 final — verify: unit, who: AI — expect: pass
 - [ ] Operator approves the redrawn map (R9) — verify: quoted, who: user — expect: approval
@@ -182,6 +186,7 @@ D15 — 2026-09-17 — An explicit `--repo` or `$SH_AGENT_REPO` never falls thro
 D16 — 2026-09-17 — R8's first sentence changes with R9, on its own exact text and approval — by: cold read round 1, blocking 3
 D17 — 2026-09-17 — `ResolveSource` replaces `FindRepo`; git helpers are called only for a tree on disk; every command's behaviour with an embedded source is fixed by the table in Interfaces, `update` branching to the release flow on `src.Dir == ""` — by: cold read round 2, blocking G6 and G7
 D18 — 2026-09-17 — The rule "a tag delivers nothing" changes with R9, in three places, in the Phase 5 commit: `AGENTS.md` § How the harness works rule 2 becomes "**A tag is a release.** `/preflight vX.Y.Z` makes a signed tag and publishes that tag's binaries with signed checksums; checkout places follow `main`, binary-only places update to the newest release."; `.agents/docs/deploy/remote.md` § Releases' opening sentence says a tag marks a version and carries the release binaries that binary-only places update to, while checkout places still follow `main`; ADR-031 is not edited (append-only) — ADR-033 states it supersedes ADR-031 D3's "a tag delivers nothing". The `Source selection` sentence also names `update` (round 3, non-blocking G9) — by: cold read round 3, blocking G8, resolved at the cap
+D19 — 2026-09-17 — Every release carries release notes in four groups built from the `changes/` entries since the previous tag, read by the operator and attached with `--notes-file` — by: the operator, "We need to write a release note when we do a new version. Like updates, optimization and fixes, new features etc.", added after the cold read; a docs-and-procedure addition that changes no interface the cold read settled
 Defaults for round 1's non-blocking items: the checksum file is signed in `/preflight` Step 6 right after the tag's own verification, with the same key; the compiled-in signer line is a package variable a test overrides; `go install` is documented for `v1.1.0` or newer — by: implementer
 Rejected: embedding in `cmd/sh-agent` — `go:embed` cannot reach `../../skills`
 Rejected: verifying the git tag only — it does not cover the downloaded file (D5)

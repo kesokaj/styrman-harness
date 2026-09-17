@@ -164,7 +164,7 @@ Tiers: unit, integration (local bare repositories, fake `gh` on PATH), e2e (a re
 ## Risks
 
 Assumptions:
-- GitHub serves `--filter=blob:none` partial clones over SSH and accepts a push from a `--depth 1` clone — checked by a real `report` from this box in Phase 3's first task, against a scratch branch-free run into the real repository only after the operator agrees; until then only against local bare repositories (which honour both).
+- GitHub serves `--filter=blob:none` partial clones over SSH and accepts a push from a `--depth 1` clone — SETTLED 2026-09-17 by one real `sh-agent report` from this box, authorised by the operator (D25): the blob-less `--no-checkout --depth 1` clone over SSH succeeded, `sparse-checkout` limited it to `reports/dave/`, and the push landed as `09586ff` (`reports/dave/2026-09-17-200615`, five files). The clone was removed and `~/.config/sh-agent/` holds no `report-*`. The push stalled on the network for about four minutes before completing — slow, not refused. Log: `.agents/docs/testing/2026-09-17-release-binary-phase-3-real-report.md`. Note: a local bare repository ignores `--filter` unless it sets `uploadpack.allowFilter`, so the local tiers seed that.
 - `go install github.com/kesokaj/styrman-harness/cmd/sh-agent@latest` resolves the newest semver tag: `v1.0.0` has no embed, so `@latest` gives a binary that cannot install until `v1.1.0` exists — stated in the README section; checked after `v1.1.0` with `go install …@latest` in a scratch `GOPATH`.
 - `ssh-keygen -Y verify` exists on macOS and Debian (OpenSSH ≥ 8.1) — checked with `ssh-keygen -Y 2>&1 | head -1` on this box and the work Mac, first task of Phase 4.
 

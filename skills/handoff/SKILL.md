@@ -44,7 +44,7 @@ Do NOT duplicate content that already exists elsewhere. Instead, reference these
 | Architecture decisions | `.agents/docs/architecture/DECISIONS.md` |
 | Specs | `.agents/docs/specs/<app>/` |
 | Implementation plans | `.agents/docs/plans/` |
-| Testing guides | `.agents/docs/testing/<app>/` |
+| Testing guide | `.agents/docs/testing/guide.md` |
 | Deploy guides | `.agents/docs/deploy/{local,remote,gcp}.md` |
 | Deferred work | the active plan's Follow-ups, or the handoff's Next Steps when no plan is active |
 | Requirements | `REQUIREMENTS.md` |

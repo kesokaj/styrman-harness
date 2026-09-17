@@ -26,5 +26,7 @@ Operator's choice at the third-round question (recorded by the explorer as a des
 ## Prevention
 An ordered resolution rule names the check for its first branch, not only the outcome, so an agent cannot silently fall through; the artifact records which branch fired, making a wrong resolution visible without a repro.
 
+Addendum (2026-09-17): the b093fd6 fix was not reliable — repro-8 (`.agents/docs/testing/2026-09-17-bug-063-adr-032-repro.md`, 1 of 5 runs with it) never ran `ls -d cmd/*/` and named the guide `demo` again. The operator then chose to delete the `<app>` level for testing guides (ADR-032): one guide per project at `testing/guide.md`, so nothing needs resolving. Status stays fixed, now by removing the mechanism rather than patching the rule; the fix commit carries ADR-032 and the `agents/verifier.md`/`agents/documentation.md` update. When a prose rule is followed in most but not all runs, prefer deleting the decision it asks the agent to make over rewording it — three defects on `<app>` resolution (G20, BUG-062, the b093fd6 miss).
+
 ## Related
 BUG-043 (agents/verifier § What to run graduated); BUG-063 (same repro run, separate missing-guide defect); `.agents/docs/testing/2026-09-17-verify-real-home-smoke.md`; `.agents/docs/testing/2026-09-16-verify-antigravity-real-home-complete.md`; `.agents/docs/testing/2026-09-17-bug-062-repro.md`; `.agents/docs/plans/2026-09-17-recon-bug-062.md`.

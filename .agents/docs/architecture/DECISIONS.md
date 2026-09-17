@@ -255,3 +255,10 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
 **Alternatives rejected:** AGENTS.md rules and the test without R9 — an agent may change AGENTS.md without the operator's approval, and `REQUIREMENTS.md` is the file that needs it. The interactive page as the source — a README cannot run it, and a second source drifts; the page is a view of the README map.
 
 **Consequences:** The map shows two gaps as dashed lines: nothing reads other places' reports in `styrman-harness-feedback` yet (read by hand), and `/retro --harness` applies only the proposals queued on the machine it runs on. The test pins verbs, not every line: a rerouted path that keeps its verbs is caught only by review (`/review --docs`), which rule 3 requires.
+
+## ADR-032: One testing guide per project     (2026-09-17) — Accepted
+**Context:** The verifier writes `testing/<app>/guide.md` and had to resolve `<app>`. Three defects cascaded from that resolution: G20 left it literal; BUG-062 named it after the repository instead of the single `cmd/` directory; the fix that made the check a command was skipped in 1 of 5 runs (repro-8 in `.agents/docs/testing/2026-09-17-bug-063-adr-032-repro.md`). The operator chose to delete the `<app>` level rather than patch again.
+
+**Decision:** (D1) One guide per project at `testing/guide.md`, nothing to resolve. (D2) A project holding older `testing/<name>/guide.md` files: exactly one is moved with `mv` to `testing/guide.md`; several are merged into one guide with a section per file and left in place (the log names them). (D3) `specs/<app>/` keeps `<app>`, defined in `agents/documentation.md` alone. (D4) This repository's guide moved from `.agents/docs/testing/sh-agent/guide.md` to `.agents/docs/testing/guide.md`.
+
+**Consequences:** The verifier's `App:` log line from BUG-062 (showing the resolution source) is removed; files changed are the verifier, documentation agent, context step 3, and the handoff, init-project and review skills. The several-files merge branch was not exercised. Repro-12 in the test log exercised the move case; the merge case is stated in the verifier's step 4 and was not run.

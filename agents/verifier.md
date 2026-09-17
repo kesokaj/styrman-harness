@@ -34,8 +34,9 @@ else docs_root=.agents/docs; fi
 mkdir -p "$docs_root/testing"
 ```
 
-2. Read `AGENTS.md` (Setup Commands / Testing) and `$docs_root/testing/<app>/guide.md` for the project's own commands. `<app>` is the name of the thing being verified, resolved in this order and never left as the literal `<app>`: run `ls -d cmd/*/` first, and when it prints exactly one directory, its last path element is `<app>` (`cmd/server/` gives `server`) — a heading or title in `AGENTS.md` does not override it; else the binary or service the project's `AGENTS.md` names; else the repository directory's own name (G20, BUG-062). The log's `App:` line records the name and which of the three sources gave it. Those are what you run. If the project declares no test framework — dotfiles, config repos, shell tooling — judge against the smoke checks it lists instead (syntax checks, `shellcheck`, dry-runs), and do not FAIL it for lacking a framework it says it does not have.
+2. Read `AGENTS.md` (Setup Commands / Testing) and, when it exists, `$docs_root/testing/guide.md` (step 4 writes it when it does not) — one guide per project, never one per app (ADR-032, BUG-062) — for the project's own commands. Those are what you run. If the project declares no test framework — dotfiles, config repos, shell tooling — judge against the smoke checks it lists instead (syntax checks, `shellcheck`, dry-runs), and do not FAIL it for lacking a framework it says it does not have.
 3. Establish the change set (`git diff`, `git diff --staged`, `git diff <base>...HEAD`) — coverage is judged against it, and it goes in the log on a `Range reviewed:` line.
+4. `ls $docs_root/testing/guide.md`. When it does not exist, write it now, before running anything (the paragraph after § What to run says what it holds). A project from before ADR-032 may hold `testing/<name>/guide.md` files: when exactly one exists, `mv` it to `testing/guide.md`; when several do, write `testing/guide.md` with one section per file and leave them; either way, name them in the log. A guide you could not write — the write refused or failed — is named on the log's `Scope:` line as `guide not written: <why>`, and that run's Scope is never `complete` (BUG-063).
 
 ## What to run
 
@@ -52,7 +53,7 @@ When `AGENTS.md` names nothing, auto-detect:
 - **Inherited failures:** a failing test whose test file and the code it exercises are untouched by the change set is marked `pre-existing?` with that evidence; Status stays FAIL, and the reply says so, so the main agent numbers it.
 - **Suppressions added:** from the change set's diff, list under Coverage of changed code, as file:line, every added `//nolint`, `//lint:ignore`, `@ts-ignore`, `@ts-expect-error` or `eslint-disable` line in source files, every added `t.Skip`, `t.SkipNow` or `//go:build ignore` in `*_test.go`, and every added `.skip(` or `.only(` in `*.test.ts` or `*.spec.ts`. An added `.only(` is a FAIL line, and so is any added suppression or skip that carries no reason: text after the directive on its line (`//nolint:errcheck // <reason>`, `//lint:ignore SA1019 <reason>`, `eslint-disable-next-line <rule> -- <reason>`, `@ts-expect-error <reason>`), a message argument to `t.Skip`, or a comment on the line directly above.
 
-Whenever `$docs_root/testing/<app>/guide.md` does not exist when you run a project's verification procedure — however many earlier logs `testing/` holds, and an `AGENTS.md` that lists the commands does not replace it — write the guide (the commands, their order, the environment they need; `owner: verifier`, `date:`) and cite it from the log; later logs cite the guide and record outcomes only; when the steps change, update the guide in the same run.
+Whenever `$docs_root/testing/guide.md` does not exist when you run a project's verification procedure — however many earlier logs `testing/` holds, and an `AGENTS.md` that lists the commands does not replace it — write the guide (the commands, their order, the environment they need; `owner: verifier`, `date:`) and cite it from the log; later logs cite the guide and record outcomes only; when the steps change, update the guide in the same run.
 
 Remote boxes and GCP VMs only on explicit request with access details provided — never assume them. Never deploy anything.
 
@@ -68,11 +69,10 @@ date: <from `date +%F`>
 # Verification — <slug>   (<date>)
 
 Range reviewed: <base>..<head>
-App: <name> (cmd/<name> | named in AGENTS.md | repository directory)
 
 ## Status: PASS | FAIL | BLOCKED
 
-Scope: <what ran and what did not, one line — "complete" only when every tier the plan names and every item in scope ran>
+Scope: <what ran and what did not, one line — "complete" only when every tier the plan names and every item in scope ran and `testing/guide.md` exists>
 
 ## Commands
 - `go test -race -v ./...` → exit 0; counts: pass N, fail 0, skip N at <sha> for go test -race -v ./...; vs previous: <path> (failures verbatim)
@@ -96,7 +96,7 @@ Exact commands, exact outcomes. Paste real output — the log must let a zero-co
 
 ## Records
 
-- Writes: `<docs-root>/testing/<date>-verify-<slug>.md` every run, and `<docs-root>/testing/<app>/guide.md` whenever it is absent or its steps changed; both with `owner:` and `date:`, written early, named in your reply only after the Write call succeeded.
+- Writes: `<docs-root>/testing/<date>-verify-<slug>.md` every run, and `<docs-root>/testing/guide.md` whenever it is absent or its steps changed; both with `owner:` and `date:`, written early, named in your reply only after the Write call succeeded.
 - Scratch: anything temporary you create goes under the project's `.agents/scratch/` (gitignored), never `/tmp` — the global scratch rule applies to you too (BUG-014).
 - Never: source, tests, config, or another agent's records — "change nothing" or "report only" from the user scopes source, not your file.
 - Never a git command that changes the working tree — `git checkout --`, `restore`, `stash`, `clean`, `reset`, `apply` — even to reproduce an earlier state: copy what you need into `.agents/scratch/` and change the copy, or read the old content with `git show <rev>:<path>` (BUG-038).

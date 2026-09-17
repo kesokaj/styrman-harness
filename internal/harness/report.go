@@ -449,20 +449,18 @@ func alive(pid int) bool {
 // one run needs no history. This host's existing run directories do come
 // along, which is what lets runDir pick a name that collides with none of
 // them. A server that does not support the filter makes git warn and send
-// everything — slower, still correct (measured 2026-09-17). empty reports a
-// feedback repository with no commits yet: nothing was checked out and HEAD is
-// unborn, which commitAndPush handles.
-func cloneThrowaway(home, url, host string) (dir string, empty bool, err error) {
+// everything — slower, still correct (measured 2026-09-17).
+func cloneThrowaway(home, url, host string) (dir string, err error) {
 	dir = throwawayDir(home)
 	if err := os.MkdirAll(filepath.Dir(dir), 0o755); err != nil {
-		return "", false, err
+		return "", err
 	}
 	if err := os.RemoveAll(dir); err != nil {
-		return "", false, err
+		return "", err
 	}
-	fail := func(err error) (string, bool, error) {
+	fail := func(err error) (string, error) {
 		_ = os.RemoveAll(dir)
-		return "", false, err
+		return "", err
 	}
 	if _, err := gitOut(filepath.Dir(dir), "clone", "--quiet", "--filter=blob:none", "--no-checkout", "--depth", "1", url, dir); err != nil {
 		// git's message repeats the URL it actually used, which a rewrite
@@ -478,12 +476,14 @@ func cloneThrowaway(home, url, host string) (dir string, empty bool, err error) 
 		return fail(fmt.Errorf("limiting the clone to reports/%s/: %w", host, err))
 	}
 	if _, err := gitOut(dir, "rev-parse", "--verify", "--quiet", "HEAD"); err != nil {
-		return dir, true, nil // an empty feedback repository: nothing to check out
+		// An empty feedback repository: HEAD is unborn, so there is nothing to
+		// check out. commitAndPush names the branch before the first commit.
+		return dir, nil
 	}
 	if _, err := gitOut(dir, "checkout", "--quiet"); err != nil {
 		return fail(fmt.Errorf("checking out reports/%s/: %w", host, err))
 	}
-	return dir, false, nil
+	return dir, nil
 }
 
 // credentialInURL matches the user[:password] of a URL, the shape a git URL
@@ -701,7 +701,7 @@ func SendReport(r ReportRun, out io.Writer) error {
 	sweepInterruptedClones(r.Home, out)
 	for attempt := 1; ; attempt++ {
 		err := func() error {
-			dir, _, err := cloneThrowaway(r.Home, r.URL, host)
+			dir, err := cloneThrowaway(r.Home, r.URL, host)
 			if err != nil {
 				return err
 			}
@@ -789,8 +789,15 @@ func runDir(feedback, host string, now time.Time, create bool) (string, error) {
 		}
 		abs := filepath.Join(feedback, rel)
 		if !create {
-			if _, err := os.Lstat(abs); errors.Is(err, os.ErrNotExist) {
+			_, err := os.Lstat(abs)
+			switch {
+			case errors.Is(err, os.ErrNotExist):
 				return rel, nil
+			case err != nil:
+				// Anything but "not there" means this name cannot be judged —
+				// an unreadable reports/<host> above all. Treating it as
+				// "taken" looped forever (code review 2026-09-17).
+				return "", fmt.Errorf("checking %s in the feedback checkout: %w", rel, err)
 			}
 			continue
 		}
@@ -849,7 +856,14 @@ func commitAndPush(dir, url string, paths []string, msg string, out io.Writer) e
 	// LC_ALL=C so the rejection below is recognised on a machine whose git
 	// speaks another language (security review 2026-09-17).
 	if _, err := gitOutC(dir, "push", "--quiet", "-u", url, "HEAD:main"); err != nil {
-		if strings.Contains(err.Error(), "rejected") || strings.Contains(err.Error(), "non-fast-forward") {
+		// Only a NON-FAST-FORWARD is the race this retries: another place
+		// pushed between this run's clone and its push. `! [remote rejected]`
+		// is something else entirely — a pre-receive hook, a protected branch,
+		// a read-only credential — and retrying it tells the operator to
+		// re-run forever over a refusal that will never go away (code review
+		// 2026-09-17). Matching "rejected" alone caught both.
+		msg := err.Error()
+		if strings.Contains(msg, "non-fast-forward") || strings.Contains(msg, "fetch first") || strings.Contains(msg, "! [rejected]") {
 			// The caller words it: a named checkout keeps the commit, a
 			// throwaway clone re-clones and re-applies once (D8).
 			return fmt.Errorf("%w: %v", errPushRejected, err)

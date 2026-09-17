@@ -1070,3 +1070,77 @@ func TestCloneFailureDoesNotPrintCredentials(t *testing.T) {
 		t.Errorf("err = %v, want it to name the unreachable repository", err)
 	}
 }
+
+// TestSendReportDoesNotRetryARefusal: only a non-fast-forward is the race the
+// retry exists for. A pre-receive hook, a protected branch or a read-only
+// credential produces `! [remote rejected]`, which will not go away by
+// re-running — telling the operator to re-run, or retrying it once, is a wrong
+// diagnosis of a permanent refusal (code review 2026-09-17).
+func TestSendReportDoesNotRetryARefusal(t *testing.T) {
+	gitEnv(t)
+	base := t.TempDir()
+	url := seedFeedback(t, base)
+	origin := strings.TrimPrefix(url, "file://")
+	hook := filepath.Join(origin, "hooks", "pre-receive")
+	if err := os.MkdirAll(filepath.Dir(hook), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(hook, []byte("#!/bin/sh\necho 'policy: no' >&2\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	home := filepath.Join(base, "home")
+	writeConfig(t, home, "feedback.jsonl", `{"user_quote":"a correction"}`+"\n")
+
+	clones := 0
+	testHooks.beforePush = func(string, int) { clones++ }
+	defer func() { testHooks.beforePush = nil }()
+
+	var out bytes.Buffer
+	err := SendReport(ReportRun{Home: home, URL: url, Host: "dave", Now: time.Now()}, &out)
+	if err == nil {
+		t.Fatal("a refused push must be an error")
+	}
+	if strings.Contains(err.Error(), "twice") || strings.Contains(out.String(), "re-cloning") {
+		t.Errorf("a permanent refusal was retried as a race: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(err.Error(), "push failed") {
+		t.Errorf("err = %v, want it to say the push failed", err)
+	}
+	if clones != 1 {
+		t.Errorf("clone attempts = %d, want 1", clones)
+	}
+	assertKeepsNothing(t, home)
+}
+
+// TestRunDirRefusesWhatItCannotRead: a name whose state cannot be read is an
+// error, not "taken" — treating it as taken looped forever (code review
+// 2026-09-17).
+func TestRunDirRefusesWhatItCannotRead(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can read a mode-000 directory")
+	}
+	feedback := t.TempDir()
+	reports := filepath.Join(feedback, "reports")
+	if err := os.MkdirAll(filepath.Join(reports, "dave"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(reports, 0o000); err != nil {
+		t.Skip("cannot make the directory unreadable here")
+	}
+	t.Cleanup(func() { _ = os.Chmod(reports, 0o755) })
+
+	done := make(chan struct{})
+	var err error
+	go func() {
+		_, err = runDir(feedback, "dave", time.Now(), false)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("runDir did not return: it is looping over a name it cannot read")
+	}
+	if err == nil {
+		t.Error("an unreadable reports/<host> must be an error")
+	}
+}

@@ -102,7 +102,7 @@ With a checkout or plain-copy source every command behaves exactly as today.
 | No release asset for this platform | `update: release vX.Y.Z has no sh-agent-<os>-<arch>`, exit 1 |
 | Signature or checksum mismatch | `update: SHA256SUMS signature does not verify` / `checksum mismatch for sh-agent-<os>-<arch>`, exit 1, binary untouched |
 | `ssh-keygen` missing | `update: ssh-keygen not found; cannot verify the release`, exit 1 |
-| `report`, partial clone unsupported by the server | falls back to a plain `--depth 1 --no-checkout` clone, output names it |
+| `report`, partial clone unsupported by the server | No fallback branch exists, and none is needed: git itself warns `filtering not recognized by server, ignoring` and sends every blob, so the clone succeeds and the run is correct, only slower. The warning goes to git's stderr, which `gitOut` discards, so the output does NOT name it — corrected here 2026-09-17 after the release code review found this row promising a fallback the code never had. Measured on a `file://` remote without `uploadpack.allowFilter`. |
 | `report`, push rejected twice | message above, exit 1, no directory left |
 | A kept feedback clone with local work | left in place, named with `has uncommitted changes` or `has N unpushed commits` |
 

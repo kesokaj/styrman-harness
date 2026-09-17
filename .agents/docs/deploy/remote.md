@@ -72,6 +72,11 @@ Procedure — what `/preflight` runs at its Step 6 here (the skill's Step 6.3 fo
 test "$(ssh-keygen -y -f ~/.ssh/id_ed25519 | ssh-keygen -lf - | cut -d' ' -f2)" = SHA256:5HpYQJjpG+yE1xXBTOIZPsTkbkgkVnV8z0eG8hBawyU   # exit 0: the signing key is here, derived from the PRIVATE key — else stop: this machine cannot sign
 # gate passed and the release commit made (preflight Step 6.3): HEAD is that commit; <gated head> is the head SHA of the gate report's `Range reviewed:` line
 test -z "$(git status --porcelain --untracked-files=all)"                                              # exit 0: clean tree — the bare form inherits status.showUntrackedFiles (BUG-049)
+# BEFORE the tag, never after the push: `go:embed` reads the WORKING TREE, so a stray file under the
+# five embedded directories is compiled into every released binary. The clean-tree test above cannot
+# see an IGNORED file, and a tag is unrecallable once pushed (D23, BUG-066; security review 2026-09-17)
+test -z "$(git status --porcelain --ignored --untracked-files=all -- context skills agents commands rules)"   # exit 0: nothing untracked or ignored there
+go test -count=1 -run TestEmbedHoldsOnlyTrackedFiles ./...                                             # exit 0: the embedded set is exactly what git tracks
 test "$(git rev-parse HEAD^)" = "$(git rev-parse <gated head>)"                                        # exit 0: the release commit sits on the gated head
 git diff --quiet <gated head> HEAD -- ':(top)' ':(top,exclude).agents/docs'                            # exit 0: records only — ':(top)' because a bare '.' is relative to the cwd and misses a change in a sibling directory (measured)
 git -c gpg.format=ssh -c user.signingkey="$HOME/.ssh/id_ed25519.pub" tag -s vX.Y.Z -m "styrman-harness vX.Y.Z"   # no target argument: tags HEAD
@@ -82,16 +87,15 @@ test "$(git cat-file -t vX.Y.Z)" = tag                                          
 test "$(git cat-file tag vX.Y.Z | grep -E '^-----BEGIN' | tail -1)" = '-----BEGIN SSH SIGNATURE-----'   # exit 0: SSH-signed (the bare pipeline exits 0 either way)
 printf '%s\n' 'ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR' > .agents/scratch/allowed_signers
 git -c gpg.ssh.allowedSignersFile=.agents/scratch/allowed_signers verify-tag vX.Y.Z                     # exit 0: Good "git" signature for ostling.simon@gmail.com
+rm -f .agents/scratch/allowed_signers                                                                   # written for the check above only
 git push origin main
 git push origin vX.Y.Z                                                                                  # plain pushes, never --force
 ```
 
 Then the release's binaries, which is how a binary-only place updates (R9, ADR-033). Built here, from the tagged tree, never by a service:
 ```bash
-# 0. `go:embed` reads the WORKING TREE, so a stray file under the five embedded
-#    directories would be compiled into every released binary (D23, BUG-066)
-test -z "$(git status --porcelain --ignored --untracked-files=all -- context skills agents commands rules)"   # exit 0: nothing untracked or ignored there
-go test -run TestEmbedHoldsOnlyTrackedFiles ./...                          # exit 0: embedded set == git's
+# The contamination guard already ran BEFORE the tag, above — it gates what goes
+# into these binaries, so it cannot wait until after the push.
 # 1. the three platforms, from the tag's own tree, reproducible flags
 for target in linux/amd64 darwin/arm64 linux/arm64; do
   GOOS="${target%/*}" GOARCH="${target#*/}" CGO_ENABLED=0 GOTOOLCHAIN=local \
@@ -109,13 +113,14 @@ sha256sum -c SHA256SUMS                                                    # exi
 ssh-keygen -Y sign -f ~/.ssh/id_ed25519 -n sh-agent-release SHA256SUMS
 printf '%s\n' 'ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR' > allowed_signers
 ssh-keygen -Y verify -f allowed_signers -I ostling.simon@gmail.com -n sh-agent-release -s SHA256SUMS.sig < SHA256SUMS   # exit 0: what the places will check, checked here first
+rm -f allowed_signers                                                      # it exists only for the check above: the line the PLACES verify against is compiled into the binary, and a signer file left on disk is the artifact release.go refuses to trust (security review 2026-09-17)
 # 4. the release, with notes read by the operator before the upload
 gh release create vX.Y.Z --repo kesokaj/styrman-harness --verify-tag --title "styrman-harness vX.Y.Z" \
   --notes-file ../release-notes-vX.Y.Z.md \
   sh-agent-linux-amd64 sh-agent-darwin-arm64 sh-agent-linux-arm64 SHA256SUMS SHA256SUMS.sig
 cd -
 ```
-`allowed_signers` is written here only to check the signature before upload; the line the PLACES verify against is compiled into the binary (`internal/harness/release.go`), so a file on any machine cannot decide what a genuine release is. The release notes are built as § Release notes below says. After the upload: `gh release view vX.Y.Z --repo kesokaj/styrman-harness --json assets --jq '.assets[].name'` lists the five assets, and nothing further is pushed anywhere — a binary-only place picks the release up the next time the operator runs `sh-agent update` there.
+`allowed_signers` is written only to run the check above and removed immediately; the line the PLACES verify against is compiled into the binary (`internal/harness/release.go`), so a file on any machine cannot decide what a genuine release is — which is exactly why this procedure does not leave one lying about. The release notes are built as § Release notes below says. After the upload: `gh release view vX.Y.Z --repo kesokaj/styrman-harness --json assets --jq '.assets[].name'` lists the five assets, and nothing further is pushed anywhere — a binary-only place picks the release up the next time the operator runs `sh-agent update` there.
 
 ### Release notes
 

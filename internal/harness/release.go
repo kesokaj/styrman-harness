@@ -1,6 +1,7 @@
 package harness
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -240,7 +241,17 @@ func verifyRelease(keygen, dir, tag, asset string, data []byte) error {
 		"-n", ReleaseNamespace,
 		"-s", filepath.Join(dir, "SHA256SUMS.sig"))
 	verify.Stdin = strings.NewReader(string(sums))
+	var verifyErr bytes.Buffer
+	verify.Stderr = &verifyErr
 	if err := verify.Run(); err != nil {
+		// A verifier that could not RUN is not a release that failed to
+		// verify; saying the latter would read as a tampered release when the
+		// machine's OpenSSH is broken (code review 2026-09-17). Either way
+		// nothing is installed.
+		var exit *exec.ExitError
+		if !errors.As(err, &exit) {
+			return fmt.Errorf("could not run %s to verify the release: %w", keygen, err)
+		}
 		return errors.New("SHA256SUMS signature does not verify")
 	}
 	// Only now that the signature holds is anything in the file believed —
@@ -304,7 +315,10 @@ var sshKeygenSystemPaths = []string{"/usr/bin/ssh-keygen", "/bin/ssh-keygen"}
 // machine may keep OpenSSH elsewhere.
 func sshKeygen() (string, error) {
 	for _, p := range sshKeygenSystemPaths {
-		if info, err := os.Stat(p); err == nil && info.Mode().IsRegular() {
+		// Regular AND executable: a non-executable file of that name is not a
+		// verifier, and silently preferring it over a working PATH copy would
+		// stop every update (code review 2026-09-17).
+		if info, err := os.Stat(p); err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0o111 != 0 {
 			return p, nil
 		}
 	}

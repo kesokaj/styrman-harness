@@ -46,6 +46,7 @@
 | BUG-056 | 2026-09-17 | internal/harness (report.go redaction structural gaps) | fixed | duplicate JSON keys, concatenated/dash-rewritten PEMs, and a JSON-valid BEGIN line all slipped past redaction while the run reported success | fixture adversarial structure (dup keys, multi-marker lines, altered delimiters), not just adversarial content; a matcher that finds nothing must fall through, not be treated as clean |
 | BUG-059 | 2026-09-17 | internal/harness (report.go decoder/needle swap) | fixed | replacing the JSON walk's decoder and adding an `authorization` needle each regressed a case the old code had handled (`1e400`, quoted header name) | when replacing a decoder or matcher, run the old implementation's accepted inputs as must-pass cases against the new one before deleting it |
 | BUG-060 | 2026-09-17 | internal/harness (report.go push target claim) | fixed | code/doc claims that the push "cannot be redirected" were disproved by `url.*.insteadOf` and a remote named after the URL, third round on this mechanism | a claim that a destination cannot be redirected names the mechanisms it was checked against; two rounds on one mechanism go to the operator, not a third patch |
+| BUG-062 | 2026-09-17 | agents/verifier | open | Claude's verifier wrote its guide under `demo` (repo dir); Antigravity resolved `server` (`cmd/<app>`) in the same repo, per G20 | an ordered resolution rule states the check for its first branch; a verifier log names which branch it used |
 
 ## Graduated
 

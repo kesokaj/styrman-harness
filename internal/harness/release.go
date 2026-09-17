@@ -9,7 +9,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 )
 
@@ -29,7 +31,27 @@ const ReleaseNamespace = "sh-agent-release"
 // anywhere on disk would otherwise decide what counts as a genuine release,
 // which is the one thing the operator's key is supposed to decide. It is a
 // variable only so a test can substitute a test key's line.
+//
+// What is NOT pinned this way is ssh-keygen itself, the program that checks
+// the signature; sshKeygen prefers a system path for exactly that reason, but
+// a machine whose system directories or PATH an attacker owns can defeat any
+// check this binary makes (security review 2026-09-17).
 var releaseSigner = "ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR"
+
+// sumsVersionMarker is the line `/preflight` writes at the top of
+// SHA256SUMS, naming the release those hashes belong to. It makes the VERSION
+// part of the signed bytes: without it a signed SHA256SUMS from any release
+// verifies under any tag, so serving an older release's assets under a newer
+// tag would pass every check (security review 2026-09-17). `sha256sum -c`
+// ignores a line starting with '#', so the file stays readable by it.
+var sumsVersionMarker = regexp.MustCompile(`(?m)^#\s*styrman-harness\s+(v[0-9]+\.[0-9]+\.[0-9]+)\s*$`)
+
+// maxAssetBytes and maxSumsBytes bound what a release can make this process
+// read into memory. Variables so a test can lower them.
+var (
+	maxAssetBytes int64 = 256 << 20
+	maxSumsBytes  int64 = 1 << 20
+)
 
 // ErrNewerRelease is returned by `update --check` on a release binary when a
 // newer release exists, so the command can exit 2 as it does for a checkout
@@ -72,8 +94,26 @@ func UpdateFromRelease(home, version string, checkOnly bool, installArgs []strin
 	if err != nil {
 		return err
 	}
-	if tag == version {
+	// The tag comes from the GitHub API, which is not signed: it reaches argv
+	// as a positional argument and decides which release is installed, so it
+	// must look like a release before either happens (a `-`-leading tag would
+	// be read by gh as a flag).
+	if !IsReleaseVersion(tag) {
+		return fmt.Errorf("the newest release is tagged %q, which is not a vX.Y.Z release; nothing installed", tag)
+	}
+	switch {
+	case tag == version:
 		fmt.Fprintf(out, "up to date (%s)\n", version)
+		return nil
+	// Never sideways or backwards. An older release is signed just as
+	// honestly as a newer one, so a deleted or re-pointed release would
+	// otherwise install a genuine binary the operator has moved past
+	// (security review 2026-09-17).
+	case !IsReleaseVersion(version):
+		fmt.Fprintf(out, "this binary reports version %q, which is not a release; leaving it alone — download %s by hand (README § Install without cloning)\n", version, tag)
+		return nil
+	case compareRelease(tag, version) < 0:
+		fmt.Fprintf(out, "the newest release %s is older than this binary %s; nothing installed\n", tag, version)
 		return nil
 	}
 	if checkOnly {
@@ -83,12 +123,25 @@ func UpdateFromRelease(home, version string, checkOnly bool, installArgs []strin
 
 	// ssh-keygen verifies the checksums. Without it nothing can be trusted,
 	// so nothing is downloaded either.
-	if _, err := exec.LookPath("ssh-keygen"); err != nil {
-		return errors.New("ssh-keygen not found; cannot verify the release")
+	keygen, err := sshKeygen()
+	if err != nil {
+		return err
 	}
 
-	dir := filepath.Join(home, ".config", "sh-agent", fmt.Sprintf("release-%d", os.Getpid()))
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	// A random directory, and one whose siblings from an interrupted earlier
+	// update are cleared first: a predictable name is one another local
+	// account can pre-create as a symlink for these writes to follow.
+	base := filepath.Join(home, ".config", "sh-agent")
+	if err := os.MkdirAll(base, 0o700); err != nil {
+		return err
+	}
+	for _, stale := range globOrNil(filepath.Join(base, "release-*")) {
+		if err := os.RemoveAll(stale); err == nil {
+			fmt.Fprintf(out, "removed %s, left by an interrupted update\n", stale)
+		}
+	}
+	dir, err := os.MkdirTemp(base, "release-")
+	if err != nil {
 		return err
 	}
 	defer os.RemoveAll(dir)
@@ -98,7 +151,7 @@ func UpdateFromRelease(home, version string, checkOnly bool, installArgs []strin
 	if err != nil {
 		return err
 	}
-	if err := verifyRelease(dir, tag, asset, data); err != nil {
+	if err := verifyRelease(keygen, dir, tag, asset, data); err != nil {
 		return err
 	}
 
@@ -134,16 +187,25 @@ func downloadRelease(dir, tag, asset string, out io.Writer) ([]byte, error) {
 		"--pattern", "SHA256SUMS",
 		"--pattern", "SHA256SUMS.sig",
 		"--dir", dir)
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
 	downloadErr := cmd.Run()
 	// A release without this platform's asset is the likelier cause of a
 	// failure here than anything else, and gh's own message for it is not
 	// one the operator can act on, so the missing file is named first.
-	data, readErr := os.ReadFile(filepath.Join(dir, asset))
-	if readErr != nil {
+	path := filepath.Join(dir, asset)
+	if _, err := os.Stat(path); err != nil {
+		if line := firstStderrLine(stderr.String()); line != "" {
+			return nil, fmt.Errorf("release %s has no %s (gh: %s)", tag, asset, line)
+		}
 		return nil, fmt.Errorf("release %s has no %s", tag, asset)
 	}
+	data, err := readCapped(path, maxAssetBytes)
+	if err != nil {
+		return nil, fmt.Errorf("release %s: %s is not usable: %w", tag, asset, err)
+	}
 	if downloadErr != nil {
-		return nil, fmt.Errorf("gh release download %s failed: %s", tag, firstLineOfError(downloadErr))
+		return nil, fmt.Errorf("gh release download %s failed: %s", tag, firstStderrLine(stderr.String()))
 	}
 	return data, nil
 }
@@ -152,10 +214,14 @@ func downloadRelease(dir, tag, asset string, out io.Writer) ([]byte, error) {
 // own line in it. Both must pass before anything is replaced: the signature
 // says the checksum file is the operator's, the checksum says the binary is
 // the one that file names.
-func verifyRelease(dir, tag, asset string, data []byte) error {
-	sums, err := os.ReadFile(filepath.Join(dir, "SHA256SUMS"))
-	if err != nil {
+func verifyRelease(keygen, dir, tag, asset string, data []byte) error {
+	sumsPath := filepath.Join(dir, "SHA256SUMS")
+	if _, err := os.Stat(sumsPath); err != nil {
 		return fmt.Errorf("release %s has no SHA256SUMS", tag)
+	}
+	sums, err := readCapped(sumsPath, maxSumsBytes)
+	if err != nil {
+		return fmt.Errorf("release %s: SHA256SUMS is not usable: %w", tag, err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "SHA256SUMS.sig")); err != nil {
 		return fmt.Errorf("release %s has no SHA256SUMS.sig", tag)
@@ -168,7 +234,7 @@ func verifyRelease(dir, tag, asset string, data []byte) error {
 	if err := os.WriteFile(signers, []byte(releaseSigner+"\n"), 0o600); err != nil {
 		return err
 	}
-	verify := exec.Command("ssh-keygen", "-Y", "verify",
+	verify := exec.Command(keygen, "-Y", "verify",
 		"-f", signers,
 		"-I", identity,
 		"-n", ReleaseNamespace,
@@ -177,9 +243,19 @@ func verifyRelease(dir, tag, asset string, data []byte) error {
 	if err := verify.Run(); err != nil {
 		return errors.New("SHA256SUMS signature does not verify")
 	}
-	want, ok := checksumFor(string(sums), asset)
-	if !ok {
-		return fmt.Errorf("SHA256SUMS does not name %s", asset)
+	// Only now that the signature holds is anything in the file believed —
+	// including the version it names, which is why the marker is inside the
+	// signed bytes rather than beside them.
+	marker := sumsVersionMarker.FindSubmatch(sums)
+	if marker == nil {
+		return fmt.Errorf("the signed SHA256SUMS of %s names no release version; it cannot be told apart from another release's", tag)
+	}
+	if named := string(marker[1]); named != tag {
+		return fmt.Errorf("the signed SHA256SUMS says %s but this is release %s", named, tag)
+	}
+	want, err := checksumFor(string(sums), asset)
+	if err != nil {
+		return fmt.Errorf("SHA256SUMS of %s: %w", tag, err)
 	}
 	sum := sha256.Sum256(data)
 	if got := hex.EncodeToString(sum[:]); got != want {
@@ -189,18 +265,100 @@ func verifyRelease(dir, tag, asset string, data []byte) error {
 }
 
 // checksumFor reads one file's hash out of a sha256sum-format listing, in
-// which a binary-mode line marks the name with a leading '*'.
-func checksumFor(sums, name string) (string, bool) {
+// which a binary-mode line marks the name with a leading '*'. The hash must
+// look like one, and two lines naming the same file are refused rather than
+// resolved by order: the file is signed, so an ambiguity in it is a reason to
+// stop, not to guess.
+func checksumFor(sums, name string) (string, error) {
+	var found string
 	for _, line := range strings.Split(sums, "\n") {
 		hash, file, ok := strings.Cut(strings.TrimSpace(line), " ")
 		if !ok {
 			continue
 		}
-		if strings.TrimPrefix(strings.TrimSpace(file), "*") == name {
-			return strings.ToLower(hash), true
+		if strings.TrimPrefix(strings.TrimSpace(file), "*") != name {
+			continue
+		}
+		hash = strings.ToLower(hash)
+		if len(hash) != 64 || strings.Trim(hash, "0123456789abcdef") != "" {
+			return "", fmt.Errorf("the line naming %s does not carry a SHA-256", name)
+		}
+		if found != "" && found != hash {
+			return "", fmt.Errorf("two different hashes are given for %s", name)
+		}
+		found = hash
+	}
+	if found == "" {
+		return "", fmt.Errorf("no line names %s", name)
+	}
+	return found, nil
+}
+
+// sshKeygenSystemPaths are looked at before PATH. A variable so a test can
+// point it at nothing and exercise the no-verifier refusal.
+var sshKeygenSystemPaths = []string{"/usr/bin/ssh-keygen", "/bin/ssh-keygen"}
+
+// sshKeygen locates the signature verifier, preferring a system path: the
+// verifier's own verdict is the whole trust chain, so a copy earlier in PATH
+// is the cheapest way to defeat it. PATH is still the fallback, because a
+// machine may keep OpenSSH elsewhere.
+func sshKeygen() (string, error) {
+	for _, p := range sshKeygenSystemPaths {
+		if info, err := os.Stat(p); err == nil && info.Mode().IsRegular() {
+			return p, nil
 		}
 	}
-	return "", false
+	p, err := exec.LookPath("ssh-keygen")
+	if err != nil {
+		return "", errors.New("ssh-keygen not found; cannot verify the release")
+	}
+	return p, nil
+}
+
+// readCapped reads a file a release supplied, refusing one that would not fit
+// in memory comfortably.
+func readCapped(path string, max int64) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	if info, err := f.Stat(); err == nil && info.Size() > max {
+		return nil, fmt.Errorf("%d bytes is larger than the %d this reads", info.Size(), max)
+	}
+	return io.ReadAll(io.LimitReader(f, max))
+}
+
+func globOrNil(pattern string) []string {
+	matches, _ := filepath.Glob(pattern)
+	return matches
+}
+
+// compareRelease orders two vX.Y.Z tags. Both are known to match
+// IsReleaseVersion, so every part parses.
+func compareRelease(a, b string) int {
+	pa, pb := releaseParts(a), releaseParts(b)
+	for i := range pa {
+		if pa[i] != pb[i] {
+			if pa[i] < pb[i] {
+				return -1
+			}
+			return 1
+		}
+	}
+	return 0
+}
+
+func releaseParts(v string) [3]int {
+	var out [3]int
+	for i, part := range strings.SplitN(strings.TrimPrefix(v, "v"), ".", 3) {
+		n, err := strconv.Atoi(part)
+		if err != nil {
+			return [3]int{}
+		}
+		out[i] = n
+	}
+	return out
 }
 
 // firstLineOfError renders a failed command's first line of stderr, which is
@@ -208,9 +366,13 @@ func checksumFor(sums, name string) (string, bool) {
 func firstLineOfError(err error) string {
 	var exit *exec.ExitError
 	if errors.As(err, &exit) {
-		if line := strings.TrimSpace(strings.SplitN(string(exit.Stderr), "\n", 2)[0]); line != "" {
+		if line := firstStderrLine(string(exit.Stderr)); line != "" {
 			return line
 		}
 	}
 	return err.Error()
+}
+
+func firstStderrLine(s string) string {
+	return strings.TrimSpace(strings.SplitN(s, "\n", 2)[0])
 }

@@ -10,6 +10,7 @@
 //	sh-agent list                    print the skill and agent inventory
 //	sh-agent render                  print the assembled context file
 //	sh-agent adopt <name|path>       copy a skill from elsewhere into the repo
+//	sh-agent report [--dry-run]      send this machine's learning-loop files and metrics to the feedback repo
 //	sh-agent version
 package main
 
@@ -42,6 +43,7 @@ Commands:
   list                    print the skill and agent inventory
   render                  print the assembled context file
   adopt <name|path>       copy a skill installed elsewhere into the repo's skills/ (--force to replace)
+  report [--feedback-repo DIR] [--dry-run]  send a redacted copy of ~/.config/sh-agent and a metrics record to the feedback repo (default checkout ~/.config/sh-agent/feedback, cloned on first use)
   version                 print the build version
 
 Flags accepted by every command:
@@ -81,6 +83,7 @@ func run(args []string, out io.Writer) error {
 	dryRun := fs.Bool("dry-run", false, "print what would change, change nothing")
 	check := fs.Bool("check", false, "update: only report whether the repo is behind")
 	force := fs.Bool("force", false, "adopt: replace an existing skill")
+	feedbackFlag := fs.String("feedback-repo", "", "report: feedback checkout (never cloned into)")
 	if err := fs.Parse(reorder(rest)); err != nil {
 		return err
 	}
@@ -100,6 +103,10 @@ func run(args []string, out io.Writer) error {
 		return nil
 	case "uninstall":
 		return harness.Uninstall(home, *dryRun, out)
+	case "report":
+		// Before FindRepo, which hard-errors without a checkout: a machine
+		// that installed from an unpacked bundle must still be able to report.
+		return report(*repoFlag, *feedbackFlag, home, *dryRun, out)
 	}
 
 	repo, err := harness.FindRepo(*repoFlag, home)
@@ -220,6 +227,25 @@ func run(args []string, out io.Writer) error {
 		return nil
 	}
 	return fmt.Errorf("unknown command %q\n\n%s", cmd, usage)
+}
+
+func report(repoFlag, feedbackFlag, home string, dryRun bool, out io.Writer) error {
+	repo, err := harness.FindRepo(repoFlag, home)
+	if err != nil {
+		fmt.Fprintf(out, "report: %v\n", err)
+		repo = ""
+	}
+	host, err := os.Hostname()
+	if err != nil {
+		host = ""
+	}
+	if err := harness.SendReport(harness.ReportRun{
+		Home: home, Repo: repo, Feedback: feedbackFlag, URL: harness.FeedbackURL,
+		Host: host, Now: time.Now(), DryRun: dryRun,
+	}, out); err != nil {
+		return fmt.Errorf("report: %w", err)
+	}
+	return nil
 }
 
 func resolveVendor(flagVal, home string) (string, error) {

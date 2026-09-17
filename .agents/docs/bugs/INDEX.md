@@ -38,6 +38,8 @@
 | BUG-039 | 2026-09-16 | context/Git + cmd/sh-agent | fixed | Claude Code headless commits carried a Co-Authored-By trailer the context said not to add | a rule overriding a CLI's built-in behaviour names the CLI's own setting and the command that reports it missing |
 | BUG-041 | 2026-09-16 | agents/security, agents/reviewer, review-standards, context | fixed | security agent graded a stdlib `crypto/rand` UUID as hand-rolled cryptography, contradicting the reviewer | a ban names the thing banned precisely enough its stdlib counterpart isn't caught; two harness agents disagreeing means the rule is the defect |
 | BUG-042 | 2026-09-16 | skills/feature | fixed | cold-read cap allowed a 4th round, plan scope grew past the brief, decision rows outlived the behaviour they described | cap counts reports not "convergence"; an ambiguity resolves to one recorded D-row; a reversing fix updates its D-row in the same change |
+| BUG-051 | 2026-09-17 | internal/harness (report_test.go) | fixed | `TestSendReport` failed at `git init --bare`: "GIT_WORK_TREE not allowed without GIT_DIR" | git treats an empty env var as set; unset with `os.Unsetenv` after `t.Setenv(k, "")`, not `t.Setenv(k, "")` alone |
+| BUG-052 | 2026-09-17 | internal/harness (report_test.go) | fixed | rejected-push case of `TestSendReport` returned nil error | fixed clock + identical inputs produce byte-identical, same-hash commits; a conflict test must vary commit content |
 
 ## Graduated
 

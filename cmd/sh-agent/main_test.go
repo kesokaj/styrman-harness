@@ -958,3 +958,23 @@ func TestUpdateRefusesWhenStatusIsUnknown(t *testing.T) {
 		t.Error("nothing should have been installed")
 	}
 }
+
+// TestReportWithoutCheckout: report runs before FindRepo, so a machine that
+// installed from an unpacked bundle — no checkout anywhere — still reports.
+// A dry run with the default feedback path absent clones nothing.
+func TestReportWithoutCheckout(t *testing.T) {
+	t.Setenv("SH_AGENT_REPO", "")
+	home, notRepo := t.TempDir(), t.TempDir()
+	var out bytes.Buffer
+	if err := run([]string{"report", "--repo", notRepo, "--home", home, "--dry-run"}, &out); err != nil {
+		t.Fatalf("report --dry-run with no checkout: %v\n%s", err, out.String())
+	}
+	for _, want := range []string{"not a harness checkout", "harness_commit, drift, skills and agents are null", "[dry-run] would clone", "report.json"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("output lacks %q:\n%s", want, out.String())
+		}
+	}
+	if entries, _ := os.ReadDir(home); len(entries) != 0 {
+		t.Errorf("dry run wrote into home: %v", entries)
+	}
+}

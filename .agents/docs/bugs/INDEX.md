@@ -53,6 +53,9 @@
 | BUG-066 | 2026-09-17 | embed.go / release build | fixed | `go:embed all:` compiled a gitignored `rules/.env` into the release binary while embed tests stayed green | an embedded artifact's test must assert BOTH directions against its source (extra content is a defect too), pinned to what git tracks |
 | BUG-067 | 2026-09-17 | cmd/sh-agent/main.go (knownCheckout) | fixed | `knownCheckout` resolved an `embedded:vX.Y.Z` manifest value as a filesystem path via `samePath` | when a field gains a value of a new kind, grep every reader of that field in the same change, not just the one that prompted it |
 | BUG-068 | 2026-09-17 | process / mutation testing | fixed | a must-fail mutation hit a duplicate text pattern in `status`, not the intended `knownCheckout` guard; text-replacement restore left it broken | a must-fail mutation asserts its target text is unique before writing; undo by restoring the saved file copy, never a reverse text replacement |
+| BUG-069 | 2026-09-17 | internal/harness/report.go (RemoveKeptClone) | fixed | unpushed-commit guard failed open, deleting an operator's only local copy when `@{upstream}` couldn't resolve | a destructive guard's `err != nil` case keeps the data, never falls through to delete; test the case where the check itself can't run |
+| BUG-070 | 2026-09-17 | cmd/sh-agent/main.go (update) | fixed | `sh-agent update --check` deleted the kept feedback clone despite its read-only contract | place a new side effect below a command's read-only/dry-run early returns; test asserts the read-only mode does NOT perform it |
+| BUG-071 | 2026-09-17 | internal/harness/report_test.go (test premises) | fixed | two Phase 3 tests set up conditions (a pid, an unreadable ref dir) that didn't actually hold, so they passed/failed for the wrong reason | prove an unusual test-setup condition actually holds (measure it in a scratch fixture) before trusting the test; BUG-024's rule applied to setup |
 
 ## Graduated
 

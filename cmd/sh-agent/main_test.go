@@ -979,6 +979,28 @@ func TestReportWithoutCheckout(t *testing.T) {
 	}
 }
 
+// An embedded install's manifest records a release, not a path: knownCheckout
+// says so and never resolves it as one (security review 2026-09-17).
+func TestKnownCheckoutRefusesEmbeddedManifest(t *testing.T) {
+	t.Setenv("SH_AGENT_REPO", "")
+	home := t.TempDir()
+	if err := harness.SaveState(home, harness.State{Repo: harness.EmbeddedPrefix + "v1.2.3"}); err != nil {
+		t.Fatal(err)
+	}
+	repo, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = knownCheckout("", home, repo)
+	if err == nil || !strings.Contains(err.Error(), "installed from the release binary v1.2.3") {
+		t.Errorf("knownCheckout = %v, want a refusal naming the release", err)
+	}
+	// Named explicitly, it is the operator's decision, as for any checkout.
+	if err := knownCheckout(repo, home, repo); err != nil {
+		t.Errorf("knownCheckout with --repo: %v", err)
+	}
+}
+
 // TestReleaseFromInfo: a release build uses -trimpath, which keeps -ldflags
 // out of the build info, so status reads an installed release binary's
 // version from the module version Go stamps at a clean tag; anything else

@@ -474,6 +474,15 @@ func knownCheckout(repoFlag, home, repo string) error {
 	if !found || st.Repo == "" {
 		return nil
 	}
+	// A manifest written by an embedded install records a release, never a
+	// path: it is not handed to samePath, which would resolve it against the
+	// working directory (security review 2026-09-17, finding 2).
+	// A manifest written by an embedded install records a release, never a
+	// path: it is not handed to samePath, which would resolve it against the
+	// working directory (security review 2026-09-17, finding 2).
+	if release, ok := strings.CutPrefix(st.Repo, harness.EmbeddedPrefix); ok {
+		return fmt.Errorf("this home was installed from the release binary %s, not from a checkout; pass --repo %s to build and install from it", release, repo)
+	}
 	if samePath(st.Repo, repo) {
 		return nil
 	}

@@ -527,6 +527,12 @@ func TestResolveSource(t *testing.T) {
 	t.Setenv("SH_AGENT_REPO", "")
 	cwd := t.TempDir()
 	t.Chdir(cwd)
+	// The walk starts at the working directory, so a temp directory INSIDE a
+	// harness checkout (a TMPDIR under one) would be found and every case
+	// below would read that tree instead (security review 2026-09-17).
+	if _, err := ResolveSource("", t.TempDir(), ""); err == nil {
+		t.Skip("the temp directory happens to be inside a harness repo")
+	}
 	repo := newRepo(t)
 	home := t.TempDir()
 

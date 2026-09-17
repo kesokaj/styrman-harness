@@ -27,6 +27,7 @@ Harness state (feedback log, retro proposals and index) lives in `~/.config/sh-a
 | `sh-agent list` | Prints the skill and agent inventory. |
 | `sh-agent render` | Prints the assembled context file. |
 | `sh-agent adopt <name\|path>` | Copies a skill installed elsewhere (for example by `npx skills add -g`) into `skills/`. `--force` replaces an existing skill of the same name. |
+| `sh-agent report` | Sends a redacted copy of `~/.config/sh-agent/` (feedback log, retro index, proposals, manifest) and a `report.json` metrics record to the private feedback repository, one directory per machine per run; clones that repository into `~/.config/sh-agent/feedback` on first use. `--dry-run` prints every file and redaction and writes nothing; `--feedback-repo DIR` names a checkout to use instead. See `.agents/docs/deploy/local.md` § Report back. |
 | `sh-agent version` | Prints the build version. |
 
 Every command accepts `--vendor VENDOR` (target `antigravity` / `agy` or `claude`; default is the vendor recorded by the existing install, else `all` — `--vendor all` widens a single-vendor install to both through `install`; `update` keeps the recorded vendor instead), `--home DIR` (install somewhere other than `$HOME`, used by the tests) and `--repo DIR`. Without `--repo`, sh-agent finds the checkout from `$SH_AGENT_REPO`, then the working directory or any of its parents, then the path it recorded at the last install — so `sh-agent update` works from anywhere.
@@ -40,6 +41,10 @@ vim context/dev-setup.md && sh-agent install && git commit -am "context: tweak" 
 sh-agent update      # fetches, refuses a dirty checkout, pulls, rebuilds, reinstalls
 ```
 
+`sh-agent` is the only way the harness reaches a machine (R8): a checkout kept current with `update`, or an unpacked copy of the repository with no `.git`, installed with `go run ./cmd/sh-agent install` from that directory (it installs the running binary and `update` refuses it — unpack a newer copy to move forward). No project vendors a copy.
+
+And back: `sh-agent report --dry-run`, read what it would send, then `sh-agent report`, so each machine's corrections and retro proposals reach the feedback repository where the harness is improved from them.
+
 ## What gets installed where
 
 | Source in this repo | Claude Code | Antigravity CLI |
@@ -48,9 +53,9 @@ sh-agent update      # fetches, refuses a dirty checkout, pulls, rebuilds, reins
 | `skills/<name>/` | `~/.claude/skills/<name>/` | `~/.gemini/config/skills/<name>/` |
 | `agents/<name>.md` (Claude format) | `~/.claude/agents/<name>.md` | `~/.gemini/config/agents/<name>/agent.md` (tool and model names translated at install) |
 | the binary | `~/.local/bin/sh-agent` | same |
-| manifest, feedback log, retro proposals, `retros.jsonl` (cross-project retro/distill index) | `~/.config/sh-agent/` | same |
+| manifest, feedback log, retro proposals, `retros.jsonl` (cross-project retro/distill index), and the feedback checkout `sh-agent report` clones (`feedback/`) | `~/.config/sh-agent/` | same |
 
-An existing `~/.claude/CLAUDE.md` that sh-agent did not write is left alone. Move only rules meant for every machine into a rule file under `rules/` in this repository — `rules/` is deployed to every install and every downstream mirror, so credentials and personal or host-specific notes never go there — then remove `~/.claude/CLAUDE.md` and run `sh-agent install`, which writes the one-line import (`@AGENTS.md`).
+An existing `~/.claude/CLAUDE.md` that sh-agent did not write is left alone. Move only rules meant for every machine into a rule file under `rules/` in this repository — `rules/` is deployed to every install on every machine, so credentials and personal or host-specific notes never go there — then remove `~/.claude/CLAUDE.md` and run `sh-agent install`, which writes the one-line import (`@AGENTS.md`).
 
 ## Adding things by hand — no code
 
@@ -95,8 +100,8 @@ cmd/sh-agent  the binary; internal/harness is its logic and tests
 
 ```bash
 gofmt -l cmd internal && go vet ./... && go test -race ./...   # gofmt takes the source dirs: unlike the Go tool it walks .agents/scratch
-# govulncheck reports two stdlib advisories; they need a newer Go on the machine, not a change here (ADR-029)
+# govulncheck: clean on go1.25.8+; an older Go reports two stdlib advisories, fixed by a newer Go on the machine, never a pin here (ADR-029)
 go run ./cmd/sh-agent install --home .agents/scratch/home   # never test against your real $HOME; scratch lives in the repo, never /tmp
 ```
 
-See `AGENTS.md` for the repo rules and `.agents/docs/plans/2026-09-03-rebuild.md` for the rebuild checklist. To cut a release, see `.agents/docs/deploy/remote.md` § Releases — signed `vX.Y.Z` tags via `/preflight`; styrman-crew consumes them.
+See `AGENTS.md` for the repo rules and `.agents/docs/plans/2026-09-03-rebuild.md` for the rebuild checklist. To cut a release, see `.agents/docs/deploy/remote.md` § Releases — signed `vX.Y.Z` tags via `/preflight`. A tag is a release marker only; every machine follows `main` with `sh-agent update` (ADR-030). How the harness reaches each machine and reports back: `.agents/docs/deploy/remote.md` § The four places.

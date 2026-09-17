@@ -12,10 +12,10 @@ The agent harness: one global context (agents.md standard), skills (Agent Skills
 gofmt -l cmd internal && go vet ./... && go test -race ./...   # before any completion claim; gofmt takes the source dirs, not `.`, because it walks .agents/scratch and the Go tool does not (BUG-048)
 go run ./cmd/sh-agent install --home .agents/scratch/home  # exercise the installer against a scratch home (gitignored)
 go run ./cmd/sh-agent list                              # sanity-check skills and agents parse
-govulncheck ./...                                       # reports two stdlib advisories today (see below); watch for NEW ones
+govulncheck ./...                                       # clean on go1.25.8+ (see below); on an older Go it reports two stdlib advisories — watch for NEW ones
 ```
 
-`go.mod` carries NO `toolchain` directive, deliberately (ADR-029 withdrew the one ADR-028 added): pinning a patched toolchain made the module unbuildable on a host that has neither that toolchain cached nor a reachable proxy, because `GOTOOLCHAIN=auto` honours a pin by downloading it — measured, including through `go run`, which fails before any of this code executes. `govulncheck` therefore reports two standard-library advisories as affecting (`os` via `LoadSkills`, `os/exec` via `Reinstall`'s `LookPath`). They are fixed in go1.24.6 and go1.25.8, Debian trixie ships neither, and the only real fix is upgrading the Go on the machine — an operator step, since the toolchain is root-owned.
+`go.mod` carries NO `toolchain` directive, deliberately (ADR-029 withdrew the one ADR-028 added): pinning a patched toolchain made the module unbuildable on a host that has neither that toolchain cached nor a reachable proxy, because `GOTOOLCHAIN=auto` honours a pin by downloading it — measured, including through `go run`, which fails before any of this code executes. On an older Go, `govulncheck` therefore reports two standard-library advisories as affecting (`os` via `LoadSkills`, `os/exec` via `Reinstall`'s `LookPath`). They are fixed in go1.24.6 and go1.25.8, and the fix is upgrading the Go on the machine, never pinning it here. Debian trixie ships neither, so the Linux box runs a user-level go1.27.1 SDK ahead of `/usr/bin/go`, needing no root (`.agents/docs/deploy/local.md` § Operator steps), and reports none since 2026-09-17.
 
 ## Layout
 
@@ -35,7 +35,7 @@ Nothing generated is committed. The deployed files are assembled by `sh-agent in
 ## Rules for working here
 
 - The installer must never run against the operator's real `$HOME` during development. Use `--home .agents/scratch/<name>` for every test (the global scratch rule: never `/tmp`). Deploying to the real home is the operator's job.
-- `sh-agent install` rebuilds the binary from its own git checkout with `go build` and lets that build install (BUG-006); the running binary is copied only when `go` is missing or when the tree is a plain copy with no `.git` — a downstream mirror, whose image or VM build step built that binary from the same tree and may keep it read-only (BUG-015). After a change under `cmd/` or `internal/`, `sh-agent status` from the target home must show a `binary` line without a warning before the install is called done.
+- `sh-agent install` rebuilds the binary from its own git checkout with `go build` and lets that build install (BUG-006); the running binary is copied only when `go` is missing or when the tree is a plain copy with no `.git` — an unpacked bundle (R8), whose binary was built from that same tree and which may be read-only to the installing user (BUG-015). After a change under `cmd/` or `internal/`, `sh-agent status` from the target home must show a `binary` line without a warning before the install is called done.
 - Adding a tool to an agent's `tools:` list means adding it to `toolMap` in `internal/harness/derive.go`. An unmapped tool fails the install on purpose: Antigravity hangs a subagent that names a tool it does not recognise.
 - Agent `description:` values are one line, double-quoted if they contain a colon, and free of the words "dispatch prompt" or "harness binary" — there is no binary behind them anymore.
 - Every skill directory needs a `SKILL.md` with a `description`; the installer refuses one without it. It also refuses any frontmatter value that a strict YAML parser reads as a comment — an unquoted `#` at the start or after a space or tab — because Antigravity silently drops such a skill (BUG-004); quote the value.
@@ -50,7 +50,7 @@ There is no test framework beyond `go test`. A change to `context/`, `agents/`, 
 
 ## Release
 
-Releases are SSH-signed annotated `vX.Y.Z` tags on `main`, cut only by `/preflight vX.Y.Z` from the operator's own turn, from this checkout, on a machine holding the operator's ed25519 key. The tag is signed per command (`-c gpg.format=ssh -c user.signingkey=...`, never a `git config` change, and `git` never under `sudo`) and checked before the push exactly as styrman-crew's channel checks it — bound first (the tag takes no target and sits on HEAD, the release commit, whose parent is the gated head and whose source tree is the gated one, on `main`), then annotated, last armor header `-----BEGIN SSH SIGNATURE-----`, `verify-tag` against the allowed-signers line — with the exact commands in `.agents/docs/deploy/remote.md` § Releases. The tag is the only version tracking (no version file; preflight Step 6.2); a pushed tag is never moved; a bad release gets the next PATCH. There is no deploy step after the push.
+Releases are SSH-signed annotated `vX.Y.Z` tags on `main`, cut only by `/preflight vX.Y.Z` from the operator's own turn, from this checkout, on a machine holding the operator's ed25519 key. The tag is signed per command (`-c gpg.format=ssh -c user.signingkey=...`, never a `git config` change, and `git` never under `sudo`) and checked before the push — bound first (the tag takes no target and sits on HEAD, the release commit, whose parent is the gated head and whose source tree is the gated one, on `main`), then annotated, last armor header `-----BEGIN SSH SIGNATURE-----`, `verify-tag` against the allowed-signers line — with the exact commands in `.agents/docs/deploy/remote.md` § Releases. The tag is the only version tracking (no version file; preflight Step 6.2); a pushed tag is never moved; a bad release gets the next PATCH. A tag is a release marker, never a delivery channel: every place follows `main` with `sh-agent update`, so there is no deploy step after the push (ADR-030 D2).
 
 ## Key files
 
@@ -61,4 +61,6 @@ Releases are SSH-signed annotated `vX.Y.Z` tags on `main`, cut only by `/preflig
 | `internal/harness/derive.go` | Claude → Antigravity agent translation |
 | `REQUIREMENTS.md` | Non-negotiables for the harness |
 | `.agents/docs/plans/2026-09-03-rebuild.md` | The rebuild checklist |
-| `.agents/docs/deploy/remote.md` | Machines, mirrors, and the signed-tag release procedure (ADR-026) |
+| `.agents/docs/deploy/remote.md` | The four places, the resync loop, and the signed-tag release procedure (ADR-030) |
+| `.agents/docs/specs/sh-agent/delivery.md` | The delivery model and the feedback loop, end to end |
+| `internal/harness/report.go` | `sh-agent report`: collect, redact, send to the feedback repository |

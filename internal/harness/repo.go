@@ -72,7 +72,7 @@ var errPlainCopy = errors.New("not its own git checkout; a plain copy cannot be 
 
 // IsCheckout reports whether repo is the top of its own git checkout: a
 // `.git` entry sits directly in it (a directory, or the file a worktree
-// carries). A harness-shaped tree nested inside another repository (a mirror
+// carries). A harness-shaped tree nested inside another repository (a clone
 // kept under review, a copy inside a project) has none and is a plain copy;
 // asking git would answer for the enclosing repository, and git's answer
 // can be redirected by its environment, so the check never asks git.

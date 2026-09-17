@@ -129,9 +129,9 @@ func run(args []string, out io.Writer) error {
 		// this is a dry run — a dry run never builds or runs a fresh binary;
 		// like every install it still reads the checkout's git state, which
 		// is why the checkout must be one the operator named or installed
-		// before. A plain copy (no .git: a mirror inside a project's image)
-		// never rebuilds — its image or VM build step built the running binary
-		// from that same tree, the tree is often read-only to the installing user,
+		// before. A plain copy (no .git: an unpacked bundle)
+		// never rebuilds — whoever unpacked it built the running binary from
+		// that same tree, the tree is often read-only to the installing user,
 		// and git cannot update it anyway (BUG-015).
 		_, goErr := exec.LookPath("go")
 		own := harness.IsCheckout(repo)
@@ -345,7 +345,7 @@ func status(repo, home, vendorFlag string, out io.Writer) error {
 		}
 	}
 	if report.Counts["foreign"] > 0 {
-		fmt.Fprintln(out, "note       ~/.claude/CLAUDE.md is yours; move only rules meant for every machine into a rule file under rules/ in the harness repo — rules/ ships to every install and mirror, never credentials or personal or host-specific notes — then remove it and run install to write the one-line import")
+		fmt.Fprintln(out, "note       ~/.claude/CLAUDE.md is yours; move only rules meant for every machine into a rule file under rules/ in the harness repo — rules/ ships to every install on every machine, never credentials or personal or host-specific notes — then remove it and run install to write the one-line import")
 	}
 	if vendor == harness.VendorAll || vendor == harness.VendorClaude {
 		if err := attributionHint(home, "note       ", out); err != nil {
@@ -414,8 +414,8 @@ func update(repo, home string, checkOnly bool, homeFlag, vendorFlag string, out 
 // knownCheckout refuses to build and install from a checkout that was only
 // discovered by walking up from the working directory when a different
 // checkout is already installed. Building runs that tree's code and deploys
-// its context everywhere; standing in a harness-shaped directory (a mirror,
-// a clone under review) must not be enough. An explicit --repo or
+// its context everywhere; standing in a harness-shaped directory (an unpacked
+// copy, a clone under review) must not be enough. An explicit --repo or
 // $SH_AGENT_REPO, or a first install, is.
 func knownCheckout(repoFlag, home, repo string) error {
 	if repoFlag != "" || os.Getenv("SH_AGENT_REPO") != "" {

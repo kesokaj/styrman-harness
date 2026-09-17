@@ -1,11 +1,11 @@
 ---
 owner: main
-date: 2026-09-16
+date: 2026-09-17
 target: remote
 ---
 # Deploy — other machines
 
-Every machine the operator works on (the Mac, the Linux boxes) runs its own copy of the harness. Git is the transport; there is no push-based deploy, no CI, no hooks.
+The harness reaches a machine one way: `sh-agent` (R8, ADR-030). Git is the transport, on the operator's own credentials; there is no push-based deploy, no CI, no hooks, no service.
 
 ## First install on a machine
 
@@ -17,6 +17,17 @@ sh-agent status
 ```
 
 `install` writes the `attribution` key on this machine; check `sh-agent status` prints no note.
+
+## The four places
+
+The operator installs the harness in four places: the work Mac (Antigravity only), the home Mac (both CLIs), and two Linux hosts where they work on other projects (both CLIs). Every one is reached on the operator's own SSH key and `gh` login — there are no deploy keys and no per-machine credentials, because the operator authenticates as themselves everywhere and a key would restrict nothing (ADR-030 D1). A place gets the harness one of two ways:
+
+- **A checkout the operator owns** — the normal path. First install as above; after that, `sh-agent update` whenever the operator decides the harness has changed. A timer (§ The resync loop) is a convenience a machine may add, not the mechanism.
+- **An unpacked bundle** — a copy of the repository with no `.git`, for a major remodel or a machine that cannot authenticate. `go run ./cmd/sh-agent install` from the unpacked directory installs the running binary as is and never rebuilds (BUG-015); `sh-agent status` names it a plain copy with no commit; `update` refuses it, by design. To move it forward, unpack a newer bundle and install again. See `local.md` § From an unpacked bundle.
+
+Nothing else carries the harness: no copy vendored inside a project, no per-project copy, no service. A project that wants the harness installs it with `sh-agent` into a home. That home receives installed FILES — `sh-agent install` writes the context, skills, agents, commands and rules and creates no repository — so nothing working in it has a checkout to push a change back with. This repository names no consumer project and depends on none (R8).
+
+Experience flows back the one way too: each place runs `sh-agent report`, which sends a redacted copy of its `~/.config/sh-agent/` and a metrics record to the private `styrman-harness-feedback` repository (`local.md` § Report back).
 
 ## The resync loop
 
@@ -42,21 +53,17 @@ Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
 
 On a box where nobody edits the checkout the timer simply keeps it current; on a box where somebody does, it now declines instead of deploying their draft.
 
-The timer follows `main` by fast-forward, not a signed tag: its trust root is whoever can push to this repository, exactly as a hand-typed `sh-agent update` is. That is the operator's own machine and the accepted position here (§ Releases covers the one consumer that does verify signatures, styrman-crew). A box where that is not acceptable runs `sh-agent update --check` on the timer and updates by hand.
+The timer follows `main` by fast-forward: its trust root is whoever can push to this repository, exactly as a hand-typed `sh-agent update` is. That is the operator, on their own machines, and the accepted position (ADR-030). A box where that is not acceptable runs `sh-agent update --check` on the timer and updates by hand. A tag is never what a machine installs from (§ Releases).
 
-## Downstream mirrors
+## Releases — signed tags, as release markers
 
-Two projects vendor this repo as a .git-less copy: styrman-crew `image/harness/` and argolis-devbox `deploy/harness/`. Each mirror's `VENDORED.md` holds the refresh recipe: rsync from a clean checkout, record `COMMIT` and `SHA256SUMS`, then diff to confirm only those two files plus `VENDORED.md` differ. What happens after the refresh differs by project — styrman-crew builds `sh-agent` inside its own image (`image/Dockerfile`, builder stage) and ships a refresh by cutting a release, since the image version stamp is what makes a running project re-seed; argolis-devbox commits and pushes with no version to bump, and its VM builds `sh-agent` on the box itself, as root, via `deploy/scripts.d/032_setup-harness.sh` on its next auto-update (within five minutes). A mirror is a plain copy either way: `install` from it never rebuilds (the tree may be read-only to the installing user — BUG-015), `sh-agent status` there shows no commit, and `update` refuses, by design. After any change to `context/`, `skills/`, or `agents/` here, refreshing both mirrors is a task in each of those projects; a retro that applies a harness-scope proposal says so in its report. styrman-crew is replacing its mirror with the signed-tag channel below and, by its own decision in that handoff, does not refresh `image/harness/` in the meantime (it stays at 4aa19be); argolis-devbox's mirror is refreshed as before until its `sh-agent update` timer lands.
+A release is an SSH-signed annotated `vX.Y.Z` tag on `main`. It is a MARKER naming a version, not a way the harness reaches a machine: every place follows `main` with `sh-agent update`, and a tag changes nothing for any of them (ADR-030 D2, withdrawing ADR-026's tag channel). A release is cut by `/preflight vX.Y.Z` from the operator's own turn, from this checkout (never a plain copy), on a machine holding the signing key. Nothing else is tagged: no lightweight tag, no `-rc` suffix, no other prefix. The tag is the only version tracking; there is no version file.
 
-## Releases — signed tags
-
-styrman-crew's host will consume this repository by its newest SSH-signed `vX.Y.Z` tag through a host-side, signature-gated channel (crew's handoff `2026-09-16-session-close-harness-channel-next.md`; selection `git tag -l 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1`, lightweight and non-SSH-signed tags refused). `sh-agent update` on operator machines and on argolis-devbox keeps following `main`; a tag changes nothing for them. A release is cut by `/preflight vX.Y.Z` from the operator's own turn, from this checkout (never a mirror or plain copy), on a machine holding the signing key. Nothing else is tagged: no lightweight tag, no `-rc` suffix, no other prefix. The tag is the only version tracking; there is no version file. ADR-026.
-
-The signer — the one line of crew's `/etc/styrman/allowed_signers` (root-only on that host; that file is the trust root, the copy here adds none):
+The signer — the allowed-signers line `verify-tag` checks against:
 ```
 ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR
 ```
-Fingerprint `SHA256:5HpYQJjpG+yE1xXBTOIZPsTkbkgkVnV8z0eG8hBawyU`; the key is `~/.ssh/id_ed25519` on the Linux box. The Mac cannot cut a release until it holds this key or crew lists the Mac's own.
+Fingerprint `SHA256:5HpYQJjpG+yE1xXBTOIZPsTkbkgkVnV8z0eG8hBawyU`; the key is `~/.ssh/id_ed25519` on the Linux box. The Mac cannot cut a release until it holds this key or the line above lists the Mac's own.
 
 Procedure — what `/preflight` runs at its Step 6 here (the skill's Step 6.3 follows a project's Release section), each command its own call, its exit status read before the next; `<gated head>` is the head SHA of the gate report's `Range reviewed:` line, the one external input — the tag itself takes no target, so no placeholder can sit on both sides of a check:
 ```bash
@@ -66,20 +73,19 @@ test -z "$(git status --porcelain --untracked-files=all)"                       
 test "$(git rev-parse HEAD^)" = "$(git rev-parse <gated head>)"                                        # exit 0: the release commit sits on the gated head
 git diff --quiet <gated head> HEAD -- ':(top)' ':(top,exclude).agents/docs'                            # exit 0: records only — ':(top)' because a bare '.' is relative to the cwd and misses a change in a sibling directory (measured)
 git -c gpg.format=ssh -c user.signingkey="$HOME/.ssh/id_ed25519.pub" tag -s vX.Y.Z -m "styrman-harness vX.Y.Z"   # no target argument: tags HEAD
-# check the tag the way the consumer does — every line carries its verdict in its exit status; before any push:
+# check the tag before any push — every line carries its verdict in its exit status:
 test "$(git rev-parse vX.Y.Z^{commit})" = "$(git rev-parse HEAD)"                                      # exit 0: the tag is on the release commit
 git merge-base --is-ancestor vX.Y.Z^{commit} main                                                       # exit 0: on main
 test "$(git cat-file -t vX.Y.Z)" = tag                                                                  # exit 0: annotated ("commit" means lightweight)
 test "$(git cat-file tag vX.Y.Z | grep -E '^-----BEGIN' | tail -1)" = '-----BEGIN SSH SIGNATURE-----'   # exit 0: SSH-signed (the bare pipeline exits 0 either way)
 printf '%s\n' 'ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR' > .agents/scratch/allowed_signers
-test ! -d /etc/styrman || sudo -n cmp /etc/styrman/allowed_signers .agents/scratch/allowed_signers     # crew host only, exit 0 elsewhere: the one root step here, a read — git is never run under sudo
 git -c gpg.ssh.allowedSignersFile=.agents/scratch/allowed_signers verify-tag vX.Y.Z                     # exit 0: Good "git" signature for ostling.simon@gmail.com
 git push origin main
 git push origin vX.Y.Z                                                                                  # plain pushes, never --force
 ```
-A tag that fails any check: `git tag -d vX.Y.Z`, fix, re-gate; a `sudo -n cmp` mismatch means crew's trust root moved — update the quoted line here from the host file, never the other way round. A pushed tag is never moved or deleted; a bad release gets the next PATCH. Rehearsed 2026-09-16 in `.agents/scratch/tagcheck/`: the operator's key passes; a lightweight tag reads `commit`, an unsigned annotated tag has no armor line and fails `verify-tag` with "no signature found", a foreign key fails with "No principal matched"; `verify-tag` against `/etc/styrman/allowed_signers` itself fails with "Permission denied" for the operator user — hence the scratch copy and the `cmp`; `git` is never run under `sudo`. The stricter forms above (`test` assertions, tag-on-HEAD, parent-is-gated-head, records-only diff, ancestor, the private-key-derived fingerprint) were rehearsed the same day in the same scratch repo: passing on a records-only release commit tagged at HEAD, failing on a tag made on the earlier commit, on a release commit carrying a source change, on a dirty tree, and on the unsigned tag. The `sudo -n cmp` line has not been run in this repository's trail yet: it is the operator's root step on the crew host.
+A tag that fails any check: `git tag -d vX.Y.Z`, fix, re-gate. A pushed tag is never moved or deleted; a bad release gets the next PATCH. `git` is never run under `sudo`. Rehearsed 2026-09-16 in `.agents/scratch/tagcheck/`: the operator's key passes; a lightweight tag reads `commit`, an unsigned annotated tag has no armor line and fails `verify-tag` with "no signature found", a foreign key fails with "No principal matched". The stricter forms above (`test` assertions, tag-on-HEAD, parent-is-gated-head, records-only diff, ancestor, the private-key-derived fingerprint) were rehearsed the same day in the same scratch repo: passing on a records-only release commit tagged at HEAD, failing on a tag made on the earlier commit, on a release commit carrying a source change, on a dirty tree, and on the unsigned tag.
 
-Version: MINOR for anything a consumer gains (a new or changed skill, agent, command, rule, context rule or installer behaviour), PATCH for a fix to released behaviour only, MAJOR for what an existing deployment must react to (a moved install path, a dropped vendor, a `state.json` or manifest shape change, a new required flag) — the context's Git rule. First tag `v1.0.0`, base ref for its gate 4aa19be (the commit both mirrors carry). The gate's verification row: the `AGENTS.md` Setup commands, `go run ./cmd/sh-agent install --home .agents/scratch/home` with `status` reporting no drift, and `sh-agent list` — 27 skills and 7 agents today, the counts crew's channel smoke-checks; a release that changes them says so in its changelog entry. There is no deploy step after the push: the consumer's timer does the rest and its outcome is observed on the crew host, not from here. The handoff after a release names the live tag.
+Version: MINOR for anything an installed place gains (a new or changed skill, agent, command, rule, context rule or installer behaviour), PATCH for a fix to released behaviour only, MAJOR for what an existing deployment must react to (a moved install path, a dropped vendor, a `state.json` or manifest shape change, a new required flag) — the context's Git rule. First tag `v1.0.0`, base ref for its gate 4aa19be. The gate's verification row: the `AGENTS.md` Setup commands, `go run ./cmd/sh-agent install --home .agents/scratch/home` with `status` reporting no drift, and `sh-agent list` — 27 skills and 7 agents today; a release that changes them says so in its changelog entry. There is no deploy step after the push: each place picks the commit up with `sh-agent update` when the operator runs it. The handoff after a release names the live tag.
 
 ## Verify
 
@@ -90,13 +96,14 @@ Same as `local.md`: `sh-agent status` with no drift, then one start of each CLI.
 Standing by-hand procedures, never pending items (those live in the newest handoff):
 
 - On the Mac after a push from the Linux box: `sh-agent update`, `sh-agent status`, then the three smoke checks on each CLI (`.agents/docs/testing/2026-09-03-verify-real-home.md`; the Mac procedure is `2026-09-04-verify-mac-real-home.md`).
-- After any change to `context/`, `skills/`, or `agents/`: refresh argolis-devbox's mirror from its project; styrman-crew receives the next signed tag (§ Releases).
+- After any change to `context/`, `skills/`, or `agents/` is pushed: `sh-agent update` at each of the four places, when the operator decides to. Nothing else needs refreshing.
+- At a place that has been in use: `sh-agent report --dry-run`, read the redaction list, then `sh-agent report` (`local.md` § Report back).
 - On a new machine, `ssh-keygen -y -f ~/.ssh/id_ed25519 | ssh-keygen -lf -` must print the fingerprint in § Releases before that machine cuts a release (derived from the private key: a copied `.pub` alone proves nothing).
 - Go upgrades on the Mac: `brew upgrade go`. On the Linux box the distribution had nothing newer, so it runs a user-level SDK on PATH ahead of `/usr/bin/go` — the procedure is in `local.md` § Operator steps, and it needs no root.
 
 ## Roll back
 
-`git checkout <last good commit> && go run ./cmd/sh-agent install` on the affected machine; `sh-agent update` will refuse to move until the branch is fast-forwardable again, so push a fix or reset the branch first.
+`git checkout <last good commit> && go run ./cmd/sh-agent install` on the affected machine; `sh-agent update` will refuse to move until the branch is fast-forwardable again, so push a fix or reset the branch first. An unpacked bundle rolls back by installing the earlier bundle.
 
 ## Access
 

@@ -1,6 +1,6 @@
 ---
 owner: main
-date: 2026-09-15
+date: 2026-09-17
 target: local
 ---
 # Deploy — local (this machine)
@@ -22,9 +22,50 @@ go run ./cmd/sh-agent install                        # builds the binary from th
 sh-agent status                                      # must end with "drift none"
 ```
 
+## Update
+
+```bash
+sh-agent update            # fetch; refuse a dirty checkout; if behind: pull --ff-only; rebuild and reinstall
+sh-agent update --check    # only reports; exit 2 when behind
+```
+
+The normal way a checkout moves forward, run whenever the operator decides the harness has changed; `remote.md` § The resync loop covers the timer and the dirty-checkout refusal.
+
+## From an unpacked bundle
+
+A copy of the repository with no `.git` — for a major remodel, or a machine that cannot authenticate to GitHub. It needs Go, and nothing else:
+
+```bash
+cd <unpacked directory>
+go run ./cmd/sh-agent install        # installs the running binary as is; never rebuilds (BUG-015)
+sh-agent status                      # first line names a plain copy with no commit; must end with "drift none"
+```
+
+`sh-agent update` refuses a plain copy, by design. To move it forward, unpack a newer copy and run `install` from it again; to roll back, install the earlier one.
+
+## Report back
+
+`sh-agent report` sends this machine's experience to the private `styrman-harness-feedback` repository so the harness can be improved from it. What leaves: a COPY of `~/.config/sh-agent/feedback.jsonl`, `retros.jsonl`, `state.json` and `proposals/*.md`, redacted, plus `report.json` — host, OS and arch, vendor, installed file count and time, the harness checkout's commit, drift, skill and agent counts, the Go that built the running binary, and the list of redactions. The originals are never modified. A symlink among them is skipped and named, never followed.
+
+```bash
+sh-agent report --dry-run     # prints where it would write, every file, and every redaction; writes nothing, clones nothing
+sh-agent report               # clones the feedback repository into ~/.config/sh-agent/feedback on first use, then commits and pushes
+```
+
+- **Redaction is structural.** A credential shape — `-----BEGIN`, `PRIVATE KEY`, `AKIA`, `AIza`, `ya29.`, `token=`, `password=` — removes the whole JSON string value (a key that matches removes the whole line's value), the whole text line, or the whole `-----BEGIN`-to-`-----END` block, never just the match. `report.json` records file, line, JSON key path and which shape fired, never the text. Anything that matches no shape IS sent: read the `--dry-run` output first where a correction may quote something private.
+- **Where it goes:** `reports/<host>/<YYYY-MM-DD-HHMMSS>/` in the feedback checkout, suffixed `-2`, `-3` when that directory exists, so no run overwrites another. Only the paths the run wrote are staged and committed; any other file in the checkout is named in the output and left alone. The first push into the empty repository names the branch `main` and sets its upstream.
+- **`--feedback-repo DIR`** uses a checkout placed deliberately. It must already be a git checkout, is never cloned into, and may not be a harness checkout.
+- **No harness checkout here** (an unpacked bundle, or nothing): `report` still runs; `harness_commit` is `null`, and with no harness tree at all so are `drift`, `skills` and `agents`. With nothing installed, `vendor`, `files` and `installed_at` are `null`. With nothing under `~/.config/sh-agent/` it still sends `report.json` — "this machine is alive" is the signal.
+
+| What fails | What you see and do |
+|---|---|
+| First-use clone fails (no SSH key, no network, repository missing) | `report: could not reach <url>: …; clone it by hand or pass --feedback-repo`, exit 1, nothing left behind. Fix access, or clone by hand into `~/.config/sh-agent/feedback`. |
+| Push rejected — another place pushed first | `report: push rejected; run git -C <feedback> pull --rebase and re-run — the commit stays local`, exit 1. Pull, then re-run; the rejected commit goes with the next push. |
+| `~/.config/sh-agent/feedback` exists but is not a checkout | Refused, exit 1. Move it aside or pass `--feedback-repo`. |
+
 ## Configure
 
-Nothing to configure. `--vendor VENDOR` selects the target CLI: `antigravity` (or `agy`) or `claude`; the default is the vendor recorded by the existing install, else `all` — passing `--vendor all` explicitly widens a single-vendor install to both through `install`; `update` keeps the recorded vendor instead. `--repo DIR` overrides where the checkout is; `$SH_AGENT_REPO` does the same persistently. `--home DIR` installs elsewhere and is what every development run uses (a scratch home under `.agents/scratch/`, never `/tmp`). From its own git checkout, `install` rebuilds the binary with `go build` first; the running binary is installed as is when `go` is missing (with a warning) or when the tree is a plain copy with no `.git` — a downstream mirror (BUG-015).
+Nothing to configure. `--vendor VENDOR` selects the target CLI: `antigravity` (or `agy`) or `claude`; the default is the vendor recorded by the existing install, else `all` — passing `--vendor all` explicitly widens a single-vendor install to both through `install`; `update` keeps the recorded vendor instead. `--repo DIR` overrides where the checkout is; `$SH_AGENT_REPO` does the same persistently. `--home DIR` installs elsewhere and is what every development run uses (a scratch home under `.agents/scratch/`, never `/tmp`). From its own git checkout, `install` rebuilds the binary with `go build` first; the running binary is installed as is when `go` is missing (with a warning) or when the tree is a plain copy with no `.git` — an unpacked bundle (BUG-015).
 
 ## Verify
 

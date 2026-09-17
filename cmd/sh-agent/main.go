@@ -47,10 +47,14 @@ Commands:
   version                 print the build version
 
 Flags accepted by every command:
-  --repo DIR        harness checkout (default: --repo, $SH_AGENT_REPO, the working directory or its parents, then the last install)
+  --repo DIR        harness checkout (default: --repo, $SH_AGENT_REPO, the working directory or its parents, the last install, then — in a release binary — the harness built into it)
   --home DIR        install under DIR instead of $HOME (for testing)
   --vendor VENDOR   target vendor: all, antigravity (or agy), claude (default: from manifest if installed, else all)
 `
+
+// version is set by a release build, -ldflags "-X main.version=vX.Y.Z"; empty
+// otherwise, and buildVersion reads the build info instead.
+var version string
 
 func main() {
 	if err := run(os.Args[1:], os.Stdout); err != nil {
@@ -104,21 +108,34 @@ func run(args []string, out io.Writer) error {
 	case "uninstall":
 		return harness.Uninstall(home, *dryRun, out)
 	case "report":
-		// Before FindRepo, which hard-errors without a checkout: a machine
-		// that installed from an unpacked bundle must still be able to report.
+		// Before ResolveSource, which errors when no harness is found: a
+		// machine with no checkout must still be able to report.
 		return report(*repoFlag, *feedbackFlag, home, *dryRun, out)
 	}
 
-	repo, err := harness.FindRepo(*repoFlag, home)
+	src, err := harness.ResolveSource(*repoFlag, home, buildVersion())
 	if err != nil {
 		return err
 	}
+	// repo is the tree on disk, "" for the files embedded in a release binary;
+	// no git helper is ever called with "" (D17).
+	repo := src.Dir
 
 	switch cmd {
 	case "install", "sync":
 		vendor, err := resolveVendor(*vendorFlag, home)
 		if err != nil {
 			return err
+		}
+		if repo == "" {
+			// A release binary installs the harness built into it and itself:
+			// there is no source to build from (D13).
+			if *dryRun {
+				fmt.Fprintf(out, "[dry-run] release binary %s: the harness built into it and the running binary would be installed\n", src.Version)
+			} else {
+				fmt.Fprintf(out, "release binary %s: installing the harness built into it and the running binary\n", src.Version)
+			}
+			return installFiles(src, home, vendor, *dryRun, out)
 		}
 		if err := knownCheckout(*repoFlag, home, repo); err != nil {
 			return err
@@ -155,48 +172,33 @@ func run(args []string, out io.Writer) error {
 		} else if goErr != nil {
 			fmt.Fprintln(out, "warning: go is not on PATH; the running binary was copied, not rebuilt — install Go and run `sh-agent update`")
 		}
-		self, err := selfExecutable()
-		if err != nil {
-			return err
-		}
-		files, err := harness.Plan(harness.DirSource(repo), self, vendor)
-		if err != nil {
-			return err
-		}
-		if err := harness.Install(repo, home, files, vendor, *dryRun, out); err != nil {
-			return err
-		}
-		if err := pathHint(home, out); err != nil {
-			return err
-		}
-		if vendor == harness.VendorAll || vendor == harness.VendorClaude {
-			attributionSet(home, *dryRun, out)
-			return attributionHint(home, "note: ", out)
-		}
-		return nil
+		return installFiles(src, home, vendor, *dryRun, out)
 
 	case "status":
-		return status(repo, home, *vendorFlag, out)
+		return status(src, home, *vendorFlag, out)
 
 	case "diff":
 		vendor, err := resolveVendor(*vendorFlag, home)
 		if err != nil {
 			return err
 		}
-		files, err := harness.Plan(harness.DirSource(repo), nil, vendor)
+		files, err := harness.Plan(src, nil, vendor)
 		if err != nil {
 			return err
 		}
 		return harness.Diff(home, files, out)
 
 	case "update":
+		if repo == "" {
+			return fmt.Errorf("this install is the release binary %s and has no checkout; download a newer release by hand (README § Install without cloning)", src.Version)
+		}
 		if err := knownCheckout(*repoFlag, home, repo); err != nil {
 			return err
 		}
 		return update(repo, home, *check, *homeFlag, *vendorFlag, out)
 
 	case "list":
-		inv, err := harness.LoadInventory(harness.DirSource(repo))
+		inv, err := harness.LoadInventory(src)
 		if err != nil {
 			return err
 		}
@@ -204,11 +206,11 @@ func run(args []string, out io.Writer) error {
 		return nil
 
 	case "render":
-		inv, err := harness.LoadInventory(harness.DirSource(repo))
+		inv, err := harness.LoadInventory(src)
 		if err != nil {
 			return err
 		}
-		data, err := harness.RenderContext(harness.DirSource(repo), inv)
+		data, err := harness.RenderContext(src, inv)
 		if err != nil {
 			return err
 		}
@@ -218,6 +220,9 @@ func run(args []string, out io.Writer) error {
 	case "adopt":
 		if fs.NArg() != 1 {
 			return errors.New("usage: sh-agent adopt <skill-name-or-path> [--force]")
+		}
+		if repo == "" {
+			return errors.New("adopt needs a harness checkout; this install is a release binary")
 		}
 		dest, err := harness.Adopt(repo, home, fs.Arg(0), *force)
 		if err != nil {
@@ -229,18 +234,42 @@ func run(args []string, out io.Writer) error {
 	return fmt.Errorf("unknown command %q\n\n%s", cmd, usage)
 }
 
+// installFiles plans the source with the running binary and installs it,
+// then the PATH and attribution notes every install prints.
+func installFiles(src harness.Source, home, vendor string, dryRun bool, out io.Writer) error {
+	self, err := selfExecutable()
+	if err != nil {
+		return err
+	}
+	files, err := harness.Plan(src, self, vendor)
+	if err != nil {
+		return err
+	}
+	if err := harness.Install(src, home, files, vendor, dryRun, out); err != nil {
+		return err
+	}
+	if err := pathHint(home, out); err != nil {
+		return err
+	}
+	if vendor == harness.VendorAll || vendor == harness.VendorClaude {
+		attributionSet(home, dryRun, out)
+		return attributionHint(home, "note: ", out)
+	}
+	return nil
+}
+
 func report(repoFlag, feedbackFlag, home string, dryRun bool, out io.Writer) error {
-	repo, err := harness.FindRepo(repoFlag, home)
+	src, err := harness.ResolveSource(repoFlag, home, buildVersion())
 	if err != nil {
 		fmt.Fprintf(out, "report: %v\n", err)
-		repo = ""
+		src = harness.Source{}
 	}
 	host, err := os.Hostname()
 	if err != nil {
 		host = ""
 	}
 	if err := harness.SendReport(harness.ReportRun{
-		Home: home, Repo: repo, Feedback: feedbackFlag, URL: harness.FeedbackURL,
+		Home: home, Source: src, Feedback: feedbackFlag, URL: harness.FeedbackURL,
 		Host: host, Now: time.Now(), DryRun: dryRun,
 	}, out); err != nil {
 		return fmt.Errorf("report: %w", err)
@@ -259,20 +288,28 @@ func resolveVendor(flagVal, home string) (string, error) {
 	return harness.VendorAll, nil
 }
 
-func status(repo, home, vendorFlag string, out io.Writer) error {
-	info := harness.Inspect(repo)
-	dirty := "clean"
-	if info.StatusUnknown {
-		// Never render an unreadable tree as clean: git failing to report is
-		// not evidence of anything (round-2 release review).
-		dirty = "state unknown — git could not report it"
-	} else if info.Dirty {
-		dirty = "uncommitted changes"
-	}
-	if info.Commit == "" {
-		fmt.Fprintf(out, "repo       %s (plain copy, not its own git checkout; update is refused)\n", repo)
-	} else {
-		fmt.Fprintf(out, "repo       %s (%s @ %s, %s)\n", repo, info.Branch, info.Commit, dirty)
+func status(src harness.Source, home, vendorFlag string, out io.Writer) error {
+	repo := src.Dir
+	var info harness.RepoInfo
+	switch {
+	case repo == "":
+		// The embedded files: no git state to show, and none is asked (D17).
+		fmt.Fprintf(out, "source     embedded %s (release binary; update downloads the newest release)\n", src.Version)
+	default:
+		info = harness.Inspect(repo)
+		dirty := "clean"
+		if info.StatusUnknown {
+			// Never render an unreadable tree as clean: git failing to report is
+			// not evidence of anything (round-2 release review).
+			dirty = "state unknown — git could not report it"
+		} else if info.Dirty {
+			dirty = "uncommitted changes"
+		}
+		if info.Commit == "" {
+			fmt.Fprintf(out, "repo       %s (plain copy, not its own git checkout; update is refused)\n", repo)
+		} else {
+			fmt.Fprintf(out, "repo       %s (%s @ %s, %s)\n", repo, info.Branch, info.Commit, dirty)
+		}
 	}
 
 	st, found, err := harness.LoadState(home)
@@ -287,14 +324,23 @@ func status(repo, home, vendorFlag string, out io.Writer) error {
 	if vDisplay == "" {
 		vDisplay = harness.VendorAll
 	}
-	fmt.Fprintf(out, "installed  %s from commit %s (vendor: %s, %d files, manifest ~/.config/sh-agent/state.json)\n", st.InstalledAt, st.Commit, vDisplay, len(st.Files))
+	from := "commit " + st.Commit
+	if release, ok := strings.CutPrefix(st.Repo, harness.EmbeddedPrefix); ok {
+		from = "release " + release
+	}
+	fmt.Fprintf(out, "installed  %s from %s (vendor: %s, %d files, manifest ~/.config/sh-agent/state.json)\n", st.InstalledAt, from, vDisplay, len(st.Files))
 	// The line describes the installed file, not this process: status may
 	// run from `go run` or from a build outside ~/.local/bin.
 	binaryLine := "binary     unknown (installed file has no build info)"
 	if bi, err := buildinfo.ReadFile(filepath.Join(home, harness.BinPath)); err == nil {
 		rev := versionFromInfo(bi)
+		if repo == "" {
+			rev = releaseFromInfo(bi)
+		}
 		binaryLine = "binary     " + rev
 		switch {
+		case repo == "":
+			// No checkout commit to compare against.
 		case !binaryOlder(rev, info.Commit):
 		case rev == "(devel)" || rev == "unknown":
 			binaryLine += " — no build stamp; run `sh-agent update`"
@@ -319,7 +365,7 @@ func status(repo, home, vendorFlag string, out io.Writer) error {
 		return err
 	}
 
-	inv, err := harness.LoadInventory(harness.DirSource(repo))
+	inv, err := harness.LoadInventory(src)
 	if err != nil {
 		return err
 	}
@@ -331,7 +377,7 @@ func status(repo, home, vendorFlag string, out io.Writer) error {
 		fmt.Fprintf(out, "agy        ~/%s  (rules/AGENTS.md, skills/, agents/, workflows/, rules/)\n", harness.AgyRoot)
 	}
 
-	files, err := harness.Plan(harness.DirSource(repo), nil, vendor)
+	files, err := harness.Plan(src, nil, vendor)
 	if err != nil {
 		return err
 	}
@@ -749,9 +795,24 @@ func attributionOff(path string) (off bool, problem string) {
 // buildVersion describes the running process, for `sh-agent version`.
 // `sh-agent status` reads the installed file instead (see status).
 func buildVersion() string {
+	if version != "" {
+		return version
+	}
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
 		return "unknown"
+	}
+	return versionFromInfo(info)
+}
+
+// releaseFromInfo renders an installed release binary's version: the module
+// version when it is a release tag, which Go stamps for a build at a clean
+// tag and `go install …@vX.Y.Z` records — a release build's -ldflags are not
+// in the build info, since -trimpath leaves them out — and the VCS stamp
+// otherwise.
+func releaseFromInfo(info *debug.BuildInfo) string {
+	if harness.IsReleaseVersion(info.Main.Version) {
+		return info.Main.Version
 	}
 	return versionFromInfo(info)
 }

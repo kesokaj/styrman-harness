@@ -77,7 +77,7 @@ func TestResyncNeverFollowsANonLocalManifestEntry(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err := Install("r", home, nil, "", false, &out); err != nil {
+	if err := Install(DirSource("r"), home, nil, "", false, &out); err != nil {
 		t.Fatalf("install with an empty plan: %v\n%s", err, out.String())
 	}
 	if _, err := os.Stat(stale); !os.IsNotExist(err) {

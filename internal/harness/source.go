@@ -5,6 +5,9 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
+
+	styrman "github.com/kesokaj/styrman-harness"
 )
 
 // Source is where the harness's own files are read from: a tree on disk (a
@@ -18,11 +21,34 @@ type Source struct {
 	// tree on disk can hold a link, so the link refusals (BUG-036) run when
 	// Dir is set; embed cannot store one.
 	Dir string
+	// Version is the release the embedded files came with, and "" for a tree
+	// on disk, whose git state says what it is.
+	Version string
 }
 
 // DirSource reads the tree at dir.
 func DirSource(dir string) Source {
 	return Source{FS: os.DirFS(dir), Dir: dir}
+}
+
+// EmbeddedSource reads the files built into this binary, which is the
+// release named by version.
+func EmbeddedSource(version string) Source {
+	return Source{FS: styrman.Files, Version: version}
+}
+
+// EmbeddedPrefix marks a manifest's repo value written by an install from the
+// embedded files: "embedded:vX.Y.Z" names a release, never a path.
+const EmbeddedPrefix = "embedded:"
+
+var releaseVersion = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
+
+// IsReleaseVersion reports whether a binary's version is a release tag. Only
+// a release binary installs its embedded files: a development build carries
+// whatever the tree held when it was built, which is stale the moment the
+// tree moves on (D14).
+func IsReleaseVersion(version string) bool {
+	return releaseVersion.MatchString(version)
 }
 
 // path names a file for a message: its disk path for a tree on disk, its

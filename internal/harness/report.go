@@ -295,25 +295,26 @@ func Collect(home string) (Collection, error) {
 // when its source is missing — no checkout, no install manifest — because a
 // machine without them still reports that it is alive.
 type Record struct {
-	TS            string      `json:"ts"`
-	Host          string      `json:"host"`
-	OS            string      `json:"os"`
-	Arch          string      `json:"arch"`
-	Vendor        *string     `json:"vendor"`
-	Files         *int        `json:"files"`
-	HarnessCommit *string     `json:"harness_commit"`
-	InstalledAt   *string     `json:"installed_at"`
-	Drift         *int        `json:"drift"`
-	Skills        *int        `json:"skills"`
-	Agents        *int        `json:"agents"`
-	Go            string      `json:"go"`
-	Redactions    []Redaction `json:"redactions"`
+	TS             string      `json:"ts"`
+	Host           string      `json:"host"`
+	OS             string      `json:"os"`
+	Arch           string      `json:"arch"`
+	Vendor         *string     `json:"vendor"`
+	Files          *int        `json:"files"`
+	HarnessCommit  *string     `json:"harness_commit"`
+	HarnessVersion *string     `json:"harness_version"`
+	InstalledAt    *string     `json:"installed_at"`
+	Drift          *int        `json:"drift"`
+	Skills         *int        `json:"skills"`
+	Agents         *int        `json:"agents"`
+	Go             string      `json:"go"`
+	Redactions     []Redaction `json:"redactions"`
 }
 
-// BuildRecord assembles the metrics record. repo is "" when no harness
-// checkout was found. Nothing here is fatal: every source that cannot be read
-// leaves its fields null and adds a note naming why.
-func BuildRecord(home, repo, host string, now time.Time, redactions []Redaction) (Record, []string) {
+// BuildRecord assembles the metrics record. src has a nil FS when no harness
+// was found. Nothing here is fatal: every source that cannot be read leaves
+// its fields null and adds a note naming why.
+func BuildRecord(home string, src Source, host string, now time.Time, redactions []Redaction) (Record, []string) {
 	rec := Record{
 		TS: now.Format(time.RFC3339), Host: host, OS: runtime.GOOS, Arch: runtime.GOARCH,
 		// The RUNNING binary's toolchain, which built it — not `go` on PATH,
@@ -339,22 +340,29 @@ func BuildRecord(home, repo, host string, now time.Time, redactions []Redaction)
 		rec.Vendor, rec.Files, rec.InstalledAt = &vendor, &files, &st.InstalledAt
 	}
 
-	if repo == "" {
+	switch {
+	case src.FS == nil:
 		notes = append(notes, "no harness checkout: harness_commit, drift, skills and agents are null")
 		return rec, notes
+	case src.Dir == "":
+		// The embedded files: no git command runs (D17).
+		version := src.Version
+		rec.HarnessVersion = &version
+		notes = append(notes, fmt.Sprintf("harness is the release binary %s, not a checkout: harness_commit is null, harness_version is set", version))
+	default:
+		if info := Inspect(src.Dir); info.Commit != "" {
+			rec.HarnessCommit = &info.Commit
+		} else {
+			notes = append(notes, "harness is a plain copy, not a git checkout: harness_commit is null")
+		}
 	}
-	if info := Inspect(repo); info.Commit != "" {
-		rec.HarnessCommit = &info.Commit
-	} else {
-		notes = append(notes, "harness is a plain copy, not a git checkout: harness_commit is null")
-	}
-	if inv, err := LoadInventory(DirSource(repo)); err != nil {
+	if inv, err := LoadInventory(src); err != nil {
 		notes = append(notes, fmt.Sprintf("inventory unreadable (%v): skills and agents are null", err))
 	} else {
 		skills, agents := len(inv.Skills), len(inv.Agents)
 		rec.Skills, rec.Agents = &skills, &agents
 	}
-	files, err := Plan(DirSource(repo), nil, vendor)
+	files, err := Plan(src, nil, vendor)
 	if err == nil {
 		var r Report
 		if r, err = Status(home, files); err == nil {
@@ -443,12 +451,13 @@ var gitRedirects = []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_O
 
 // ReportRun is one invocation of `sh-agent report`.
 type ReportRun struct {
-	Home, Repo string // Repo is "" when no harness checkout was found
-	Feedback   string // --feedback-repo, or ""
-	URL        string // cloned into the default path when it is absent
-	Host       string
-	Now        time.Time
-	DryRun     bool
+	Home     string
+	Source   Source // FS is nil when no harness was found
+	Feedback string // --feedback-repo, or ""
+	URL      string // cloned into the default path when it is absent
+	Host     string
+	Now      time.Time
+	DryRun   bool
 }
 
 // SendReport collects, redacts, writes one run directory into the feedback
@@ -467,7 +476,7 @@ func SendReport(r ReportRun, out io.Writer) error {
 		return err
 	}
 	host := hostDir(r.Host)
-	rec, notes := BuildRecord(r.Home, r.Repo, host, r.Now, col.Redactions)
+	rec, notes := BuildRecord(r.Home, r.Source, host, r.Now, col.Redactions)
 	for _, s := range col.Skipped {
 		fmt.Fprintf(out, "report: skipped %s\n", s)
 	}

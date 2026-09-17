@@ -959,7 +959,7 @@ func TestUpdateRefusesWhenStatusIsUnknown(t *testing.T) {
 	}
 }
 
-// TestReportWithoutCheckout: report runs before FindRepo, so a machine that
+// TestReportWithoutCheckout: report runs before ResolveSource, so a machine that
 // installed from an unpacked bundle — no checkout anywhere — still reports.
 // A dry run with the default feedback path absent clones nothing.
 func TestReportWithoutCheckout(t *testing.T) {
@@ -976,6 +976,118 @@ func TestReportWithoutCheckout(t *testing.T) {
 	}
 	if entries, _ := os.ReadDir(home); len(entries) != 0 {
 		t.Errorf("dry run wrote into home: %v", entries)
+	}
+}
+
+// TestReleaseFromInfo: a release build uses -trimpath, which keeps -ldflags
+// out of the build info, so status reads an installed release binary's
+// version from the module version Go stamps at a clean tag; anything else
+// falls back to the revision.
+func TestReleaseFromInfo(t *testing.T) {
+	rev := debug.BuildSetting{Key: "vcs.revision", Value: "b64ffe886729abcdef"}
+	cases := []struct {
+		name string
+		info *debug.BuildInfo
+		want string
+	}{
+		{"built at a clean tag", &debug.BuildInfo{Main: debug.Module{Version: "v1.2.3"}, Settings: []debug.BuildSetting{rev, {Key: "vcs.modified", Value: "false"}}}, "v1.2.3"},
+		{"go install at a tag", &debug.BuildInfo{Main: debug.Module{Version: "v1.2.3"}}, "v1.2.3"},
+		{"pseudo-version", &debug.BuildInfo{Main: debug.Module{Version: "v1.2.4-0.20260917090000-b64ffe886729+dirty"}, Settings: []debug.BuildSetting{rev, {Key: "vcs.modified", Value: "true"}}}, "b64ffe886729+dirty"},
+	}
+	for _, c := range cases {
+		if got := releaseFromInfo(c.info); got != c.want {
+			t.Errorf("%s: releaseFromInfo = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+// TestReleaseBinaryWithoutCheckout: a release binary run where no harness tree
+// is found installs the files built into it, and every command follows the
+// per-command table in the release-binary plan (D13, D14, D15, D17). A
+// development build in the same place keeps today's error.
+func TestReleaseBinaryWithoutCheckout(t *testing.T) {
+	t.Setenv("SH_AGENT_REPO", "")
+	t.Setenv(harness.ChildEnv, "")
+	t.Chdir(t.TempDir())
+	home := t.TempDir()
+	var out bytes.Buffer
+
+	if err := run([]string{"install", "--home", home}, &out); err == nil || !strings.Contains(err.Error(), "harness repo not found") {
+		t.Fatalf("development build, no tree: err = %v, want harness repo not found", err)
+	}
+	if _, err := os.Stat(filepath.Join(home, harness.ClaudeRoot)); !os.IsNotExist(err) {
+		t.Fatalf("a refused install wrote into home: %v", err)
+	}
+
+	defer func(v string) { version = v }(version)
+	version = "v9.9.9"
+
+	// An explicit --repo that is not a tree is refused, never replaced by the
+	// embedded files.
+	out.Reset()
+	if err := run([]string{"install", "--repo", t.TempDir(), "--home", home}, &out); err == nil || !strings.Contains(err.Error(), "not a harness checkout") {
+		t.Errorf("release binary, bad --repo: err = %v, want the refusal", err)
+	}
+
+	out.Reset()
+	if err := run([]string{"install", "--home", home}, &out); err != nil {
+		t.Fatalf("install: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "release binary v9.9.9") || strings.Contains(out.String(), "building") {
+		t.Errorf("install output does not name the release binary, or built:\n%s", out.String())
+	}
+	if _, err := os.Stat(filepath.Join(home, harness.BinPath)); err != nil {
+		t.Errorf("the running binary was not installed: %v", err)
+	}
+	st, found, err := harness.LoadState(home)
+	if err != nil || !found || st.Repo != "embedded:v9.9.9" || st.Commit != "" {
+		t.Errorf("state = %+v (found %v, err %v), want repo embedded:v9.9.9 and no commit", st, found, err)
+	}
+
+	out.Reset()
+	if err := run([]string{"status", "--home", home}, &out); err != nil {
+		t.Fatalf("status: %v\n%s", err, out.String())
+	}
+	for _, want := range []string{
+		"source     embedded v9.9.9 (release binary; update downloads the newest release)",
+		"from release v9.9.9",
+		"binary     ",
+		"drift      none",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("status lacks %q:\n%s", want, out.String())
+		}
+	}
+	if strings.Contains(out.String(), "repo       ") {
+		t.Errorf("status prints a repo line for an embedded install:\n%s", out.String())
+	}
+
+	out.Reset()
+	if err := run([]string{"diff", "--home", home}, &out); err != nil {
+		t.Errorf("diff: %v\n%s", err, out.String())
+	}
+	out.Reset()
+	if err := run([]string{"list", "--home", home}, &out); err != nil || !strings.Contains(out.String(), "### Skills") {
+		t.Errorf("list: %v\n%s", err, out.String())
+	}
+	out.Reset()
+	if err := run([]string{"render", "--home", home}, &out); err != nil || !strings.HasPrefix(out.String(), harness.Marker) {
+		t.Errorf("render: %v\n%.200s", err, out.String())
+	}
+	out.Reset()
+	if err := run([]string{"adopt", "anything", "--home", home}, &out); err == nil || err.Error() != "adopt needs a harness checkout; this install is a release binary" {
+		t.Errorf("adopt: err = %v", err)
+	}
+	out.Reset()
+	if err := run([]string{"update", "--home", home}, &out); err == nil || !strings.Contains(err.Error(), "release binary") {
+		t.Errorf("update: err = %v, want a refusal naming the release binary", err)
+	}
+	out.Reset()
+	// The record's notes print before the feedback checkout is resolved, so
+	// they show whether or not this non-checkout feedback path is refused.
+	_ = run([]string{"report", "--home", home, "--dry-run", "--feedback-repo", t.TempDir()}, &out)
+	if !strings.Contains(out.String(), "release binary v9.9.9") {
+		t.Errorf("report does not say the harness is a release binary:\n%s", out.String())
 	}
 }
 

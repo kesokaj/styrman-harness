@@ -16,7 +16,7 @@ import (
 // Install writes the planned files under home, removes files a previous
 // install wrote that the plan no longer contains, and records the manifest.
 // Writing is idempotent: an unchanged file is neither rewritten nor reported.
-func Install(repo, home string, files []File, vendor string, dryRun bool, out io.Writer) error {
+func Install(src Source, home string, files []File, vendor string, dryRun bool, out io.Writer) error {
 	v, err := NormalizeVendor(vendor)
 	if err != nil {
 		return err
@@ -91,8 +91,15 @@ func Install(repo, home string, files []File, vendor string, dryRun bool, out io
 	}
 
 	sort.Strings(manifest)
-	info := Inspect(repo) // empty for a plain copy: no commit of another repo is recorded
-	commit := info.Commit
+	// An embedded install records the release it came with and runs no git
+	// command (D17); a tree on disk records its path and commit.
+	repo, commit := EmbeddedPrefix+src.Version, ""
+	var info RepoInfo
+	if src.Dir != "" {
+		repo = src.Dir
+		info = Inspect(repo) // empty for a plain copy: no commit of another repo is recorded
+		commit = info.Commit
+	}
 	switch {
 	case commit == "":
 	case info.StatusUnknown:

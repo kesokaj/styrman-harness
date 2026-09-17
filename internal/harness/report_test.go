@@ -256,7 +256,7 @@ func TestReportCollect(t *testing.T) {
 
 func TestReportRecord(t *testing.T) {
 	now := time.Date(2026, 9, 17, 9, 0, 0, 0, time.UTC)
-	rec, notes := BuildRecord(t.TempDir(), "", "dave", now, nil)
+	rec, notes := BuildRecord(t.TempDir(), Source{}, "dave", now, nil)
 	data, err := json.Marshal(rec)
 	if err != nil {
 		t.Fatal(err)
@@ -265,12 +265,12 @@ func TestReportRecord(t *testing.T) {
 	if err := json.Unmarshal(data, &m); err != nil {
 		t.Fatal(err)
 	}
-	for _, k := range []string{"ts", "host", "os", "arch", "vendor", "files", "harness_commit", "installed_at", "drift", "skills", "agents", "go", "redactions"} {
+	for _, k := range []string{"ts", "host", "os", "arch", "vendor", "files", "harness_commit", "harness_version", "installed_at", "drift", "skills", "agents", "go", "redactions"} {
 		if _, ok := m[k]; !ok {
 			t.Errorf("record lacks %q: %s", k, data)
 		}
 	}
-	for _, k := range []string{"vendor", "files", "harness_commit", "installed_at", "drift", "skills", "agents"} {
+	for _, k := range []string{"vendor", "files", "harness_commit", "harness_version", "installed_at", "drift", "skills", "agents"} {
 		if m[k] != nil {
 			t.Errorf("%s = %v with no checkout and no install, want null", k, m[k])
 		}
@@ -288,11 +288,11 @@ func TestReportRecord(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := Install(repo, home, files, VendorAll, false, &bytes.Buffer{}); err != nil {
+	if err := Install(DirSource(repo), home, files, VendorAll, false, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
-	rec, _ = BuildRecord(home, repo, "dave", now, nil)
-	if rec.HarnessCommit != nil || rec.Drift == nil || *rec.Drift != 0 || rec.Skills == nil || *rec.Skills != 2 || rec.Agents == nil || *rec.Agents != 1 || rec.Files == nil || rec.Vendor == nil {
+	rec, _ = BuildRecord(home, DirSource(repo), "dave", now, nil)
+	if rec.HarnessCommit != nil || rec.HarnessVersion != nil || rec.Drift == nil || *rec.Drift != 0 || rec.Skills == nil || *rec.Skills != 2 || rec.Agents == nil || *rec.Agents != 1 || rec.Files == nil || rec.Vendor == nil {
 		t.Errorf("installed record = %+v", rec)
 	}
 }

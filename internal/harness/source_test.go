@@ -1,12 +1,14 @@
 package harness
 
 import (
+	"bytes"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 )
 
 // A Source with no Dir is the shape of the files embedded in a release
@@ -206,5 +208,40 @@ func TestDirSourceFollowsLinkedSkillDir(t *testing.T) {
 	}
 	if _, err := LoadSkills(DirSource(repo)); err == nil || !strings.Contains(err.Error(), "dangling") {
 		t.Errorf("LoadSkills err = %v, want a refusal naming the dangling link", err)
+	}
+}
+
+// An install from the embedded files records the release, not a path, and
+// the report record carries that release in harness_version with
+// harness_commit null — no git command runs for it (D17).
+func TestEmbeddedInstallStateAndRecord(t *testing.T) {
+	src := mapSource(fsHarness())
+	src.Version = "v1.2.3"
+	home := t.TempDir()
+	files, err := Plan(src, nil, VendorAll)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Install(src, home, files, VendorAll, false, &bytes.Buffer{}); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+	st, found, err := LoadState(home)
+	if err != nil || !found {
+		t.Fatalf("LoadState: %v %v", found, err)
+	}
+	if st.Repo != "embedded:v1.2.3" || st.Commit != "" {
+		t.Errorf("state repo %q commit %q, want embedded:v1.2.3 and no commit", st.Repo, st.Commit)
+	}
+
+	now := time.Date(2026, 9, 17, 9, 0, 0, 0, time.UTC)
+	rec, notes := BuildRecord(home, src, "dave", now, nil)
+	if rec.HarnessCommit != nil || rec.HarnessVersion == nil || *rec.HarnessVersion != "v1.2.3" {
+		t.Errorf("harness_commit %v harness_version %v, want null and v1.2.3", rec.HarnessCommit, rec.HarnessVersion)
+	}
+	if rec.Drift == nil || *rec.Drift != 0 || rec.Skills == nil || *rec.Skills != 1 || rec.Agents == nil || *rec.Agents != 1 {
+		t.Errorf("record = %+v, want drift 0, 1 skill, 1 agent from the embedded files", rec)
+	}
+	if !strings.Contains(strings.Join(notes, "\n"), "release binary v1.2.3") {
+		t.Errorf("notes %v do not say the harness is a release binary", notes)
 	}
 }

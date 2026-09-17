@@ -34,7 +34,7 @@ else docs_root=.agents/docs; fi
 mkdir -p "$docs_root/testing"
 ```
 
-2. Read `AGENTS.md` (Setup Commands / Testing) and `$docs_root/testing/<app>/guide.md` for the project's own commands. `<app>` is the name of the thing being verified, resolved in this order and never left as the literal `<app>`: the `cmd/<app>` directory when there is exactly one; else the binary or service the project's `AGENTS.md` names; else the repository directory's own name (G20). Those are what you run. If the project declares no test framework — dotfiles, config repos, shell tooling — judge against the smoke checks it lists instead (syntax checks, `shellcheck`, dry-runs), and do not FAIL it for lacking a framework it says it does not have.
+2. Read `AGENTS.md` (Setup Commands / Testing) and `$docs_root/testing/<app>/guide.md` for the project's own commands. `<app>` is the name of the thing being verified, resolved in this order and never left as the literal `<app>`: run `ls -d cmd/*/` first, and when it prints exactly one directory, its last path element is `<app>` (`cmd/server/` gives `server`) — a heading or title in `AGENTS.md` does not override it; else the binary or service the project's `AGENTS.md` names; else the repository directory's own name (G20, BUG-062). The log's `App:` line records the name and which of the three sources gave it. Those are what you run. If the project declares no test framework — dotfiles, config repos, shell tooling — judge against the smoke checks it lists instead (syntax checks, `shellcheck`, dry-runs), and do not FAIL it for lacking a framework it says it does not have.
 3. Establish the change set (`git diff`, `git diff --staged`, `git diff <base>...HEAD`) — coverage is judged against it, and it goes in the log on a `Range reviewed:` line.
 
 ## What to run
@@ -68,6 +68,7 @@ date: <from `date +%F`>
 # Verification — <slug>   (<date>)
 
 Range reviewed: <base>..<head>
+App: <name> (cmd/<name> | named in AGENTS.md | repository directory)
 
 ## Status: PASS | FAIL | BLOCKED
 

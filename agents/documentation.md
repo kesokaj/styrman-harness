@@ -36,7 +36,7 @@ ROADMAP.md                            # root: Next / Later are yours when the pl
 ```
 Plus inline godoc-style comments on exported symbols.
 
-`<app>` resolves as `agents/verifier.md` defines it — the single `cmd/<app>` directory, else the binary or service the project's `AGENTS.md` names, else the repository directory's own name — and is never left literal in a path you write.
+`<app>` resolves as `agents/verifier.md` defines it — the single `cmd/<app>` directory (`ls -d cmd/*/` printing exactly one), which a heading or title in `AGENTS.md` does not override, else the binary or service the project's `AGENTS.md` names, else the repository directory's own name — and is never left literal in a path you write.
 
 Shared seam: the `verifier` creates `testing/<app>/guide.md` whenever it runs a project's procedure and finds the guide absent, and updates it when the steps change — its dated verify logs in `testing/` are its own; the guide is otherwise yours.
 

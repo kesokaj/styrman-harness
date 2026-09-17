@@ -94,8 +94,14 @@ git push origin vX.Y.Z                                                          
 
 Then the release's binaries, which is how a binary-only place updates (R9, ADR-033). Built here, from the tagged tree, never by a service:
 ```bash
-# The contamination guard already ran BEFORE the tag, above — it gates what goes
-# into these binaries, so it cannot wait until after the push.
+# 0. the contamination guard AGAIN, here: it ran before the tag so a bad tree is
+#    never tagged, and it runs again here because `go:embed` reads the working
+#    tree at BUILD time — which is after the tag and the pushes, so a .DS_Store
+#    or an editor swap file appearing under skills/ in between would otherwise be
+#    embedded unguarded (D23, BUG-066; code review 2026-09-17 round 2). Both
+#    commands are read-only, so running them twice costs nothing.
+test -z "$(git status --porcelain --ignored --untracked-files=all -- context skills agents commands rules)"   # exit 0: nothing untracked or ignored there
+go test -count=1 -run TestEmbedHoldsOnlyTrackedFiles ./...                 # exit 0: embedded set == git's
 # 1. the three platforms, from the tag's own tree, reproducible flags
 for target in linux/amd64 darwin/arm64 linux/arm64; do
   GOOS="${target%/*}" GOARCH="${target#*/}" CGO_ENABLED=0 GOTOOLCHAIN=local \

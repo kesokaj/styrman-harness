@@ -592,3 +592,38 @@ func TestUpdateFromReleaseNeverGoesBackwards(t *testing.T) {
 		t.Error("a development build was overwritten from a release")
 	}
 }
+
+// TestVerifierMessageCarriesWhatTheToolSaid: an OpenSSH too old for
+// `-Y verify` exits 255, exactly as a bad signature does, so without the
+// tool's own words a broken machine reads as a tampered release. The verdict
+// is unchanged — nothing installs either way — but the cause is visible
+// (code review 2026-09-17, round 2).
+func TestVerifierMessageCarriesWhatTheToolSaid(t *testing.T) {
+	bin := t.TempDir()
+	fake := filepath.Join(bin, "ssh-keygen")
+	writeFile(t, fake, "#!/bin/sh\necho \"unknown option -- Y\" >&2\nexit 255\n")
+	if err := os.Chmod(fake, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	old := sshKeygenSystemPaths
+	sshKeygenSystemPaths = []string{fake}
+	t.Cleanup(func() { sshKeygenSystemPaths = old })
+
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "SHA256SUMS"), "# styrman-harness v9.9.9\n")
+	writeFile(t, filepath.Join(dir, "SHA256SUMS.sig"), "not really a signature\n")
+	keygen, err := sshKeygen()
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = verifyRelease(keygen, dir, "v9.9.9", AssetName(runtime.GOOS, runtime.GOARCH), []byte("x"))
+	if err == nil {
+		t.Fatal("a verifier that cannot verify must be an error")
+	}
+	if !strings.Contains(err.Error(), "unknown option -- Y") {
+		t.Errorf("err = %v, want it to carry ssh-keygen's own message", err)
+	}
+	if !strings.Contains(err.Error(), "does not verify") {
+		t.Errorf("err = %v, want the verdict kept", err)
+	}
+}

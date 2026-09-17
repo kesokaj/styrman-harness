@@ -248,9 +248,26 @@ func verifyRelease(keygen, dir, tag, asset string, data []byte) error {
 		// verify; saying the latter would read as a tampered release when the
 		// machine's OpenSSH is broken (code review 2026-09-17). Either way
 		// nothing is installed.
+		// What ssh-keygen SAID, not just that it failed: an OpenSSH too old
+		// for `-Y verify` exits 255 like a bad signature does, so without its
+		// message a broken tool reads as a tampered release (code review
+		// 2026-09-17, round 2).
+		said := firstStderrLine(verifyErr.String())
 		var exit *exec.ExitError
 		if !errors.As(err, &exit) {
+			if said != "" {
+				return fmt.Errorf("could not run %s to verify the release: %w (%s)", keygen, err, said)
+			}
 			return fmt.Errorf("could not run %s to verify the release: %w", keygen, err)
+		}
+		// No attempt to tell a bad signature from a broken tool by its
+		// wording — the first attempt at that misread `Signature
+		// verification failed: incorrect signature` as a tool complaint. The
+		// verdict stays the same and ssh-keygen's own words ride along, so an
+		// OpenSSH too old for `-Y verify` ("unknown option -- Y", also exit
+		// 255) is visible instead of looking like a tampered release.
+		if said != "" {
+			return fmt.Errorf("SHA256SUMS signature does not verify (%s: %s)", filepath.Base(keygen), said)
 		}
 		return errors.New("SHA256SUMS signature does not verify")
 	}

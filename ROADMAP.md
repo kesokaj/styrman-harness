@@ -6,7 +6,7 @@ Last reviewed: 2026-09-17
 
 ## Now
 
-- Release binary with the harness built in; `report` keeps nothing — `.agents/docs/plans/2026-09-17-release-binary.md` (landed on `main` as cd0bbcb; what remains is the release itself, which the operator runs: `/preflight v1.1.0`, its rehearsal and the work Mac e2e)
+- Release binary with the harness built in; `report` keeps nothing — `.agents/docs/plans/2026-09-17-release-binary.md`. Landed on `main` (cd0bbcb) and RELEASED as v1.1.0; what remains needs the work Mac: the e2e legs there, `go install …@v1.1.0`, then the plan's Done row (see the newest handoff)
 
 ## Next
 

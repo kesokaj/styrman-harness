@@ -24,7 +24,7 @@ flowchart LR
         bundle["Unpacked bundle<br/>no .git"]
         installer["sh-agent install / sh-agent update"]
         homeFiles["~/.claude and ~/.gemini/config<br/>installed files, no repository"]
-        sessions["Claude Code and Antigravity sessions<br/>feedback skill logs, /retro queues"]
+        sessions["Claude Code and Antigravity sessions<br/>feedback-log skill logs, /retro queues"]
         configDir["~/.config/sh-agent/<br/>feedback.jsonl, retros.jsonl, proposals/, state.json"]
         reporter["sh-agent report<br/>copy, redact, commit, push to the feedback URL"]
     end

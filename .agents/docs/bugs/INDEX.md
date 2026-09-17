@@ -49,6 +49,7 @@
 | BUG-062 | 2026-09-17 | agents/verifier | fixed | Claude's verifier wrote its guide under `demo` (repo dir); Antigravity resolved `server` (`cmd/<app>`) in the same repo, per G20; prose patch still missed 1/5 (ADR-032 then deleted `<app>` resolution) | when a prose rule is followed in most but not all runs, delete the decision it asks the agent to make rather than reword it |
 | BUG-063 | 2026-09-17 | agents/verifier | fixed | verifier's `mkdir` for the testing guide was denied, never retried, no guide written, log said `Scope: complete` | a duty an agent must perform is a numbered step, not a paragraph beside the steps; "complete" is defined by artifacts owed, not commands run |
 | BUG-064 | 2026-09-17 | agents/verifier | fixed | after BUG-063's fix, Claude's verifier still skipped writing the guide with no denial or error, though it reported the gap honestly | a duty a subagent must not skip goes in the dispatch text the main agent writes, not only in the subagent's own definition |
+| BUG-065 | 2026-09-17 | skills/feedback | fixed | `/feedback` loaded the harness's `feedback` skill instead of Claude Code's built-in feedback command | a skill/agent/command name never shadows a built-in slash command of either CLI; check the CLI's built-in list before naming one |
 
 ## Graduated
 

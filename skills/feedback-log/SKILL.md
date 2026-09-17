@@ -1,5 +1,5 @@
 ---
-name: feedback
+name: feedback-log
 description: |
   Passive correction logger for the agent harness learning loop. Detects when the user
   corrects, overrides, or re-states a preference and appends a structured entry to the

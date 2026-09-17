@@ -169,5 +169,5 @@ After saving, tell the user:
 
 - The `/retro` workflow turns corrections into proposals scoped to the project (applied there, recorded in `.agents/docs/retros/`) or to the harness (queued in `~/.config/sh-agent/proposals/`)
 - The `/distill` workflow captures repeated patterns as reusable skills
-- The `feedback` skill passively logs corrections to `~/.config/sh-agent/feedback.jsonl`
+- The `feedback-log` skill passively logs corrections to `~/.config/sh-agent/feedback.jsonl`
 - The `changelog` subagent writes `.agents/docs/changes/` entries — reference these, don't duplicate them

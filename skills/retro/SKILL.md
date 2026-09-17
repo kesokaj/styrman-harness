@@ -33,7 +33,7 @@ Suggest it naturally: *"I noticed a few corrections this session. Want me to run
 
 ## Step 1: Read the session and the feedback log
 
-Read the conversation transcript, plus the entries in `~/.config/sh-agent/feedback.jsonl` from this session and this project (the `feedback` skill writes there; deduplicate overlapping entries). Scan for:
+Read the conversation transcript, plus the entries in `~/.config/sh-agent/feedback.jsonl` from this session and this project (the `feedback-log` skill writes there; deduplicate overlapping entries). Scan for:
 
 1. **Explicit corrections** — "no", "wrong", "don't do that", "actually we…"
 2. **Re-stated preferences** — a rule that already exists in the project's `AGENTS.md` or `.agents/rules/`, in the global context, or in a skill
@@ -46,7 +46,7 @@ Read the conversation transcript, plus the entries in `~/.config/sh-agent/feedba
 
 ## Step 2: Target, scope, rule_ref — per finding
 
-1. **`rule_ref`**, one controlled vocabulary shared with the `feedback` skill: `AGENTS.md § <section title>` (global context), `project AGENTS.md § <section>`, `skill:<name>`, `agent:<name>`, `rule:<name>` (a `.agents/rules/<name>.md`), or `null` when no rule exists yet.
+1. **`rule_ref`**, one controlled vocabulary shared with the `feedback-log` skill: `AGENTS.md § <section title>` (global context), `project AGENTS.md § <section>`, `skill:<name>`, `agent:<name>`, `rule:<name>` (a `.agents/rules/<name>.md`), or `null` when no rule exists yet.
 2. **The one target file** the fix belongs in. A finding about THIS project's code, layout, commands, or conventions targets the project; a finding about how an agent, a global skill, or the global context behaves targets the harness.
 
 | Category | Project target | Harness target |

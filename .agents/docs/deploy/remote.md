@@ -126,7 +126,11 @@ gh release create vX.Y.Z --repo kesokaj/styrman-harness --verify-tag --title "st
   sh-agent-linux-amd64 sh-agent-darwin-arm64 sh-agent-linux-arm64 SHA256SUMS SHA256SUMS.sig
 cd -
 ```
-`allowed_signers` is written only to run the check above and removed immediately; the line the PLACES verify against is compiled into the binary (`internal/harness/release.go`), so a file on any machine cannot decide what a genuine release is — which is exactly why this procedure does not leave one lying about. The release notes are built as § Release notes below says. After the upload: `gh release view vX.Y.Z --repo kesokaj/styrman-harness --json assets --jq '.assets[].name'` lists the five assets, and nothing further is pushed anywhere — a binary-only place picks the release up the next time the operator runs `sh-agent update` there.
+`allowed_signers` is written only to run the check above and removed immediately; the line the PLACES verify against is compiled into the binary (`internal/harness/release.go`), so a file on any machine cannot decide what a genuine release is — which is exactly why this procedure does not leave one lying about. The release notes are built as § Release notes below says. Publishing a release changes NOTHING about the repository's visibility: `styrman-harness` stays private, the release page is readable only by accounts that can already read the repository, and every asset download needs that credential — which is what README § Install without cloning depends on. `gh repo view kesokaj/styrman-harness --json visibility` after the upload is the check; only a deliberate change in the repository's settings makes anything public.
+
+Upload the assets one call at a time, not all of them on `gh release create`: a single create-with-assets call ROLLS THE WHOLE RELEASE BACK when one upload fails, which is what GitHub's upload endpoint did twice for v1.1.0 (`HTTP 500: Error creating asset temp dir`, both attempts leaving no release and the tag intact). Create the release with `--notes-file` alone, then `gh release upload vX.Y.Z --repo kesokaj/styrman-harness <asset> --clobber` per file, retrying an individual upload before calling it a failure.
+
+After the upload: `gh release view vX.Y.Z --repo kesokaj/styrman-harness --json assets --jq '.assets[].name'` lists the five assets, and nothing further is pushed anywhere — a binary-only place picks the release up the next time the operator runs `sh-agent update` there.
 
 ### Release notes
 

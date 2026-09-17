@@ -50,13 +50,8 @@
 | BUG-063 | 2026-09-17 | agents/verifier | fixed | verifier's `mkdir` for the testing guide was denied, never retried, no guide written, log said `Scope: complete` | a duty an agent must perform is a numbered step, not a paragraph beside the steps; "complete" is defined by artifacts owed, not commands run |
 | BUG-064 | 2026-09-17 | agents/verifier | fixed | after BUG-063's fix, Claude's verifier still skipped writing the guide with no denial or error, though it reported the gap honestly | a duty a subagent must not skip goes in the dispatch text the main agent writes, not only in the subagent's own definition |
 | BUG-065 | 2026-09-17 | skills/feedback | fixed | `/feedback` loaded the harness's `feedback` skill instead of Claude Code's built-in feedback command | a skill/agent/command name never shadows a built-in slash command of either CLI; check the CLI's built-in list before naming one |
-| BUG-066 | 2026-09-17 | embed.go / release build | fixed | `go:embed all:` compiled a gitignored `rules/.env` into the release binary while embed tests stayed green | an embedded artifact's test must assert BOTH directions against its source (extra content is a defect too), pinned to what git tracks |
 | BUG-067 | 2026-09-17 | cmd/sh-agent/main.go (knownCheckout) | fixed | `knownCheckout` resolved an `embedded:vX.Y.Z` manifest value as a filesystem path via `samePath` | when a field gains a value of a new kind, grep every reader of that field in the same change, not just the one that prompted it |
-| BUG-068 | 2026-09-17 | process / mutation testing | fixed | a must-fail mutation hit a duplicate text pattern in `status`, not the intended `knownCheckout` guard; text-replacement restore left it broken | a must-fail mutation asserts its target text is unique before writing; undo by restoring the saved file copy, never a reverse text replacement |
-| BUG-069 | 2026-09-17 | internal/harness/report.go (RemoveKeptClone) | fixed | unpushed-commit guard failed open, deleting an operator's only local copy when `@{upstream}` couldn't resolve | a destructive guard's `err != nil` case keeps the data, never falls through to delete; test the case where the check itself can't run |
-| BUG-070 | 2026-09-17 | cmd/sh-agent/main.go (update) | fixed | `sh-agent update --check` deleted the kept feedback clone despite its read-only contract | place a new side effect below a command's read-only/dry-run early returns; test asserts the read-only mode does NOT perform it |
-| BUG-071 | 2026-09-17 | internal/harness/report_test.go (test premises) | fixed | two Phase 3 tests set up conditions (a pid, an unreadable ref dir) that didn't actually hold, so they passed/failed for the wrong reason | prove an unusual test-setup condition actually holds (measure it in a scratch fixture) before trusting the test; BUG-024's rule applied to setup |
-| BUG-072 | 2026-09-17 | process/verifier-dispatch | fixed | verifier dispatched at 4d45155, then main agent edited its files mid-run; PASS result matched no commit, log marked inconclusive | while a verifier dispatch is in flight, freeze its files; stop the run (TaskStop) if a fix can't wait, then re-dispatch after committing |
+| BUG-073 | 2026-09-17 | process/dated trail records | fixed | new retro write clobbered an existing `2026-09-17-retro-3.md` from another session; `git status` showed MODIFIED not new | before writing a dated trail file, `ls` the target dir in the same turn and pick the next free suffix from disk, never from session memory |
 
 ## Graduated
 
@@ -81,3 +76,9 @@
 | BUG-057 | internal/harness (report_test.go fixture authoring) | `context/AGENTS.md` § Hard rules, "Ask git what actually changed" bullet |
 | BUG-058 | internal/harness (report.go — review Outcome accuracy) | `context/AGENTS.md` § Definition of Done, step 2 |
 | BUG-061 | agents/changelog (ADR authoring) | `agents/changelog.md` § Rules (first bullet) and `context/AGENTS.md` § Definition of Done, step 4 |
+| BUG-066 | embed.go / release build | `context/AGENTS.md` § Hard rules, "A test that a generated or embedded artifact matches its source asserts BOTH directions" bullet |
+| BUG-068 | process / mutation testing | `context/AGENTS.md` § Hard rules, "A must-fail MUTATION asserts its target text is unique" clause |
+| BUG-069 | internal/harness/report.go (RemoveKeptClone) | `context/AGENTS.md` § Hard rules, "A guard in front of a destructive or irreversible action" bullet |
+| BUG-070 | cmd/sh-agent/main.go (update) | `context/AGENTS.md` § Hard rules, "When a command has a read-only mode" bullet |
+| BUG-071 | internal/harness/report_test.go (test premises) | `context/AGENTS.md` § Hard rules, "A test that sets up an unusual condition proves the condition HOLDS" clause |
+| BUG-072 | process/verifier-dispatch | `context/AGENTS.md` § Definition of Done, step 1, "While that dispatch is IN FLIGHT the tree stays frozen" sentence |

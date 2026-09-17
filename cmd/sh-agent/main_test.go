@@ -208,8 +208,8 @@ func TestKnownCheckout(t *testing.T) {
 func TestDryRunNeverBuilds(t *testing.T) {
 	t.Setenv(harness.ChildEnv, "")
 	// A checkout-SHAPED repo of its own, not this checkout (`../..`): when
-	// the test runs inside a downstream mirror — a plain copy with no .git,
-	// which is what styrman-crew's image/harness is — `../..` is not a
+	// the test runs inside a plain copy with no .git — an unpacked bundle, or
+	// once a copy vendored inside a consumer project — `../..` is not a
 	// checkout, the dry run rightly prints the plain-copy line, and the
 	// assertion below failed for a shape the test never meant to cover
 	// (styrman-crew BUG-058). IsCheckout asks only for a `.git` entry and
@@ -252,8 +252,7 @@ func checkoutShaped(t *testing.T) string {
 }
 
 // plainCopy copies this checkout's deployable trees into a directory with
-// no .git: what a downstream image ships (styrman-crew image/harness,
-// argolis-devbox deploy/harness).
+// no .git: what an unpacked bundle is (R8).
 func plainCopy(t *testing.T) string {
 	t.Helper()
 	src, err := filepath.Abs("../..")
@@ -287,11 +286,11 @@ func plainCopy(t *testing.T) string {
 	return dst
 }
 
-// TestPlainCopyNeverRebuilds: a mirror inside a project's image is built by
-// that image from the same tree, is usually read-only to the installing
-// user, and cannot be updated with git; install from it must deploy the
-// running binary without a rebuild, without the no-toolchain warning, and
-// without creating a scratch directory inside the mirror (BUG-015).
+// TestPlainCopyNeverRebuilds: an unpacked bundle's binary was built from
+// the same tree, the tree may be read-only to the installing user, and it
+// cannot be updated with git; install from it must deploy the running
+// binary without a rebuild, without the no-toolchain warning, and
+// without creating a scratch directory inside the copy (BUG-015).
 func TestPlainCopyNeverRebuilds(t *testing.T) {
 	if _, err := exec.LookPath("go"); err != nil {
 		t.Skip("go not on PATH: the rebuild path is unreachable, nothing to prove")
@@ -311,7 +310,7 @@ func TestPlainCopyNeverRebuilds(t *testing.T) {
 		}
 	}
 	if _, err := os.Stat(filepath.Join(copyDir, ".agents")); !os.IsNotExist(err) {
-		t.Errorf("install created %s inside the mirror (err=%v)", filepath.Join(copyDir, ".agents"), err)
+		t.Errorf("install created %s inside the plain copy (err=%v)", filepath.Join(copyDir, ".agents"), err)
 	}
 	if _, err := os.Stat(filepath.Join(home, harness.BinPath)); err != nil {
 		t.Errorf("binary not installed from the plain copy: %v", err)

@@ -20,8 +20,8 @@ And the loop back:
 |---|---|---|
 | Work Mac | Antigravity only | The operator runs `sh-agent update` |
 | Home Mac | Claude Code and Antigravity | The operator runs `sh-agent update` |
-| argolis-devbox | both | The operator runs `sh-agent update` |
-| styrman-crew | both | The operator runs `sh-agent update` |
+| A Linux project host | both | The operator runs `sh-agent update` |
+| A second Linux project host | both | The operator runs `sh-agent update` |
 
 The normal flow is deliberately dull: the operator edits this repository, is happy with it, then goes to each place and runs one command. There is no push, no timer that has to work, no service that has to be up. A timer is a convenience some machines add; it is not the mechanism.
 

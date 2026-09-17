@@ -54,7 +54,7 @@ func TestReportRedactJSONL(t *testing.T) {
 	want := []Redaction{
 		{File: "feedback.jsonl", Line: 1, Path: "user_quote", Pattern: "-----BEGIN"},
 		{File: "feedback.jsonl", Line: 2, Path: "user_quote", Pattern: "AKIA"},
-		{File: "feedback.jsonl", Line: 3, Pattern: "token="},
+		{File: "feedback.jsonl", Line: 3, Pattern: "secret assignment"},
 	}
 	if len(recs) != len(want) {
 		t.Fatalf("redactions = %+v, want %+v", recs, want)
@@ -63,6 +63,74 @@ func TestReportRedactJSONL(t *testing.T) {
 		if recs[i] != want[i] {
 			t.Errorf("redaction %d = %+v, want %+v", i, recs[i], want[i])
 		}
+	}
+}
+
+// TestReportRedactShapes: the common credential forms, in any case, are
+// caught inside a JSONL value and on a text line; ordinary prose that only
+// resembles them is not (security review 2026-09-17, finding 1).
+func TestReportRedactShapes(t *testing.T) {
+	secrets := []string{
+		"export GITHUB_TOKEN=FAKEVALUE", "DB_PASSWORD=FAKEVALUE", "password: FAKEVALUE",
+		`config was {"password": "FAKEVALUE"}`, "Authorization: Bearer FAKEVALUE",
+		"github_pat_FAKEVALUE", "ghp_FAKEVALUE", "sk-ant-FAKEVALUE", "aws_secret_access_key = FAKEVALUE",
+		"ASIAFAKEVALUE", "postgres://app:FAKEVALUE@db/x", "token = FAKEVALUE", "xoxb-FAKEVALUE",
+		"GOCSPX-FAKEVALUE", "api_key=FAKEVALUE", "API-KEY: FAKEVALUE",
+	}
+	for _, sec := range secrets {
+		quoted, _ := json.Marshal(map[string]string{"user_quote": "they said " + sec})
+		for name, in := range map[string]struct {
+			data  string
+			jsonl bool
+		}{"jsonl": {string(quoted) + "\n", true}, "text": {"note: " + sec + "\n", false}} {
+			out, recs, err := redactLines("f", []byte(in.data), in.jsonl)
+			if err != nil || len(recs) != 1 || strings.Contains(string(out), "FAKEVALUE") {
+				t.Errorf("%s %q: out=%q recs=%+v err=%v", name, sec, out, recs, err)
+			}
+		}
+	}
+	for _, benign := range []string{"the task-list grew", "the token expired", "passwords are hard", "max_tokens 5", "ASIAN food"} {
+		// "ASIAN" contains the ASIA prefix: accepted over-redaction, pinned
+		// here so a change to it is deliberate.
+		_, recs, _ := redactLines("f", []byte(benign+"\n"), false)
+		if want := benign == "ASIAN food"; (len(recs) == 1) != want {
+			t.Errorf("%q: redactions %+v, want redacted=%v", benign, recs, want)
+		}
+	}
+}
+
+// TestReportRedactStructuralGaps: the four ways a needle was present, content
+// still left, and the run reported success (security review 2026-09-17,
+// finding 4), plus a key that named its own secret in report.json (finding 2).
+func TestReportRedactStructuralGaps(t *testing.T) {
+	cases := []struct {
+		name, in string
+		jsonl    bool
+		leak     string
+	}{
+		{"duplicate key shadows the secret", `{"user_quote":"AKIAFAKEVALUE","user_quote":"clean"}` + "\n", true, "FAKEVALUE"},
+		{"two keys concatenated on one line", "-----BEGIN A KEY-----\nFAKEBODY1\n-----END A KEY----------BEGIN B KEY-----\nFAKEBODY2\n-----END B KEY-----\nafter\n", false, "FAKEBODY"},
+		{"dashes rewritten", "–––––BEGIN RSA PRIVATE KEY–––––\nFAKEBODY\n–––––END RSA PRIVATE KEY–––––\nafter\n", false, "FAKEBODY"},
+		{"JSONL header line that is valid JSON alone", `"-----BEGIN RSA PRIVATE KEY-----"` + "\nFAKEBODY\n-----END RSA PRIVATE KEY-----\n" + `{"ok":"after"}` + "\n", true, "FAKEBODY"},
+	}
+	for _, c := range cases {
+		out, recs, err := redactLines("f", []byte(c.in), c.jsonl)
+		if err != nil || recs == nil || strings.Contains(string(out), c.leak) {
+			t.Errorf("%s: out=%q recs=%+v err=%v", c.name, out, recs, err)
+		}
+		if strings.Contains(c.in, "after") && !strings.Contains(string(out), "after") {
+			t.Errorf("%s: redacted past the block: %q", c.name, out)
+		}
+	}
+	out, recs, err := redactDocument("state.json", []byte(`{"repo":"ghp_FAKEVALUE","repo":"/r"}`))
+	if err != nil || recs == nil || strings.Contains(string(out), "FAKEVALUE") {
+		t.Errorf("state.json duplicate key: out=%q recs=%+v err=%v", out, recs, err)
+	}
+
+	_, recs, _ = redactLines("retros.jsonl", []byte(`{"tool_output":{"https://api.example.test/v1?token=FAKEVALUE":"404"}}`), true)
+	rec, _ := json.Marshal(recs)
+	if len(recs) != 1 || recs[0].Path != "" || strings.Contains(string(rec), "FAKEVALUE") {
+		t.Errorf("secret in a key reached the record: %s", rec)
 	}
 }
 
@@ -95,7 +163,7 @@ func TestReportRedactText(t *testing.T) {
 	if string(out) != want {
 		t.Errorf("got:\n%s\nwant:\n%s", out, want)
 	}
-	if len(recs) != 2 || recs[0].Line != 4 || recs[0].Lines != 4 || recs[0].Unterminated || recs[1].Pattern != "password=" || recs[1].Line != 8 {
+	if len(recs) != 2 || recs[0].Line != 4 || recs[0].Lines != 4 || recs[0].Unterminated || recs[1].Pattern != "secret assignment" || recs[1].Line != 8 {
 		t.Errorf("redactions = %+v", recs)
 	}
 
@@ -273,7 +341,7 @@ func TestSendReport(t *testing.T) {
 	if err := SendReport(dry, &out); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Lstat(feedback); !os.IsNotExist(err) || !strings.Contains(out.String(), "[dry-run] would clone") || !strings.Contains(out.String(), "feedback.jsonl:1 user_quote (password=)") {
+	if _, err := os.Lstat(feedback); !os.IsNotExist(err) || !strings.Contains(out.String(), "[dry-run] would clone") || !strings.Contains(out.String(), "feedback.jsonl:1 user_quote (secret assignment)") {
 		t.Fatalf("dry run: lstat err=%v\n%s", err, out.String())
 	}
 
@@ -374,7 +442,65 @@ func TestResolveFeedbackFailures(t *testing.T) {
 
 	harnessRepo := newRepo(t)
 	git(t, harnessRepo, "init", "-q")
-	if _, _, err := ResolveFeedback(harnessRepo, home, missing, false); err == nil || !strings.Contains(err.Error(), "harness checkout") {
+	if _, _, err := ResolveFeedback(harnessRepo, home, missing, false); err == nil || !strings.Contains(err.Error(), "not the feedback repository") {
 		t.Errorf("--feedback-repo naming a harness checkout: err = %v", err)
+	}
+
+	// Any checkout whose origin is not the feedback URL is refused, on the
+	// explicit path and on the default one (security review 2026-09-17,
+	// finding 3): its remote would receive the report.
+	base := t.TempDir()
+	feedbackOrigin := filepath.Join(base, "feedback.git")
+	otherOrigin := filepath.Join(base, "other.git")
+	git(t, base, "init", "--bare", "-q", "-b", "main", feedbackOrigin)
+	git(t, base, "init", "--bare", "-q", "-b", "main", otherOrigin)
+	other := filepath.Join(base, "other")
+	git(t, base, "clone", "-q", otherOrigin, other)
+	if _, _, err := ResolveFeedback(other, home, feedbackOrigin, false); err == nil || !strings.Contains(err.Error(), "not the feedback repository") {
+		t.Errorf("explicit checkout of another repository: err = %v", err)
+	}
+	wrongHome := t.TempDir()
+	git(t, base, "clone", "-q", otherOrigin, filepath.Join(wrongHome, ".config", "sh-agent", "feedback"))
+	if _, _, err := ResolveFeedback("", wrongHome, feedbackOrigin, true); err == nil || !strings.Contains(err.Error(), "not the feedback repository") {
+		t.Errorf("default path holding another repository, dry run: err = %v", err)
+	}
+	right := filepath.Join(base, "right")
+	git(t, base, "clone", "-q", feedbackOrigin, right)
+	if _, _, err := ResolveFeedback(right, home, feedbackOrigin, false); err != nil {
+		t.Errorf("checkout of the feedback repository refused: %v", err)
+	}
+}
+
+func TestSendReportRefusesRedirectsAndLinks(t *testing.T) {
+	gitEnv(t)
+	base := t.TempDir()
+	origin := filepath.Join(base, "origin.git")
+	git(t, base, "init", "--bare", "-q", "-b", "main", origin)
+	checkout := filepath.Join(base, "feedback")
+	git(t, base, "clone", "-q", origin, checkout)
+	run := ReportRun{Home: t.TempDir(), Feedback: checkout, URL: origin, Host: "dave", Now: time.Now()}
+
+	// GIT_DIR would send every git call below to another repository.
+	elsewhere := filepath.Join(base, "elsewhere")
+	git(t, base, "init", "-q", elsewhere)
+	t.Setenv("GIT_DIR", filepath.Join(elsewhere, ".git"))
+	if err := SendReport(run, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "GIT_DIR is set") {
+		t.Errorf("GIT_DIR set: err = %v", err)
+	}
+	os.Unsetenv("GIT_DIR")
+
+	// A reports/<host> link pulled from the remote must not carry writes out.
+	outside := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(checkout, "reports"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(checkout, "reports", "dave")); err != nil {
+		t.Fatal(err)
+	}
+	if err := SendReport(run, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "not a directory") {
+		t.Errorf("reports/dave link: err = %v", err)
+	}
+	if entries, _ := os.ReadDir(outside); len(entries) != 0 {
+		t.Errorf("wrote through the link: %v", entries)
 	}
 }

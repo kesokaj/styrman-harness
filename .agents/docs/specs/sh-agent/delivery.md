@@ -34,17 +34,17 @@ Two ways, and no third:
 
 Authentication is the operator's own SSH key and `gh` login, present on every machine because they log in as themselves. That is why no deploy keys, tokens or per-machine credentials exist anywhere in this design — they would restrict nothing and add key management. The accepted cost is theirs, stated plainly: "if I don't login in with ssh or gh I can't get updates." The bundle is the fallback when that bites.
 
-## Why consumers cannot change the harness
+## What keeps consumers from changing the harness
 
-Not a permission — a shape. Only the four checkouts are repositories, and they belong to the operator. Everything downstream of them receives installed FILES: `sh-agent install` writes the context, skills, agents, commands and rules into a home and never creates a checkout there. An agent working in such a home has the harness text and nothing to push with.
+Part shape, part credential. Only the four checkouts are repositories, and they belong to the operator. Everything downstream of them receives installed FILES: `sh-agent install` writes the context, skills, agents, commands and rules into a home and never creates a checkout there. But a checkout is not what changing the harness takes — a credential that can push to this repository is, and anything that reaches the operator's SSH key or `gh` login can clone and push, after which every place's `update` deploys it. So a home seeded for agents is read-only only when it reaches no such credential: no forwarded ssh-agent, no `gh` token, no readable key. The shape is provable here; the credential half is each host's to hold (security review 2026-09-17, finding 5).
 
-State that guarantee as a property of `sh-agent install`, provable from this repository. Do not rest it on how any particular consumer seeds its homes — that was done once, in ADR-030 D4, and it is a dependency pointing the wrong way: if that consumer changes its entrypoint, a claim in this repository's decision record silently becomes false and nothing here would catch it.
+State the shape as a property of `sh-agent install`, provable from this repository. Do not rest it on how any particular consumer seeds its homes — that was done once, in ADR-030 D4, and it is a dependency pointing the wrong way: if that consumer changes its entrypoint, a claim in this repository's decision record silently becomes false and nothing here would catch it.
 
 ## The loop back
 
-`sh-agent report` (planned, not built) sends a COPY of one machine's experience to a private repository, `styrman-harness-feedback`, one directory per machine per run: the corrections log, the retro proposals, the cross-project index, and a metrics record naming the host, the installed commit, drift, the skill and agent counts and the toolchain that built the binary.
+`sh-agent report` sends a COPY of one machine's experience to a private repository, `styrman-harness-feedback`, one directory per machine per run: the corrections log, the retro proposals, the cross-project index, and a metrics record naming the host, the installed commit, drift, the skill and agent counts and the toolchain that built the binary.
 
-It redacts before sending, structurally. The credential needles LOCATE a secret and never define how much is removed — a whole JSON string value, a whole text line, or a whole `-----BEGIN`-to-`-----END` block goes. This is the design the operator chose at the cold-read cap, and the reasoning is worth keeping: `AKIA` is a prefix, so replacing the matched token strips the marker and ships the key; a private key's header matches while its body carries no needle at all. Any span shorter than a structural unit leaks while reporting success.
+It refuses any checkout whose origin is not that repository, and redacts before sending, structurally. The credential needles — vendor token prefixes, and case-insensitive password, secret, token and api-key assignments, bearer headers and URL credentials — LOCATE a secret and never define how much is removed — a whole JSON string value, a whole text line, or a whole `-----BEGIN`-to-`-----END` block goes. This is the design the operator chose at the cold-read cap, and the reasoning is worth keeping: `AKIA` is a prefix, so replacing the matched token strips the marker and ships the key; a private key's header matches while its body carries no needle at all. Any span shorter than a structural unit leaks while reporting success.
 
 Originals never leave `~/.config/sh-agent/`. R7 keeps that as the one place harness state lives; a copy going to the operator's own private index is not a second home for it, and R8 says so explicitly so the two rules do not contradict.
 
@@ -65,9 +65,9 @@ This is easy to get wrong when several of those repositories sit side by side on
 
 ## Where things stand
 
-**Built and shipped:** `sh-agent` with install, update, status, diff, uninstall, list, render, adopt and version; `update` refusing a dirty checkout on every path; the installer refusing secret-shaped files and duplicate skill names; `v1.0.0` tagged and signed. 27 skills, 7 agents.
+**Built and shipped:** `sh-agent` with install, update, status, diff, uninstall, list, render, adopt, report and version; `update` refusing a dirty checkout on every path; the installer refusing secret-shaped files and duplicate skill names; `v1.0.0` tagged and signed. 27 skills, 7 agents.
 
-**Decided, not built:** everything in `## The loop back` above. The plan's phase list is the work.
+**The loop back is built:** `sh-agent report` since 2026-09-17, run end to end from the Linux box into the private `styrman-harness-feedback` repository (`.agents/docs/testing/2026-09-17-delivery-rework-e2e.md`). How to run it and what fails: `.agents/docs/deploy/local.md` § Report back. Not yet exercised on real data: a redaction firing, and any place but that one box.
 
 **Open, defaulting to no:** whether this repository becomes public. Only that would let a machine bootstrap with no credential at all, and it is a question about content rather than packaging.
 

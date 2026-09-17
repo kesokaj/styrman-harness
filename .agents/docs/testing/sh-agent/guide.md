@@ -1,6 +1,6 @@
 ---
 owner: verifier
-date: 2026-09-14
+date: 2026-09-17
 ---
 # Verification guide — sh-agent
 
@@ -64,6 +64,26 @@ chmod -R u+w .agents/scratch/<slug>/mirror   # restore before cleanup
 Then confirm the checkout path still rebuilds with
 `<built binary> install --repo <this checkout> --home .agents/scratch/<slug>/home3 --dry-run`
 → `[dry-run] the binary would be rebuilt from <checkout>`.
+
+## 3b. `report`, the feedback loop back (change to `internal/harness/report.go`, `cmd/sh-agent/main.go`'s report wiring, or `reorder`'s `takesValue` map)
+
+Never run `report` without `--dry-run` from a dev or verification session — it pushes
+to the real feedback repository (`git@github.com:kesokaj/styrman-harness-feedback.git`)
+and never touch the real `$HOME`.
+
+```bash
+go run ./cmd/sh-agent report --dry-run --home .agents/scratch/<slug>-home
+```
+
+Must print the destination, the collected/absent files, and the redaction list (what was
+caught — it cannot show a miss), and write nothing (`git status` in a real feedback checkout stays byte-identical before and
+after). `go test ./cmd/... -run TestReorder` covers a new value-flag being added to
+`takesValue`; `go test ./internal/... -run TestReport` covers collection, redaction, and
+the git side (`TestSendReport`, `TestResolveFeedbackFailures`,
+`TestSendReportRefusesRedirectsAndLinks`, against local bare
+repositories under `.agents/scratch/` or Go's own `t.TempDir()`, never the real remote).
+A real end-to-end run against the feedback repository is an e2e-tier check the main
+agent runs and logs, not a bare `verifier` dispatch.
 
 ## 4. Sandbox start of each CLI (change to `context/`, `agents/`, or `skills/`)
 

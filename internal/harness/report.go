@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
@@ -16,22 +17,57 @@ import (
 )
 
 // FeedbackURL is where `sh-agent report` clones the feedback repository on
-// first use. SSH, the same transport and credential the operator already uses
-// for this repository; change it by editing this constant (plan D4).
+// first use, and the only origin it pushes to. SSH, the same transport and
+// credential the operator already uses for this repository; change it by
+// editing this constant (plan D4).
 const FeedbackURL = "git@github.com:kesokaj/styrman-harness-feedback.git"
 
 const redactedValue = "[redacted by sh-agent report]"
 
-// needles LOCATE a credential; they never define how much is removed. AKIA is
+// Needles LOCATE a credential; they never define how much is removed. AKIA is
 // a prefix and a PEM body carries no needle at all, so replacing the matched
 // span would ship the key while reporting it redacted. What goes is always a
 // whole JSON string value, a whole line, or a whole BEGIN-to-END block (D9).
-var needles = []string{"-----BEGIN", "PRIVATE KEY", "AKIA", "AIza", "ya29.", "token=", "password="}
+//
+// prefixNeedles are vendor token shapes, matched case-sensitively: they are
+// distinctive as written. Nothing shorter than a vendor's own prefix is
+// listed — a bare `sk-` would match every "task-".
+var prefixNeedles = []string{
+	"-----BEGIN", "PRIVATE KEY", "AKIA", "ASIA", "AIza", "ya29.", "GOCSPX-",
+	"ghp_", "gho_", "ghs_", "ghu_", "github_pat_", "glpat-",
+	"sk-ant-", "sk-proj-", "xoxb-", "xoxp-", "xoxa-", "xoxs-",
+}
+
+// keywordNeedles are assignment and header shapes, matched without regard to
+// case, because the common forms are GITHUB_TOKEN=, DB_PASSWORD: and
+// Authorization: Bearer (security review 2026-09-17, finding 1). Pattern is
+// the name recorded in report.json, never the matched text.
+var keywordNeedles = []struct {
+	pattern string
+	re      *regexp.Regexp
+}{
+	{"secret assignment", regexp.MustCompile(`(?i)(password|passwd|secret|token|api[_-]?key)[a-z0-9_-]*["']?\s*[:=]`)},
+	{"bearer", regexp.MustCompile(`(?i)bearer\s+\S`)},
+	{"url credentials", regexp.MustCompile(`://[^/\s:@]+:[^/\s@]+@`)},
+}
+
+// A key block opens at a PEM header, or at a header whose dashes a chat UI
+// rewrote, and closes at the matching footer. A footer followed on the same
+// line by another header keeps the block open (two keys concatenated).
+var (
+	blockOpen  = regexp.MustCompile(`-----BEGIN|BEGIN[A-Z ]*PRIVATE KEY`)
+	blockClose = regexp.MustCompile(`-----END[^-]*(-----)?|END[A-Z ]*PRIVATE KEY`)
+)
 
 func needleIn(s string) (string, bool) {
-	for _, n := range needles {
+	for _, n := range prefixNeedles {
 		if strings.Contains(s, n) {
 			return n, true
+		}
+	}
+	for _, k := range keywordNeedles {
+		if k.re.MatchString(s) {
+			return k.pattern, true
 		}
 	}
 	return "", false
@@ -39,7 +75,8 @@ func needleIn(s string) (string, bool) {
 
 // Redaction records where a value was removed and which needle fired — never
 // the text. Line is 1-based and absent for a whole-document walk; Path is the
-// JSON key path when the value sat inside JSON.
+// JSON key path when the value sat inside JSON, and absent when a key itself
+// matched, since that key is the secret.
 type Redaction struct {
 	File         string `json:"file"`
 	Line         int    `json:"line,omitempty"`
@@ -49,9 +86,35 @@ type Redaction struct {
 	Unterminated bool   `json:"unterminated,omitempty"`
 }
 
-// redactLines redacts line-oriented content. With jsonLines, a line that is
-// valid JSON has its string values walked; any other line falls through to
-// the text rule, which never crashes on malformed input.
+// blockEnd returns the index of the line that closes the key block opened on
+// line i, or the last non-empty line and false when nothing closes it.
+func blockEnd(lines []string, i int) (int, bool) {
+	j, off := i, blockOpen.FindStringIndex(lines[i])[1]
+	for j < len(lines) {
+		loc := blockClose.FindStringIndex(lines[j][off:])
+		if loc == nil {
+			j, off = j+1, 0
+			continue
+		}
+		after := off + loc[1]
+		if next := blockOpen.FindStringIndex(lines[j][after:]); next != nil {
+			off = after + next[1]
+			continue
+		}
+		return j, true
+	}
+	last := len(lines) - 1
+	if lines[last] == "" {
+		last--
+	}
+	return last, false
+}
+
+// redactLines redacts line-oriented content. A key block is found first. With
+// jsonLines, a line that is valid JSON has its string values walked, unless a
+// block runs past it; a line the walk leaves carrying a needle (a shadowed
+// duplicate key) and every other line fall through to the text rule, which
+// never crashes on malformed input.
 func redactLines(name string, data []byte, jsonLines bool) ([]byte, []Redaction, error) {
 	lines := strings.SplitAfter(string(data), "\n")
 	var out strings.Builder
@@ -63,44 +126,33 @@ func redactLines(name string, data []byte, jsonLines bool) ([]byte, []Redaction,
 		}
 		body := strings.TrimSuffix(raw, "\n")
 		nl := raw[len(body):]
+		valid := jsonLines && json.Valid([]byte(body))
 
-		if jsonLines && json.Valid([]byte(body)) {
+		if blockOpen.MatchString(body) {
+			end, closed := blockEnd(lines, i)
+			// A key wholly inside one JSON line is a string value: the walk
+			// replaces it and the line stays JSON.
+			if !(valid && closed && end == i) {
+				rec := Redaction{File: name, Line: i + 1, Pattern: "-----BEGIN", Lines: end - i + 1, Unterminated: !closed}
+				last := lines[end]
+				fmt.Fprintf(&out, "[redacted by sh-agent report: %d lines]%s", rec.Lines, last[len(strings.TrimSuffix(last, "\n")):])
+				recs = append(recs, rec)
+				i = end
+				continue
+			}
+		}
+
+		if valid {
 			red, lineRecs, err := redactJSON(name, i+1, []byte(body), false)
 			if err != nil {
 				return nil, nil, err
 			}
-			if lineRecs == nil {
-				out.WriteString(raw)
+			if lineRecs != nil {
+				out.Write(red)
+				out.WriteString(nl)
+				recs = append(recs, lineRecs...)
 				continue
 			}
-			out.Write(red)
-			out.WriteString(nl)
-			recs = append(recs, lineRecs...)
-			continue
-		}
-
-		if strings.Contains(body, "-----BEGIN") {
-			end := -1
-			for j := i; j < len(lines); j++ {
-				if strings.Contains(lines[j], "-----END") {
-					end = j
-					break
-				}
-			}
-			rec := Redaction{File: name, Line: i + 1, Pattern: "-----BEGIN"}
-			if end < 0 {
-				end = len(lines) - 1
-				if lines[end] == "" {
-					end--
-				}
-				rec.Unterminated = true
-			}
-			rec.Lines = end - i + 1
-			last := lines[end]
-			fmt.Fprintf(&out, "[redacted by sh-agent report: %d lines]%s", rec.Lines, last[len(strings.TrimSuffix(last, "\n")):])
-			recs = append(recs, rec)
-			i = end
-			continue
 		}
 
 		if n, ok := needleIn(body); ok {
@@ -114,9 +166,11 @@ func redactLines(name string, data []byte, jsonLines bool) ([]byte, []Redaction,
 }
 
 // redactJSON walks one JSON value. It returns nil records when nothing fired,
-// so the caller ships the original bytes untouched. A needle in an object KEY
+// so the caller ships the original bytes untouched — or, when the raw bytes
+// still carry a needle, falls back to its text rule. A needle in an object KEY
 // cannot be replaced without colliding keys, so the whole value becomes the
-// marker as a JSON string — still valid JSON, still one line.
+// marker as a JSON string — still valid JSON, still one line — and the record
+// carries no path, which would be the key.
 func redactJSON(name string, line int, data []byte, indent bool) ([]byte, []Redaction, error) {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.UseNumber()
@@ -125,16 +179,19 @@ func redactJSON(name string, line int, data []byte, indent bool) ([]byte, []Reda
 		return nil, nil, fmt.Errorf("%s: decoding JSON that validated: %w", name, err)
 	}
 	var recs []Redaction
-	keyHit := false
+	keyNeedle := ""
 	v = walkJSON(v, "", func(path, needle string, isKey bool) {
+		if isKey && keyNeedle == "" {
+			keyNeedle = needle
+		}
 		recs = append(recs, Redaction{File: name, Line: line, Path: path, Pattern: needle})
-		keyHit = keyHit || isKey
 	})
 	if recs == nil {
 		return nil, nil, nil
 	}
-	if keyHit {
+	if keyNeedle != "" {
 		v = redactedValue
+		recs = []Redaction{{File: name, Line: line, Pattern: keyNeedle}}
 	}
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
@@ -186,14 +243,18 @@ func walkJSON(v any, path string, fire func(path, needle string, isKey bool)) an
 }
 
 // redactDocument redacts a single JSON document, or treats it as text when it
-// is not JSON.
+// is not JSON, or when the walk found nothing but the raw bytes still carry a
+// needle (a duplicate key shadowing a secret).
 func redactDocument(name string, data []byte) ([]byte, []Redaction, error) {
 	if !json.Valid(data) {
 		return redactLines(name, data, false)
 	}
 	red, recs, err := redactJSON(name, 0, data, true)
-	if err != nil || recs == nil {
-		return data, nil, err
+	if err != nil {
+		return nil, nil, err
+	}
+	if recs == nil {
+		return redactLines(name, data, false)
 	}
 	return append(red, '\n'), recs, nil
 }
@@ -360,6 +421,8 @@ func BuildRecord(home, repo, host string, now time.Time, redactions []Redaction)
 // already be a git checkout and is never cloned into. The default path,
 // ~/.config/sh-agent/feedback, is cloned from url when absent — never on a
 // dry run — through a temporary sibling, so a failed clone leaves nothing.
+// Whichever it is, a checkout that exists must be the feedback repository
+// itself (verifyFeedback) before anything is written into it.
 func ResolveFeedback(explicit, home, url string, dryRun bool) (dir string, present bool, err error) {
 	if explicit != "" {
 		abs, err := filepath.Abs(explicit)
@@ -369,18 +432,14 @@ func ResolveFeedback(explicit, home, url string, dryRun bool) (dir string, prese
 		if !IsCheckout(abs) {
 			return "", false, fmt.Errorf("--feedback-repo %s is not a git checkout; it is never cloned into", explicit)
 		}
-		// report never writes to a harness repository, whichever flag names it.
-		if IsRepo(abs) {
-			return "", false, fmt.Errorf("--feedback-repo %s is a harness checkout, not the feedback repository", explicit)
-		}
-		return abs, true, nil
+		return abs, true, verifyFeedback(abs, url)
 	}
 	dir = filepath.Join(home, ".config", "sh-agent", "feedback")
 	if _, err := os.Lstat(dir); err == nil {
 		if !IsCheckout(dir) {
 			return "", false, fmt.Errorf("%s exists but is not a git checkout; move it aside or pass --feedback-repo", dir)
 		}
-		return dir, true, nil
+		return dir, true, verifyFeedback(dir, url)
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return "", false, err
 	}
@@ -403,6 +462,32 @@ func ResolveFeedback(explicit, home, url string, dryRun bool) (dir string, prese
 	return dir, true, nil
 }
 
+// verifyFeedback refuses any checkout but the feedback repository: dir must be
+// the top of its own checkout and its origin exactly url, compared as
+// configured rather than after insteadOf rewrites. Without it a typo in
+// --feedback-repo, or a directory nested in another repository, commits the
+// operator's corrections into that repository and pushes them to its remote
+// (security review 2026-09-17, finding 3). A harness checkout fails it too.
+func verifyFeedback(dir, url string) error {
+	top, err := gitOut(dir, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return fmt.Errorf("%s: %w", dir, err)
+	}
+	want, err1 := filepath.EvalSymlinks(dir)
+	got, err2 := filepath.EvalSymlinks(top)
+	if err1 != nil || err2 != nil || want != got {
+		return fmt.Errorf("%s is not the top of its own git checkout (git reports %s)", dir, top)
+	}
+	if origin, _ := gitOut(dir, "config", "--get", "remote.origin.url"); origin != url {
+		return fmt.Errorf("%s is not the feedback repository: its origin is %q, not %q", dir, origin, url)
+	}
+	return nil
+}
+
+// gitRedirects are the variables that point git at a repository other than
+// the directory it runs in.
+var gitRedirects = []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_COMMON_DIR"}
+
 // ReportRun is one invocation of `sh-agent report`.
 type ReportRun struct {
 	Home, Repo string // Repo is "" when no harness checkout was found
@@ -417,6 +502,13 @@ type ReportRun struct {
 // checkout, and commits and pushes only the paths it wrote. It runs no git
 // command in the harness repository beyond Inspect.
 func SendReport(r ReportRun, out io.Writer) error {
+	// With any of these set, every git call below would commit and push in
+	// another repository whatever the checkout checks say (finding 3).
+	for _, k := range gitRedirects {
+		if _, set := os.LookupEnv(k); set {
+			return fmt.Errorf("%s is set; report commits only in the feedback checkout — unset it and re-run", k)
+		}
+	}
 	col, err := Collect(r.Home)
 	if err != nil {
 		return err
@@ -500,6 +592,14 @@ func SendReport(r ReportRun, out io.Writer) error {
 // the directory, which is what reserves the name.
 func runDir(feedback, host string, now time.Time, create bool) (string, error) {
 	base := filepath.Join("reports", host, now.Format("2006-01-02-150405"))
+	// The checkout's content comes from a shared remote: a reports or
+	// reports/<host> link pulled from it would carry every write below out of
+	// the checkout, so a link is refused, never followed (BUG-036's rule).
+	for _, rel := range []string{"reports", filepath.Join("reports", host)} {
+		if info, err := os.Lstat(filepath.Join(feedback, rel)); err == nil && !info.IsDir() {
+			return "", fmt.Errorf("%s in the feedback checkout is not a directory; refusing to write through it", rel)
+		}
+	}
 	if create {
 		if err := os.MkdirAll(filepath.Join(feedback, "reports", host), 0o755); err != nil {
 			return "", err
@@ -550,11 +650,9 @@ func commitAndPush(dir string, paths []string, msg string, out io.Writer) error 
 	}
 	fmt.Fprintln(out, stat)
 	// A freshly created feedback repository has no commits, so the clone's
-	// branch is unborn and named after the local git default. Naming it main
-	// before the first commit lets every later plain `git push` match.
-	unborn := false
+	// branch is unborn and named after the local git default; it is named
+	// main before the first commit.
 	if _, err := gitOut(dir, "rev-parse", "--verify", "--quiet", "HEAD"); err != nil {
-		unborn = true
 		if _, err := gitOut(dir, "symbolic-ref", "HEAD", "refs/heads/main"); err != nil {
 			return err
 		}
@@ -563,11 +661,10 @@ func commitAndPush(dir string, paths []string, msg string, out io.Writer) error 
 	if _, err := gitOut(dir, commit...); err != nil {
 		return err
 	}
-	push := []string{"push", "--quiet"}
-	if _, err := gitOut(dir, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"); err != nil || unborn {
-		push = append(push, "-u", "origin", "HEAD")
-	}
-	if _, err := gitOut(dir, push...); err != nil {
+	// Always to origin, which verifyFeedback checked, never to whatever
+	// upstream the branch happens to track; -u sets main's upstream the first
+	// time and is a no-op after.
+	if _, err := gitOut(dir, "push", "--quiet", "-u", "origin", "HEAD"); err != nil {
 		if strings.Contains(err.Error(), "rejected") {
 			return fmt.Errorf("push rejected; run `git -C %s pull --rebase` and re-run — the commit stays local", dir)
 		}

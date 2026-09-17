@@ -376,49 +376,107 @@ func BuildRecord(home string, src Source, host string, now time.Time, redactions
 	return rec, notes
 }
 
-// ResolveFeedback returns the feedback checkout. A path given explicitly must
-// already be a git checkout and is never cloned into. The default path,
-// ~/.config/sh-agent/feedback, is cloned from url when absent — never on a
-// dry run — through a temporary sibling, so a failed clone leaves nothing.
-// Whichever it is, a checkout that exists must be the feedback repository
-// itself (verifyFeedback) before anything is written into it.
-func ResolveFeedback(explicit, home, url string, dryRun bool) (dir string, present bool, err error) {
-	if explicit != "" {
-		abs, err := filepath.Abs(explicit)
-		if err != nil {
-			return "", false, err
-		}
-		if !IsCheckout(abs) {
-			return "", false, fmt.Errorf("--feedback-repo %s is not a git checkout; it is never cloned into", explicit)
-		}
-		return abs, true, verifyFeedback(abs, url)
+// ResolveFeedback returns the checkout named with --feedback-repo. It must
+// already be a git checkout, it is never cloned into, and it must be the
+// feedback repository itself (verifyFeedback) before anything is written into
+// it. Without --feedback-repo a run clones a throwaway instead
+// (cloneThrowaway) and keeps nothing.
+func ResolveFeedback(explicit, url string) (string, error) {
+	abs, err := filepath.Abs(explicit)
+	if err != nil {
+		return "", err
 	}
-	dir = filepath.Join(home, ".config", "sh-agent", "feedback")
-	if _, err := os.Lstat(dir); err == nil {
-		if !IsCheckout(dir) {
-			return "", false, fmt.Errorf("%s exists but is not a git checkout; move it aside or pass --feedback-repo", dir)
-		}
-		return dir, true, verifyFeedback(dir, url)
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return "", false, err
+	if !IsCheckout(abs) {
+		return "", fmt.Errorf("--feedback-repo %s is not a git checkout; it is never cloned into", explicit)
 	}
-	if dryRun {
-		return dir, false, nil
-	}
+	return abs, verifyFeedback(abs, url)
+}
+
+// throwawayDir is the clone one run writes through. It carries the pid so two
+// runs on one machine never share a directory, and it is removed when the run
+// ends, whatever the outcome (D8).
+func throwawayDir(home string) string {
+	return filepath.Join(home, ".config", "sh-agent", fmt.Sprintf("report-%d", os.Getpid()))
+}
+
+// cloneThrowaway makes that clone: blob-less, so no other place's report
+// CONTENT is fetched; --no-checkout plus a sparse checkout of this host's own
+// directory, so no other place's files land on this disk; and depth 1, because
+// one run needs no history. This host's existing run directories do come
+// along, which is what lets runDir pick a name that collides with none of
+// them. A server that does not support the filter makes git warn and send
+// everything — slower, still correct (measured 2026-09-17). empty reports a
+// feedback repository with no commits yet: nothing was checked out and HEAD is
+// unborn, which commitAndPush handles.
+func cloneThrowaway(home, url, host string) (dir string, empty bool, err error) {
+	dir = throwawayDir(home)
 	if err := os.MkdirAll(filepath.Dir(dir), 0o755); err != nil {
 		return "", false, err
 	}
-	tmp := fmt.Sprintf("%s.clone-%d", dir, os.Getpid())
-	_ = os.RemoveAll(tmp)
-	if _, err := gitOut(filepath.Dir(dir), "clone", "--quiet", url, tmp); err != nil {
-		_ = os.RemoveAll(tmp)
-		return "", false, fmt.Errorf("could not reach %s: %v; clone it by hand or pass --feedback-repo", url, err)
-	}
-	if err := os.Rename(tmp, dir); err != nil {
-		_ = os.RemoveAll(tmp)
+	if err := os.RemoveAll(dir); err != nil {
 		return "", false, err
 	}
-	return dir, true, nil
+	fail := func(err error) (string, bool, error) {
+		_ = os.RemoveAll(dir)
+		return "", false, err
+	}
+	if _, err := gitOut(filepath.Dir(dir), "clone", "--quiet", "--filter=blob:none", "--no-checkout", "--depth", "1", url, dir); err != nil {
+		return fail(fmt.Errorf("could not reach %s: %v; check the connection or pass --feedback-repo", url, err))
+	}
+	if err := verifyFeedback(dir, url); err != nil {
+		return fail(err)
+	}
+	if _, err := gitOut(dir, "sparse-checkout", "set", "--no-cone", "reports/"+host+"/"); err != nil {
+		return fail(fmt.Errorf("limiting the clone to reports/%s/: %w", host, err))
+	}
+	if _, err := gitOut(dir, "rev-parse", "--verify", "--quiet", "HEAD"); err != nil {
+		return dir, true, nil // an empty feedback repository: nothing to check out
+	}
+	if _, err := gitOut(dir, "checkout", "--quiet"); err != nil {
+		return fail(fmt.Errorf("checking out reports/%s/: %w", host, err))
+	}
+	return dir, false, nil
+}
+
+// RemoveKeptClone removes the feedback checkout earlier versions kept at
+// ~/.config/sh-agent/feedback, now that a run clones a throwaway and keeps
+// nothing (D9). It removes only that clone, only when it is a checkout of the
+// feedback repository, clean, and not ahead of its upstream; anything else is
+// left where it is and named with the reason, because it holds work this tool
+// did not put there.
+func RemoveKeptClone(home, url string, out io.Writer) error {
+	dir := filepath.Join(home, ".config", "sh-agent", "feedback")
+	if _, err := os.Lstat(dir); errors.Is(err, os.ErrNotExist) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	leave := func(why string) error {
+		fmt.Fprintf(out, "kept %s: %s — remove it by hand when you are done with it\n", dir, why)
+		return nil
+	}
+	if !IsCheckout(dir) {
+		return leave("not a git checkout")
+	}
+	if err := verifyFeedback(dir, url); err != nil {
+		return leave("not the feedback repository")
+	}
+	status, err := gitOut(dir, "status", "--porcelain", "--untracked-files=all")
+	if err != nil {
+		return leave("git could not report its state")
+	}
+	if status != "" {
+		return leave("has uncommitted changes")
+	}
+	// A commit that never reached the remote is the operator's only copy.
+	if ahead, err := gitOut(dir, "rev-list", "--count", "@{upstream}..HEAD"); err == nil && ahead != "0" {
+		return leave(fmt.Sprintf("has %s unpushed commit(s)", ahead))
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "removed the kept feedback clone %s (report no longer keeps one)\n", dir)
+	return nil
 }
 
 // verifyFeedback refuses any checkout but the feedback repository: dir must be
@@ -510,17 +568,18 @@ func SendReport(r ReportRun, out io.Writer) error {
 	}
 	files := append(col.Files, Collected{Name: "report.json", Data: append(recData, '\n')})
 
-	dir, present, err := ResolveFeedback(r.Feedback, r.Home, r.URL, r.DryRun)
-	if err != nil {
-		return err
-	}
-	runRel, err := runDir(dir, host, r.Now, !r.DryRun)
-	if err != nil {
-		return err
-	}
 	if r.DryRun {
-		if !present {
-			fmt.Fprintf(out, "[dry-run] would clone %s into %s\n", r.URL, dir)
+		dir := throwawayDir(r.Home)
+		if r.Feedback != "" {
+			if dir, err = ResolveFeedback(r.Feedback, r.URL); err != nil {
+				return err
+			}
+		} else {
+			fmt.Fprintf(out, "[dry-run] would clone %s into %s, blob-less and limited to reports/%s/, and remove it after the push\n", r.URL, dir, host)
+		}
+		runRel, err := runDir(dir, host, r.Now, false)
+		if err != nil {
+			return err
 		}
 		for _, f := range files {
 			fmt.Fprintf(out, "[dry-run] would write %s\n", filepath.Join(dir, runRel, filepath.FromSlash(f.Name)))
@@ -528,12 +587,65 @@ func SendReport(r ReportRun, out io.Writer) error {
 		return nil
 	}
 
-	if dirty, err := gitOut(dir, "status", "--porcelain", "--untracked-files=all"); err != nil {
-		return fmt.Errorf("reading the feedback checkout's state: %w", err)
-	} else if dirty != "" {
-		fmt.Fprintf(out, "report: left alone in %s, not staged:\n%s\n", dir, dirty)
+	// A checkout the operator named is theirs: it is written into, never
+	// removed, and a rejected push leaves the commit in it. A throwaway clone
+	// is this run's own, so a rejection is retried once from a fresh clone —
+	// there is nowhere for a rejected commit to wait (D8).
+	if r.Feedback != "" {
+		dir, err := ResolveFeedback(r.Feedback, r.URL)
+		if err != nil {
+			return err
+		}
+		if dirty, err := gitOut(dir, "status", "--porcelain", "--untracked-files=all"); err != nil {
+			return fmt.Errorf("reading the feedback checkout's state: %w", err)
+		} else if dirty != "" {
+			fmt.Fprintf(out, "report: left alone in %s, not staged:\n%s\n", dir, dirty)
+		}
+		err = writeAndPush(dir, r.URL, host, files, r.Now, out)
+		if errors.Is(err, errPushRejected) {
+			return fmt.Errorf("push rejected; run `git -C %s pull --rebase` and re-run — the commit stays local", dir)
+		}
+		return err
 	}
 
+	for attempt := 1; ; attempt++ {
+		err := func() error {
+			dir, _, err := cloneThrowaway(r.Home, r.URL, host)
+			if err != nil {
+				return err
+			}
+			// Removed on every path out of this run: a failed push, a refusal,
+			// a panic in a caller. Nothing of the feedback repository is kept.
+			defer func() {
+				if testHooks.beforeRemove != nil {
+					testHooks.beforeRemove(dir)
+				}
+				_ = os.RemoveAll(dir)
+			}()
+			if testHooks.beforePush != nil {
+				testHooks.beforePush(dir, attempt)
+			}
+			return writeAndPush(dir, r.URL, host, files, r.Now, out)
+		}()
+		if !errors.Is(err, errPushRejected) {
+			return err
+		}
+		if attempt == 2 {
+			return errors.New("push rejected twice; re-run `sh-agent report` — nothing is kept locally")
+		}
+		fmt.Fprintln(out, "report: push rejected (another place pushed first); re-cloning and re-applying this run once")
+	}
+}
+
+// writeAndPush writes one run into the checkout at dir and pushes exactly the
+// paths it wrote. The run directory's name is picked inside dir, so a retry
+// from a fresh clone sees the run directories that are now on the remote and
+// never reuses a name.
+func writeAndPush(dir, url, host string, files []Collected, now time.Time, out io.Writer) error {
+	runRel, err := runDir(dir, host, now, true)
+	if err != nil {
+		return err
+	}
 	paths := make([]string, 0, len(files))
 	for _, f := range files {
 		rel := filepath.Join(runRel, filepath.FromSlash(f.Name))
@@ -545,12 +657,20 @@ func SendReport(r ReportRun, out io.Writer) error {
 		}
 		paths = append(paths, rel)
 	}
-	if err := commitAndPush(dir, r.URL, paths, fmt.Sprintf("report: %s %s", host, filepath.Base(runRel)), out); err != nil {
+	if err := commitAndPush(dir, url, paths, fmt.Sprintf("report: %s %s", host, filepath.Base(runRel)), out); err != nil {
 		return err
 	}
 	sha, _ := gitOut(dir, "rev-parse", "--short", "HEAD")
 	fmt.Fprintf(out, "report: sent %s (%s)\n", filepath.ToSlash(runRel), sha)
 	return nil
+}
+
+// testHooks lets the tests look inside a throwaway clone before it is removed,
+// and wedge another place's push in before this run's own. Both are nil in
+// every build but the tests'.
+var testHooks struct {
+	beforePush   func(dir string, attempt int)
+	beforeRemove func(dir string)
 }
 
 // runDir picks reports/<host>/<date>-<HHMMSS>, suffixed -2, -3… when that
@@ -602,6 +722,10 @@ func hostDir(host string) string {
 	return host
 }
 
+// errPushRejected marks a non-fast-forward push: another place pushed between
+// this run's clone and its own push.
+var errPushRejected = errors.New("push rejected")
+
 // commitAndPush stages the named paths only, shows the staged stat, commits
 // those paths only — so anything the operator already staged there stays
 // out — and pushes. Each is its own git call, as the harness's Git rule asks.
@@ -633,7 +757,9 @@ func commitAndPush(dir, url string, paths []string, msg string, out io.Writer) e
 	// same place.
 	if _, err := gitOut(dir, "push", "--quiet", "-u", url, "HEAD:main"); err != nil {
 		if strings.Contains(err.Error(), "rejected") {
-			return fmt.Errorf("push rejected; run `git -C %s pull --rebase` and re-run — the commit stays local", dir)
+			// The caller words it: a named checkout keeps the commit, a
+			// throwaway clone re-clones and re-applies once (D8).
+			return fmt.Errorf("%w: %v", errPushRejected, err)
 		}
 		return fmt.Errorf("push failed, the commit stays local: %w", err)
 	}

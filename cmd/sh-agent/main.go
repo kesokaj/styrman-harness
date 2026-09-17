@@ -10,7 +10,7 @@
 //	sh-agent list                    print the skill and agent inventory
 //	sh-agent render                  print the assembled context file
 //	sh-agent adopt <name|path>       copy a skill from elsewhere into the repo
-//	sh-agent report [--dry-run]      send this machine's learning-loop files and metrics to the feedback repo
+//	sh-agent report [--dry-run]      send this machine's learning-loop files and metrics to the feedback repo, keeping nothing
 //	sh-agent version
 package main
 
@@ -43,7 +43,7 @@ Commands:
   list                    print the skill and agent inventory
   render                  print the assembled context file
   adopt <name|path>       copy a skill installed elsewhere into the repo's skills/ (--force to replace)
-  report [--feedback-repo DIR] [--dry-run]  send a redacted copy of ~/.config/sh-agent and a metrics record to the feedback repo (default checkout ~/.config/sh-agent/feedback, cloned on first use)
+  report [--feedback-repo DIR] [--dry-run]  send a redacted copy of ~/.config/sh-agent and a metrics record to the feedback repo (through a throwaway clone holding only this machine's reports, removed after the push; --feedback-repo names a checkout to write into instead)
   version                 print the build version
 
 Flags accepted by every command:
@@ -408,6 +408,13 @@ func status(src harness.Source, home, vendorFlag string, out io.Writer) error {
 }
 
 func update(repo, home string, checkOnly bool, homeFlag, vendorFlag string, out io.Writer) error {
+	// Earlier versions kept a full clone of the feedback repository in this
+	// home, so every machine held every other machine's reports; `report` now
+	// clones a throwaway and keeps nothing, and update is where the old one
+	// goes (D9). Reported, never fatal: it is not what update came to do.
+	if err := harness.RemoveKeptClone(home, harness.FeedbackURL, out); err != nil {
+		fmt.Fprintf(out, "note: could not remove the kept feedback clone: %v\n", err)
+	}
 	behind, err := harness.Behind(repo)
 	if err != nil {
 		return err

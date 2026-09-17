@@ -48,6 +48,7 @@
 | BUG-058 | 2026-09-17 | internal/harness (report.go — review Outcome accuracy) | fixed | round-2 Outcome marked a finding "fixed by deleting the mechanism" while its second named trigger (`blockEnd`) still leaked | an Outcome marking a finding fixed checks every trigger the finding names against a must-fail test, not only the headline case |
 | BUG-059 | 2026-09-17 | internal/harness (report.go decoder/needle swap) | fixed | replacing the JSON walk's decoder and adding an `authorization` needle each regressed a case the old code had handled (`1e400`, quoted header name) | when replacing a decoder or matcher, run the old implementation's accepted inputs as must-pass cases against the new one before deleting it |
 | BUG-060 | 2026-09-17 | internal/harness (report.go push target claim) | fixed | code/doc claims that the push "cannot be redirected" were disproved by `url.*.insteadOf` and a remote named after the URL, third round on this mechanism | a claim that a destination cannot be redirected names the mechanisms it was checked against; two rounds on one mechanism go to the operator, not a third patch |
+| BUG-061 | 2026-09-17 | agents/changelog (ADR authoring) | fixed | ADR-031 draft named consumer projects (against R8), miscounted rules, invented a "deferred" decision, cited R9 by line numbers | an ADR states only what its dispatch and the diff say; main agent checks an agent-written ADR against the diff before commit, not only the reviewer |
 
 ## Graduated
 

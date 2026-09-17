@@ -2,6 +2,61 @@
 
 A personal agent harness for **Claude Code** and the **Antigravity CLI** (`agy`): one global context file in the [agents.md](https://agents.md) standard, skills in the [Agent Skills](https://agentskills.io) `SKILL.md` standard, subagents, and `sh-agent` — a small Go binary that installs, resyncs, inspects, and removes all of it. No hooks, no gates, no CI.
 
+## How it works
+
+This map is the contract for how the harness reaches a machine and how experience comes back. The strict rules that keep it true are in `AGENTS.md` § How the harness works; `TestHarnessMap` fails when the map names a command the binary does not have.
+
+```mermaid
+flowchart LR
+    subgraph checkoutLane["Your harness checkout"]
+        edit["Edit context/, skills/, agents/, commands/, rules/"]
+        ship["gofmt, vet, test -race<br/>commit and push main"]
+        preflight["/preflight vX.Y.Z<br/>SSH-signed tag"]
+        retroHarness["/retro --harness<br/>applies the proposals queued on this machine"]
+        readReports["Read reports/HOST/RUN/<br/>by hand: not built yet"]
+    end
+    subgraph githubLane["GitHub, private"]
+        harnessRepo[("styrman-harness<br/>main: what every place follows<br/>tags: release markers only")]
+        feedbackRepo[("styrman-harness-feedback<br/>reports/HOST/RUN/")]
+    end
+    subgraph placeLane["Each of the four places"]
+        checkoutPlace["Checkout<br/>the normal path"]
+        bundle["Unpacked bundle<br/>no .git"]
+        installer["sh-agent install / sh-agent update"]
+        homeFiles["~/.claude and ~/.gemini/config<br/>installed files, no repository"]
+        sessions["Claude Code and Antigravity sessions<br/>feedback skill logs, /retro queues"]
+        configDir["~/.config/sh-agent/<br/>feedback.jsonl, retros.jsonl, proposals/, state.json"]
+        reporter["sh-agent report<br/>copy, redact, commit, push to the feedback URL"]
+    end
+    edit --> ship
+    ship -- "git push" --> harnessRepo
+    ship --> preflight
+    preflight -- "tag marks a version" --> harnessRepo
+    harnessRepo -- "clone once, update pulls" --> checkoutPlace
+    checkoutPlace --> installer
+    bundle -- "install only" --> installer
+    installer -- "writes files" --> homeFiles
+    homeFiles -- "read at session start" --> sessions
+    sessions -- "logs" --> configDir
+    configDir -- "copy and redact" --> reporter
+    reporter -- "git push" --> feedbackRepo
+    feedbackRepo -.-> readReports
+    configDir -. "same machine only" .-> retroHarness
+    readReports -.-> edit
+    retroHarness --> edit
+    linkStyle 0,1,4 stroke:#0B7A74,stroke-width:2px
+    linkStyle 2,3 stroke:#8A3A78,stroke-width:2px
+    linkStyle 5,6,7,8 stroke:#3B4FB8,stroke-width:2px
+    linkStyle 9,10,11,12,13,14,15 stroke:#A8660F,stroke-width:2px
+```
+
+Teal is **update**, indigo **install**, amber **report back**, plum **release**. A dashed line is a gap: done by hand, or limited to one machine.
+
+- **Install:** clone `styrman-harness` with your own SSH key or `gh` login, or unpack a bundle with no `.git`, then `go run ./cmd/sh-agent install`. It writes installed files into `~/.claude` and `~/.gemini/config`, and the next session reads them.
+- **Update:** edit and push `main` in your checkout. At each place, when you decide, `sh-agent update` fetches, refuses a dirty checkout, fast-forwards, rebuilds and reinstalls. A bundle place unpacks a newer bundle and installs again. Nothing pushes to a machine.
+- **Report back:** sessions log corrections and retros under `~/.config/sh-agent/`. Before each report, read what was added since the last one. `sh-agent report` sends a redacted copy and a metrics record to `styrman-harness-feedback`. Back at the harness, `/retro --harness` applies the proposals queued on that machine; other places' reports are read by hand.
+- **Release:** `/preflight vX.Y.Z` in your own turn gates, then pushes an SSH-signed tag. A tag marks a version and delivers nothing; places follow `main`.
+
 ## Install
 
 ```bash

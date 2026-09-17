@@ -34,6 +34,17 @@ Every project keeps its scratch in `.agents/scratch/` (gitignored), its failures
 
 The harness reaches a machine one way: a checkout the operator owns, kept current with `sh-agent update`, or an unpacked bundle installed with `sh-agent install`. There is no other channel — no vendored mirror inside a consumer project, no per-project copy, no service. A project that wants the harness uses `sh-agent`; this repository names no consumer project and depends on none. Experience flows back the one way too: `sh-agent report` sends a COPY of this machine's corrections, proposals and a metrics record to the private feedback repository. The originals stay in `~/.config/sh-agent/`, which R7 keeps as the one place that state lives; a copy leaving for the operator's own private index is not a second home for it. (Approved by the operator 2026-09-17, on the exact text above; ADR-030.)
 
+## R9 — Four procedures, set in stone
+
+The harness is operated by four procedures and no others, drawn in `README.md` § How it works:
+
+- **Install:** a place clones `styrman-harness` with the operator's own credential, or unpacks a bundle with no `.git`, and runs `sh-agent install`, which writes installed files into the vendor directories and creates no repository.
+- **Update:** the operator edits, verifies, commits and pushes `main` in their checkout; each place runs `sh-agent update` when the operator decides — fetch, refuse a dirty checkout, fast-forward, rebuild, reinstall. A bundle place unpacks a newer bundle and installs again. Nothing is pushed to a machine.
+- **Report back:** each place runs `sh-agent report`, which sends a redacted copy of `~/.config/sh-agent/` and a metrics record to `styrman-harness-feedback`; the harness is improved from it in the operator's checkout, and that change returns through Update.
+- **Release:** `/preflight vX.Y.Z`, from the operator's own turn, gates the tree and pushes an SSH-signed tag on `main`. A tag marks a version and delivers nothing.
+
+The four procedures and the map change together, only with the operator's explicit approval, an ADR, and one commit carrying the code, the docs and the map. (Approved by the operator 2026-09-17, on the exact text above; ADR-031.)
+
 ## Known limits
 
 - **Antigravity global rules path.** The CLI's customization root is `~/.gemini/config/`; rules there are documented for the workspace form (`.agents/rules/*.md`) and by analogy for the global one. Verified on the Linux box 2026-09-03 (`.agents/docs/testing/2026-09-03-verify-real-home.md`): the CLI reads rules, skills, and agents from there. Confirmed on the Mac for Antigravity on 2026-09-04 (`.agents/docs/testing/2026-09-04-verify-mac-real-home.md`); Claude Code on the Mac is unverified.

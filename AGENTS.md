@@ -6,6 +6,16 @@ Project rules for this repo. They override the global context, which this repo i
 
 The agent harness: one global context (agents.md standard), skills (Agent Skills `SKILL.md` standard), subagents, and `sh-agent`, the Go binary that installs them into Claude Code and the Antigravity CLI. No hooks, no gates, no CI.
 
+## How the harness works
+
+The map in `README.md` § How it works defines how the harness reaches a machine and how experience comes back. It is the contract, not an illustration, and these rules are strict:
+
+1. **Two ways in, one way back, nothing else.** A place gets the harness from a checkout kept current with `sh-agent update`, or from an unpacked bundle installed with `sh-agent install`. Experience comes back only through `sh-agent report` into `styrman-harness-feedback`. No service, no push to a machine, no copy vendored into a project, no timer as the mechanism (R8, ADR-030).
+2. **A tag delivers nothing.** `/preflight vX.Y.Z` makes a signed release marker; every place follows `main`.
+3. **Changing a path is a design question.** Adding, removing or rerouting any line on the map goes to the operator first, gets an ADR, and lands in ONE commit with the code, the docs and the map. A change to install, update, report or release behaviour whose diff does not touch the map is incomplete; `/review --docs` checks for it.
+4. **Dashed means a gap, and it stays honest.** A dashed line is done by hand or limited to one machine; it turns solid in the commit that closes the gap, and nothing is drawn solid before it works for every place.
+5. **The map is pinned by a test.** `TestHarnessMap` fails when the map is missing, when it names an `sh-agent` verb the binary does not have, or when install, update or report is missing from it. The interactive page of the map (a private claude.ai artifact, not in this repository) is only a view: when the map changes, the page is updated from it, and it is never the source.
+
 ## Setup commands
 
 ```bash

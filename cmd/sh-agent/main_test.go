@@ -742,6 +742,68 @@ func gitFixture(t *testing.T) (repo, marker string) {
 	return repo, marker
 }
 
+// TestUpdateKeptCloneCleanupOnlyWhenUpdating: `update` removes the feedback
+// clone older versions kept in this home (D9), but `--check` reports and
+// changes NOTHING — the cleanup sat above its returns, so the read-only mode
+// deleted files (security review 2026-09-17, finding 2).
+func TestUpdateKeptCloneCleanupOnlyWhenUpdating(t *testing.T) {
+	repo, marker := gitFixture(t)
+	home := t.TempDir()
+
+	// A clone that passes RemoveKeptClone's checks without a network: a local
+	// repository whose origin URL is set to the feedback URL it verifies.
+	plant := func(t *testing.T) string {
+		t.Helper()
+		base := t.TempDir()
+		origin := filepath.Join(base, "feedback.git")
+		kept := filepath.Join(home, ".config", "sh-agent", "feedback")
+		_ = os.RemoveAll(kept)
+		if err := os.MkdirAll(filepath.Dir(kept), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		for _, args := range [][]string{
+			{"init", "--quiet", "--bare", "-b", "main", origin},
+			{"clone", "--quiet", origin, kept},
+			{"-C", kept, "remote", "set-url", "origin", harness.FeedbackURL},
+		} {
+			cmd := exec.Command("git", args...)
+			cmd.Dir = base
+			cmd.Env = append(gitCleanEnv(), "GIT_CONFIG_GLOBAL="+filepath.Join(base, "gitconfig"), "GIT_CONFIG_NOSYSTEM=1")
+			if out, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("git %v: %v\n%s", args, err, out)
+			}
+		}
+		return kept
+	}
+
+	kept := plant(t)
+	var out bytes.Buffer
+	if err := update(repo, home, true, "", "", &out); err != nil {
+		t.Fatalf("update --check: %v\n%s", err, out.String())
+	}
+	if _, err := os.Stat(kept); err != nil {
+		t.Errorf("--check removed the kept clone: %v\n%s", err, out.String())
+	}
+	if strings.Contains(out.String(), "removed the kept feedback clone") {
+		t.Errorf("--check reported a removal:\n%s", out.String())
+	}
+
+	// The same update without --check does remove it.
+	out.Reset()
+	if err := update(repo, home, false, "", "", &out); err != nil {
+		t.Fatalf("update: %v\n%s", err, out.String())
+	}
+	if _, err := os.Stat(kept); !os.IsNotExist(err) {
+		t.Errorf("update did not remove the kept clone: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "removed the kept feedback clone") {
+		t.Errorf("the removal was silent:\n%s", out.String())
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Errorf("the install did not run: %v", err)
+	}
+}
+
 // TestUpdateNeverInstallsDirtyTree is BUG-046: `update` deploys the working
 // tree, not the commit it fetched, so a dirty checkout must not be installed
 // on EITHER path. Pull already refused it when behind; the up-to-date path

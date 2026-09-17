@@ -202,7 +202,19 @@ func Reinstall(repo string, args []string, out io.Writer) error {
 }
 
 func gitOut(repo string, args ...string) (string, error) {
+	return gitRun(exec.Command("git", append([]string{"-C", repo}, args...)...), args)
+}
+
+// gitOutC is gitOut with git's messages forced to C, for the one caller that
+// has to RECOGNISE a message: a rejected push, which report retries. Git runs
+// in the operator's own environment everywhere else on purpose.
+func gitOutC(repo string, args ...string) (string, error) {
 	cmd := exec.Command("git", append([]string{"-C", repo}, args...)...)
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
+	return gitRun(cmd, args)
+}
+
+func gitRun(cmd *exec.Cmd, args []string) (string, error) {
 	data, err := cmd.Output()
 	if err != nil {
 		var exit *exec.ExitError

@@ -9,7 +9,9 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -399,6 +401,48 @@ func throwawayDir(home string) string {
 	return filepath.Join(home, ".config", "sh-agent", fmt.Sprintf("report-%d", os.Getpid()))
 }
 
+// sweepInterruptedClones removes report-<pid> directories an earlier run left
+// behind. The deferred removal covers every path the process takes, but not a
+// signal: a SIGINT or a crash leaves a clone of the feedback repository on the
+// disk, which is what this design exists to avoid. A directory whose process
+// is still running is left alone, so two runs never delete each other's clone.
+func sweepInterruptedClones(home string, out io.Writer) {
+	mine := throwawayDir(home)
+	matches, _ := filepath.Glob(filepath.Join(home, ".config", "sh-agent", "report-*"))
+	for _, dir := range matches {
+		if dir == mine {
+			continue // this run's own path, replaced by cloneThrowaway
+		}
+		pid, err := strconv.Atoi(strings.TrimPrefix(filepath.Base(dir), "report-"))
+		if err != nil {
+			continue // not a name this tool wrote
+		}
+		if alive(pid) {
+			continue
+		}
+		if err := os.RemoveAll(dir); err != nil {
+			fmt.Fprintf(out, "report: could not remove %s left by an interrupted run: %v\n", dir, err)
+			continue
+		}
+		fmt.Fprintf(out, "report: removed %s, left by an interrupted run\n", dir)
+	}
+}
+
+// alive reports whether a process with this pid exists. Signal 0 is the
+// portable existence check; a process owned by another user answers
+// EPERM, which is still "alive".
+func alive(pid int) bool {
+	if pid <= 0 {
+		return false
+	}
+	p, err := os.FindProcess(pid)
+	if err != nil {
+		return false
+	}
+	err = p.Signal(syscall.Signal(0))
+	return err == nil || errors.Is(err, os.ErrPermission)
+}
+
 // cloneThrowaway makes that clone: blob-less, so no other place's report
 // CONTENT is fetched; --no-checkout plus a sparse checkout of this host's own
 // directory, so no other place's files land on this disk; and depth 1, because
@@ -421,7 +465,11 @@ func cloneThrowaway(home, url, host string) (dir string, empty bool, err error) 
 		return "", false, err
 	}
 	if _, err := gitOut(filepath.Dir(dir), "clone", "--quiet", "--filter=blob:none", "--no-checkout", "--depth", "1", url, dir); err != nil {
-		return fail(fmt.Errorf("could not reach %s: %v; check the connection or pass --feedback-repo", url, err))
+		// git's message repeats the URL it actually used, which a rewrite
+		// (`url.*.insteadOf`) can turn into one carrying a token;
+		// verifyFeedback never prints an origin for the same reason
+		// (security review 2026-09-17, finding 6).
+		return fail(fmt.Errorf("could not reach %s: %v; check the connection or pass --feedback-repo", scrubCredentials(url), scrubCredentials(err.Error())))
 	}
 	if err := verifyFeedback(dir, url); err != nil {
 		return fail(err)
@@ -438,6 +486,15 @@ func cloneThrowaway(home, url, host string) (dir string, empty bool, err error) 
 	return dir, false, nil
 }
 
+// credentialInURL matches the user[:password] of a URL, the shape a git URL
+// rewrite can add to a message this tool prints.
+var credentialInURL = regexp.MustCompile(`([a-zA-Z][a-zA-Z0-9+.-]*://)[^/@\s]*@`)
+
+// scrubCredentials replaces the credential part of every URL in s.
+func scrubCredentials(s string) string {
+	return credentialInURL.ReplaceAllString(s, "${1}[redacted]@")
+}
+
 // RemoveKeptClone removes the feedback checkout earlier versions kept at
 // ~/.config/sh-agent/feedback, now that a run clones a throwaway and keeps
 // nothing (D9). It removes only that clone, only when it is a checkout of the
@@ -445,8 +502,17 @@ func cloneThrowaway(home, url, host string) (dir string, empty bool, err error) 
 // left where it is and named with the reason, because it holds work this tool
 // did not put there.
 func RemoveKeptClone(home, url string, out io.Writer) error {
-	dir := filepath.Join(home, ".config", "sh-agent", "feedback")
-	if _, err := os.Lstat(dir); errors.Is(err, os.ErrNotExist) {
+	// git is given an absolute path: verifyFeedback compares it against git's
+	// own --show-toplevel, which is absolute, so a relative home — the form
+	// this repo's rules prescribe for testing — would never match and the
+	// clone would always be "kept" for a reason that is not true.
+	absHome, err := filepath.Abs(home)
+	if err != nil {
+		return err
+	}
+	dir := filepath.Join(absHome, ".config", "sh-agent", "feedback")
+	info, err := os.Lstat(dir)
+	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	} else if err != nil {
 		return err
@@ -455,21 +521,45 @@ func RemoveKeptClone(home, url string, out io.Writer) error {
 		fmt.Fprintf(out, "kept %s: %s — remove it by hand when you are done with it\n", dir, why)
 		return nil
 	}
+	// A link is not the clone: what it points at is somewhere the operator
+	// chose, and this function's business is one directory (BUG-036's rule).
+	if info.Mode()&os.ModeSymlink != 0 {
+		return leave("a symlink, not the kept clone")
+	}
 	if !IsCheckout(dir) {
 		return leave("not a git checkout")
 	}
 	if err := verifyFeedback(dir, url); err != nil {
 		return leave("not the feedback repository")
 	}
-	status, err := gitOut(dir, "status", "--porcelain", "--untracked-files=all")
+	// --ignored as well as --untracked-files=all: a file the repository's own
+	// .gitignore hides is still something someone put there, and `status`
+	// says nothing about it otherwise.
+	status, err := gitOut(dir, "status", "--porcelain", "--untracked-files=all", "--ignored")
 	if err != nil {
 		return leave("git could not report its state")
 	}
 	if status != "" {
 		return leave("has uncommitted changes")
 	}
-	// A commit that never reached the remote is the operator's only copy.
-	if ahead, err := gitOut(dir, "rev-list", "--count", "@{upstream}..HEAD"); err == nil && ahead != "0" {
+	// A stash is work that is in no commit and in no working tree, so
+	// `status` says nothing about it.
+	if stashed, err := gitOut(dir, "stash", "list"); err != nil {
+		return leave("git could not report whether it has stashed changes")
+	} else if stashed != "" {
+		return leave("has stashed changes")
+	}
+	// A commit no remote has is the operator's only copy. Counted over ALL
+	// local refs against ALL remote-tracking refs, not `@{upstream}..HEAD`:
+	// a branch with no upstream made that call FAIL, and a failed count was
+	// then read as "nothing to lose" (security review 2026-09-17, finding 1).
+	// Unreadable remote refs make every commit look unpushed, which keeps the
+	// clone — the safe direction. A count that cannot be taken keeps it too.
+	ahead, err := gitOut(dir, "rev-list", "--count", "--all", "--not", "--remotes")
+	if err != nil {
+		return leave("git could not report whether it has unpushed commits")
+	}
+	if ahead != "0" {
 		return leave(fmt.Sprintf("has %s unpushed commit(s)", ahead))
 	}
 	if err := os.RemoveAll(dir); err != nil {
@@ -608,6 +698,7 @@ func SendReport(r ReportRun, out io.Writer) error {
 		return err
 	}
 
+	sweepInterruptedClones(r.Home, out)
 	for attempt := 1; ; attempt++ {
 		err := func() error {
 			dir, _, err := cloneThrowaway(r.Home, r.URL, host)
@@ -755,8 +846,10 @@ func commitAndPush(dir, url string, paths []string, msg string, out io.Writer) e
 	// decide the destination; the operator's URL rewrites still apply (see
 	// FeedbackURL). -u makes a later plain `git pull --rebase` fetch from the
 	// same place.
-	if _, err := gitOut(dir, "push", "--quiet", "-u", url, "HEAD:main"); err != nil {
-		if strings.Contains(err.Error(), "rejected") {
+	// LC_ALL=C so the rejection below is recognised on a machine whose git
+	// speaks another language (security review 2026-09-17).
+	if _, err := gitOutC(dir, "push", "--quiet", "-u", url, "HEAD:main"); err != nil {
+		if strings.Contains(err.Error(), "rejected") || strings.Contains(err.Error(), "non-fast-forward") {
 			// The caller words it: a named checkout keeps the commit, a
 			// throwaway clone re-clones and re-applies once (D8).
 			return fmt.Errorf("%w: %v", errPushRejected, err)

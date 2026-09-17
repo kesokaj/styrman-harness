@@ -881,6 +881,121 @@ func TestRemoveKeptClone(t *testing.T) {
 		}
 	})
 
+	// A branch with no upstream holds commits no remote has, and the old
+	// guard (`@{upstream}..HEAD`) could not even count them: its git call
+	// fails, and a failed count was read as "nothing to lose" (security review
+	// 2026-09-17, finding 1).
+	t.Run("unpushed work on a branch with no upstream is kept", func(t *testing.T) {
+		home := newHome(t)
+		kept := filepath.Join(configDir(home), "feedback")
+		git(t, kept, "checkout", "-q", "-b", "local-only")
+		if err := os.WriteFile(filepath.Join(kept, "mine.md"), []byte("mine\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		git(t, kept, "add", "-A")
+		git(t, kept, "commit", "-qm", "work on a branch with no upstream")
+		var out bytes.Buffer
+		if err := RemoveKeptClone(home, url, &out); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := os.Stat(kept); err != nil {
+			t.Errorf("a clone with unpushed work on an untracked branch must be kept: %v", err)
+		}
+		if !strings.Contains(out.String(), "unpushed commit") {
+			t.Errorf("reason not named:\n%s", out.String())
+		}
+	})
+
+	// A count that cannot be taken is not "nothing to lose": with the refs
+	// unreadable, git exits non-zero and the clone is kept.
+	t.Run("an uncountable clone is kept", func(t *testing.T) {
+		home := newHome(t)
+		kept := filepath.Join(configDir(home), "feedback")
+		packed := filepath.Join(kept, ".git", "packed-refs")
+		if err := os.Chmod(packed, 0o000); err != nil {
+			t.Skip("cannot make the refs unreadable here")
+		}
+		t.Cleanup(func() { _ = os.Chmod(packed, 0o644) })
+		var out bytes.Buffer
+		if err := RemoveKeptClone(home, url, &out); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := os.Stat(kept); err != nil {
+			t.Errorf("a clone whose refs cannot be read must be kept: %v", err)
+		}
+		if !strings.Contains(out.String(), "kept ") {
+			t.Errorf("reason not named:\n%s", out.String())
+		}
+	})
+
+	// A stash holds work that is in no commit and no working tree.
+	t.Run("stashed work is kept", func(t *testing.T) {
+		home := newHome(t)
+		kept := filepath.Join(configDir(home), "feedback")
+		if err := os.WriteFile(filepath.Join(kept, "reports", "dave", "2026-09-01-000000", "report.json"), []byte("changed\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		git(t, kept, "stash", "push", "-q")
+		var out bytes.Buffer
+		if err := RemoveKeptClone(home, url, &out); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := os.Stat(kept); err != nil {
+			t.Errorf("a clone with a stash must be kept: %v", err)
+		}
+		if !strings.Contains(out.String(), "stash") {
+			t.Errorf("reason not named:\n%s", out.String())
+		}
+	})
+
+	// A link at that path is not the clone: removing it would be removing
+	// whatever it points at from the operator's view (BUG-036's rule).
+	t.Run("a symlink there is kept", func(t *testing.T) {
+		home := filepath.Join(t.TempDir(), "home")
+		if err := os.MkdirAll(configDir(home), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		target := filepath.Join(base, "link-target")
+		git(t, base, "clone", "-q", url, target)
+		if err := os.Symlink(target, filepath.Join(configDir(home), "feedback")); err != nil {
+			t.Skip("symlinks unavailable here")
+		}
+		var out bytes.Buffer
+		if err := RemoveKeptClone(home, url, &out); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := os.Lstat(filepath.Join(configDir(home), "feedback")); err != nil {
+			t.Errorf("the link was removed: %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(target, ".git")); err != nil {
+			t.Errorf("the link's target was removed: %v", err)
+		}
+		if !strings.Contains(out.String(), "symlink") {
+			t.Errorf("reason not named:\n%s", out.String())
+		}
+	})
+
+	// A relative --home is what this repo's own rules prescribe for testing
+	// (`--home .agents/scratch/x`), so the path is resolved before git sees it.
+	t.Run("a relative home still resolves", func(t *testing.T) {
+		home := newHome(t)
+		wd, err := os.Getwd()
+		if err != nil {
+			t.Fatal(err)
+		}
+		rel, err := filepath.Rel(wd, home)
+		if err != nil {
+			t.Skip("no relative path from the working directory")
+		}
+		var out bytes.Buffer
+		if err := RemoveKeptClone(rel, url, &out); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := os.Stat(filepath.Join(configDir(home), "feedback")); !os.IsNotExist(err) {
+			t.Errorf("a clean clone under a relative home was not removed: %v", err)
+		}
+	})
+
 	t.Run("nothing there says nothing", func(t *testing.T) {
 		home := filepath.Join(t.TempDir(), "home")
 		var out bytes.Buffer
@@ -892,4 +1007,66 @@ func TestRemoveKeptClone(t *testing.T) {
 		}
 	})
 	_ = origin
+}
+
+// TestSendReportSweepsInterruptedClones: a run killed before its deferred
+// removal (SIGINT, a crash) leaves report-<pid> behind, holding a clone of the
+// feedback repository — the very thing this phase removes from a machine. The
+// next run sweeps such a directory when its process is gone, and leaves one
+// whose process is still alive (security review 2026-09-17).
+func TestSendReportSweepsInterruptedClones(t *testing.T) {
+	gitEnv(t)
+	base := t.TempDir()
+	url := seedFeedback(t, base)
+	home := filepath.Join(base, "home")
+	writeConfig(t, home, "feedback.jsonl", `{"user_quote":"a correction"}`+"\n")
+
+	// A pid that has exited, and one that is alive (this test process).
+	done := exec.Command("true")
+	if err := done.Run(); err != nil {
+		t.Fatal(err)
+	}
+	stale := filepath.Join(configDir(home), fmt.Sprintf("report-%d", done.Process.Pid))
+	// pid 1 is alive and is never this process, whose own report-<pid> path
+	// the run under test clones into.
+	alive := filepath.Join(configDir(home), "report-1")
+	for _, dir := range []string{stale, alive} {
+		if err := os.MkdirAll(filepath.Join(dir, "reports"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var out bytes.Buffer
+	if err := SendReport(ReportRun{Home: home, URL: url, Host: "dave", Now: time.Now()}, &out); err != nil {
+		t.Fatalf("report: %v\n%s", err, out.String())
+	}
+	if _, err := os.Stat(stale); !os.IsNotExist(err) {
+		t.Errorf("an interrupted run's clone was not swept: %v", err)
+	}
+	if !strings.Contains(out.String(), "removed") {
+		t.Errorf("the sweep was silent:\n%s", out.String())
+	}
+	if _, err := os.Stat(alive); err != nil {
+		t.Errorf("a live run's clone was swept: %v", err)
+	}
+}
+
+// TestCloneFailureDoesNotPrintCredentials: git's stderr can carry the URL a
+// rewrite produced, credentials included; verifyFeedback deliberately never
+// prints an origin, and this path must not either (security review
+// 2026-09-17, finding 6).
+func TestCloneFailureDoesNotPrintCredentials(t *testing.T) {
+	gitEnv(t)
+	home := filepath.Join(t.TempDir(), "home")
+	url := "https://x-access-token:ghs_FAKETOKEN@example.invalid/kesokaj/nope.git"
+	err := SendReport(ReportRun{Home: home, URL: url, Host: "dave", Now: time.Now()}, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("cloning an unreachable URL must fail")
+	}
+	if strings.Contains(err.Error(), "ghs_FAKETOKEN") {
+		t.Errorf("the error carries the credential: %v", err)
+	}
+	if !strings.Contains(err.Error(), "could not reach") {
+		t.Errorf("err = %v, want it to name the unreachable repository", err)
+	}
 }

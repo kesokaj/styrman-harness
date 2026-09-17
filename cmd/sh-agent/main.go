@@ -408,13 +408,6 @@ func status(src harness.Source, home, vendorFlag string, out io.Writer) error {
 }
 
 func update(repo, home string, checkOnly bool, homeFlag, vendorFlag string, out io.Writer) error {
-	// Earlier versions kept a full clone of the feedback repository in this
-	// home, so every machine held every other machine's reports; `report` now
-	// clones a throwaway and keeps nothing, and update is where the old one
-	// goes (D9). Reported, never fatal: it is not what update came to do.
-	if err := harness.RemoveKeptClone(home, harness.FeedbackURL, out); err != nil {
-		fmt.Fprintf(out, "note: could not remove the kept feedback clone: %v\n", err)
-	}
 	behind, err := harness.Behind(repo)
 	if err != nil {
 		return err
@@ -443,6 +436,15 @@ func update(repo, home string, checkOnly bool, homeFlag, vendorFlag string, out 
 			what = "could not be checked for uncommitted changes (git did not report its status)"
 		}
 		return fmt.Errorf("%s %s and `update` installs the working tree, not the fetched commit; commit or stash them, or run `sh-agent install` to deploy them deliberately", repo, what)
+	}
+	// Earlier versions kept a full clone of the feedback repository in this
+	// home, so every machine held every other machine's reports; `report` now
+	// clones a throwaway and keeps nothing, and update is where the old one
+	// goes (D9). Below every `--check` return: that mode reports and changes
+	// nothing (security review 2026-09-17, finding 2). Reported, never fatal:
+	// it is not what update came to do.
+	if err := harness.RemoveKeptClone(home, harness.FeedbackURL, out); err != nil {
+		fmt.Fprintf(out, "note: could not remove the kept feedback clone: %v\n", err)
 	}
 	if behind > 0 {
 		if err := harness.Pull(repo, out); err != nil {

@@ -44,8 +44,8 @@ func TestSkillAndAgentNamesMustBeOneLocalSegment(t *testing.T) {
 			"---\nname: "+tc.name+"\ndescription: \"a skill\"\n---\nbody\n")
 		writeFile(t, filepath.Join(repo, "agents", "file.md"),
 			"---\nname: "+tc.name+"\ndescription: \"an agent\"\n---\nbody\n")
-		_, serr := LoadSkills(repo)
-		_, aerr := LoadAgents(repo)
+		_, serr := LoadSkills(DirSource(repo))
+		_, aerr := LoadAgents(DirSource(repo))
 		if tc.bad {
 			if serr == nil || !strings.Contains(serr.Error(), "dir/SKILL.md") {
 				t.Errorf("name %q: skills loader err = %v, want a refusal naming dir/SKILL.md", tc.name, serr)
@@ -77,7 +77,7 @@ func TestResyncNeverFollowsANonLocalManifestEntry(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err := Install("r", home, nil, "", false, &out); err != nil {
+	if err := Install(DirSource("r"), home, nil, "", false, &out); err != nil {
 		t.Fatalf("install with an empty plan: %v\n%s", err, out.String())
 	}
 	if _, err := os.Stat(stale); !os.IsNotExist(err) {
@@ -119,7 +119,7 @@ func TestSkillFilesAndAdoptCopiesRefuseSymlinks(t *testing.T) {
 	if err := os.Symlink(outside, filepath.Join(dir, "link.md")); err != nil {
 		t.Skip("symlinks unavailable here")
 	}
-	if _, err := Plan(repo, nil, ""); err == nil || !strings.Contains(err.Error(), "symlink") {
+	if _, err := Plan(DirSource(repo), nil, ""); err == nil || !strings.Contains(err.Error(), "symlink") {
 		t.Fatalf("Plan err = %v, want a symlink refusal", err)
 	}
 	if err := copyTree(dir, t.TempDir()); err == nil || !strings.Contains(err.Error(), "symlink") {
@@ -162,7 +162,7 @@ func TestContextAgentsAndDocsRefuseSymlinks(t *testing.T) {
 			if err := os.Symlink(outside, link); err != nil {
 				t.Skip("symlinks unavailable here")
 			}
-			_, err := Plan(repo, nil, "")
+			_, err := Plan(DirSource(repo), nil, "")
 			if err == nil || !strings.Contains(err.Error(), "symlink") {
 				t.Errorf("Plan err = %v, want a symlink refusal naming %s", err, link)
 			}
@@ -185,10 +185,10 @@ func TestSymlinkedSkillMdIsRefused(t *testing.T) {
 	if err := os.Symlink(outside, filepath.Join(dir, "SKILL.md")); err != nil {
 		t.Skip("symlinks unavailable here")
 	}
-	if _, err := LoadSkills(repo); err == nil || !strings.Contains(err.Error(), "symlink") {
+	if _, err := LoadSkills(DirSource(repo)); err == nil || !strings.Contains(err.Error(), "symlink") {
 		t.Errorf("LoadSkills err = %v, want a symlink refusal", err)
 	}
-	if _, err := Plan(repo, nil, ""); err == nil || !strings.Contains(err.Error(), "symlink") {
+	if _, err := Plan(DirSource(repo), nil, ""); err == nil || !strings.Contains(err.Error(), "symlink") {
 		t.Errorf("Plan err = %v, want a symlink refusal", err)
 	}
 }
@@ -202,7 +202,7 @@ func TestSkillDirWithoutSkillMdIsSkipped(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(repo, "skills", "notaskill"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	skills, err := LoadSkills(repo)
+	skills, err := LoadSkills(DirSource(repo))
 	if err != nil {
 		t.Fatalf("LoadSkills: %v", err)
 	}
@@ -211,8 +211,8 @@ func TestSkillDirWithoutSkillMdIsSkipped(t *testing.T) {
 	}
 }
 
-// A managed directory that is itself a symlink is refused too: os.ReadDir and
-// filepath.Glob follow a directory link, so guarding the leaf files alone let
+// A managed directory that is itself a symlink is refused too: os.DirFS, like
+// os.ReadDir and filepath.Glob before it, follows a directory link, so guarding the leaf files alone let
 // the same payload through one path segment up (BUG-036, review round 2).
 func TestManagedDirsRefuseSymlinks(t *testing.T) {
 	skillMD := "---\nname: s\ndescription: \"x\"\n---\nbody\n"
@@ -242,7 +242,7 @@ func TestManagedDirsRefuseSymlinks(t *testing.T) {
 			if err := os.Symlink(outside, filepath.Join(repo, dir)); err != nil {
 				t.Skip("symlinks unavailable here")
 			}
-			if _, err := Plan(repo, nil, ""); err == nil || !strings.Contains(err.Error(), "symlink") {
+			if _, err := Plan(DirSource(repo), nil, ""); err == nil || !strings.Contains(err.Error(), "symlink") {
 				t.Errorf("Plan err = %v, want a symlink refusal naming %s", err, filepath.Join(repo, dir))
 			}
 		})

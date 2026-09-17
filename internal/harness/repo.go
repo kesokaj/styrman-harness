@@ -11,21 +11,23 @@ import (
 	"strings"
 )
 
-// FindRepo locates the harness checkout: an explicit path, then $SH_AGENT_REPO,
+// ResolveSource locates the harness: an explicit path, then $SH_AGENT_REPO,
 // then the working directory and its parents, then the path the last install
-// recorded — so `sh-agent update` works from anywhere once installed. A path
-// the operator named is used or refused, never silently replaced by one the
-// walk finds: install builds and runs the checkout's code, so a typo must
-// not hand that to whatever harness-shaped tree the shell happens to be in.
-func FindRepo(explicit, home string) (string, error) {
+// recorded — so `sh-agent update` works from anywhere once installed — and
+// last, in a release binary only, the files built into it (D14). A path the
+// operator named is used or refused, never silently replaced by one the walk
+// finds or by the embedded files (D15): install builds and runs the
+// checkout's code, so a typo must not hand that to whatever harness-shaped
+// tree the shell happens to be in. version is the running binary's.
+func ResolveSource(explicit, home, version string) (Source, error) {
 	for _, named := range []string{explicit, os.Getenv("SH_AGENT_REPO")} {
 		if named == "" {
 			continue
 		}
 		if !IsRepo(named) {
-			return "", fmt.Errorf("%s is not a harness checkout (no context/AGENTS.md and skills/)", named)
+			return Source{}, fmt.Errorf("%s is not a harness checkout (no context/AGENTS.md and skills/)", named)
 		}
-		return filepath.Abs(named)
+		return absSource(named)
 	}
 	var candidates []string
 	if wd, err := os.Getwd(); err == nil {
@@ -36,15 +38,27 @@ func FindRepo(explicit, home string) (string, error) {
 			}
 		}
 	}
-	if st, found, err := LoadState(home); err == nil && found {
+	// An embedded install records a release, not a path (EmbeddedPrefix).
+	if st, found, err := LoadState(home); err == nil && found && !strings.HasPrefix(st.Repo, EmbeddedPrefix) {
 		candidates = append(candidates, st.Repo)
 	}
 	for _, c := range candidates {
 		if c != "" && IsRepo(c) {
-			return filepath.Abs(c)
+			return absSource(c)
 		}
 	}
-	return "", errors.New("harness repo not found: run from inside the checkout, pass --repo, or set SH_AGENT_REPO")
+	if IsReleaseVersion(version) {
+		return EmbeddedSource(version), nil
+	}
+	return Source{}, errors.New("harness repo not found: run from inside the checkout, pass --repo, or set SH_AGENT_REPO")
+}
+
+func absSource(dir string) (Source, error) {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return Source{}, err
+	}
+	return DirSource(abs), nil
 }
 
 // IsRepo reports whether dir looks like the harness repo.
@@ -188,7 +202,19 @@ func Reinstall(repo string, args []string, out io.Writer) error {
 }
 
 func gitOut(repo string, args ...string) (string, error) {
+	return gitRun(exec.Command("git", append([]string{"-C", repo}, args...)...), args)
+}
+
+// gitOutC is gitOut with git's messages forced to C, for the one caller that
+// has to RECOGNISE a message: a rejected push, which report retries. Git runs
+// in the operator's own environment everywhere else on purpose.
+func gitOutC(repo string, args ...string) (string, error) {
 	cmd := exec.Command("git", append([]string{"-C", repo}, args...)...)
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
+	return gitRun(cmd, args)
+}
+
+func gitRun(cmd *exec.Cmd, args []string) (string, error) {
 	data, err := cmd.Output()
 	if err != nil {
 		var exit *exec.ExitError

@@ -3,7 +3,6 @@ package harness
 import (
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -62,10 +61,11 @@ type File struct {
 //	workflows/<name>.md   → same as commands/
 //	rules/<name>.md       → .claude/rules/<name>.md,    .gemini/config/rules/<name>.md
 //
+// src is the checkout, plain copy, or embedded files to read.
 // vendor selects which targets to generate ("all", "antigravity", or "claude").
 // selfExe is the running binary, copied to ~/.local/bin so `sh-agent update`
 // works from any directory; pass nil to skip it.
-func Plan(repo string, selfExe []byte, vendor string) ([]File, error) {
+func Plan(src Source, selfExe []byte, vendor string) ([]File, error) {
 	v, err := NormalizeVendor(vendor)
 	if err != nil {
 		return nil, err
@@ -73,11 +73,11 @@ func Plan(repo string, selfExe []byte, vendor string) ([]File, error) {
 	wantClaude := v == VendorAll || v == VendorClaude
 	wantAgy := v == VendorAll || v == VendorAntigravity
 
-	inv, err := LoadInventory(repo)
+	inv, err := LoadInventory(src)
 	if err != nil {
 		return nil, err
 	}
-	context, err := RenderContext(repo, inv)
+	context, err := RenderContext(src, inv)
 	if err != nil {
 		return nil, err
 	}
@@ -96,17 +96,17 @@ func Plan(repo string, selfExe []byte, vendor string) ([]File, error) {
 	}
 
 	for _, s := range inv.Skills {
-		err := filepath.WalkDir(s.Dir, func(path string, d fs.DirEntry, err error) error {
+		err := fs.WalkDir(src.FS, s.Dir, func(p string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
-			// A link is refused, not followed: os.ReadFile would deploy the
+			// A link is refused, not followed: reading it would deploy the
 			// TARGET'S bytes under the LINK'S mode (d.Info reports the link, and
 			// `|0o600` on a link's 0777 ships a world-writable file into
 			// ~/.claude) — an arbitrary-file read into every consumer home
 			// (security review 2026-09-14). A skill ships regular files only.
 			if d.Type()&fs.ModeSymlink != 0 {
-				return fmt.Errorf("%s is a symlink — a skill ships regular files only", path)
+				return fmt.Errorf("%s is a symlink — a skill ships regular files only", src.path(p))
 			}
 			if d.IsDir() || d.Name() == ".DS_Store" {
 				return nil
@@ -118,17 +118,14 @@ func Plan(repo string, selfExe []byte, vendor string) ([]File, error) {
 			// step that would spread them (security review 2026-09-16). The
 			// names match the context's Git rule.
 			if secretShaped(d.Name()) {
-				return fmt.Errorf("%s is a secret-shaped file — install refuses to deploy it; move it out of the skill", path)
+				return fmt.Errorf("%s is a secret-shaped file — install refuses to deploy it; move it out of the skill", src.path(p))
 			}
-			rel, err := filepath.Rel(s.Dir, path)
-			if err != nil {
-				return err
-			}
+			rel := filepath.FromSlash(strings.TrimPrefix(p, s.Dir+"/"))
 			info, err := d.Info()
 			if err != nil {
 				return err
 			}
-			data, err := os.ReadFile(path)
+			data, err := fs.ReadFile(src.FS, p)
 			if err != nil {
 				return err
 			}

@@ -2,8 +2,8 @@ package harness
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
+	"io/fs"
+	"path"
 	"sort"
 	"strings"
 )
@@ -20,16 +20,15 @@ const claudeStub = Marker + "\n@AGENTS.md\n"
 
 // RenderContext assembles the deployed context: context/AGENTS.md first,
 // every other context/*.md in name order, then the compact inventory.
-func RenderContext(repo string, inv Inventory) ([]byte, error) {
-	if err := checkManagedTree(repo); err != nil {
+func RenderContext(src Source, inv Inventory) ([]byte, error) {
+	if err := checkManagedTree(src); err != nil {
 		return nil, err
 	}
-	dir := filepath.Join(repo, "context")
-	main, err := os.ReadFile(filepath.Join(dir, "AGENTS.md"))
+	main, err := fs.ReadFile(src.FS, "context/AGENTS.md")
 	if err != nil {
 		return nil, fmt.Errorf("reading context: %w", err)
 	}
-	extras, err := filepath.Glob(filepath.Join(dir, "*.md"))
+	extras, err := fs.Glob(src.FS, "context/*.md")
 	if err != nil {
 		return nil, err
 	}
@@ -39,10 +38,10 @@ func RenderContext(repo string, inv Inventory) ([]byte, error) {
 	b.WriteString(Marker + "\n")
 	b.Write(main)
 	for _, p := range extras {
-		if filepath.Base(p) == "AGENTS.md" {
+		if path.Base(p) == "AGENTS.md" {
 			continue
 		}
-		data, err := os.ReadFile(p)
+		data, err := fs.ReadFile(src.FS, p)
 		if err != nil {
 			return nil, err
 		}

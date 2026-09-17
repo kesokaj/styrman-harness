@@ -3,7 +3,9 @@ package harness
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -13,7 +15,7 @@ import (
 type Skill struct {
 	Name        string
 	Description string
-	Dir         string // absolute, symlinks resolved
+	Dir         string // skills/<dir> inside the Source
 	SlashOnly   bool   // disable-model-invocation: the user types /name
 }
 
@@ -78,34 +80,19 @@ func validName(kind, file, name string) error {
 	return nil
 }
 
-// readRegular reads a file the repo ships, refusing a link. checkManagedTree
-// covers the managed directories and every entry in them; this guards the one
-// read it cannot reach, skills/<name>/SKILL.md, because skills/<name> may
-// itself be a link that LoadSkills resolves (BUG-036).
-func readRegular(path string) ([]byte, error) {
-	info, err := os.Lstat(path)
-	if err != nil {
-		return nil, err
-	}
-	if info.Mode()&os.ModeSymlink != 0 {
-		return nil, fmt.Errorf("%s is a symlink — the repo ships regular files only", path)
-	}
-	if !info.Mode().IsRegular() {
-		return nil, fmt.Errorf("%s is not a regular file — the repo ships regular files only", path)
-	}
-	return os.ReadFile(path)
-}
-
-// LoadInventory reads every customization directory of the repo.
 // checkManagedTree refuses a symbolic link anywhere sh-agent reads the repo's
 // own bytes: each managed directory, and every entry directly inside the flat
-// ones. os.ReadDir and filepath.Glob follow a directory link and os.ReadFile
-// follows a file link, so either deploys bytes from outside the repo into
-// every consumer home — and for context/ into the AGENTS.md both CLIs send to
-// the model (BUG-036). One check at the boundary, so no reader can forget it.
-func checkManagedTree(repo string) error {
+// ones. os.DirFS follows a directory link on ReadDir and Glob and a file link
+// on ReadFile, so either deploys bytes from outside the repo into every
+// consumer home — and for context/ into the AGENTS.md both CLIs send to the
+// model (BUG-036). One check at the boundary, so no reader can forget it. It
+// runs only for a tree on disk: the embedded files hold no link.
+func checkManagedTree(src Source) error {
+	if src.Dir == "" {
+		return nil
+	}
 	for _, dir := range []string{"context", "agents", "commands", "rules", "workflows", "skills"} {
-		p := filepath.Join(repo, dir)
+		p := src.path(dir)
 		info, err := os.Lstat(p)
 		if errors.Is(err, os.ErrNotExist) {
 			continue
@@ -118,8 +105,8 @@ func checkManagedTree(repo string) error {
 		}
 		if !info.IsDir() || dir == "skills" {
 			// skills/<name> may be a link: `npx skills add -g` leaves one and
-			// LoadSkills resolves it. A skill's own files are walked in
-			// plan.go, and its SKILL.md is read with readRegular.
+			// os.DirFS follows it. A skill's own files are walked in plan.go,
+			// and its SKILL.md is read with readRegular.
 			continue
 		}
 		entries, err := os.ReadDir(p)
@@ -135,22 +122,23 @@ func checkManagedTree(repo string) error {
 	return nil
 }
 
-func LoadInventory(repo string) (Inventory, error) {
+// LoadInventory reads every customization directory of the source.
+func LoadInventory(src Source) (Inventory, error) {
 	var inv Inventory
-	if err := checkManagedTree(repo); err != nil {
+	if err := checkManagedTree(src); err != nil {
 		return inv, err
 	}
 	var err error
-	if inv.Skills, err = LoadSkills(repo); err != nil {
+	if inv.Skills, err = LoadSkills(src); err != nil {
 		return inv, err
 	}
-	if inv.Agents, err = LoadAgents(repo); err != nil {
+	if inv.Agents, err = LoadAgents(src); err != nil {
 		return inv, err
 	}
-	if inv.Commands, err = LoadDocs(repo, "commands", "workflows"); err != nil {
+	if inv.Commands, err = LoadDocs(src, "commands", "workflows"); err != nil {
 		return inv, err
 	}
-	if inv.Rules, err = LoadDocs(repo, "rules"); err != nil {
+	if inv.Rules, err = LoadDocs(src, "rules"); err != nil {
 		return inv, err
 	}
 	return inv, nil
@@ -159,11 +147,10 @@ func LoadInventory(repo string) (Inventory, error) {
 // LoadSkills reads every skills/<name>/SKILL.md. A directory without a
 // SKILL.md is ignored; one with a SKILL.md but no description is an error,
 // because the description is the only thing either CLI shows the model.
-func LoadSkills(repo string) ([]Skill, error) {
-	root := filepath.Join(repo, "skills")
-	entries, err := os.ReadDir(root)
+func LoadSkills(src Source) ([]Skill, error) {
+	entries, err := fs.ReadDir(src.FS, "skills")
 	if err != nil {
-		return nil, fmt.Errorf("reading %s: %w", root, err)
+		return nil, fmt.Errorf("reading %s: %w", src.path("skills"), err)
 	}
 	var skills []Skill
 	// Two skills of the same name install to one destination, so the second
@@ -174,20 +161,23 @@ func LoadSkills(repo string) ([]Skill, error) {
 	// (code review 2026-09-16).
 	byName := map[string]string{}
 	for _, e := range entries {
-		dir, err := filepath.EvalSymlinks(filepath.Join(root, e.Name()))
+		dir := path.Join("skills", e.Name())
+		// fs.Stat follows a link, so a skills/<name> link to a directory is a
+		// skill and a dangling one is refused out loud.
+		info, err := fs.Stat(src.FS, dir)
 		if err != nil {
 			return nil, fmt.Errorf("resolving skill %s: %w", e.Name(), err)
 		}
-		if info, err := os.Stat(dir); err != nil || !info.IsDir() {
+		if !info.IsDir() {
 			continue
 		}
-		data, err := readRegular(filepath.Join(dir, "SKILL.md"))
+		data, err := src.readRegular(path.Join(dir, "SKILL.md"))
 		if err != nil {
 			// No SKILL.md means the directory is not a skill. Any other
 			// error, a symlinked SKILL.md above all, is refused out loud:
 			// plan.go's walk only visits skills this loader returned, so a
 			// silent skip would drop the refusal altogether (BUG-036).
-			if errors.Is(err, os.ErrNotExist) {
+			if errors.Is(err, fs.ErrNotExist) {
 				continue
 			}
 			return nil, err
@@ -226,66 +216,67 @@ func LoadSkills(repo string) ([]Skill, error) {
 }
 
 // LoadAgents reads every agents/*.md in Claude Code's subagent format.
-func LoadAgents(repo string) ([]Agent, error) {
-	paths, err := filepath.Glob(filepath.Join(repo, "agents", "*.md"))
+func LoadAgents(src Source) ([]Agent, error) {
+	paths, err := fs.Glob(src.FS, "agents/*.md")
 	if err != nil {
 		return nil, err
 	}
 	var agents []Agent
 	for _, p := range paths {
-		raw, err := os.ReadFile(p)
+		raw, err := fs.ReadFile(src.FS, p)
 		if err != nil {
 			return nil, err
 		}
 		front, body, err := Split(string(raw))
 		if err != nil {
-			return nil, fmt.Errorf("agent %s: %w", filepath.Base(p), err)
+			return nil, fmt.Errorf("agent %s: %w", path.Base(p), err)
 		}
 		if err := Lint(front); err != nil {
-			return nil, fmt.Errorf("agent %s: %w", filepath.Base(p), err)
+			return nil, fmt.Errorf("agent %s: %w", path.Base(p), err)
 		}
 		fm := Parse(front)
 		name := fm["name"]
 		if name == "" {
-			name = strings.TrimSuffix(filepath.Base(p), ".md")
+			name = strings.TrimSuffix(path.Base(p), ".md")
 		}
-		if err := validName("agent", filepath.Base(p), name); err != nil {
+		if err := validName("agent", path.Base(p), name); err != nil {
 			return nil, err
 		}
 		if fm["description"] == "" {
 			return nil, fmt.Errorf("agent %s: no description", name)
 		}
-		agents = append(agents, Agent{Name: name, Description: fm["description"], Path: p, Front: fm, Body: body, Raw: raw})
+		agents = append(agents, Agent{Name: name, Description: fm["description"], Path: src.path(p), Front: fm, Body: body, Raw: raw})
 	}
 	sort.Slice(agents, func(i, j int) bool { return agents[i].Name < agents[j].Name })
 	return agents, nil
 }
 
-// LoadDocs reads every *.md directly under the named repo directories.
+// LoadDocs reads every *.md directly under the named source directories.
 // Missing directories are fine; the same name in two of them is not.
-func LoadDocs(repo string, dirs ...string) ([]Doc, error) {
+func LoadDocs(src Source, dirs ...string) ([]Doc, error) {
 	seen := map[string]string{}
 	var docs []Doc
 	for _, dir := range dirs {
-		paths, err := filepath.Glob(filepath.Join(repo, dir, "*.md"))
+		paths, err := fs.Glob(src.FS, dir+"/*.md")
 		if err != nil {
 			return nil, err
 		}
 		for _, p := range paths {
-			raw, err := os.ReadFile(p)
+			raw, err := fs.ReadFile(src.FS, p)
 			if err != nil {
 				return nil, err
 			}
-			name := strings.TrimSuffix(filepath.Base(p), ".md")
+			shown := src.path(p)
+			name := strings.TrimSuffix(path.Base(p), ".md")
 			if prev, dup := seen[name]; dup {
-				return nil, fmt.Errorf("%s and %s both define %q", prev, p, name)
+				return nil, fmt.Errorf("%s and %s both define %q", prev, shown, name)
 			}
-			seen[name] = p
+			seen[name] = shown
 			desc := ""
 			text := string(raw)
 			if front, body, err := Split(text); err == nil {
 				if err := Lint(front); err != nil {
-					return nil, fmt.Errorf("%s: %w", p, err)
+					return nil, fmt.Errorf("%s: %w", shown, err)
 				}
 				desc = Parse(front)["description"]
 				text = body
@@ -293,7 +284,7 @@ func LoadDocs(repo string, dirs ...string) ([]Doc, error) {
 			if desc == "" {
 				desc = firstLine(text)
 			}
-			docs = append(docs, Doc{Name: name, Description: desc, Path: p, Raw: raw})
+			docs = append(docs, Doc{Name: name, Description: desc, Path: shown, Raw: raw})
 		}
 	}
 	sort.Slice(docs, func(i, j int) bool { return docs[i].Name < docs[j].Name })

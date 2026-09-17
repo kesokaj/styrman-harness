@@ -109,7 +109,7 @@ func TestLoadSkillsRejectsUnquotedComment(t *testing.T) {
 	if err := os.WriteFile(p, []byte("---\nname: gamma\ndescription: Gamma\nargument-hint: [topic or #issue]\n---\nbody\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := LoadSkills(repo)
+	_, err := LoadSkills(DirSource(repo))
 	if err == nil || !strings.Contains(err.Error(), "gamma") || !strings.Contains(err.Error(), "argument-hint") {
 		t.Fatalf("LoadSkills should name the skill and the key, got %v", err)
 	}
@@ -126,7 +126,7 @@ func TestSplitRejectsMissingFrontmatter(t *testing.T) {
 
 func TestDeriveAgy(t *testing.T) {
 	repo := newRepo(t)
-	agents, err := LoadAgents(repo)
+	agents, err := LoadAgents(DirSource(repo))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +163,7 @@ func TestDeriveAgy(t *testing.T) {
 
 func TestInventoryAndRender(t *testing.T) {
 	repo := newRepo(t)
-	skills, err := LoadSkills(repo)
+	skills, err := LoadSkills(DirSource(repo))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +173,7 @@ func TestInventoryAndRender(t *testing.T) {
 	if !skills[1].SlashOnly || skills[0].SlashOnly {
 		t.Errorf("SlashOnly wrong: %+v", skills)
 	}
-	inv, err := LoadInventory(repo)
+	inv, err := LoadInventory(DirSource(repo))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +183,7 @@ func TestInventoryAndRender(t *testing.T) {
 	if len(inv.Rules) != 1 || inv.Rules[0].Description != "Go style" {
 		t.Errorf("rules = %+v", inv.Rules)
 	}
-	ctx, err := RenderContext(repo, inv)
+	ctx, err := RenderContext(DirSource(repo), inv)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,12 +221,12 @@ func TestInstallStatusResyncUninstall(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	files, err := Plan(repo, self, VendorAll)
+	files, err := Plan(DirSource(repo), self, VendorAll)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err := Install(repo, home, files, VendorAll, false, &out); err != nil {
+	if err := Install(DirSource(repo), home, files, VendorAll, false, &out); err != nil {
 		t.Fatal(err)
 	}
 	for _, rel := range []string{
@@ -270,7 +270,7 @@ func TestInstallStatusResyncUninstall(t *testing.T) {
 		t.Errorf("fresh install should be clean apart from the foreign CLAUDE.md: %+v", report.Counts)
 	}
 	// status and diff plan without the binary; the installed one is not stale.
-	noSelf, err := Plan(repo, nil, VendorAll)
+	noSelf, err := Plan(DirSource(repo), nil, VendorAll)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -294,12 +294,12 @@ func TestInstallStatusResyncUninstall(t *testing.T) {
 	if err := os.RemoveAll(filepath.Join(repo, "skills", "beta")); err != nil {
 		t.Fatal(err)
 	}
-	files, err = Plan(repo, self, VendorAll)
+	files, err = Plan(DirSource(repo), self, VendorAll)
 	if err != nil {
 		t.Fatal(err)
 	}
 	out.Reset()
-	if err := Install(repo, home, files, VendorAll, false, &out); err != nil {
+	if err := Install(DirSource(repo), home, files, VendorAll, false, &out); err != nil {
 		t.Fatal(err)
 	}
 	for _, rel := range []string{".claude/skills/beta", ".gemini/config/skills/beta"} {
@@ -344,11 +344,11 @@ func TestInstallStatusResyncUninstall(t *testing.T) {
 func TestInstallWritesOwnClaudeStub(t *testing.T) {
 	repo := newRepo(t)
 	home := t.TempDir()
-	files, err := Plan(repo, nil, VendorAll)
+	files, err := Plan(DirSource(repo), nil, VendorAll)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := Install(repo, home, files, VendorAll, false, &bytes.Buffer{}); err != nil {
+	if err := Install(DirSource(repo), home, files, VendorAll, false, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
 	got, err := os.ReadFile(filepath.Join(home, ClaudeRoot, "CLAUDE.md"))
@@ -385,7 +385,7 @@ func TestVendorSelection(t *testing.T) {
 	self := []byte("#!/bin/sh\necho sh-agent\n")
 
 	// Plan for antigravity only
-	agyPlan, err := Plan(repo, self, VendorAntigravity)
+	agyPlan, err := Plan(DirSource(repo), self, VendorAntigravity)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -405,7 +405,7 @@ func TestVendorSelection(t *testing.T) {
 	}
 
 	// Plan for claude only
-	claudePlan, err := Plan(repo, self, VendorClaude)
+	claudePlan, err := Plan(DirSource(repo), self, VendorClaude)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -418,7 +418,7 @@ func TestVendorSelection(t *testing.T) {
 	// Install antigravity-only to clean home
 	home := t.TempDir()
 	var out bytes.Buffer
-	if err := Install(repo, home, agyPlan, VendorAntigravity, false, &out); err != nil {
+	if err := Install(DirSource(repo), home, agyPlan, VendorAntigravity, false, &out); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(home, ClaudeRoot)); err == nil {
@@ -441,7 +441,7 @@ func TestVendorSelection(t *testing.T) {
 	}
 
 	// Status check with antigravity plan has no drift
-	noSelfAgy, err := Plan(repo, nil, VendorAntigravity)
+	noSelfAgy, err := Plan(DirSource(repo), nil, VendorAntigravity)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -455,11 +455,11 @@ func TestVendorSelection(t *testing.T) {
 
 	// Switch from antigravity to all, then back to antigravity:
 	// Verify resync removes Claude files when returning to antigravity
-	allPlan, err := Plan(repo, self, VendorAll)
+	allPlan, err := Plan(DirSource(repo), self, VendorAll)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := Install(repo, home, allPlan, VendorAll, false, &bytes.Buffer{}); err != nil {
+	if err := Install(DirSource(repo), home, allPlan, VendorAll, false, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(home, ClaudeRoot, "AGENTS.md")); err != nil {
@@ -468,7 +468,7 @@ func TestVendorSelection(t *testing.T) {
 
 	// Now switch back to antigravity
 	out.Reset()
-	if err := Install(repo, home, agyPlan, VendorAntigravity, false, &out); err != nil {
+	if err := Install(DirSource(repo), home, agyPlan, VendorAntigravity, false, &out); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(home, ClaudeRoot, "AGENTS.md")); err == nil {
@@ -523,21 +523,63 @@ func TestAdopt(t *testing.T) {
 	}
 }
 
-func TestFindRepo(t *testing.T) {
+func TestResolveSource(t *testing.T) {
+	t.Setenv("SH_AGENT_REPO", "")
+	cwd := t.TempDir()
+	t.Chdir(cwd)
+	// The walk starts at the working directory, so a temp directory INSIDE a
+	// harness checkout (a TMPDIR under one) would be found and every case
+	// below would read that tree instead (security review 2026-09-17).
+	if _, err := ResolveSource("", t.TempDir(), ""); err == nil {
+		t.Skip("the temp directory happens to be inside a harness repo")
+	}
 	repo := newRepo(t)
 	home := t.TempDir()
-	if _, err := FindRepo("", home); err == nil {
-		t.Skip("working directory happens to be inside a harness repo")
+
+	// A development build with no tree found keeps the error: only a release
+	// binary may install the files it carries (D14).
+	for _, v := range []string{"", "b64ffe886729", "b64ffe886729+dirty", "(devel)", "v1.2.3-rc.1", "v1.2.3-0.20260917090000-b64ffe886729", "1.2.3", "v1.2"} {
+		if _, err := ResolveSource("", home, v); err == nil || !strings.Contains(err.Error(), "harness repo not found") {
+			t.Errorf("version %q with no tree: err = %v, want harness repo not found", v, err)
+		}
 	}
-	got, err := FindRepo(repo, home)
-	if err != nil || got != repo {
-		t.Errorf("explicit repo: %s, %v", got, err)
+
+	src, err := ResolveSource("", home, "v1.2.3")
+	if err != nil {
+		t.Fatalf("release binary with no tree: %v", err)
+	}
+	if src.Dir != "" || src.Version != "v1.2.3" || src.FS == nil {
+		t.Errorf("release binary with no tree: %+v, want the embedded source", src)
+	}
+	if _, err := fs.Stat(src.FS, "context/AGENTS.md"); err != nil {
+		t.Errorf("the embedded source has no context/AGENTS.md: %v", err)
+	}
+
+	if src, err := ResolveSource(repo, home, "v1.2.3"); err != nil || src.Dir != repo {
+		t.Errorf("explicit repo: %+v, %v", src, err)
 	}
 	if err := SaveState(home, State{Repo: repo}); err != nil {
 		t.Fatal(err)
 	}
-	if got, err := FindRepo("", home); err != nil || got != repo {
-		t.Errorf("repo from state: %s, %v", got, err)
+	// The recorded tree comes before the embedded files.
+	if src, err := ResolveSource("", home, "v1.2.3"); err != nil || src.Dir != repo {
+		t.Errorf("repo from state: %+v, %v", src, err)
+	}
+
+	// A manifest written by an embedded install records no path: its repo
+	// value is never read as one, even when a directory of that name holding
+	// a harness sits in the working directory.
+	if err := os.CopyFS(filepath.Join(cwd, "embedded:v1.0.0"), os.DirFS(repo)); err != nil {
+		t.Fatal(err)
+	}
+	if err := SaveState(home, State{Repo: "embedded:v1.0.0"}); err != nil {
+		t.Fatal(err)
+	}
+	if src, err := ResolveSource("", home, "v1.2.3"); err != nil || src.Dir != "" {
+		t.Errorf("recorded embedded install: %+v, %v, want the embedded source", src, err)
+	}
+	if _, err := ResolveSource("", home, ""); err == nil {
+		t.Error("a development build must not read a recorded embedded:<version> as a path")
 	}
 }
 
@@ -694,7 +736,7 @@ func TestLastRetro(t *testing.T) {
 
 func TestSlashNoteOnlyWhenSomeSkillIsSlashOnly(t *testing.T) {
 	repo := newRepo(t)
-	inv, err := LoadInventory(repo)
+	inv, err := LoadInventory(DirSource(repo))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -727,20 +769,25 @@ func gitIn(t *testing.T, dir string, args ...string) string {
 	return strings.TrimSpace(string(outb))
 }
 
-func TestFindRepoRefusesNamedNonRepo(t *testing.T) {
+// An explicit --repo or $SH_AGENT_REPO is used or refused, never replaced by
+// the embedded files, even in a release binary (D15).
+func TestResolveSourceRefusesNamedNonRepo(t *testing.T) {
 	home := t.TempDir()
 	bogus := filepath.Join(t.TempDir(), "not-a-checkout")
-	if _, err := FindRepo(bogus, home); err == nil {
-		t.Error("an explicit path that is not a checkout must be an error, not a fallback")
-	}
-	t.Setenv("SH_AGENT_REPO", bogus)
-	if _, err := FindRepo("", home); err == nil {
-		t.Error("$SH_AGENT_REPO pointing at a non-checkout must be an error, not a fallback")
+	for _, v := range []string{"", "v1.2.3"} {
+		t.Setenv("SH_AGENT_REPO", "")
+		if _, err := ResolveSource(bogus, home, v); err == nil {
+			t.Errorf("version %q: an explicit path that is not a checkout must be an error, not a fallback", v)
+		}
+		t.Setenv("SH_AGENT_REPO", bogus)
+		if _, err := ResolveSource("", home, v); err == nil {
+			t.Errorf("version %q: $SH_AGENT_REPO pointing at a non-checkout must be an error, not a fallback", v)
+		}
 	}
 	t.Setenv("SH_AGENT_REPO", "")
 	repo := newRepo(t)
-	if got, err := FindRepo(repo, home); err != nil || got != repo {
-		t.Errorf("explicit checkout: %q, %v", got, err)
+	if got, err := ResolveSource(repo, home, ""); err != nil || got.Dir != repo {
+		t.Errorf("explicit checkout: %+v, %v", got, err)
 	}
 }
 
@@ -751,12 +798,12 @@ func TestInstallMarksDirtyTree(t *testing.T) {
 	gitIn(t, repo, "commit", "-q", "-m", "fixture")
 	short := gitIn(t, repo, "rev-parse", "--short", "HEAD")
 	home := t.TempDir()
-	files, err := Plan(repo, nil, VendorAll)
+	files, err := Plan(DirSource(repo), nil, VendorAll)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err := Install(repo, home, files, VendorAll, false, &out); err != nil {
+	if err := Install(DirSource(repo), home, files, VendorAll, false, &out); err != nil {
 		t.Fatal(err)
 	}
 	st, _, err := LoadState(home)
@@ -769,11 +816,11 @@ func TestInstallMarksDirtyTree(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(repo, "context", "AGENTS.md"), []byte("# AGENTS.md\n\nBe honest and brief.\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	files, err = Plan(repo, nil, VendorAll)
+	files, err = Plan(DirSource(repo), nil, VendorAll)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := Install(repo, home, files, VendorAll, false, &out); err != nil {
+	if err := Install(DirSource(repo), home, files, VendorAll, false, &out); err != nil {
 		t.Fatal(err)
 	}
 	st, _, err = LoadState(home)
@@ -1053,8 +1100,8 @@ func TestRenderContextRefusesSymlinks(t *testing.T) {
 		if err := os.Symlink(outside, filepath.Join(repo, "context")); err != nil {
 			t.Skipf("symlinks unavailable: %v", err)
 		}
-		inv, _ := LoadInventory(repo)
-		if _, err := RenderContext(repo, inv); err == nil {
+		inv, _ := LoadInventory(DirSource(repo))
+		if _, err := RenderContext(DirSource(repo), inv); err == nil {
 			t.Fatal("a symlinked context directory must be refused")
 		} else if !strings.Contains(err.Error(), "symlink") {
 			t.Errorf("the error should name the symlink, got %v", err)
@@ -1070,8 +1117,8 @@ func TestRenderContextRefusesSymlinks(t *testing.T) {
 		if err := os.Symlink(outside, filepath.Join(repo, "context", "extra.md")); err != nil {
 			t.Skipf("symlinks unavailable: %v", err)
 		}
-		inv, _ := LoadInventory(repo)
-		if _, err := RenderContext(repo, inv); err == nil {
+		inv, _ := LoadInventory(DirSource(repo))
+		if _, err := RenderContext(DirSource(repo), inv); err == nil {
 			t.Fatal("a symlinked context file must be refused")
 		} else if !strings.Contains(err.Error(), "symlink") {
 			t.Errorf("the error should name the symlink, got %v", err)
@@ -1188,7 +1235,7 @@ func assertSkillsClean(t *testing.T, repo, when string) {
 			t.Errorf("%s: skills/ holds %q, which is not a skill", when, e.Name())
 		}
 	}
-	skills, err := LoadSkills(repo)
+	skills, err := LoadSkills(DirSource(repo))
 	if err != nil {
 		t.Fatalf("%s: LoadSkills: %v", when, err)
 	}
@@ -1216,7 +1263,7 @@ func TestLoadSkillsRefusesDuplicateNames(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dup, "SKILL.md"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := LoadSkills(repo)
+	_, err := LoadSkills(DirSource(repo))
 	if err == nil {
 		t.Fatal("two skills named alpha must be refused")
 	}
@@ -1238,7 +1285,7 @@ func TestPlanRefusesSecretShapedFiles(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(repo, "skills", "alpha", name), []byte("secret\n"), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := Plan(repo, nil, VendorAll); err == nil {
+			if _, err := Plan(DirSource(repo), nil, VendorAll); err == nil {
 				t.Fatalf("%s must not be deployed", name)
 			} else if !strings.Contains(err.Error(), name) {
 				t.Errorf("the error should name the file, got %v", err)
@@ -1250,7 +1297,7 @@ func TestPlanRefusesSecretShapedFiles(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(repo, "skills", "alpha", "keys-explained.md"), []byte("about keys\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		files, err := Plan(repo, nil, VendorAll)
+		files, err := Plan(DirSource(repo), nil, VendorAll)
 		if err != nil {
 			t.Fatalf("a normal file must still plan: %v", err)
 		}
@@ -1402,7 +1449,7 @@ func TestPlanDropsGroupAndOtherWrite(t *testing.T) {
 	if err := os.Chmod(loose, 0o666); err != nil {
 		t.Fatal(err)
 	}
-	files, err := Plan(repo, nil, VendorAll)
+	files, err := Plan(DirSource(repo), nil, VendorAll)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1434,12 +1481,12 @@ func TestInstallCorrectsTheModeOfAnUnchangedFile(t *testing.T) {
 	}
 	repo := newRepo(t)
 	home := t.TempDir()
-	files, err := Plan(repo, nil, VendorAll)
+	files, err := Plan(DirSource(repo), nil, VendorAll)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var buf bytes.Buffer
-	if err := Install(repo, home, files, VendorAll, false, &buf); err != nil {
+	if err := Install(DirSource(repo), home, files, VendorAll, false, &buf); err != nil {
 		t.Fatal(err)
 	}
 	victim := filepath.Join(home, ClaudeRoot, "skills", "alpha", "SKILL.md")
@@ -1447,7 +1494,7 @@ func TestInstallCorrectsTheModeOfAnUnchangedFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	buf.Reset()
-	if err := Install(repo, home, files, VendorAll, false, &buf); err != nil {
+	if err := Install(DirSource(repo), home, files, VendorAll, false, &buf); err != nil {
 		t.Fatal(err)
 	}
 	info, err := os.Stat(victim)
@@ -1462,7 +1509,7 @@ func TestInstallCorrectsTheModeOfAnUnchangedFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	buf.Reset()
-	if err := Install(repo, home, files, VendorAll, true, &buf); err != nil {
+	if err := Install(DirSource(repo), home, files, VendorAll, true, &buf); err != nil {
 		t.Fatal(err)
 	}
 	if info, _ := os.Stat(victim); info.Mode().Perm() != 0o666 {

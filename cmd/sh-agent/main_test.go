@@ -742,6 +742,68 @@ func gitFixture(t *testing.T) (repo, marker string) {
 	return repo, marker
 }
 
+// TestUpdateKeptCloneCleanupOnlyWhenUpdating: `update` removes the feedback
+// clone older versions kept in this home (D9), but `--check` reports and
+// changes NOTHING — the cleanup sat above its returns, so the read-only mode
+// deleted files (security review 2026-09-17, finding 2).
+func TestUpdateKeptCloneCleanupOnlyWhenUpdating(t *testing.T) {
+	repo, marker := gitFixture(t)
+	home := t.TempDir()
+
+	// A clone that passes RemoveKeptClone's checks without a network: a local
+	// repository whose origin URL is set to the feedback URL it verifies.
+	plant := func(t *testing.T) string {
+		t.Helper()
+		base := t.TempDir()
+		origin := filepath.Join(base, "feedback.git")
+		kept := filepath.Join(home, ".config", "sh-agent", "feedback")
+		_ = os.RemoveAll(kept)
+		if err := os.MkdirAll(filepath.Dir(kept), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		for _, args := range [][]string{
+			{"init", "--quiet", "--bare", "-b", "main", origin},
+			{"clone", "--quiet", origin, kept},
+			{"-C", kept, "remote", "set-url", "origin", harness.FeedbackURL},
+		} {
+			cmd := exec.Command("git", args...)
+			cmd.Dir = base
+			cmd.Env = append(gitCleanEnv(), "GIT_CONFIG_GLOBAL="+filepath.Join(base, "gitconfig"), "GIT_CONFIG_NOSYSTEM=1")
+			if out, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("git %v: %v\n%s", args, err, out)
+			}
+		}
+		return kept
+	}
+
+	kept := plant(t)
+	var out bytes.Buffer
+	if err := update(repo, home, true, "", "", &out); err != nil {
+		t.Fatalf("update --check: %v\n%s", err, out.String())
+	}
+	if _, err := os.Stat(kept); err != nil {
+		t.Errorf("--check removed the kept clone: %v\n%s", err, out.String())
+	}
+	if strings.Contains(out.String(), "removed the kept feedback clone") {
+		t.Errorf("--check reported a removal:\n%s", out.String())
+	}
+
+	// The same update without --check does remove it.
+	out.Reset()
+	if err := update(repo, home, false, "", "", &out); err != nil {
+		t.Fatalf("update: %v\n%s", err, out.String())
+	}
+	if _, err := os.Stat(kept); !os.IsNotExist(err) {
+		t.Errorf("update did not remove the kept clone: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "removed the kept feedback clone") {
+		t.Errorf("the removal was silent:\n%s", out.String())
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Errorf("the install did not run: %v", err)
+	}
+}
+
 // TestUpdateNeverInstallsDirtyTree is BUG-046: `update` deploys the working
 // tree, not the commit it fetched, so a dirty checkout must not be installed
 // on EITHER path. Pull already refused it when behind; the up-to-date path
@@ -959,7 +1021,7 @@ func TestUpdateRefusesWhenStatusIsUnknown(t *testing.T) {
 	}
 }
 
-// TestReportWithoutCheckout: report runs before FindRepo, so a machine that
+// TestReportWithoutCheckout: report runs before ResolveSource, so a machine that
 // installed from an unpacked bundle — no checkout anywhere — still reports.
 // A dry run with the default feedback path absent clones nothing.
 func TestReportWithoutCheckout(t *testing.T) {
@@ -976,6 +1038,175 @@ func TestReportWithoutCheckout(t *testing.T) {
 	}
 	if entries, _ := os.ReadDir(home); len(entries) != 0 {
 		t.Errorf("dry run wrote into home: %v", entries)
+	}
+}
+
+// An embedded install's manifest records a release, not a path: knownCheckout
+// says so and never resolves it as one (security review 2026-09-17).
+func TestKnownCheckoutRefusesEmbeddedManifest(t *testing.T) {
+	t.Setenv("SH_AGENT_REPO", "")
+	home := t.TempDir()
+	if err := harness.SaveState(home, harness.State{Repo: harness.EmbeddedPrefix + "v1.2.3"}); err != nil {
+		t.Fatal(err)
+	}
+	repo, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = knownCheckout("", home, repo)
+	if err == nil || !strings.Contains(err.Error(), "installed from the release binary v1.2.3") {
+		t.Errorf("knownCheckout = %v, want a refusal naming the release", err)
+	}
+	// Named explicitly, it is the operator's decision, as for any checkout.
+	if err := knownCheckout(repo, home, repo); err != nil {
+		t.Errorf("knownCheckout with --repo: %v", err)
+	}
+}
+
+// TestReleaseFromInfo: a release build uses -trimpath, which keeps -ldflags
+// out of the build info, so status reads an installed release binary's
+// version from the module version Go stamps at a clean tag; anything else
+// falls back to the revision.
+func TestReleaseFromInfo(t *testing.T) {
+	rev := debug.BuildSetting{Key: "vcs.revision", Value: "b64ffe886729abcdef"}
+	cases := []struct {
+		name string
+		info *debug.BuildInfo
+		want string
+	}{
+		{"built at a clean tag", &debug.BuildInfo{Main: debug.Module{Version: "v1.2.3"}, Settings: []debug.BuildSetting{rev, {Key: "vcs.modified", Value: "false"}}}, "v1.2.3"},
+		{"go install at a tag", &debug.BuildInfo{Main: debug.Module{Version: "v1.2.3"}}, "v1.2.3"},
+		{"pseudo-version", &debug.BuildInfo{Main: debug.Module{Version: "v1.2.4-0.20260917090000-b64ffe886729+dirty"}, Settings: []debug.BuildSetting{rev, {Key: "vcs.modified", Value: "true"}}}, "b64ffe886729+dirty"},
+	}
+	for _, c := range cases {
+		if got := releaseFromInfo(c.info); got != c.want {
+			t.Errorf("%s: releaseFromInfo = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+// TestReleaseBinaryWithoutCheckout: a release binary run where no harness tree
+// is found installs the files built into it, and every command follows the
+// per-command table in the release-binary plan (D13, D14, D15, D17). A
+// development build in the same place keeps today's error.
+func TestReleaseBinaryWithoutCheckout(t *testing.T) {
+	t.Setenv("SH_AGENT_REPO", "")
+	t.Setenv(harness.ChildEnv, "")
+	t.Chdir(t.TempDir())
+	home := t.TempDir()
+	var out bytes.Buffer
+
+	if err := run([]string{"install", "--home", home}, &out); err == nil || !strings.Contains(err.Error(), "harness repo not found") {
+		t.Fatalf("development build, no tree: err = %v, want harness repo not found", err)
+	}
+	if _, err := os.Stat(filepath.Join(home, harness.ClaudeRoot)); !os.IsNotExist(err) {
+		t.Fatalf("a refused install wrote into home: %v", err)
+	}
+
+	defer func(v string) { version = v }(version)
+	version = "v9.9.9"
+
+	// An explicit --repo that is not a tree is refused, never replaced by the
+	// embedded files.
+	out.Reset()
+	if err := run([]string{"install", "--repo", t.TempDir(), "--home", home}, &out); err == nil || !strings.Contains(err.Error(), "not a harness checkout") {
+		t.Errorf("release binary, bad --repo: err = %v, want the refusal", err)
+	}
+
+	out.Reset()
+	if err := run([]string{"install", "--home", home}, &out); err != nil {
+		t.Fatalf("install: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "release binary v9.9.9") || strings.Contains(out.String(), "building") {
+		t.Errorf("install output does not name the release binary, or built:\n%s", out.String())
+	}
+	if _, err := os.Stat(filepath.Join(home, harness.BinPath)); err != nil {
+		t.Errorf("the running binary was not installed: %v", err)
+	}
+	st, found, err := harness.LoadState(home)
+	if err != nil || !found || st.Repo != "embedded:v9.9.9" || st.Commit != "" {
+		t.Errorf("state = %+v (found %v, err %v), want repo embedded:v9.9.9 and no commit", st, found, err)
+	}
+
+	out.Reset()
+	if err := run([]string{"status", "--home", home}, &out); err != nil {
+		t.Fatalf("status: %v\n%s", err, out.String())
+	}
+	for _, want := range []string{
+		"source     embedded v9.9.9 (release binary; update downloads the newest release)",
+		"from release v9.9.9",
+		"binary     ",
+		"drift      none",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("status lacks %q:\n%s", want, out.String())
+		}
+	}
+	if strings.Contains(out.String(), "repo       ") {
+		t.Errorf("status prints a repo line for an embedded install:\n%s", out.String())
+	}
+
+	out.Reset()
+	if err := run([]string{"diff", "--home", home}, &out); err != nil {
+		t.Errorf("diff: %v\n%s", err, out.String())
+	}
+	out.Reset()
+	if err := run([]string{"list", "--home", home}, &out); err != nil || !strings.Contains(out.String(), "### Skills") {
+		t.Errorf("list: %v\n%s", err, out.String())
+	}
+	out.Reset()
+	if err := run([]string{"render", "--home", home}, &out); err != nil || !strings.HasPrefix(out.String(), harness.Marker) {
+		t.Errorf("render: %v\n%.200s", err, out.String())
+	}
+	out.Reset()
+	if err := run([]string{"adopt", "anything", "--home", home}, &out); err == nil || err.Error() != "adopt needs a harness checkout; this install is a release binary" {
+		t.Errorf("adopt: err = %v", err)
+	}
+	// `update` on a release binary goes to the release flow (Phase 4). PATH is
+	// emptied for this call so the real gh is never reached: an earlier version
+	// of this test called the real repository over the network (2026-09-17).
+	out.Reset()
+	func() {
+		t.Setenv("PATH", t.TempDir())
+		if err := run([]string{"update", "--home", home}, &out); err == nil || !strings.Contains(err.Error(), "install gh and run gh auth login") {
+			t.Errorf("update with no gh: err = %v, want the gh refusal", err)
+		}
+	}()
+	out.Reset()
+	// The record's notes print before the feedback checkout is resolved, so
+	// they show whether or not this non-checkout feedback path is refused.
+	_ = run([]string{"report", "--home", home, "--dry-run", "--feedback-repo", t.TempDir()}, &out)
+	if !strings.Contains(out.String(), "release binary v9.9.9") {
+		t.Errorf("report does not say the harness is a release binary:\n%s", out.String())
+	}
+}
+
+// TestReleaseBinaryUpdateCheckExitsTwo: on a release binary, `update --check`
+// reports a newer release and exits 2, the same code a checkout that is behind
+// gives (plan § Per command with an embedded source).
+func TestReleaseBinaryUpdateCheckExitsTwo(t *testing.T) {
+	t.Setenv("SH_AGENT_REPO", "")
+	t.Chdir(t.TempDir())
+	defer func(v string) { version = v }(version)
+	version = "v1.0.0"
+
+	// A gh that answers the one call --check makes, and nothing else on PATH.
+	bin := t.TempDir()
+	gh := filepath.Join(bin, "gh")
+	script := "#!/bin/sh" + "\n" + "printf " + "'v9.9.9" + "\\n" + "'" + "\n"
+	if err := os.WriteFile(gh, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+
+	var out bytes.Buffer
+	err := run([]string{"update", "--check", "--home", t.TempDir()}, &out)
+	var code exitCode
+	if !errors.As(err, &code) || int(code) != 2 {
+		t.Fatalf("err = %v, want exit code 2", err)
+	}
+	if !strings.Contains(out.String(), "newer release v9.9.9 available") {
+		t.Errorf("output: %q", out.String())
 	}
 }
 

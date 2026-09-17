@@ -6,6 +6,8 @@ Last reviewed: 2026-09-17
 
 ## Now
 
+- Release binary with the harness built in; `report` keeps nothing — `.agents/docs/plans/2026-09-17-release-binary.md`
+
 ## Next
 
 ## Later / Ideas

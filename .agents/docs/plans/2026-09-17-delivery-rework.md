@@ -105,27 +105,9 @@ Delivery is verified separately and needs no new code: `sh-agent update` on a ch
 
 ### Phase 1 — The decision and the requirement (no code)
 
-- [ ] ADR-030: delivery is `sh-agent` only; supersedes ADR-026's delivery half, retires both mirrors, records the webservice as assessed and struck, and records why `report` scans content rather than reusing `secretShaped` — verify: read, who: AI — expect: `## ADR-030` present, ADR-026 marked superseded in part
-- [ ] `REQUIREMENTS.md` R8, applied only on the operator's explicit approval. The exact text to approve, so no one has to reconstruct it:
-
-```
-## R8 — One delivery channel, and it is `sh-agent`
-
-The harness reaches a machine one way: a checkout the operator owns, kept
-current with `sh-agent update`, or an unpacked bundle installed with
-`sh-agent install`. There is no other channel — no vendored mirror inside a
-consumer project, no per-project copy, no service. A project that wants the
-harness uses `sh-agent`; this repository names no consumer project and
-depends on none. Experience flows back the one way too: `sh-agent report`
-sends a COPY of this machine's corrections, proposals and a metrics record
-to the private feedback repository. The originals stay in
-`~/.config/sh-agent/`, which R7 keeps as the one place that state lives; a
-copy leaving for the operator's own private index is not a second home for
-it.
-```
-
-  The last sentence is the reconciliation: R7 says the harness's own state "lives in `~/.config/sh-agent/` and nowhere else", and `report` pushes a copy of exactly that state to GitHub. Without that sentence the two requirements contradict — verify: both requirements read together, who: user — expect: R8 present with the approval quoted and dated, R7 unchanged
-- [ ] Checkpoint — expect: ADR-030 and R8 on disk, ADR-026 marked — evidence: `git show --stat`, 2026-09-17
+- [x] ADR-030 written, D1 to D6 in the file's own style; ADR-026's heading marked "Superseded in part by ADR-030". Verified append-only: one deleted line in `DECISIONS.md` and it is that heading, 2026-09-17
+- [x] `REQUIREMENTS.md` R8 applied on the operator's approval of its exact text, given 2026-09-17 in reply to that text quoted in full. R7 unchanged; R8's closing sentence carries the reconciliation. `ROADMAP.md` Now points at this plan, 2026-09-17
+- [x] Checkpoint — ADR-030, R8 and the ROADMAP pointer committed together as the trajectory rule requires; `git show --stat 9222762`: 3 files, 16 insertions, 2 deletions; pushed. The staged diff's one credential-shape hit was a context line of ADR-026's own prose about armor headers, zero added lines, 2026-09-17
 
 ### Phase 2 — `sh-agent report`
 

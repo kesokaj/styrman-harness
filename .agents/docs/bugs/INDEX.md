@@ -48,7 +48,7 @@
 | BUG-060 | 2026-09-17 | internal/harness (report.go push target claim) | fixed | code/doc claims that the push "cannot be redirected" were disproved by `url.*.insteadOf` and a remote named after the URL, third round on this mechanism | a claim that a destination cannot be redirected names the mechanisms it was checked against; two rounds on one mechanism go to the operator, not a third patch |
 | BUG-062 | 2026-09-17 | agents/verifier | fixed | Claude's verifier wrote its guide under `demo` (repo dir); Antigravity resolved `server` (`cmd/<app>`) in the same repo, per G20; prose patch still missed 1/5 (ADR-032 then deleted `<app>` resolution) | when a prose rule is followed in most but not all runs, delete the decision it asks the agent to make rather than reword it |
 | BUG-063 | 2026-09-17 | agents/verifier | fixed | verifier's `mkdir` for the testing guide was denied, never retried, no guide written, log said `Scope: complete` | a duty an agent must perform is a numbered step, not a paragraph beside the steps; "complete" is defined by artifacts owed, not commands run |
-| BUG-064 | 2026-09-17 | agents/verifier | open | after BUG-063's fix, Claude's verifier still skipped writing the guide with no denial or error, though it reported the gap honestly | none established; two prose fixes (BUG-043, BUG-063) haven't made the duty execute reliably on Claude Code — operator design question, not a third wording change |
+| BUG-064 | 2026-09-17 | agents/verifier | fixed | after BUG-063's fix, Claude's verifier still skipped writing the guide with no denial or error, though it reported the gap honestly | a duty a subagent must not skip goes in the dispatch text the main agent writes, not only in the subagent's own definition |
 
 ## Graduated
 

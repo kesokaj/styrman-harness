@@ -25,4 +25,4 @@ A duty an agent must perform is a numbered step it runs, not a paragraph beside 
 
 ## Related
 BUG-043 (the guide duty); BUG-062 (same repro run, same log format, different mechanism; ADR-032 removed the `<app>` resolution this fix's Scope check now covers); `.agents/docs/testing/2026-09-17-bug-062-repro.md`; `.agents/docs/testing/2026-09-17-bug-063-adr-032-repro.md`.
-BUG-064 (this fix's reporting half held in the real-home smoke check, but the guide duty itself was still skipped without any tool denial on Claude Code — third occurrence of this mechanism).
+BUG-064 (this fix's reporting half held in the real-home smoke check, but the guide duty itself was still skipped without any tool denial on Claude Code — third occurrence of this mechanism). In BUG-064's repro, repro-13 skipped the guide and still logged `Scope: complete` (naming the missing guide inside the line) — this bug's reporting rule is not reliable on Claude Code either; BUG-064's fix (the dispatch-text sentence) is the mitigation.

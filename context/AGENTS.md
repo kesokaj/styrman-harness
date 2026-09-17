@@ -2,7 +2,7 @@
 
 > [agents.md](https://agents.md) standard; skills follow the [Agent Skills](https://agentskills.io) `SKILL.md` standard. Deployed by `sh-agent` as `~/.claude/AGENTS.md` (via a one-line `~/.claude/CLAUDE.md`) and `~/.gemini/config/rules/AGENTS.md`. A project's own `AGENTS.md` overrides this. No hooks, gates, or scripts stand behind these rules; they hold because they are read.
 
-Operator: fullstack software engineer, Go + TypeScript, macOS (Apple Silicon) or Linux. Local by default; GCP is the only cloud, used when the user says so (see Environment & Stack).
+Operator: fullstack software engineer, Go + TypeScript, macOS (Apple Silicon) or Linux. Local by default; GCP is the only cloud, used when the user says so (see Environment & Stack). They decide every architectural choice themselves and want to be asked often — but every ask is a SHORT LIST: one line of why per option, and your recommendation named. Never a long preamble, never options without a recommendation. Their words, 2026-09-17: "When you want me to answer anything give me a short list and a short explanation and tell me what you recommend."
 
 ## Resume, then checkpoint
 

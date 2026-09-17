@@ -25,6 +25,11 @@ func TestReorder(t *testing.T) {
 		"adopt a --force":                   {"--force", "adopt", "a"},
 		"adopt -- --looks-like-a-flag":      {"adopt", "--looks-like-a-flag"},
 		"--repo r --home h adopt x --force": {"--repo", "r", "--home", "h", "--force", "adopt", "x"},
+		// A value flag missing from takesValue swallows the next argument:
+		// --feedback-repo would take "--dry-run" as its value and the run
+		// would push when a dry run was asked (BUG-002's shape).
+		"report --feedback-repo /x --dry-run": {"--feedback-repo", "/x", "--dry-run", "report"},
+		"report --dry-run":                    {"--dry-run", "report"},
 	}
 	for in, want := range cases {
 		if got := reorder(strings.Fields(in)); !reflect.DeepEqual(got, want) {

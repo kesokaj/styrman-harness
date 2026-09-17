@@ -444,10 +444,15 @@ func binaryOlder(rev, commit string) bool {
 // `sh-agent adopt my-skill --home /tmp/x` parses; the flag package stops at
 // the first positional argument otherwise.
 func reorder(args []string) []string {
+	// Every flag that TAKES A VALUE belongs here, or it swallows the next
+	// argument: `report --feedback-repo /x --dry-run` parses --dry-run as the
+	// path and pushes when a dry run was asked (BUG-002's shape, caught by
+	// the cold read of the delivery plan before it shipped).
 	takesValue := map[string]bool{
 		"-repo": true, "--repo": true,
 		"-home": true, "--home": true,
 		"-vendor": true, "--vendor": true,
+		"-feedback-repo": true, "--feedback-repo": true,
 	}
 	var flags, positional []string
 	for i := 0; i < len(args); i++ {

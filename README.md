@@ -43,7 +43,7 @@ sh-agent update      # fetches, refuses a dirty checkout, pulls, rebuilds, reins
 
 `sh-agent` is the only way the harness reaches a machine (R8): a checkout kept current with `update`, or an unpacked copy of the repository with no `.git`, installed with `go run ./cmd/sh-agent install` from that directory (it installs the running binary and `update` refuses it — unpack a newer copy to move forward). No project vendors a copy.
 
-And back: `sh-agent report --dry-run`, read what it would send, then `sh-agent report`, so each machine's corrections and retro proposals reach the feedback repository where the harness is improved from them.
+And back: `sh-agent report --dry-run` lists every file and every redaction it would make — what was caught, never what was missed, so before every report, not just the first, read what was added under `~/.config/sh-agent/` since the last one — then `sh-agent report`, so each machine's corrections and retro proposals reach the feedback repository where the harness is improved from them.
 
 ## What gets installed where
 

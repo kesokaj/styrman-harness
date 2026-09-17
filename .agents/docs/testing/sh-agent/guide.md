@@ -78,10 +78,14 @@ go run ./cmd/sh-agent report --dry-run --home .agents/scratch/<slug>-home
 Must print the destination, the collected/absent files, and the redaction list (what was
 caught — it cannot show a miss), and write nothing (`git status` in a real feedback checkout stays byte-identical before and
 after). `go test ./cmd/... -run TestReorder` covers a new value-flag being added to
-`takesValue`; `go test ./internal/... -run TestReport` covers collection, redaction, and
-the git side (`TestSendReport`, `TestResolveFeedbackFailures`,
-`TestSendReportRefusesRedirectsAndLinks`, against local bare
-repositories under `.agents/scratch/` or Go's own `t.TempDir()`, never the real remote).
+`takesValue`; `-run TestReport` alone does NOT run every report test (`TestSendReport`,
+`TestResolveFeedbackFailures`, `TestSendReportRefusesRedirectsAndLinks`,
+`TestSendReportPushesOnlyToFeedbackURL` don't match that prefix) — use
+`go test ./internal/... -run 'TestReport|TestSendReport|TestResolveFeedback'` for
+collection, redaction, and the git side, against local bare repositories under
+`.agents/scratch/` or Go's own `t.TempDir()`, never the real remote, and confirm with
+`go test ./internal/... -list 'TestReport|TestSendReport|TestResolveFeedback'` that it
+lists every one of them.
 A real end-to-end run against the feedback repository is an e2e-tier check the main
 agent runs and logs, not a bare `verifier` dispatch.
 

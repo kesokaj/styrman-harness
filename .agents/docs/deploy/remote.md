@@ -97,7 +97,7 @@ Standing by-hand procedures, never pending items (those live in the newest hando
 
 - On the Mac after a push from the Linux box: `sh-agent update`, `sh-agent status`, then the three smoke checks on each CLI (`.agents/docs/testing/2026-09-03-verify-real-home.md`; the Mac procedure is `2026-09-04-verify-mac-real-home.md`).
 - After any change to `context/`, `skills/`, or `agents/` is pushed: `sh-agent update` at each of the four places, when the operator decides to. Nothing else needs refreshing.
-- At a place that has been in use: read the originals under `~/.config/sh-agent/` (the dry run shows what is caught, never what is missed), `sh-agent report --dry-run`, then `sh-agent report` (`local.md` § Report back). Whether the work Mac reports at all is the operator's call — its corrections come from work sessions.
+- At a place that has been in use: read the originals under `~/.config/sh-agent/` (the dry run shows what is caught, never what is missed), `sh-agent report --dry-run`, then `sh-agent report` (`local.md` § Report back). Every place reports the same way, the work Mac included (plan D12).
 - On a new machine, `ssh-keygen -y -f ~/.ssh/id_ed25519 | ssh-keygen -lf -` must print the fingerprint in § Releases before that machine cuts a release (derived from the private key: a copied `.pub` alone proves nothing).
 - Go upgrades on the Mac: `brew upgrade go`. On the Linux box the distribution had nothing newer, so it runs a user-level SDK on PATH ahead of `/usr/bin/go` — the procedure is in `local.md` § Operator steps, and it needs no root.
 

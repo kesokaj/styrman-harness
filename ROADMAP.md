@@ -6,8 +6,6 @@ Last reviewed: 2026-09-17
 
 ## Now
 
-- Delivery through `sh-agent` only, with a feedback loop back — `.agents/docs/plans/2026-09-17-delivery-rework.md`
-
 ## Next
 
 ## Later / Ideas

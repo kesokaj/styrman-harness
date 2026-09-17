@@ -21,10 +21,7 @@ func TestReportRedactJSONL(t *testing.T) {
 	clean := `{"user_quote":"<b>no secrets</b> & more","n":1.50}`
 	in := strings.Join([]string{quote, akia, malformed, clean, "not json at all", ""}, "\n")
 
-	out, recs, err := redactLines("feedback.jsonl", []byte(in), true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	out, recs := redactLines("feedback.jsonl", []byte(in), true)
 	lines := strings.Split(string(out), "\n")
 	if len(lines) != 6 || lines[5] != "" {
 		t.Fatalf("line structure changed: %q", out)
@@ -34,26 +31,19 @@ func TestReportRedactJSONL(t *testing.T) {
 			t.Errorf("output still carries %q:\n%s", leak, out)
 		}
 	}
-	for i, want := range []bool{true, true, false, true, false} {
-		if json.Valid([]byte(lines[i])) != want {
-			t.Errorf("line %d json.Valid = %v, want %v: %s", i+1, !want, want, lines[i])
+	// A matching line goes whole, and in a JSONL file its marker is itself a
+	// JSON object, so every redacted line parses — the malformed one included.
+	for i, want := range []string{marker("[redacted by sh-agent report: 1 lines]", true), marker(redactedValue, true), marker(redactedValue, true)} {
+		if lines[i] != want || !json.Valid([]byte(lines[i])) {
+			t.Errorf("line %d = %q, want %q", i+1, lines[i], want)
 		}
-	}
-	if !strings.Contains(lines[0], `"user_quote":"`+redactedValue+`"`) || !strings.Contains(lines[0], "12345678901234567890") {
-		t.Errorf("PEM line: whole value not replaced, or a number lost precision: %s", lines[0])
-	}
-	if !strings.Contains(lines[1], `"project":"/p"`) || !strings.Contains(lines[1], `"user_quote":"`+redactedValue+`"`) {
-		t.Errorf("AKIA line: %s", lines[1])
-	}
-	if lines[2] != redactedValue {
-		t.Errorf("malformed line did not fall through to the text rule: %q", lines[2])
 	}
 	if lines[3] != clean || lines[4] != "not json at all" {
 		t.Errorf("clean lines not byte-identical: %q %q", lines[3], lines[4])
 	}
 	want := []Redaction{
-		{File: "feedback.jsonl", Line: 1, Path: "user_quote", Pattern: "-----BEGIN"},
-		{File: "feedback.jsonl", Line: 2, Path: "user_quote", Pattern: "AKIA"},
+		{File: "feedback.jsonl", Line: 1, Pattern: "-----BEGIN", Lines: 1},
+		{File: "feedback.jsonl", Line: 2, Pattern: "AKIA"},
 		{File: "feedback.jsonl", Line: 3, Pattern: "secret assignment"},
 	}
 	if len(recs) != len(want) {
@@ -76,6 +66,10 @@ func TestReportRedactShapes(t *testing.T) {
 		"github_pat_FAKEVALUE", "ghp_FAKEVALUE", "sk-ant-FAKEVALUE", "aws_secret_access_key = FAKEVALUE",
 		"ASIAFAKEVALUE", "postgres://app:FAKEVALUE@db/x", "token = FAKEVALUE", "xoxb-FAKEVALUE",
 		"GOCSPX-FAKEVALUE", "api_key=FAKEVALUE", "API-KEY: FAKEVALUE",
+		// Round 2, finding 8: an empty URL user, and a non-Bearer scheme.
+		"redis://:FAKEVALUE@localhost:6379/0", "Authorization: Basic FAKEVALUE",
+		// Round 3, finding 3: the header name quoted, as code and JSON write it.
+		`headers: {"Authorization": "Basic FAKEVALUE"}`, `requests.get(u, headers={'Authorization': 'Basic FAKEVALUE'})`,
 	}
 	for _, sec := range secrets {
 		quoted, _ := json.Marshal(map[string]string{"user_quote": "they said " + sec})
@@ -83,25 +77,28 @@ func TestReportRedactShapes(t *testing.T) {
 			data  string
 			jsonl bool
 		}{"jsonl": {string(quoted) + "\n", true}, "text": {"note: " + sec + "\n", false}} {
-			out, recs, err := redactLines("f", []byte(in.data), in.jsonl)
-			if err != nil || len(recs) != 1 || strings.Contains(string(out), "FAKEVALUE") {
-				t.Errorf("%s %q: out=%q recs=%+v err=%v", name, sec, out, recs, err)
+			out, recs := redactLines("f", []byte(in.data), in.jsonl)
+			if len(recs) != 1 || strings.Contains(string(out), "FAKEVALUE") {
+				t.Errorf("%s %q: out=%q recs=%+v", name, sec, out, recs)
 			}
 		}
 	}
 	for _, benign := range []string{"the task-list grew", "the token expired", "passwords are hard", "max_tokens 5", "ASIAN food"} {
 		// "ASIAN" contains the ASIA prefix: accepted over-redaction, pinned
 		// here so a change to it is deliberate.
-		_, recs, _ := redactLines("f", []byte(benign+"\n"), false)
+		_, recs := redactLines("f", []byte(benign+"\n"), false)
 		if want := benign == "ASIAN food"; (len(recs) == 1) != want {
 			t.Errorf("%q: redactions %+v, want redacted=%v", benign, recs, want)
 		}
 	}
 }
 
-// TestReportRedactStructuralGaps: the four ways a needle was present, content
-// still left, and the run reported success (security review 2026-09-17,
-// finding 4), plus a key that named its own secret in report.json (finding 2).
+// TestReportRedactStructuralGaps: the ways a needle was present, content still
+// left, and the run reported success — four from security review 2026-09-17
+// finding 4, two from round 2 (a key split across array values, a secret-named
+// key beside another hit, and a needle behind a JSON escape, which only the
+// decoded text shows) — plus a key that named its own secret in report.json
+// (finding 2).
 func TestReportRedactStructuralGaps(t *testing.T) {
 	cases := []struct {
 		name, in string
@@ -112,24 +109,35 @@ func TestReportRedactStructuralGaps(t *testing.T) {
 		{"two keys concatenated on one line", "-----BEGIN A KEY-----\nFAKEBODY1\n-----END A KEY----------BEGIN B KEY-----\nFAKEBODY2\n-----END B KEY-----\nafter\n", false, "FAKEBODY"},
 		{"dashes rewritten", "–––––BEGIN RSA PRIVATE KEY–––––\nFAKEBODY\n–––––END RSA PRIVATE KEY–––––\nafter\n", false, "FAKEBODY"},
 		{"JSONL header line that is valid JSON alone", `"-----BEGIN RSA PRIVATE KEY-----"` + "\nFAKEBODY\n-----END RSA PRIVATE KEY-----\n" + `{"ok":"after"}` + "\n", true, "FAKEBODY"},
+		{"key split across array values on one line", `{"tool_output":["-----BEGIN OPENSSH PRIVATE KEY-----","FAKEBODY1","FAKEBODY2","-----END OPENSSH PRIVATE KEY-----"]}` + "\n" + `{"ok":"after"}` + "\n", true, "FAKEBODY"},
+		{"needle behind a JSON unicode escape", `{"user_quote":"\u0041KIAFAKEVALUE"}` + "\n" + `{"ok":"after"}` + "\n", true, "FAKEVALUE"},
+		// Round 3: a header line that only mentions a footer (finding 2b); a
+		// number beyond float64, and two records on one line, beside a needle
+		// only the decoded text shows (finding 4).
+		{"header line that mentions a footer", "pasted -----BEGIN OPENSSH PRIVATE KEY----- up to -----END below\nFAKEBODY1\nFAKEBODY2\n-----END OPENSSH PRIVATE KEY-----\nafter\n", false, "FAKEBODY"},
+		{"number beyond float64 beside an escaped needle", `{"n":1e400,"q":"\u0041KIAFAKEVALUE"}` + "\n" + `{"ok":"after"}` + "\n", true, "FAKEVALUE"},
+		{"two records on one line", `{"a":1}{"q":"\u0041KIAFAKEVALUE"}` + "\n" + `{"ok":"after"}` + "\n", true, "FAKEVALUE"},
+		{"secret-named key beside another hit", `{"user_quote":"use ghp_FAKEPREFIX","config":{"api_key":"FAKEVALUE"}}` + "\n" + `{"ok":"after"}` + "\n", true, "FAKEVALUE"},
 	}
 	for _, c := range cases {
-		out, recs, err := redactLines("f", []byte(c.in), c.jsonl)
-		if err != nil || recs == nil || strings.Contains(string(out), c.leak) {
-			t.Errorf("%s: out=%q recs=%+v err=%v", c.name, out, recs, err)
+		out, recs := redactLines("f", []byte(c.in), c.jsonl)
+		if recs == nil || strings.Contains(string(out), c.leak) {
+			t.Errorf("%s: out=%q recs=%+v", c.name, out, recs)
 		}
 		if strings.Contains(c.in, "after") && !strings.Contains(string(out), "after") {
 			t.Errorf("%s: redacted past the block: %q", c.name, out)
 		}
 	}
-	out, recs, err := redactDocument("state.json", []byte(`{"repo":"ghp_FAKEVALUE","repo":"/r"}`))
-	if err != nil || recs == nil || strings.Contains(string(out), "FAKEVALUE") {
-		t.Errorf("state.json duplicate key: out=%q recs=%+v err=%v", out, recs, err)
+	for _, doc := range []string{`{"repo":"ghp_FAKEVALUE","repo":"/r"}`, `{"repo":"ya29.FAKE","db":{"password":"FAKEVALUE"}}`} {
+		out, recs := redactDocument("state.json", []byte(doc))
+		if recs == nil || strings.Contains(string(out), "FAKE") {
+			t.Errorf("state.json %s: out=%q recs=%+v", doc, out, recs)
+		}
 	}
 
-	_, recs, _ = redactLines("retros.jsonl", []byte(`{"tool_output":{"https://api.example.test/v1?token=FAKEVALUE":"404"}}`), true)
+	_, recs := redactLines("retros.jsonl", []byte(`{"tool_output":{"https://api.example.test/v1?token=FAKEVALUE":"404"}}`), true)
 	rec, _ := json.Marshal(recs)
-	if len(recs) != 1 || recs[0].Path != "" || strings.Contains(string(rec), "FAKEVALUE") {
+	if len(recs) != 1 || strings.Contains(string(rec), "FAKEVALUE") {
 		t.Errorf("secret in a key reached the record: %s", rec)
 	}
 }
@@ -140,25 +148,22 @@ func TestReportRedactCleanIsByteIdentical(t *testing.T) {
 	state := "{\n    \"repo\": \"/r\",\n\"files\": []\n}\n"
 	for name, tc := range map[string]struct {
 		data   string
-		redact func(string, []byte) ([]byte, []Redaction, error)
+		redact func(string, []byte) ([]byte, []Redaction)
 	}{
-		"feedback.jsonl": {jsonl, func(n string, d []byte) ([]byte, []Redaction, error) { return redactLines(n, d, true) }},
-		"proposals/x.md": {md, func(n string, d []byte) ([]byte, []Redaction, error) { return redactLines(n, d, false) }},
+		"feedback.jsonl": {jsonl, func(n string, d []byte) ([]byte, []Redaction) { return redactLines(n, d, true) }},
+		"proposals/x.md": {md, func(n string, d []byte) ([]byte, []Redaction) { return redactLines(n, d, false) }},
 		"state.json":     {state, redactDocument},
 	} {
-		out, recs, err := tc.redact(name, []byte(tc.data))
-		if err != nil || recs != nil || !bytes.Equal(out, []byte(tc.data)) {
-			t.Errorf("%s: out=%q recs=%v err=%v, want the input unchanged", name, out, recs, err)
+		out, recs := tc.redact(name, []byte(tc.data))
+		if recs != nil || !bytes.Equal(out, []byte(tc.data)) {
+			t.Errorf("%s: out=%q recs=%v, want the input unchanged", name, out, recs)
 		}
 	}
 }
 
 func TestReportRedactText(t *testing.T) {
 	in := "# Proposal\n\nbefore\n" + pem + "\nafter password=hunter2\nlast\n"
-	out, recs, err := redactLines("proposals/p.md", []byte(in), false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	out, recs := redactLines("proposals/p.md", []byte(in), false)
 	want := "# Proposal\n\nbefore\n[redacted by sh-agent report: 4 lines]\n" + redactedValue + "\nlast\n"
 	if string(out) != want {
 		t.Errorf("got:\n%s\nwant:\n%s", out, want)
@@ -168,24 +173,28 @@ func TestReportRedactText(t *testing.T) {
 	}
 
 	unterminated := "keep\n-----BEGIN OPENSSH PRIVATE KEY-----\nbody\nbody"
-	out, recs, _ = redactLines("proposals/q.md", []byte(unterminated), false)
+	out, recs = redactLines("proposals/q.md", []byte(unterminated), false)
 	if string(out) != "keep\n[redacted by sh-agent report: 3 lines]" || len(recs) != 1 || !recs[0].Unterminated || recs[0].Lines != 3 {
 		t.Errorf("unterminated: out=%q recs=%+v", out, recs)
 	}
 }
 
 func TestReportRedactDocument(t *testing.T) {
-	out, recs, err := redactDocument("state.json", []byte(`{"repo":"/r","nested":{"list":["x","ya29.token"]}}`))
-	if err != nil || !json.Valid(out) || strings.Contains(string(out), "ya29.token") {
-		t.Fatalf("out=%s err=%v", out, err)
+	// Any needle anywhere replaces the whole document with a JSON marker.
+	out, recs := redactDocument("state.json", []byte(`{"repo":"/r","nested":{"list":["x","ya29.token"]}}`))
+	if string(out) != marker(redactedValue, true)+"\n" || !json.Valid(out) {
+		t.Fatalf("out=%s", out)
 	}
-	if len(recs) != 1 || recs[0].Path != "nested.list[1]" || recs[0].Line != 0 {
+	if len(recs) != 1 || recs[0].Pattern != "ya29." || recs[0].Line != 0 {
 		t.Errorf("redactions = %+v", recs)
 	}
-	// A needle in a KEY cannot be replaced in place; the whole value goes
-	// and the result is still JSON.
-	out, recs, _ = redactLines("feedback.jsonl", []byte(`{"token=abc":"v"}`), true)
-	if string(out) != `"`+redactedValue+`"` || len(recs) != 1 {
+	// A needle only the decoded document shows (round 3, finding 6).
+	if out, recs := redactDocument("state.json", []byte(`{"x":"\u0041KIAFAKE"}`)); len(recs) != 1 || strings.Contains(string(out), "FAKE") {
+		t.Errorf("escaped needle in state.json: out=%s recs=%+v", out, recs)
+	}
+	// A needle in a KEY takes its line like any other hit.
+	out, recs = redactLines("feedback.jsonl", []byte(`{"token=abc":"v"}`), true)
+	if string(out) != marker(redactedValue, true) || len(recs) != 1 {
 		t.Errorf("key hit: out=%s recs=%+v", out, recs)
 	}
 }
@@ -341,12 +350,12 @@ func TestSendReport(t *testing.T) {
 	if err := SendReport(dry, &out); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Lstat(feedback); !os.IsNotExist(err) || !strings.Contains(out.String(), "[dry-run] would clone") || !strings.Contains(out.String(), "feedback.jsonl:1 user_quote (secret assignment)") {
+	if _, err := os.Lstat(feedback); !os.IsNotExist(err) || !strings.Contains(out.String(), "[dry-run] would clone") || !strings.Contains(out.String(), "feedback.jsonl:1 (secret assignment)") {
 		t.Fatalf("dry run: lstat err=%v\n%s", err, out.String())
 	}
 
-	// First run: clones the empty repository, names the branch main, sets
-	// its upstream on the first push.
+	// First run: clones the empty repository, names the branch main, and
+	// points main at the URL it pushed to, so a plain pull fetches from there.
 	out.Reset()
 	if err := SendReport(run, &out); err != nil {
 		t.Fatalf("first run: %v\n%s", err, out.String())
@@ -354,8 +363,8 @@ func TestSendReport(t *testing.T) {
 	if got := git(t, origin, "rev-list", "--count", "main"); got != "1" {
 		t.Fatalf("origin main has %s commits after the first run\n%s", got, out.String())
 	}
-	if got := git(t, feedback, "rev-parse", "--abbrev-ref", "@{upstream}"); got != "origin/main" {
-		t.Errorf("upstream = %q", got)
+	if got := git(t, feedback, "config", "branch.main.remote"); got != origin {
+		t.Errorf("branch.main.remote = %q, want %q", got, origin)
 	}
 	first := filepath.Join(feedback, "reports", "dave", now.Format("2006-01-02-150405"))
 	sent, err := os.ReadFile(filepath.Join(first, "feedback.jsonl"))
@@ -464,6 +473,12 @@ func TestResolveFeedbackFailures(t *testing.T) {
 	if _, _, err := ResolveFeedback("", wrongHome, feedbackOrigin, true); err == nil || !strings.Contains(err.Error(), "not the feedback repository") {
 		t.Errorf("default path holding another repository, dry run: err = %v", err)
 	}
+	// The refusal names the expected URL, never the checkout's origin, which
+	// can carry a token (round 2, finding 4).
+	git(t, other, "remote", "set-url", "origin", "https://x-access-token:ghs_FAKETOKEN@example.test/a/b.git")
+	if _, _, err := ResolveFeedback(other, home, feedbackOrigin, true); err == nil || strings.Contains(err.Error(), "FAKETOKEN") {
+		t.Errorf("origin with a token: err = %v", err)
+	}
 	right := filepath.Join(base, "right")
 	git(t, base, "clone", "-q", feedbackOrigin, right)
 	if _, _, err := ResolveFeedback(right, home, feedbackOrigin, false); err != nil {
@@ -502,5 +517,54 @@ func TestSendReportRefusesRedirectsAndLinks(t *testing.T) {
 	}
 	if entries, _ := os.ReadDir(outside); len(entries) != 0 {
 		t.Errorf("wrote through the link: %v", entries)
+	}
+}
+
+// TestSendReportPushesOnlyToFeedbackURL: a pushurl, or an earlier url listed
+// before the one verifyFeedback reads, would have sent the report elsewhere
+// while it reported success (security review round 2, finding 1).
+func TestSendReportPushesOnlyToFeedbackURL(t *testing.T) {
+	gitEnv(t)
+	base := t.TempDir()
+	origin := filepath.Join(base, "origin.git")
+	elsewhere := filepath.Join(base, "elsewhere.git")
+	git(t, base, "init", "--bare", "-q", "-b", "main", origin)
+	git(t, base, "init", "--bare", "-q", "-b", "main", elsewhere)
+	for name, setup := range map[string][][]string{
+		"pushurl":    {{"config", "remote.origin.pushurl", elsewhere}},
+		"second url": {{"config", "remote.origin.url", elsewhere}, {"config", "--add", "remote.origin.url", origin}},
+	} {
+		checkout := filepath.Join(base, strings.ReplaceAll(name, " ", "-"))
+		git(t, base, "clone", "-q", origin, checkout)
+		for _, args := range setup {
+			git(t, checkout, args...)
+		}
+		run := ReportRun{Home: t.TempDir(), Feedback: checkout, URL: origin, Host: name, Now: time.Now()}
+		var out bytes.Buffer
+		if err := SendReport(run, &out); err != nil {
+			t.Fatalf("%s: %v\n%s", name, err, out.String())
+		}
+		if _, err := gitOut(elsewhere, "rev-parse", "--verify", "--quiet", "main"); err == nil {
+			t.Errorf("%s: the report reached the other repository", name)
+		}
+	}
+	if got := git(t, origin, "rev-list", "--count", "main"); got != "2" {
+		t.Errorf("feedback repository has %s commits, want 2", got)
+	}
+}
+
+// TestSendReportDryRunShowsDroppedRecords: an unterminated key block redacts to
+// the end of its file, so the dry-run list says so, where the operator reads
+// before sending (security review round 3, finding 7).
+func TestSendReportDryRunShowsDroppedRecords(t *testing.T) {
+	home := t.TempDir()
+	writeConfig(t, home, "feedback.jsonl", `{"q":"the header starts with -----BEGIN"}`+"\n"+`{"q":"a later correction"}`+"\n")
+	var out bytes.Buffer
+	run := ReportRun{Home: home, URL: filepath.Join(t.TempDir(), "absent.git"), Host: "dave", Now: time.Now(), DryRun: true}
+	if err := SendReport(run, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "feedback.jsonl:1 (-----BEGIN) 2 lines, unterminated") {
+		t.Errorf("dry run does not show the dropped records:\n%s", out.String())
 	}
 }

@@ -1469,4 +1469,20 @@ func TestOffPathInstallNamesWhatAnswersAndDoesNotWarnTwice(t *testing.T) {
 	if strings.Contains(out.String(), "shadowed") {
 		t.Errorf("status reported a shadow for a home whose bin dir is off PATH:\n%s", out.String())
 	}
+
+	// A dry run installs nothing, so it says nothing about PATH: on a fresh
+	// home it would otherwise call the bin dir "not on PATH" whether it is or
+	// not, a false diagnosis from a read-only mode.
+	fresh := t.TempDir()
+	out.Reset()
+	if err := run([]string{"install", "--dry-run", "--repo", repo, "--home", fresh}, &out); err != nil {
+		t.Fatalf("install --dry-run: %v\n%s", err, out.String())
+	}
+	// The bin-dir phrases only: PATH here is one directory, so install rightly
+	// warns that `go` is not on it, and that warning is not what this pins.
+	for _, claim := range []string{"add it so `sh-agent` is available everywhere", "so `sh-agent` runs", "comes before"} {
+		if strings.Contains(out.String(), claim) {
+			t.Errorf("install --dry-run made a PATH claim about a binary it did not write (%q):\n%s", claim, out.String())
+		}
+	}
 }

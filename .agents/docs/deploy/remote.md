@@ -22,14 +22,14 @@ On a machine that installs from a RELEASE BINARY instead, the download is verifi
 
 ```bash
 # One chained command: a failed check stops the move. ASSET is sh-agent-linux-amd64,
-# sh-agent-darwin-arm64 or sh-agent-linux-arm64; the signer line is § Releases' allowed-signers
+# sh-agent-darwin-arm64 or sh-agent-linux-arm64; the signer line is § Releases' allowed_signers
 # line, taken from this file in a checkout, never from the release page. macOS: shasum -a 256 -c -
 ASSET=sh-agent-linux-amd64 \
 && D=$(mktemp -d) && cd "$D" \
 && gh release download vX.Y.Z --repo kesokaj/styrman-harness --clobber \
      --pattern "$ASSET" --pattern 'SHA256SUMS' --pattern 'SHA256SUMS.sig' --dir "$D" \
-&& printf '%s\n' 'ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR' > allowed-signers \
-&& ssh-keygen -Y verify -f allowed-signers -I ostling.simon@gmail.com -n sh-agent-release -s SHA256SUMS.sig < SHA256SUMS \
+&& printf '%s\n' 'ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR' > allowed_signers \
+&& ssh-keygen -Y verify -f allowed_signers -I ostling.simon@gmail.com -n sh-agent-release -s SHA256SUMS.sig < SHA256SUMS \
 && grep -v '^#' SHA256SUMS | sha256sum -c - --ignore-missing \
 && chmod +x "$ASSET" && "./$ASSET" version \
 && mv "$ASSET" ~/.local/bin/sh-agent && cd ~ && rm -r "$D"
@@ -86,7 +86,7 @@ The timer follows `main` by fast-forward: its trust root is whoever can push to 
 
 A release is an SSH-signed annotated `vX.Y.Z` tag on `main`, and the binaries published with it. A tag marks a version; it also carries the `sh-agent` binaries that a BINARY-ONLY place updates to, while a checkout place still follows `main` with `sh-agent update` and a tag changes nothing for it (ADR-033, superseding ADR-030 D2's "a tag delivers nothing"; ADR-030 D2 withdrew ADR-026's tag channel, and this restores a narrower one: the assets, verified by signature, never a push to a machine). A release is cut by `/preflight vX.Y.Z` from the operator's own turn, from this checkout (never a plain copy), on a machine holding the signing key. Nothing else is tagged: no lightweight tag, no `-rc` suffix, no other prefix. The tag is the only version tracking; there is no version file.
 
-The signer — the allowed-signers line `verify-tag` checks against:
+The signer — the allowed_signers line `verify-tag` checks against:
 ```
 ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR
 ```

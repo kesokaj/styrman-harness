@@ -89,12 +89,14 @@ A machine that only USES the harness needs no checkout: a release binary carries
 D=$(mktemp -d) && cd "$D" \
 && gh release download --repo kesokaj/styrman-harness --clobber \
      --pattern 'sh-agent-linux-amd64' --pattern 'SHA256SUMS' --pattern 'SHA256SUMS.sig' --dir "$D" \
-&& printf '%s\n' 'ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR' > allowed-signers \
-&& ssh-keygen -Y verify -f allowed-signers -I ostling.simon@gmail.com -n sh-agent-release -s SHA256SUMS.sig < SHA256SUMS \
+&& printf '%s\n' 'ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR' > allowed_signers \
+&& ssh-keygen -Y verify -f allowed_signers -I ostling.simon@gmail.com -n sh-agent-release -s SHA256SUMS.sig < SHA256SUMS \
 && grep -v '^#' SHA256SUMS | sha256sum -c - --ignore-missing \
 && chmod +x sh-agent-linux-amd64 && ./sh-agent-linux-amd64 version \
 && mv sh-agent-linux-amd64 ~/.local/bin/sh-agent && cd ~ && rm -r "$D"
+```
 
+```bash
 # or go install, for v1.1.0 or newer (v1.0.0 has no harness built in). The module path
 # is an https URL and the repository is private, so git must be told to fetch it over
 # SSH — without this it fails with "could not read Username for 'https://github.com'".
@@ -108,7 +110,9 @@ GOPRIVATE='github.com/kesokaj/*' \
   go install github.com/kesokaj/styrman-harness/cmd/sh-agent@v1.1.0
 # (or, if you would rather set it once for this machine:
 #   git config --global url."git@github.com:".insteadOf https://github.com/ )
+```
 
+```bash
 # or the Releases page in a browser: download the binary, SHA256SUMS and SHA256SUMS.sig,
 # run the same three checks as the gh route on them (signature, checksum, version), then
 chmod +x ~/Downloads/sh-agent-darwin-arm64 && mv ~/Downloads/sh-agent-darwin-arm64 ~/.local/bin/sh-agent

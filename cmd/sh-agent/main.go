@@ -270,8 +270,13 @@ func installFiles(src harness.Source, home, vendor string, dryRun bool, out io.W
 	if err := harness.Install(src, home, files, vendor, dryRun, out); err != nil {
 		return err
 	}
-	if err := pathHint(home, out); err != nil {
-		return err
+	// A dry run wrote no binary, so no statement about how PATH reaches it is
+	// true; the hint would call the bin dir "not on PATH" whether it is or not
+	// (security review round 3).
+	if !dryRun {
+		if err := pathHint(home, out); err != nil {
+			return err
+		}
 	}
 	if vendor == harness.VendorAll || vendor == harness.VendorClaude {
 		attributionSet(home, dryRun, out)

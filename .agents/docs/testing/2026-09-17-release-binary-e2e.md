@@ -82,3 +82,37 @@ Host `spgo-mac.roam.internal`, darwin/arm64, Antigravity only. Run by the operat
 - The signature edge case on darwin (a swapped `SHA256SUMS.sig` refused). Proven on Linux against the real releases; not run on the Mac.
 - The Claude Code side on that Mac: it was installed `--vendor antigravity` only, so `~/.claude` there holds nothing from v1.2.0 and `claude` was not started from it.
 - `linux/arm64`: built and published for both releases, never executed on any machine.
+
+## Added 2026-09-18 — v1.2.1 on two machines the operator ran himself
+
+Both runs are from the operator's own shell, on machines with no harness checkout in play. Between them they close every leg that had been owed since v1.1.0 except three, named at the end.
+
+### devbox (Debian, linux/amd64) — first release-binary install on this machine
+
+- **Download verified before anything was moved.** `gh release download v1.2.1` (binary, `SHA256SUMS`, `SHA256SUMS.sig`) into a fresh `mktemp -d`; `ssh-keygen -Y verify -n sh-agent-release` → `Good "sh-agent-release" signature for ostling.simon@gmail.com with ED25519 key SHA256:5HpYQJjpG+yE1xXBTOIZPsTkbkgkVnV8z0eG8hBawyU`; `sha256sum -c` → `sh-agent-linux-amd64: OK`; `./sh-agent-linux-amd64 version` → `sh-agent v1.2.1`, run from the download directory before the install.
+- **The install was then lost to PATH shadowing** — recorded as BUG-078, and the reason this section exists. `/usr/local/bin/sh-agent` held the verified v1.2.1 binary (7052333 bytes, and `/usr/local/bin/sh-agent version` printed `v1.2.1` when called by absolute path), but `which -a sh-agent` found `/home/admin/.local/bin/sh-agent` (PATH 1) and `/opt/devbox/bin/sh-agent` (PATH 5) ahead of it at PATH 11. Unqualified `sh-agent` therefore ran a `(devel)` build, which resolved the stale plain copy at `/opt/devbox/deploy/harness` and installed THAT — reporting `drift none` the whole time, because drift is measured against whatever source the running binary resolved.
+- **Proof the content was stale, and proof it stopped being so.** With the shadowed binary, `claude -p 'Quote the rule about a guard in front of a destructive action.'` quoted the `rm -r` bullet — the fail-closed guard rule at `context/AGENTS.md:58` was not in that tree. After `/opt/devbox/bin/sh-agent` was pointed at `/usr/local/bin/sh-agent`, `grep -c 'A guard in front of a destructive' ~/.claude/AGENTS.md` → `1`.
+- **Install, once the right binary ran.** `sh-agent install --vendor=all` → `release binary v1.2.1: installing the harness built into it and the running binary`, `29 written, 231 unchanged, 2 removed, 0 kept — 260 files managed`. The 2 removed are files the stale tree had and v1.2.1 does not.
+- **Status.** `source embedded v1.2.1 (release binary; update downloads the newest release)`, `installed 2026-09-18T10:26:00Z from release v1.2.1 (vendor: all, 260 files …)`, `binary v1.2.1`, `drift none — 259 files match the repo`.
+- **Report, from a release binary, `--vendor all`.** `report: harness is the release binary v1.2.1, not a checkout: harness_commit is null, harness_version is set`; `skipped feedback.jsonl (absent)`; sent `reports/devbox/2026-09-18-102654 (1aefa0e)` — 9 files, 1627 insertions, six queued retro proposals among them.
+- **Nothing kept.** `ls -la ~/.config/sh-agent/` afterwards: `proposals/`, `retros.jsonl`, `state.json`. No `feedback/`, no `report-*`. First time this has been shown on a `--vendor all` release-binary place.
+
+### The work Mac (darwin/arm64) — the kept clone, shed for real
+
+- **`sh-agent update` on v1.2.1** → `removed the kept feedback clone /Users/spgo/.config/sh-agent/feedback (report no longer keeps one)`, then `up to date (v1.2.1)`. This is the fix for what § What the Mac exposed found on 2026-09-18: the release-binary branch of `update` returned before `RemoveKeptClone`. The clone that machine had held since 2026-09-17 is gone.
+- The preceding `update` on that Mac, which fetched v1.2.1 itself, could not have shed it: `git show v1.2.0:cmd/sh-agent/main.go | grep -c shedKeptClone` → `0`, against `4` for v1.2.1. `update` replaces the binary and then runs the NEW binary's `install`, never its `update`, so the shedding waited for a second `update` — worth knowing for any future cleanup that ships this way.
+- **`ls -la ~/.config/sh-agent/`** → `state.json` alone.
+- **`report`** → sent `reports/spgo-mac.roam.internal/2026-09-18-122933 (789e2d9)`, two files, with the same release-binary metrics note. `feedback.jsonl`, `retros.jsonl` and `proposals/` were all absent and each was named as skipped.
+
+### What these two runs settle
+
+- A `darwin/arm64` binary and a `linux/amd64` release binary both run, install, report and update on machines with no checkout.
+- `update` sheds the old kept clone on a release-binary place — the last piece of "report keeps nothing on the machine".
+- A release delivers context rules to a binary-only place: the fail-closed guard rule, graduated on 2026-09-17, is now on both machines and was quoted back from neither before this.
+
+### Still not exercised anywhere
+
+- The swapped-signature edge case on darwin (a tampered `SHA256SUMS.sig` refused, binary untouched). Proven on Linux against the real releases; never run on the Mac.
+- `linux/arm64`: built and published for all three releases, never executed on any machine.
+- The Claude Code side of the work Mac: still installed `--vendor antigravity` only, so `~/.claude` there holds nothing from any release and `claude` has not been started from it. devbox covers the Claude side on Linux.
+- `sh-agent update` has never run on devbox: that machine reached v1.2.1 by download and `install`, not by updating from an earlier release.

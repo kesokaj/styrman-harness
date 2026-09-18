@@ -79,12 +79,19 @@ func RunningElsewhere(pathEnv, binPath, exe string) (string, bool) {
 	if err != nil {
 		return "", false
 	}
-	if inst, err := os.Stat(binPath); err == nil && os.SameFile(self, inst) {
+	// No installed file, nothing to be behind: an `update` that installed
+	// nothing into a home with no binary must not name a file that does not
+	// exist and call the running one stale (security review 2026-09-18).
+	inst, err := os.Stat(binPath)
+	if err != nil || os.SameFile(self, inst) {
 		return "", false
 	}
 	name := filepath.Base(binPath)
 	for _, dir := range filepath.SplitList(pathEnv) {
 		cand := filepath.Join(dir, name)
+		if dir == "" {
+			cand = "." + string(filepath.Separator) + name // as PathShadows prints it
+		}
 		if info, err := os.Stat(cand); err == nil && os.SameFile(info, self) {
 			return cand, true
 		}

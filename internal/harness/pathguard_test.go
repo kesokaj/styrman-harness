@@ -447,12 +447,12 @@ func TestRunningElsewhere(t *testing.T) {
 		{"reported at the PATH entry, whichever order", joinPath(sysDir, binDir), sysBin, sysBin, true},
 		{"running a file no PATH entry reaches: nobody's sh-agent", joinPath(binDir, sysDir), hidden, "", false},
 		{"reached only through a link: reported at the PATH entry, not the exe path", joinPath(binDir, aliasDir), sysBin, filepath.Join(aliasDir, "sh-agent"), true},
-		{"installed file missing: a reachable other copy still reported", joinPath(sysDir), sysBin, sysBin, true},
+		{"installed file missing: nothing to be behind, silent", joinPath(sysDir), sysBin, "", false},
 		{"exe missing", joinPath(binDir), filepath.Join(root, "gone"), "", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			binPath := installed
-			if tc.name == "installed file missing: a reachable other copy still reported" {
+			if tc.name == "installed file missing: nothing to be behind, silent" {
 				binPath = filepath.Join(root, "nowhere", "sh-agent")
 			}
 			got, ok := RunningElsewhere(tc.path, binPath, tc.exe)

@@ -658,7 +658,7 @@ func staleRunningNote(home string, out io.Writer) {
 	}
 	installed := filepath.Join(home, harness.BinPath)
 	if from, ok := harness.RunningElsewhere(os.Getenv("PATH"), installed, exe); ok {
-		fmt.Fprintf(out, "note: this update ran from %s, which update never replaces; the installed binary is %s. A shell that has already resolved `sh-agent` to the old path keeps running it until `hash -r` (bash) or `rehash` (zsh) — or remove it\n", from, installed)
+		fmt.Fprintf(out, "note: this update ran from %s, not from the installed binary %s; update replaces only the installed one, so the file it ran from stays as it is. A shell that has already resolved `sh-agent` to that path keeps running it until `hash -r` (bash) or `rehash` (zsh); point it at the installed binary (`ln -sfn`) or remove it\n", from, installed)
 	}
 }
 

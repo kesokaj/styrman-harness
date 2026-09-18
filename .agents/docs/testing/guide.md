@@ -105,6 +105,16 @@ questions, one skill load, one agent dispatch) from that home, on each CLI, befo
 install is called done. The Mac procedure is
 `.agents/docs/testing/2026-09-04-verify-mac-real-home.md`.
 
+After any `sh-agent update`, also run the deploy guides' post-update check from that
+home: `hash -r` (bash) or `rehash` (zsh), then `sh-agent version` unqualified and
+confirm it matches the version just installed, then `sh-agent status` and confirm it
+prints no `shadowed` line (BUG-079). When the version is wrong, `type sh-agent` then
+`which -a sh-agent` name which file the shell is still reaching.
+
+The by-hand install chains (README § Install without cloning, `remote.md` § First
+install) are exercised only in `.agents/docs/testing/2026-09-17-release-binary-e2e.md`,
+not by any tier in this guide — an accepted e2e-only check.
+
 ## Full matrix
 
 `.agents/docs/testing/skill-matrix.md` is the reproducible spec of every skill/agent

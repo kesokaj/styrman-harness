@@ -30,3 +30,11 @@ The three places that had to agree on BUG-079's remedy — README.md, `.agents/d
 - Did not check every other file under `.agents/docs/specs/` beyond `delivery.md`, nor `skills/` contents beyond a targeted grep for "replaces the binary" / "replaces … binary" phrasing — no other hits surfaced in that grep across `context/`, `agents/`, `skills/` (excluding vendored), so treated as clean, but a full read of every skill file was not performed.
 - Did not check `.agents/docs/bugs/INDEX.md` or the BUG-079 record itself — both were committed in `c868ed4`, outside the reviewed range.
 - Did not evaluate whether a `changes/` entry is owed for the `bc745dc` fix commit — no such entry exists in the diff; flagged here only as a note, not scored as a finding, since it falls outside the specific comparison points the brief named.
+
+## Outcome
+
+Written by the main agent; the fixes are `documentation`'s, in the commit that closes BUG-079.
+
+- [low] "replaces the binary" in five living docs — **fixed** by `documentation`: each now names `~/.local/bin/sh-agent` in its own sentence (`README.md` § How it works and § Daily commands, `remote.md` § The four places, `local.md` .agents/docs/deploy/local.md:40, `delivery.md` .agents/docs/specs/sh-agent/delivery.md:33).
+- [informational, third review running] `testing/guide.md` § 5 — **settled**: the post-update check (`hash -r`/`rehash`, unqualified `sh-agent version`, `status` with no `shadowed` line) is a step of § 5 (.agents/docs/testing/guide.md:108), and the by-hand install chains are declared an accepted e2e-only check exercised in the release-binary e2e log, not a guide tier (.agents/docs/testing/guide.md:114).
+- Map: an output line inside the existing `update` verb; no line rerouted (rule 3) — recorded.

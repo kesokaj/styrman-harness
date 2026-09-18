@@ -171,8 +171,24 @@ func TestUpdateFromReleaseReplacesAndInstalls(t *testing.T) {
 	t.Setenv("SH_AGENT_FAKE_MARKER", marker)
 
 	var out bytes.Buffer
+	// The process running this update is not the file it installs — the
+	// devbox shape — and a PATH entry reaches it by name (BUG-079).
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	elsewhere := t.TempDir()
+	byName := filepath.Join(elsewhere, "sh-agent")
+	if err := os.Symlink(self, byName); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", os.Getenv("PATH")+string(os.PathListSeparator)+elsewhere)
 	if err := UpdateFromRelease(home, "v1.0.0", false, []string{"--home", home}, &out); err != nil {
 		t.Fatalf("update: %v\n%s", err, out.String())
+	}
+	wantNote := "note: this update ran from " + byName + ", not from the installed binary " + dest + "; update replaces only the installed one"
+	if !strings.Contains(out.String(), wantNote) {
+		t.Errorf("a replacing update did not name the binary it ran from:\nwant %q\n%s", wantNote, out.String())
 	}
 	got, err := os.ReadFile(dest)
 	if err != nil {

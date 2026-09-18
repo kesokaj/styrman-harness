@@ -37,7 +37,7 @@ A place installed from a release binary (README § Install without cloning) has 
 
 ```bash
 sh-agent update --check    # only reports; exit 2 when a newer release exists
-sh-agent update            # download the newest release, verify it, replace the binary, reinstall
+sh-agent update            # download the newest release, verify it, replace ~/.local/bin/sh-agent, reinstall
 ```
 
 What it does, in order: asks `gh` for the newest release's tag; refuses anything that is not a `vX.Y.Z` tag, and anything not numerically newer than the installed version — an older release is signed just as honestly as a newer one, so nothing but this check stops a downgrade; downloads this platform's binary with `SHA256SUMS` and `SHA256SUMS.sig` into a temporary directory under `~/.config/sh-agent/`, removed on every path out; verifies the signature with `ssh-keygen -Y verify` against the allowed-signers line compiled INTO the binary, in the namespace `sh-agent-release`; checks that the signed `SHA256SUMS` names this release and that the binary matches its line in it; and only then replaces `~/.local/bin/sh-agent` through a rename and runs the new binary's `install`. Any failure leaves the installed binary untouched and names the check that failed. It needs `gh` on `PATH` and `ssh-keygen`; a development build is never overwritten from a release.

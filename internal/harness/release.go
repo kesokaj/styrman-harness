@@ -175,6 +175,7 @@ func UpdateFromRelease(home, version string, checkOnly bool, installArgs []strin
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("%s install: %w", dest, err)
 	}
+	NoteRunningElsewhere(home, out)
 	return nil
 }
 

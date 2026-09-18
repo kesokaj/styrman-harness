@@ -1,6 +1,8 @@
 package harness
 
 import (
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 )
@@ -97,4 +99,23 @@ func RunningElsewhere(pathEnv, binPath, exe string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// NoteRunningElsewhere says, after an update wrote the installed binary, when
+// the process that ran the update is not that binary and a shell can reach the
+// process's file by name: that file stays as it is, and a shell that already
+// resolved `sh-agent` to it keeps running it whatever PATH says (BUG-079).
+// Called only after a binary was actually written — an up-to-date or
+// older-release run installs nothing, so there is nothing to be behind, and on
+// the older-release branch the running file is the NEWER one (security review
+// 2026-09-18, round 2).
+func NoteRunningElsewhere(home string, out io.Writer) {
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	installed := filepath.Join(home, BinPath)
+	if from, ok := RunningElsewhere(os.Getenv("PATH"), installed, exe); ok {
+		fmt.Fprintf(out, "note: this update ran from %s, not from the installed binary %s; update replaces only the installed one, so the file it ran from stays as it is. A shell that has already resolved `sh-agent` to that path keeps running it until `hash -r` (bash) or `rehash` (zsh); point it at the installed binary (`ln -sfn`) or remove it — when that path is root-owned, prefer removing it\n", from, installed)
+	}
 }

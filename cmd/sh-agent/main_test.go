@@ -1490,10 +1490,13 @@ func TestOffPathInstallNamesWhatAnswersAndDoesNotWarnTwice(t *testing.T) {
 // `update` replaces ~/.local/bin/sh-agent and nothing else. On devbox it was
 // run by /usr/local/bin/sh-agent (v1.2.1), which stayed v1.2.1 while
 // ~/.local/bin became v1.2.2, and bash's command hash kept running the old
-// file — `which -a` showed the right order and `sh-agent version` printed the
-// wrong version. update now says when the binary it ran from is not the one
-// it installed and a shell can reach it by name (BUG-079).
-func TestUpdateNamesTheBinaryItRanFrom(t *testing.T) {
+// file (BUG-079). UpdateFromRelease prints the note itself when it REPLACED
+// the binary (its positive case is beside it, in internal/harness). An update
+// that installed nothing — up to date, --check, a fresh home — says nothing:
+// there is nothing for the running file to be behind, and on the
+// older-release branch the running file is the newer one (security review
+// 2026-09-18, round 2).
+func TestUpToDateUpdateSaysNothingAboutTheRunningBinary(t *testing.T) {
 	t.Setenv("SH_AGENT_REPO", "")
 	t.Chdir(t.TempDir())
 	defer func(v string) { version = v }(version)
@@ -1512,71 +1515,34 @@ func TestUpdateNamesTheBinaryItRanFrom(t *testing.T) {
 		t.Fatal(err)
 	}
 	elsewhere := t.TempDir()
-	byName := filepath.Join(elsewhere, "sh-agent")
-	if err := os.Symlink(self, byName); err != nil {
+	if err := os.Symlink(self, filepath.Join(elsewhere, "sh-agent")); err != nil {
 		t.Fatal(err)
 	}
 	home := t.TempDir()
 	installed := filepath.Join(home, harness.BinPath)
-
-	want := "note: this update ran from " + byName + ", not from the installed binary " + installed + "; update replaces only the installed one, so the file it ran from stays as it is. A shell that has already resolved `sh-agent` to that path keeps running it until `hash -r` (bash) or `rehash` (zsh); point it at the installed binary (`ln -sfn`) or remove it"
-
-	t.Run("no installed binary: silent", func(t *testing.T) {
-		// An up-to-date update into a home that has no binary installed
-		// nothing; naming a file that does not exist and calling the running
-		// one stale would send the reader to remove their only binary.
-		t.Setenv("PATH", ghDir+string(os.PathListSeparator)+elsewhere)
-		var out bytes.Buffer
-		if err := run([]string{"update", "--home", home}, &out); err != nil {
-			t.Fatalf("update: %v\n%s", err, out.String())
-		}
-		if strings.Contains(out.String(), "not from the installed binary") {
-			t.Errorf("update named an installed binary that does not exist:\n%s", out.String())
-		}
-	})
-
-	// From here on the home holds an installed binary — a different file
-	// from this process — as after any install.
 	if err := os.MkdirAll(filepath.Dir(installed), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(installed, []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	t.Setenv("PATH", ghDir+string(os.PathListSeparator)+elsewhere)
 
-	t.Run("reachable by name: named", func(t *testing.T) {
-		t.Setenv("PATH", ghDir+string(os.PathListSeparator)+elsewhere)
+	for _, args := range [][]string{
+		{"update", "--home", home},
+		{"update", "--check", "--home", home},
+	} {
 		var out bytes.Buffer
-		if err := run([]string{"update", "--home", home}, &out); err != nil {
-			t.Fatalf("update: %v\n%s", err, out.String())
+		if err := run(args, &out); err != nil {
+			t.Fatalf("%v: %v\n%s", args, err, out.String())
 		}
-		if !strings.Contains(out.String(), want) {
-			t.Errorf("update did not name the binary it ran from:\nwant %q\n%s", want, out.String())
-		}
-	})
-
-	t.Run("not on PATH at all: silent", func(t *testing.T) {
-		// A test binary or a `go run` build is never reachable by name.
-		t.Setenv("PATH", ghDir)
-		var out bytes.Buffer
-		if err := run([]string{"update", "--home", home}, &out); err != nil {
-			t.Fatalf("update: %v\n%s", err, out.String())
+		if !strings.Contains(out.String(), "up to date (v1.0.0)") {
+			t.Fatalf("%v: expected the up-to-date path:\n%s", args, out.String())
 		}
 		if strings.Contains(out.String(), "not from the installed binary") {
-			t.Errorf("update named a binary no shell can reach by name:\n%s", out.String())
+			t.Errorf("%v installed nothing and still described the running binary as behind:\n%s", args, out.String())
 		}
-	})
-
-	t.Run("--check says nothing", func(t *testing.T) {
-		t.Setenv("PATH", ghDir+string(os.PathListSeparator)+elsewhere)
-		var out bytes.Buffer
-		if err := run([]string{"update", "--check", "--home", home}, &out); err != nil {
-			t.Fatalf("update --check: %v\n%s", err, out.String())
-		}
-		if strings.Contains(out.String(), "not from the installed binary") {
-			t.Errorf("--check, which changes nothing, described a replacement:\n%s", out.String())
-		}
-	})
+	}
 }
 
 // The checkout path of update has the same shape: Reinstall writes

@@ -205,15 +205,15 @@ func run(args []string, out io.Writer) error {
 			if !*check {
 				shedKeptClone(home, out)
 			}
+			// The BUG-079 note, when this run wrote the installed binary, is
+			// printed by UpdateFromRelease itself: only there is "replaced"
+			// known, and only there can its positive case be tested.
 			err = harness.UpdateFromRelease(home, src.Version, *check, args, out)
 			if errors.Is(err, harness.ErrNewerRelease) {
 				return exitCode(2)
 			}
 			if err != nil {
 				return fmt.Errorf("update: %w", err)
-			}
-			if !*check {
-				staleRunningNote(home, out)
 			}
 			return nil
 		}
@@ -504,7 +504,9 @@ func update(repo, home string, checkOnly bool, homeFlag, vendorFlag string, out 
 	if err := harness.Reinstall(repo, args, out); err != nil {
 		return err
 	}
-	staleRunningNote(home, out)
+	// Reinstall wrote ~/.local/bin/sh-agent; the process running this update
+	// may be another file (BUG-079).
+	harness.NoteRunningElsewhere(home, out)
 	return nil
 }
 
@@ -645,21 +647,6 @@ func selfExecutable() ([]byte, error) {
 		return nil, err
 	}
 	return os.ReadFile(p)
-}
-
-// staleRunningNote says when this update ran from a binary it did not
-// replace and a shell can reach that binary by name — the file is now behind
-// the one at ~/.local/bin, and a shell that has already resolved `sh-agent`
-// to it keeps running it whatever PATH says (BUG-079).
-func staleRunningNote(home string, out io.Writer) {
-	exe, err := os.Executable()
-	if err != nil {
-		return
-	}
-	installed := filepath.Join(home, harness.BinPath)
-	if from, ok := harness.RunningElsewhere(os.Getenv("PATH"), installed, exe); ok {
-		fmt.Fprintf(out, "note: this update ran from %s, not from the installed binary %s; update replaces only the installed one, so the file it ran from stays as it is. A shell that has already resolved `sh-agent` to that path keeps running it until `hash -r` (bash) or `rehash` (zsh); point it at the installed binary (`ln -sfn`) or remove it\n", from, installed)
-	}
 }
 
 // pathHint says, after an install, whether the next unqualified `sh-agent`

@@ -52,4 +52,7 @@ None. Every cell either ran with output or refused with a message that names the
 
 ## Real machines (Phase 5)
 
-Filled from the operator's pasted output. See § Real machines when it exists; until then the release-binary cells that need a real home, a real shell and a published release are those marked "Phase 5" above.
+Filled from the operator's pasted output and, for this box, from the operator's request to run it here.
+
+- **This Linux box (`dave`, checkout place, the operator's real home), 2026-09-18, on the operator's word:** `~/.config/sh-agent` was `755` before. `sh-agent update` → `up to date with upstream (20ca4b4)`, the kept-clone note (declined, as intended), `building sh-agent from …/styrman-harness`, **`mode    ~/.config/sh-agent (0755 -> 0700)`** printed before the per-file lines, `1 written, 259 unchanged, 0 removed, 0 kept — 260 files managed` (the rebuilt binary); `sh-agent version` unqualified → `sh-agent 20ca4b4c1a07`; `type sh-agent` → `sh-agent is hashed (/home/kesokaj/.local/bin/sh-agent)`; `status` → `repo … (main @ 20ca4b4, clean)`, `binary 20ca4b4c1a07`, `drift none — 259 files match the repo`, no `shadowed` line; the dir `700` after. Every Phase 5 cell a checkout place can show, shown; the BUG-079 note correctly absent (the process was the installed file).
+- **Mac and devbox:** awaiting the operator's output (`update` v1.2.2 → v1.2.3, `version`, `status`; the Mac's Claude side and browser chain).

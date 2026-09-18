@@ -18,6 +18,22 @@ sh-agent status
 
 `install` writes the `attribution` key on this machine; check `sh-agent status` prints no note.
 
+On a machine that installs from a RELEASE BINARY instead, the download is verified before it is moved and the install is verified after it — two different checks, and skipping the second is what BUG-078 cost:
+
+```bash
+gh release download vX.Y.Z --repo kesokaj/styrman-harness --clobber \
+  --pattern 'sh-agent-<os>-<arch>' --pattern 'SHA256SUMS' --pattern 'SHA256SUMS.sig' --dir "$D"
+ssh-keygen -Y verify -f allowed-signers -I <signer> -n sh-agent-release -s SHA256SUMS.sig < SHA256SUMS
+grep -v '^#' SHA256SUMS | sha256sum -c - --ignore-missing
+./sh-agent-<os>-<arch> version        # the downloaded FILE, before it is moved anywhere
+mv …/sh-agent-<os>-<arch> ~/.local/bin/sh-agent    # or a system path
+
+sh-agent version                      # unqualified: what the SHELL resolves, after the move
+which -a sh-agent                     # every candidate, in PATH order, when the version is wrong
+```
+
+`sh-agent version` unqualified is the one that matters. A binary moved into a system path is not installed if an earlier `PATH` entry holds another `sh-agent`: that one runs, installs whatever source it resolves, and reports `drift none` about it. `install` and `status` name such a binary now (a `warning:` line and a `shadowed` line), and a symlink from the earlier entry to the installed binary settles it — it runs the same file, so it is not a shadow. `--clobber` matters for the same class of reason: without it a leftover file from an earlier attempt makes the download refuse, and the stale file is what gets moved.
+
 ## The four places
 
 The operator installs the harness in four places: the work Mac (Antigravity only), the home Mac (both CLIs), and two Linux hosts where they work on other projects (both CLIs). Every one is reached on the operator's own SSH key and `gh` login — there are no deploy keys and no per-machine credentials, because the operator authenticates as themselves everywhere and a key would restrict nothing (ADR-030 D1). A place gets the harness one of two ways:
@@ -163,7 +179,7 @@ Version: MINOR for anything an installed place gains (a new or changed skill, ag
 
 ## Verify
 
-Same as `local.md`: `sh-agent status` with no drift, then one start of each CLI. On the Mac, additionally confirm the Antigravity paths — passed 2026-09-04 (`.agents/docs/testing/2026-09-04-verify-mac-real-home.md`); re-run after a change that touches Antigravity-specific behavior and record the result there.
+Same as `local.md`: `sh-agent version` unqualified matching what was installed, `sh-agent status` with no drift and no `shadowed` line, then one start of each CLI. On the Mac, additionally confirm the Antigravity paths — passed 2026-09-04 (`.agents/docs/testing/2026-09-04-verify-mac-real-home.md`); re-run after a change that touches Antigravity-specific behavior and record the result there.
 
 ## Operator steps
 

@@ -273,6 +273,7 @@ func installFiles(src harness.Source, home, vendor string, dryRun bool, out io.W
 	if err := pathHint(home, out); err != nil {
 		return err
 	}
+	shadowHint(home, out)
 	if vendor == harness.VendorAll || vendor == harness.VendorClaude {
 		attributionSet(home, dryRun, out)
 		return attributionHint(home, "note: ", out)
@@ -383,6 +384,15 @@ func status(src harness.Source, home, vendorFlag string, out io.Writer) error {
 		}
 	}
 	fmt.Fprintln(out, binaryLine)
+	// The line above describes the installed file; these say when that file is
+	// not the one an unqualified `sh-agent` runs (BUG-078). Only when this
+	// home's bin dir is on PATH: for a scratch home it never is, and the
+	// operator's own home is the one where the distinction bites.
+	if binOnPath(home) {
+		for _, s := range shadows(home) {
+			fmt.Fprintf(out, "shadowed   %s comes first on PATH, so `sh-agent` runs that, not the binary above\n", s)
+		}
+	}
 	if last, ok := harness.LastRetro(home); ok {
 		days := int(time.Since(last).Hours() / 24)
 		hint := ""
@@ -628,13 +638,50 @@ func selfExecutable() ([]byte, error) {
 
 func pathHint(home string, out io.Writer) error {
 	bin := filepath.Join(home, filepath.Dir(harness.BinPath))
-	for _, p := range filepath.SplitList(os.Getenv("PATH")) {
-		if p == bin || strings.TrimSuffix(p, "/") == bin {
-			return nil
-		}
+	if binOnPath(home) {
+		return nil
+	}
+	// Naming what DOES answer matters more than the generic advice: a place
+	// whose bin dir is off PATH while another sh-agent is on it looks
+	// installed and is not (BUG-078).
+	if s := shadows(home); len(s) > 0 {
+		fmt.Fprintf(out, "note: %s is not on PATH, so `sh-agent` runs %s instead; put %s ahead of it\n", bin, s[0], bin)
+		return nil
 	}
 	fmt.Fprintf(out, "note: %s is not on PATH; add it so `sh-agent` is available everywhere\n", bin)
 	return nil
+}
+
+// binOnPath reports whether this home's ~/.local/bin is on PATH at all.
+func binOnPath(home string) bool {
+	bin := filepath.Join(home, filepath.Dir(harness.BinPath))
+	for _, p := range filepath.SplitList(os.Getenv("PATH")) {
+		if p == bin || strings.TrimSuffix(p, "/") == bin {
+			return true
+		}
+	}
+	return false
+}
+
+// shadows names every sh-agent a shell finds before this home's installed one.
+func shadows(home string) []string {
+	return harness.PathShadows(os.Getenv("PATH"), filepath.Join(home, harness.BinPath), harness.ResolveExecutable)
+}
+
+// shadowHint warns when the installed binary is on PATH but loses to an
+// earlier entry — the BUG-078 case, where install reports success and `status`
+// reports drift none, both about a binary the next command will not run. When
+// the bin dir is off PATH entirely, pathHint owns the message: warning twice
+// about one situation trains the reader to skip both, and every install into a
+// scratch home would print it.
+func shadowHint(home string, out io.Writer) {
+	if !binOnPath(home) {
+		return
+	}
+	bin := filepath.Join(home, harness.BinPath)
+	for _, s := range shadows(home) {
+		fmt.Fprintf(out, "warning: %s comes before %s on PATH, so `sh-agent` runs that one\n", s, bin)
+	}
 }
 
 // attributionSet writes the one vendor setting the harness owns (R4,

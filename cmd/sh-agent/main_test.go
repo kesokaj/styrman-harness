@@ -1369,3 +1369,104 @@ func TestHarnessMap(t *testing.T) {
 		}
 	}
 }
+
+// A verified release binary was installed to /usr/local/bin and then ignored,
+// because two earlier PATH entries held other sh-agents; install said it
+// succeeded and status said drift none, both about a binary that was not the
+// one the shell ran (BUG-078). install warns and status carries a `shadowed`
+// line, and both go quiet when the earlier entry is a link to the same file.
+func TestInstallAndStatusNameAPathShadow(t *testing.T) {
+	t.Setenv(harness.ChildEnv, "1")
+	repo, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	installedBin := filepath.Join(home, harness.BinPath)
+
+	// An earlier PATH entry holding a different sh-agent.
+	earlier := t.TempDir()
+	other := filepath.Join(earlier, "sh-agent")
+	if err := os.WriteFile(other, []byte("#!/bin/sh\necho not-the-installed-one\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", earlier+string(os.PathListSeparator)+filepath.Dir(installedBin))
+
+	var out bytes.Buffer
+	if err := run([]string{"install", "--repo", repo, "--home", home}, &out); err != nil {
+		t.Fatalf("install: %v\n%s", err, out.String())
+	}
+	wantInstall := "warning: " + other + " comes before " + installedBin + " on PATH, so `sh-agent` runs that one"
+	if !strings.Contains(out.String(), wantInstall) {
+		t.Errorf("install missing %q:\n%s", wantInstall, out.String())
+	}
+
+	out.Reset()
+	if err := run([]string{"status", "--repo", repo, "--home", home}, &out); err != nil {
+		t.Fatalf("status: %v\n%s", err, out.String())
+	}
+	wantStatus := "shadowed   " + other + " comes first on PATH, so `sh-agent` runs that, not the binary above"
+	if !strings.Contains(out.String(), wantStatus) {
+		t.Errorf("status missing %q:\n%s", wantStatus, out.String())
+	}
+
+	// The fix the operator applied: point the earlier entry at the installed
+	// binary. It runs the same file, so neither command may still warn.
+	if err := os.Remove(other); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(installedBin, other); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	if err := run([]string{"status", "--repo", repo, "--home", home}, &out); err != nil {
+		t.Fatalf("status after symlink: %v\n%s", err, out.String())
+	}
+	if strings.Contains(out.String(), "shadowed") {
+		t.Errorf("status still reports a shadow for a link to the installed binary:\n%s", out.String())
+	}
+}
+
+// One situation, one message. When this home's bin dir is not on PATH at all,
+// pathHint owns it and names what answers instead; the shadow warning stays
+// quiet, so a scratch-home install — which this repo does constantly — does
+// not print a warning the operator learns to skip past.
+func TestOffPathInstallNamesWhatAnswersAndDoesNotWarnTwice(t *testing.T) {
+	t.Setenv(harness.ChildEnv, "1")
+	repo, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	binDir := filepath.Join(home, filepath.Dir(harness.BinPath))
+
+	elsewhere := t.TempDir()
+	other := filepath.Join(elsewhere, "sh-agent")
+	if err := os.WriteFile(other, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", elsewhere) // this home's bin dir is NOT on PATH
+
+	var out bytes.Buffer
+	if err := run([]string{"install", "--repo", repo, "--home", home}, &out); err != nil {
+		t.Fatalf("install: %v\n%s", err, out.String())
+	}
+	want := "note: " + binDir + " is not on PATH, so `sh-agent` runs " + other + " instead; put " + binDir + " ahead of it"
+	if !strings.Contains(out.String(), want) {
+		t.Errorf("install missing %q:\n%s", want, out.String())
+	}
+	// Not the generic "warning:" — setting PATH to one directory also drops
+	// `go`, and install rightly warns about that. Only the shadow warning
+	// must be absent.
+	if strings.Contains(out.String(), "comes before") {
+		t.Errorf("install warned twice about one situation:\n%s", out.String())
+	}
+
+	out.Reset()
+	if err := run([]string{"status", "--repo", repo, "--home", home}, &out); err != nil {
+		t.Fatalf("status: %v\n%s", err, out.String())
+	}
+	if strings.Contains(out.String(), "shadowed") {
+		t.Errorf("status reported a shadow for a home whose bin dir is off PATH:\n%s", out.String())
+	}
+}

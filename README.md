@@ -78,9 +78,16 @@ Harness state (feedback log, retro proposals and index) lives in `~/.config/sh-a
 A machine that only USES the harness needs no checkout: a release binary carries `context/`, `skills/`, `agents/`, `commands/` and `rules/` inside it, and installs them. Any of these gets you the binary, all with your own GitHub credential — the repository is private, so a download works only when you are logged in or hold the key:
 
 ```bash
-# gh, the shortest path
-gh release download --repo kesokaj/styrman-harness --pattern 'sh-agent-linux-amd64' --dir ~/.local/bin
-mv ~/.local/bin/sh-agent-linux-amd64 ~/.local/bin/sh-agent && chmod +x ~/.local/bin/sh-agent
+# gh, the shortest path. --clobber because a leftover file from an earlier
+# attempt makes the download refuse, and the stale file is then what you move.
+gh release download --repo kesokaj/styrman-harness --clobber \
+  --pattern 'sh-agent-linux-amd64' --pattern 'SHA256SUMS' --pattern 'SHA256SUMS.sig' --dir ~/.local/bin
+cd ~/.local/bin
+printf '%s\n' 'YOUR_EMAIL ssh-ed25519 AAAA…' > allowed-signers   # the release signer
+ssh-keygen -Y verify -f allowed-signers -I YOUR_EMAIL -n sh-agent-release -s SHA256SUMS.sig < SHA256SUMS
+grep -v '^#' SHA256SUMS | sha256sum -c - --ignore-missing         # macOS: shasum -a 256 -c
+chmod +x sh-agent-linux-amd64 && ./sh-agent-linux-amd64 version   # check the file BEFORE it becomes `sh-agent`
+mv sh-agent-linux-amd64 sh-agent
 
 # or go install, for v1.1.0 or newer (v1.0.0 has no harness built in). The module path
 # is an https URL and the repository is private, so git must be told to fetch it over
@@ -100,9 +107,12 @@ chmod +x ~/Downloads/sh-agent-darwin-arm64 && mv ~/Downloads/sh-agent-darwin-arm
 Then:
 
 ```bash
+sh-agent version     # FIRST, unqualified: the version you just downloaded, or another sh-agent is winning
 sh-agent install     # installs the harness built into the binary
 sh-agent status      # "source embedded vX.Y.Z" and "drift none"
 ```
+
+`sh-agent version` comes first on purpose. Moving a verified binary into place is not the same as installing it: if any earlier `PATH` entry holds another `sh-agent`, that one runs instead, installs whatever source *it* resolves, and reports `drift none` about it — a machine ran a stale tree for an hour this way (BUG-078). `install` and `status` now name such a binary (`warning: … comes before … on PATH` and a `shadowed` line), but the one-word check above is the fastest confirmation. When it names the wrong version, `which -a sh-agent` lists every candidate in order; point the earlier one at this binary (`ln -sfn`) or remove it — a symlink to the same file is not a shadow and silences the warning.
 
 Make sure `~/.local/bin` is on your `PATH`. The assets are `sh-agent-linux-amd64`, `sh-agent-darwin-arm64` and `sh-agent-linux-arm64`, beside `SHA256SUMS` and `SHA256SUMS.sig`.
 

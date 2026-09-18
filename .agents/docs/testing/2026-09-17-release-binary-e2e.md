@@ -59,3 +59,26 @@ v1.2.0 was cut with the CORRECTED procedure (create the release with notes alone
 ### Still only the Mac can settle these
 
 Unchanged from the section above, now owed against v1.2.0 rather than v1.1.0: running any `darwin/arm64` binary at all, the macOS `xattr` quarantine note, `report` from a release-binary install leaving nothing behind, the swapped-signature edge case, and a clean start of both CLIs from a home installed by a release binary.
+
+## Added 2026-09-18 — the work Mac, on v1.2.0 (the operator's own runs)
+
+Host `spgo-mac.roam.internal`, darwin/arm64, Antigravity only. Run by the operator from `/tmp`, i.e. with no harness checkout anywhere near — the shape the whole feature exists for. **This is the first time a `darwin/arm64` binary has been executed at all.**
+
+- **Download and run.** `gh release download v1.2.0 --pattern 'sh-agent-darwin-arm64' --dir ~/.local/bin`, `mv`, `chmod +x` → `sh-agent v1.2.0`, 6709378 bytes, byte-identical in size to the published asset. No `xattr` step needed: a `gh` download is not quarantined, as README says.
+- **Install.** `sh-agent install --vendor antigravity` → `release binary v1.2.0: installing the harness built into it and the running binary`, `2 written, 128 unchanged, 0 removed, 0 kept — 130 files managed`. 130 is one vendor's half of 260, and the 2 written are `context/AGENTS.md` and `skills/preflight/SKILL.md` — exactly v1.2.0's delta over what that home already had.
+- **Status.** `source     embedded v1.2.0 (release binary; update downloads the newest release)`, `installed … from release v1.2.0 (vendor: antigravity, 130 files …)`, `binary     v1.2.0`, `drift      none — 129 files match the repo`.
+- **Report, the first ever from a release-binary install.** `--dry-run` named the throwaway clone (`report-7033`, blob-less, limited to `reports/spgo-mac.roam.internal/`) and the note `harness is the release binary v1.2.0, not a checkout: harness_commit is null, harness_version is set`. The real run sent `reports/spgo-mac.roam.internal/2026-09-18-103648 (c4b13a8)`. Verified independently from the Linux box by cloning the feedback repository: that commit exists and its `report.json` reads `{"host":"spgo-mac.roam.internal","os":"darwin","arch":"arm64","vendor":"antigravity","files":130,"harness_commit":null,"harness_version":"v1.2.0","drift":0,"skills":27,"agents":7,"go":"go1.27.1"}` — the `harness_version` shape existed only in fixtures until now. The push took about 1m 9s.
+- **Nothing kept.** `ls -la ~/.config/sh-agent/` afterwards: `state.json` and no `report-*` directory. The throwaway was created and removed on a second machine.
+- **`update --check`** → `up to date (v1.2.0)`, exit 0.
+- **`adopt`** → `adopt needs a harness checkout; this install is a release binary`. (A typo, `adpot`, first printed the usage text, which incidentally confirmed v1.2.0's updated `update` and `report` descriptions shipped.)
+- **CLI start.** `agy -p 'List three skills you have.'` from a scratch directory answered cleanly, naming `golang`, `typescript` and `cloud-run-deploy` with paths under `~/.gemini/config/skills/` — the files the binary carried. This is the tier the Linux box could not run, because its sandbox home no longer exists.
+
+### What the Mac exposed
+
+`ls ~/.config/sh-agent/` also showed `feedback/`, dated 2026-09-17 — the full clone earlier versions kept. `report` ignores it by design, but `update` is supposed to remove it, and the plan says so for BOTH kinds of place (§ Old kept clone cleanup). Only the checkout path called `RemoveKeptClone`; the release-binary branch returned before reaching it. So a binary-only place would have kept holding every other machine's reports — the exact complaint this feature began with, surviving in the one place it was meant to fix. Fixed the same day with a test that fails without the call; it reaches that Mac in the next release.
+
+### Still not exercised anywhere
+
+- The signature edge case on darwin (a swapped `SHA256SUMS.sig` refused). Proven on Linux against the real releases; not run on the Mac.
+- The Claude Code side on that Mac: it was installed `--vendor antigravity` only, so `~/.claude` there holds nothing from v1.2.0 and `claude` was not started from it.
+- `linux/arm64`: built and published for both releases, never executed on any machine.

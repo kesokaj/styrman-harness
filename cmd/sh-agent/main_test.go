@@ -1063,6 +1063,90 @@ func TestKnownCheckoutRefusesEmbeddedManifest(t *testing.T) {
 	}
 }
 
+// TestReleaseBinaryUpdateShedsKeptClone: a place with no checkout sheds the
+// full feedback clone earlier versions kept, exactly as a checkout place does
+// (plan § Old kept clone cleanup: "update, both kinds of place"). Only the
+// checkout path did it, so the machine that prompted this whole feature — a
+// Mac installed from a release binary — would have kept holding every other
+// place's reports (found 2026-09-18). Not under --check.
+func TestReleaseBinaryUpdateShedsKeptClone(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	t.Setenv("SH_AGENT_REPO", "")
+	t.Chdir(t.TempDir())
+	defer func(v string) { version = v }(version)
+	version = "v1.0.0"
+
+	// A gh that answers the one call --check and the up-to-date path make.
+	bin := t.TempDir()
+	script := "#!/bin/sh" + "\n" + "printf " + "'v1.0.0" + "\\n" + "'" + "\n"
+	if err := os.WriteFile(filepath.Join(bin, "gh"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// PATH holds this directory alone, so the real gh is unreachable — but
+	// RemoveKeptClone runs git, so git is linked in beside the fake gh rather
+	// than adding a system directory that would bring the real gh with it
+	// (the mistake caught on 2026-09-17).
+	gitBin, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("git not installed")
+	}
+	if err := os.Symlink(gitBin, filepath.Join(bin, "git")); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+
+	plant := func(t *testing.T, home string) string {
+		t.Helper()
+		base := t.TempDir()
+		origin := filepath.Join(base, "feedback.git")
+		kept := filepath.Join(home, ".config", "sh-agent", "feedback")
+		if err := os.MkdirAll(filepath.Dir(kept), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		for _, args := range [][]string{
+			{"init", "--quiet", "--bare", "-b", "main", origin},
+			{"clone", "--quiet", origin, kept},
+			{"-C", kept, "remote", "set-url", "origin", harness.FeedbackURL},
+		} {
+			cmd := exec.Command(gitBin, args...)
+			cmd.Dir = base
+			cmd.Env = append(gitCleanEnv(), "GIT_CONFIG_GLOBAL="+filepath.Join(base, "gitconfig"), "GIT_CONFIG_NOSYSTEM=1")
+			if out, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("git %v: %v\n%s", args, err, out)
+			}
+		}
+		return kept
+	}
+
+	// --check changes nothing, here as on the checkout path.
+	home := t.TempDir()
+	kept := plant(t, home)
+	var out bytes.Buffer
+	if err := run([]string{"update", "--check", "--home", home}, &out); err != nil {
+		t.Fatalf("update --check: %v\n%s", err, out.String())
+	}
+	if _, err := os.Stat(kept); err != nil {
+		t.Errorf("--check removed the kept clone: %v\n%s", err, out.String())
+	}
+
+	// The real update sheds it, even when the release is already current.
+	out.Reset()
+	if err := run([]string{"update", "--home", home}, &out); err != nil {
+		t.Fatalf("update: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "up to date (v1.0.0)") {
+		t.Errorf("expected the up-to-date path:\n%s", out.String())
+	}
+	if _, err := os.Stat(kept); !os.IsNotExist(err) {
+		t.Errorf("a binary-only place did not shed the kept clone: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "removed the kept feedback clone") {
+		t.Errorf("the removal was silent:\n%s", out.String())
+	}
+}
+
 // TestReleaseFromInfo: a release build uses -trimpath, which keeps -ldflags
 // out of the build info, so status reads an installed release binary's
 // version from the module version Go stamps at a clean tag; anything else

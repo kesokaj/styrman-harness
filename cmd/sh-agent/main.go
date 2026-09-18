@@ -196,6 +196,15 @@ func run(args []string, out io.Writer) error {
 			if err != nil {
 				return err
 			}
+			// Both kinds of place shed the clone earlier versions kept
+			// (plan § Old kept clone cleanup, D9). Only the checkout path
+			// did, so a binary-only place went on holding every other
+			// place's reports — which is the complaint this whole feature
+			// began with. Never under --check, which changes nothing
+			// (BUG-070). Found on the work Mac, 2026-09-18.
+			if !*check {
+				shedKeptClone(home, out)
+			}
 			err = harness.UpdateFromRelease(home, src.Version, *check, args, out)
 			if errors.Is(err, harness.ErrNewerRelease) {
 				return exitCode(2)
@@ -450,15 +459,9 @@ func update(repo, home string, checkOnly bool, homeFlag, vendorFlag string, out 
 		}
 		return fmt.Errorf("%s %s and `update` installs the working tree, not the fetched commit; commit or stash them, or run `sh-agent install` to deploy them deliberately", repo, what)
 	}
-	// Earlier versions kept a full clone of the feedback repository in this
-	// home, so every machine held every other machine's reports; `report` now
-	// clones a throwaway and keeps nothing, and update is where the old one
-	// goes (D9). Below every `--check` return: that mode reports and changes
-	// nothing (security review 2026-09-17, finding 2). Reported, never fatal:
-	// it is not what update came to do.
-	if err := harness.RemoveKeptClone(home, harness.FeedbackURL, out); err != nil {
-		fmt.Fprintf(out, "note: could not remove the kept feedback clone: %v\n", err)
-	}
+	// Below every `--check` return: that mode reports and changes nothing
+	// (security review 2026-09-17, finding 2).
+	shedKeptClone(home, out)
 	if behind > 0 {
 		if err := harness.Pull(repo, out); err != nil {
 			return err
@@ -470,6 +473,16 @@ func update(repo, home string, checkOnly bool, homeFlag, vendorFlag string, out 
 		return err
 	}
 	return harness.Reinstall(repo, args, out)
+}
+
+// shedKeptClone removes the full clone of the feedback repository that earlier
+// versions kept in this home, so no machine holds another machine's reports
+// (D9). `report` keeps nothing now; update is where the old one goes. Reported,
+// never fatal: it is not what update came to do.
+func shedKeptClone(home string, out io.Writer) {
+	if err := harness.RemoveKeptClone(home, harness.FeedbackURL, out); err != nil {
+		fmt.Fprintf(out, "note: could not remove the kept feedback clone: %v\n", err)
+	}
 }
 
 // installPassArgs are the flags an update hands to the install it runs: the

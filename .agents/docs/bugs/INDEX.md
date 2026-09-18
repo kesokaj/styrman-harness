@@ -57,6 +57,7 @@
 | BUG-076 | 2026-09-18 | internal/harness/repo.go (ResolveSource) | fixed | operator saw "harness repo not found" on a stale dev-build binary and thought the download-without-cloning feature was broken | a refusal error names the precondition that failed (this build has no harness built in), not only the alternatives to try |
 | BUG-077 | 2026-09-18 | internal/harness/repo.go (ResolveSource), delivery model | fixed | release binary on devbox silently installed a stale plain-copy tree instead of its embedded harness, reporting "drift none" | decide source order per kind of build; a ship-with-it artifact never silently prefers a tree found on the machine, and an unupdatable copy never outranks one that can update |
 | BUG-083 | 2026-09-18 | agents/verifier | open | rewritten "write log EARLY, IN PROGRESS" rule followed in only 1 of 3 behavioural runs | verify an agent-definition change with dispatches that don't repeat the changed rule, report n of N; the enforcement is dispatch text (BUG-064), not the definition alone |
+| BUG-084 | 2026-09-18 | skills/feedback-log, agents/verifier | fixed | retro-added signal missing from JSON schema line; verifier Status template missing IN PROGRESS; "first command" rule unsatisfiable given Pre-flight order | when a value joins a vocabulary, grep the file and its consumers for every enumeration (schema, template, table) and change them together; an ordinal-step rule is checked against the agent's own step order |
 
 ## Graduated
 

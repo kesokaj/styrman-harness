@@ -60,7 +60,7 @@ There is no test framework beyond `go test`. A change to `context/`, `agents/`, 
 
 ## Release
 
-Releases are SSH-signed annotated `vX.Y.Z` tags on `main`, cut only by `/preflight vX.Y.Z` from the operator's own turn, from this checkout, on a machine holding the operator's ed25519 key. The tag is signed per command (`-c gpg.format=ssh -c user.signingkey=...`, never a `git config` change, and `git` never under `sudo`) and checked before the push — bound first (the tag takes no target and sits on HEAD, the release commit, whose parent is the gated head and whose source tree is the gated one, on `main`), then annotated, last armor header `-----BEGIN SSH SIGNATURE-----`, `verify-tag` against the allowed-signers line — with the exact commands in `.agents/docs/deploy/remote.md` § Releases. The tag is the only version tracking (no version file; preflight Step 6.2); a pushed tag is never moved; a bad release gets the next PATCH. A tag is a release marker, never a delivery channel: every place follows `main` with `sh-agent update`, so there is no deploy step after the push (ADR-030 D2).
+Releases are SSH-signed annotated `vX.Y.Z` tags on `main`, cut only by `/preflight vX.Y.Z` from the operator's own turn, from this checkout, on a machine holding the operator's ed25519 key. The tag is signed per command (`-c gpg.format=ssh -c user.signingkey=...`, never a `git config` change, and `git` never under `sudo`) and checked before the push — bound first (the tag takes no target and sits on HEAD, the release commit, whose parent is the gated head and whose source tree is the gated one, on `main`), then annotated, last armor header `-----BEGIN SSH SIGNATURE-----`, `verify-tag` against the allowed-signers line — with the exact commands in `.agents/docs/deploy/remote.md` § Releases. The tag is the only version tracking (no version file; preflight Step 6.2); a pushed tag is never moved; a bad release gets the next PATCH. A tag is a release marker that also carries the binaries a binary-only place updates to: a checkout place follows `main` with `sh-agent update`, a binary-only place moves only when a new tag is published, and nothing is pushed to any machine after the push (ADR-033, superseding ADR-030 D2).
 
 ## Key files
 
@@ -71,6 +71,6 @@ Releases are SSH-signed annotated `vX.Y.Z` tags on `main`, cut only by `/preflig
 | `internal/harness/derive.go` | Claude → Antigravity agent translation |
 | `REQUIREMENTS.md` | Non-negotiables for the harness |
 | `.agents/docs/plans/2026-09-03-rebuild.md` | The rebuild checklist |
-| `.agents/docs/deploy/remote.md` | The four places, the resync loop, and the signed-tag release procedure (ADR-030) |
+| `.agents/docs/deploy/remote.md` | The four places, the resync loop, and the signed-tag release procedure (ADR-030, ADR-033) |
 | `.agents/docs/specs/sh-agent/delivery.md` | The delivery model and the feedback loop, end to end |
 | `internal/harness/report.go` | `sh-agent report`: collect, redact, send to the feedback repository |

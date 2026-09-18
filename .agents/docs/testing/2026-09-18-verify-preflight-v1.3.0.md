@@ -4,7 +4,7 @@ date: 2026-09-18
 ---
 # Verification — preflight-v1.3.0   (2026-09-18)
 
-Range reviewed: v1.2.3..3b5b71a
+Range reviewed: v1.2.3..94bec82
 
 ## Status: PASS
 
@@ -130,3 +130,35 @@ Go 1.27.1 linux/amd64 (user-level SDK ahead of `/usr/bin/go`, per `AGENTS.md`;
 windows/amd64 build artifacts in `.agents/scratch/verify-v130/` (untested, build
 only). Scratch home `.agents/scratch/verify-v130/home`, gitignored. Real `$HOME`
 never touched.
+
+## Round 2 (94bec82)
+
+### Status: PASS
+
+Pre-gate commit moved HEAD to 94bec82: four text-only lines (README.md,
+agents/verifier.md, context/AGENTS.md, skills/feedback-log/SKILL.md; no Go).
+Re-ran the install/status/dry-run tier against the new HEAD, all from a built
+binary per guide tier 3a.
+
+- `gofmt -l cmd internal` -> exit 0, no output
+- `go test -race -count=1 ./...` -> exit 0, all packages ok (output at
+  .agents/scratch/verify-v130/go-test-r2.txt); no new Go in this commit so no
+  fresh --- PASS/FAIL count taken, non-verbose ok lines only
+- `go build -o .agents/scratch/verify-v130/sh-agent-built ./cmd/sh-agent` -> exit 0
+- `sh-agent-built install --home .agents/scratch/verify-v130/home` -> exit 0,
+  "0 written, 260 unchanged, 0 removed, 0 kept - 260 files managed" (rebuilt from
+  the repo, as the checkout-rebuild path always does, but found nothing to write:
+  the earlier Round 1 install of the same scratch home had already been refreshed
+  to 94bec82's content by the time this ran, or the four changed files render
+  byte-identical output for this vendor - either way, no drift)
+- `sh-agent-built status --home .agents/scratch/verify-v130/home` -> exit 0,
+  "installed ... from commit 94bec82+dirty", "drift none - 259 files match the
+  repo"
+- `sh-agent-built install --home .agents/scratch/verify-v130/home --dry-run` ->
+  exit 0, "[dry-run] the binary would be rebuilt from <checkout>" then
+  "[dry-run] 0 written, 260 unchanged, 0 removed, 0 kept - 260 files managed" -
+  matches expectation using the built-binary form (see Round 1 Root cause on why
+  `go run ... --dry-run` is not used for this check)
+
+Top-level Status stays PASS; Round 2 confirms no regression from the pre-gate
+commit.

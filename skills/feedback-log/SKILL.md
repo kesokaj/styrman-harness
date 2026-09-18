@@ -25,6 +25,8 @@ Append an entry when ANY of these occur:
 3. **Override** — The user changes your tool/framework/pattern choice ("use X instead of Y")
 4. **Format correction** — The user asks you to restructure or reformat output
 5. **Knowledge gap** — You had to ask about something the harness should have told you
+6. **Redirection** — The user changes what is being built or how far it goes after work has started ("the binary should only ever use X", "I want more info on Y"): a design redirection is a correction of the reading that produced the first design, even when no word of it is "no" — signal `redirection`
+7. **A missed filing** — The user asks for something a rule says should already exist (the full versions of a table's items, a scratch file named under it, a record) — the ask IS the correction — signal `restatement`, because the rule existed and the ask repeats what it requires
 
 ## When NOT to Log
 
@@ -73,6 +75,7 @@ Append one JSON object per line to `~/.config/sh-agent/feedback.jsonl`. If the d
 | `restatement` | User repeated a rule that already exists |
 | `format` | User asked for different output structure |
 | `gap` | Agent lacked knowledge it should have had |
+| `redirection` | User changed what is being built, or how far, after work started |
 
 ## Behavior Rules
 

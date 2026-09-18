@@ -116,14 +116,7 @@ func TestThrowawayParentIsPrivate(t *testing.T) {
 		t.Skip("root's umask makes mode assertions meaningless")
 	}
 	home := t.TempDir()
-	// Every install creates ~/.config/sh-agent first (SaveState), and did so
-	// at 0755: a MkdirAll(…, 0700) afterwards is a no-op on an existing dir
-	// (security review round 2 of the audit, measured on the operator's
-	// own home). The dir pre-exists here, loose, as on every real machine.
 	cfg := filepath.Join(home, ".config", "sh-agent")
-	if err := os.MkdirAll(cfg, 0o755); err != nil {
-		t.Fatal(err)
-	}
 	_, err := cloneThrowaway(home, filepath.Join(t.TempDir(), "no-such-repo.git"), "host")
 	if err == nil {
 		t.Fatal("cloning a missing repository succeeded")
@@ -134,6 +127,16 @@ func TestThrowawayParentIsPrivate(t *testing.T) {
 	}
 	if info.Mode().Perm()&0o077 != 0 {
 		t.Errorf("throwaway parent is %o, want 0700", info.Mode().Perm())
+	}
+	// An existing loose dir is install's to tighten (with a `mode` line),
+	// never report's: report changes nothing on the machine but the clone
+	// it removes (D1 of the plan's option 1, 2026-09-18).
+	if err := os.Chmod(cfg, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_, _ = cloneThrowaway(home, filepath.Join(t.TempDir(), "no-such-repo.git"), "host")
+	if info, _ := os.Stat(cfg); info.Mode().Perm() != 0o755 {
+		t.Errorf("report changed the runtime dir's mode to %o", info.Mode().Perm())
 	}
 }
 
@@ -155,6 +158,10 @@ func TestDiffUsesTheHomeNotTmp(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "does-not-exist"))
+	// diff inspects; it never tightens the runtime dir (security round 2).
+	if err := os.Chmod(filepath.Join(home, ".config", "sh-agent"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	out.Reset()
 	if err := Diff(home, files, &out); err != nil {
 		t.Fatalf("Diff with an unusable system temp dir: %v", err)
@@ -164,6 +171,9 @@ func TestDiffUsesTheHomeNotTmp(t *testing.T) {
 	}
 	if left, _ := filepath.Glob(filepath.Join(home, ".config", "sh-agent", "sh-agent-diff-*")); len(left) != 0 {
 		t.Errorf("Diff left temp files: %v", left)
+	}
+	if info, _ := os.Stat(filepath.Join(home, ".config", "sh-agent")); info.Mode().Perm() != 0o755 {
+		t.Errorf("diff changed the runtime dir's mode to %o", info.Mode().Perm())
 	}
 }
 
@@ -226,8 +236,62 @@ func TestInstallMakesTheConfigDirPrivate(t *testing.T) {
 			if info.Mode().Perm()&0o077 != 0 {
 				t.Errorf("after install, %s is %o, want 0700", cfg, info.Mode().Perm())
 			}
+			line := "mode    ~/.config/sh-agent (0755 -> 0700)"
+			if has := strings.Contains(out.String(), line); has != (pre == "0755") {
+				t.Errorf("mode line printed=%v for a %s dir:\n%s", has, pre, out.String())
+			}
 		})
 	}
+
+	t.Run("dry run names it and leaves it", func(t *testing.T) {
+		home := t.TempDir()
+		cfg := filepath.Join(home, ".config", "sh-agent")
+		if err := os.MkdirAll(cfg, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		files, err := Plan(DirSource(repo), nil, VendorAll)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out bytes.Buffer
+		if err := Install(DirSource(repo), home, files, VendorAll, true, &out); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(out.String(), "mode    ~/.config/sh-agent (0755 -> 0700)") {
+			t.Errorf("dry run did not name the mode change:\n%s", out.String())
+		}
+		if info, _ := os.Stat(cfg); info.Mode().Perm() != 0o755 {
+			t.Errorf("dry run changed the mode to %o", info.Mode().Perm())
+		}
+	})
+
+	t.Run("a symlinked runtime dir is left alone", func(t *testing.T) {
+		home := t.TempDir()
+		target := filepath.Join(t.TempDir(), "elsewhere")
+		if err := os.MkdirAll(target, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(filepath.Join(home, ".config"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(target, filepath.Join(home, ".config", "sh-agent")); err != nil {
+			t.Fatal(err)
+		}
+		files, err := Plan(DirSource(repo), nil, VendorAll)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out bytes.Buffer
+		if err := Install(DirSource(repo), home, files, VendorAll, false, &out); err != nil {
+			t.Fatal(err)
+		}
+		if info, _ := os.Stat(target); info.Mode().Perm() != 0o755 {
+			t.Errorf("install chmodded the target of a symlinked runtime dir to %o", info.Mode().Perm())
+		}
+		if strings.Contains(out.String(), "mode    ~/.config/sh-agent") {
+			t.Errorf("install claimed a mode change through a symlink:\n%s", out.String())
+		}
+	})
 }
 
 // The reviewer's low: a lexical compare of the home path misses a symlinked

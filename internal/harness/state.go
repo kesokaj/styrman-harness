@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -67,27 +68,44 @@ func SaveState(home string, s State) error {
 	return writeAtomic(statePath(home), append(data, '\n'), 0o644)
 }
 
-// ConfigDir returns ~/.config/sh-agent, created 0700 or tightened to it: the
+// ConfigDir returns ~/.config/sh-agent, created 0700 when absent: the
 // feedback log, the retro proposals and, briefly, a clone of the private
-// feedback repository live there, and every install used to create the
-// directory 0755 on the way to state.json — after which a later
-// MkdirAll(…, 0700) was a no-op (security review of the 2026-09-18 audit,
-// round 2, measured on the operator's own home).
+// feedback repository live there. An existing directory is left as it is
+// here — every install used to create it 0755 on the way to state.json, and
+// TightenConfigDir, run by install alone, is what corrects that (security
+// review of the 2026-09-18 audit, rounds 2 and 3; the operator's option 1).
 func ConfigDir(home string) (string, error) {
 	dir := filepath.Join(home, ".config", "sh-agent")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
-	info, err := os.Stat(dir)
-	if err != nil {
-		return "", err
-	}
-	if info.Mode().Perm()&0o077 != 0 {
-		if err := os.Chmod(dir, 0o700); err != nil {
-			return "", err
-		}
-	}
 	return dir, nil
+}
+
+// TightenConfigDir corrects the runtime directory's mode to 0700 at the start
+// of an install, the way install corrects a deployed file's mode: it names
+// the change with a `mode` line, a dry run names it and touches nothing, and
+// a chmod that fails is a note, never a failed install — the first version
+// aborted after every file was written, leaving no manifest. A symlinked
+// directory (a dotfiles arrangement) and one the caller does not own are
+// left alone: the first is not sh-agent's to reach through, the second is
+// not its to change.
+func TightenConfigDir(home string, dryRun bool, out io.Writer) {
+	dir := filepath.Join(home, ".config", "sh-agent")
+	info, err := os.Lstat(dir)
+	if err != nil || info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return
+	}
+	if info.Mode().Perm()&0o077 == 0 || !ownedByCaller(info) {
+		return
+	}
+	fmt.Fprintf(out, "mode    ~/.config/sh-agent (%04o -> 0700)\n", info.Mode().Perm())
+	if dryRun {
+		return
+	}
+	if err := os.Chmod(dir, 0o700); err != nil {
+		fmt.Fprintf(out, "note: could not correct the mode of ~/.config/sh-agent (%v)\n", err)
+	}
 }
 
 func RemoveState(home string) error {

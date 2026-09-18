@@ -4,11 +4,11 @@ date: 2026-09-18
 ---
 # sh-agent — every verb on every kind of place
 
-The verb × place-kind matrix of `plans/2026-09-18-sh-agent-works-everywhere.md` (Phase 3 on this box; Phase 4 on real machines). A cell is `exercised` (ran, output logged), `refused` (a message naming the cause and the alternative), `n/a` (the verb has no meaning there), or `remainder` (no machine here can run it). Nothing is blank.
+The verb × place-kind matrix of `plans/2026-09-18-sh-agent-works-everywhere.md` (Phase 3 on this box; Phase 5 on real machines). A cell is `exercised` (ran, output logged), `refused` (a message naming the cause and the alternative), `n/a` (the verb has no meaning there), or `remainder` (no machine here can run it). Nothing is blank.
 
-## How the cells were run (this box, 2026-09-18, tree 3209cf3)
+## How the cells were run (this box, 2026-09-18, tree 3209cf3, re-run at e7fec88)
 
-`.agents/scratch/matrix/run.sh`, log `.agents/scratch/matrix/run.log` (gitignored; 53 cells). Three place kinds built from this checkout: **checkout** — `git clone` of this repository, driven by a development build (`go build ./cmd/sh-agent`, version `(devel)`) with `--repo`; **plain copy** — `git archive HEAD | tar -x`, no `.git`, the same development build with `--repo`; **release binary** — `go build -trimpath -ldflags "-X main.version=v9.9.9"` of this tree, no `--repo`. Each kind gets a fresh `--home`. `report` only ever `--dry-run`; `update` runs with a PATH that holds no `gh`, so nothing reaches the network. Every line below is quoted from the log.
+`.agents/scratch/matrix/run.sh`, log `.agents/scratch/matrix/run.log` (gitignored; 53 cells). Three place kinds built from this checkout: **checkout** — `git clone` of this repository, driven by a development build (`go build ./cmd/sh-agent`, version `(devel)`) with `--repo`; **plain copy** — `git archive HEAD | tar -x`, no `.git`, the same development build with `--repo`; **release binary** — `go build -trimpath -ldflags "-X main.version=v9.9.9"` of this tree, no `--repo`. Each kind gets a fresh `--home`. `report` only ever `--dry-run`; `update` runs with a PATH that holds no `gh`, so nothing reaches the network. Every line below is quoted from the log. Re-run by the verifier at e7fec88 (`2026-09-18-verify-sh-agent-works-everywhere-phase-3.md`): every exit and every quoted line unchanged but the SHA, and `~/.config/sh-agent` is `700` under each fresh home after its install (the Phase 2 round-2 change).
 
 ## Matrix
 
@@ -24,8 +24,8 @@ The verb × place-kind matrix of `plans/2026-09-18-sh-agent-works-everywhere.md`
 | `diff` (after a drifted file) | exercised: a unified hunk for `~/.claude/AGENTS.md` (`-drift`), temp copy under the home's `.config/sh-agent/`, nothing left | exercised | exercised |
 | `status` (after a drifted file) | exercised: `differs ~/.claude/AGENTS.md`, `drift 0 missing, 1 differ, 0 stale — run `sh-agent diff`, then `sh-agent install``, exit 1 | exercised, exit 1 | exercised, exit 1 |
 | `install` (repairs drift) | exercised: one `update ~/.claude/AGENTS.md`, `1 written, 259 unchanged` | exercised | exercised |
-| `update --check` | exercised: `up to date with upstream (3209cf3)`, exit 0 | refused: `not its own git checkout; a plain copy cannot be updated with git — `install` still deploys it as it is; to move forward, use a checkout (`git clone git@github.com:kesokaj/styrman-harness.git`) or a release binary (README § Install without cloning)` | refused (no `gh` on PATH): `update: this install has no checkout; install gh and run gh auth login, or download a newer release by hand (README § Install without cloning)`. The real path — `gh` present, a published newer release — is Phase 4's (v1.1.0→v1.2.0 on Linux scratch, v1.2.0→v1.2.1 and v1.2.1→v1.2.2 on the Mac and devbox, `2026-09-17-release-binary-e2e.md`) |
-| `update` | exercised: `up to date with upstream (3209cf3)`, `building sh-agent from …/checkout`, `update ~/.local/bin/sh-agent`, `1 written, 259 unchanged`; no BUG-079 note (not the real home) | refused: the same message as `--check` | refused (no `gh`): the same message as `--check`; see Phase 4 |
+| `update --check` | exercised: `up to date with upstream (3209cf3)`, exit 0 | refused: `not its own git checkout; a plain copy cannot be updated with git — `install` still deploys it as it is; to move forward, use a checkout (`git clone git@github.com:kesokaj/styrman-harness.git`) or a release binary (README § Install without cloning)` | refused (no `gh` on PATH): `update: this install has no checkout; install gh and run gh auth login, or download a newer release by hand (README § Install without cloning)`. The real path — `gh` present, a published newer release — is Phase 5's (v1.1.0→v1.2.0 on Linux scratch, v1.2.0→v1.2.1 and v1.2.1→v1.2.2 on the Mac and devbox, `2026-09-17-release-binary-e2e.md`) |
+| `update` | exercised: `up to date with upstream (3209cf3)`, `building sh-agent from …/checkout`, `update ~/.local/bin/sh-agent`, `1 written, 259 unchanged`; no BUG-079 note (not the real home) | refused: the same message as `--check` | refused (no `gh`): the same message as `--check`; see Phase 5 |
 | `adopt <dir>` | exercised: `adopted into …/checkout/skills/widget`, `next: review it, run `sh-agent install`, then commit and push the repo` | exercised: `adopted into …/plain/skills/widget`, `next: … then copy it into your harness checkout and commit there — this tree is a plain copy with no repository` | refused: `adopt needs a harness checkout (`git clone git@github.com:kesokaj/styrman-harness.git`, then run adopt from a build of it); this install is a release binary and carries no tree to adopt into` |
 | `report --dry-run` | exercised: skips the absent logs, `[dry-run] would clone …styrman-harness-feedback.git into …/.config/sh-agent/report-<pid>, blob-less and limited to reports/dave/, and remove it after the push`, would write `state.json` and `report.json`; nothing written, nothing cloned | exercised: same, plus `report: harness is a plain copy, not a git checkout: harness_commit is null` | exercised: same, plus `report: harness is the release binary v9.9.9, not a checkout: harness_commit is null, harness_version is set` |
 | `report` (real) | remainder on this box by rule (never run in a dispatch); exercised on this box on 2026-09-17 (`2026-09-17-release-binary-phase-3-real-report.md`) and on the Mac and devbox on 2026-09-18 from release binaries | same | exercised on the Mac and devbox (v1.2.1, v1.2.2) |
@@ -37,8 +37,8 @@ The verb × place-kind matrix of `plans/2026-09-18-sh-agent-works-everywhere.md`
 
 ## The two orderings
 
-- **First install into an empty home** — every kind above: 260 `add` lines, a manifest, `status` drift none from a fresh home. The E2E golden criterion (a real CLI reading the installed files) is Phase 4's on the Mac and devbox; on this box it was done from the real home on 2026-09-18 (`claude -p` quoting a context rule after `sh-agent update`, `2026-09-17-release-binary-e2e.md`).
-- **Update over an existing install**, including from a binary outside `~/.local/bin` — the checkout row above (rebuild, `update ~/.local/bin/sh-agent`); the release path on real machines (Phase 4); the BUG-079 note observed live in `2026-09-18-verify-bug079-stale-running-binary-3.md`.
+- **First install into an empty home** — every kind above: 260 `add` lines, a manifest, `status` drift none from a fresh home. The E2E golden criterion (a real CLI reading the installed files) is Phase 5's on the Mac and devbox; on this box it was done from the real home on 2026-09-18 (`claude -p` quoting a context rule after `sh-agent update`, `2026-09-17-release-binary-e2e.md`).
+- **Update over an existing install**, including from a binary outside `~/.local/bin` — the checkout row above (rebuild, `update ~/.local/bin/sh-agent`); the release path on real machines (Phase 5); the BUG-079 note observed live in `2026-09-18-verify-bug079-stale-running-binary-3.md`.
 
 ## Silent cells
 
@@ -50,6 +50,6 @@ None. Every cell either ran with output or refused with a message that names the
 - The darwin swapped-signature edge case of `update` (a tampered `SHA256SUMS.sig` refused, binary untouched): proven on Linux against the real releases; not run on the Mac.
 - `update` from a release binary with `gh` present on THIS box: not run here by rule (the operator's machines are the binary-only places); proven on the Mac and devbox.
 
-## Real machines (Phase 4)
+## Real machines (Phase 5)
 
-Filled from the operator's pasted output. See § Real machines when it exists; until then the release-binary cells that need a real home, a real shell and a published release are those marked "Phase 4" above.
+Filled from the operator's pasted output. See § Real machines when it exists; until then the release-binary cells that need a real home, a real shell and a published release are those marked "Phase 5" above.

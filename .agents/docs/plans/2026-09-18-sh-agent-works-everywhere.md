@@ -59,20 +59,20 @@ E2E criteria: (golden) on a machine with no harness, `sh-agent install` from a r
 - [ ] Checkpoint — expect: the merged record's `## Outcome` complete; suite green — evidence: verifier log, date
 
 ### Phase 3 — the matrix, on this box
-- [ ] `.agents/docs/testing/sh-agent-matrix.md` — every verb against a checkout clone, a release-stamped binary and a `git archive` plain copy, from fresh scratch homes; each cell `exercised`/`refused`/`n/a` with the command and the line that proves it — verify: integration, who: AI — expect: no blank cell; `install` then `status` reports drift none from a fresh home on each place kind — docs: `.agents/docs/testing/guide.md` (the matrix as a tier)
-- [ ] Every `refused` cell's message names the cause and the alternative; a cell that is neither exercised nor refused is a bug — verify: read, who: AI — expect: zero silent no-ops, or `bug` skill runs
-- [ ] Checkpoint — expect: the matrix complete for this box — evidence: the matrix file and verifier log, date
+- [x] `.agents/docs/testing/sh-agent-matrix.md` — every verb against a checkout clone, a release-stamped binary and a `git archive` plain copy, from fresh scratch homes; each cell `exercised`/`refused`/`n/a` with the command and the line that proves it — verify: integration, who: AI — expect: no blank cell; `install` then `status` reports drift none from a fresh home on each place kind — docs: `.agents/docs/testing/guide.md` (the matrix as a tier). Evidence: 53 cells from `.agents/scratch/matrix/run.sh` at 3209cf3, re-run by the verifier at e7fec88 (`testing/2026-09-18-verify-sh-agent-works-everywhere-phase-3.md`, PASS: every exit and quoted line matches, no blank cell, drift none from each fresh home); `guide.md` § 3c by `documentation`, 2026-09-18
+- [x] Every `refused` cell's message names the cause and the alternative; a cell that is neither exercised nor refused is a bug — verify: read, who: AI — expect: zero silent no-ops, or `bug` skill runs. Evidence: the matrix's § Silent cells — none; every refusal quoted names the cause and the alternative (the two that did not, `update` and `adopt` on a plain copy and `adopt` on a release binary, were fixed in Phase 2 before the run), 2026-09-18
+- [x] Checkpoint — expect: the matrix complete for this box — evidence: `testing/sh-agent-matrix.md` (53 cells, none blank) and `testing/2026-09-18-verify-sh-agent-works-everywhere-phase-3.md` (PASS at e7fec88), 2026-09-18
 
-### Phase 4 — the matrix, on real machines
-- [ ] Mac and devbox: `update` to the release that carries Phases 1–3, then the cells only a real home can settle (unqualified `sh-agent version`, `type sh-agent`, `status` with no `shadowed`, `report` leaving nothing, `claude -p` and `agy -p` reading the installed files) — verify: e2e, who: user (runs) + AI (logs) — expect: pasted output logged in `sh-agent-matrix.md` § Real machines
-- [ ] Mac: `sh-agent install --vendor all` and one `claude -p`; the README browser chain once (`V=` the current release) — verify: e2e, who: user — expect: logged; closes the Claude-side and `shasum`/`xattr` legs
-- [ ] Remainder named: `linux/arm64` (no machine), the darwin swapped-signature edge (the Mac, when the operator has a minute) — verify: read, who: AI — expect: both in the handoff's Next Steps, neither marked exercised
-- [ ] Checkpoint — expect: every cell exercised, refused, n/a or remainder — evidence: the matrix file, date
-
-### Phase 5 — release and close
+### Phase 4 — release
 - [ ] `/preflight vX.Y.Z` from the operator's own turn (PATCH if only fixes; MINOR if Phase 1's lines count as new behaviour — D3) — verify: the gate, who: user + AI — expect: SHIP, published, consumed from a fresh download — docs: release entry
 - [ ] Mac and devbox `update` to it; `sh-agent version` unqualified — verify: e2e, who: user — expect: the new version, no note or a note that is true
-- [ ] Checkpoint and Done — verifier, reviewer over the whole range, security, documentation, bugs, handoff — expect: `ROADMAP.md` "Now" empty — evidence: handoff path, date
+- [ ] Checkpoint — expect: the release published and consumed from a fresh download; the Mac and devbox on it — evidence: the gate report and the pasted `sh-agent version` lines, date
+
+### Phase 5 — the matrix, on real machines, and close
+- [ ] Mac and devbox, already on the Phase 4 release: the cells only a real home can settle (unqualified `sh-agent version`, `type sh-agent`, `status` with no `shadowed`, `report` leaving nothing, `claude -p` and `agy -p` reading the installed files) — verify: e2e, who: user (runs) + AI (logs) — expect: pasted output logged in `sh-agent-matrix.md` § Real machines
+- [ ] Mac: `sh-agent install --vendor all` and one `claude -p`; the README browser chain once (`V=` the current release) — verify: e2e, who: user — expect: logged; closes the Claude-side and `shasum`/`xattr` legs
+- [ ] Remainder named: `linux/arm64` (no machine), the darwin swapped-signature edge (the Mac, when the operator has a minute) — verify: read, who: AI — expect: both in the handoff's Next Steps, neither marked exercised
+- [ ] Checkpoint and Done — every cell exercised, refused, n/a or remainder; verifier, reviewer over the whole range, security, documentation, bugs, handoff — expect: `ROADMAP.md` "Now" empty — evidence: the matrix file, the handoff path, date
 
 ## Risks
 
@@ -88,6 +88,7 @@ D5 — 2026-09-18 — The audit (Phase 2) is in scope — by: the operator, "I w
 D6 — 2026-09-18 — A previous file that exists but cannot be read is written over, as today, and the line says so: `update  ~/<rel> (previous file unreadable: <err>)`; the alternative, refusing the install, would turn a stray unreadable file into a broken place with no path forward — by: implementer, cold read round 1 (`apply.go:33`, the `default` branch takes every non-nil `readErr`)
 D7 — 2026-09-18 — A mode-only correction prints `mode    ~/<rel> (<old> -> <new>)` and stays in the `unchanged` count: the contract is "names each file it changed", a permission is a change, and no bytes were written — by: implementer, cold read round 1 (`apply.go:49-55`)
 D8 — 2026-09-18 — The mode probe (`os.Stat`, compare `Perm()`) runs on every run so `--dry-run` prints the same `mode` line the real run would; only the `os.Chmod` is inside `!dryRun` — by: implementer, cold read round 2 (`apply.go:49-55` wraps both today)
+D10 — 2026-09-18 — Phases 4 and 5 swapped: the real-machine cells need the release that carries Phases 1–3 on the Mac and devbox, so the release is Phase 4 and the real-machine matrix plus Done is Phase 5 — by: implementer, while closing Phase 3 (the original order asked the operator to update to a release that did not exist yet)
 D9 — 2026-09-18 — The unreadable-previous-file fixture is a regular file with mode `0000`, skipped as root; a directory in its place cannot serve, because `writeAtomic`'s final `os.Rename` over a directory fails (the Phase 1 review measured `EISDIR`; the verifier's live run printed `file exists`, `EEXIST` — the kernel's choice depends on the directory; either way the rename refuses) and the install refuses rather than writes — and since the Phase 1 review, the per-file line prints AFTER the write, so that refusal leaves no line claiming a change — by: the operator at the cold-read cap, "Go with 1"; residue judged a fixture detail, not a design ambiguity
 Open: none
 Rejected: `--verbose` for the per-file lines — a flag nobody remembers on the day it matters; `status --files` — answers "what is installed", not "what just changed"; a Follow-up

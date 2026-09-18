@@ -25,6 +25,9 @@ func Install(src Source, home string, files []File, vendor string, dryRun bool, 
 	if err != nil {
 		return err
 	}
+	// Before any file is written, so a mode problem is seen first and never
+	// interrupts a deployment (security review of the audit, round 2).
+	TightenConfigDir(home, dryRun, out)
 
 	counts := map[string]int{}
 	var manifest []string

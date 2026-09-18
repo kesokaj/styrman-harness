@@ -856,8 +856,13 @@ func TestRemoveKeptClone(t *testing.T) {
 		if _, err := os.Stat(kept); err != nil {
 			t.Errorf("a clone with unpushed work must be kept: %v", err)
 		}
-		if !strings.Contains(out.String(), "unpushed commit") {
+		if !strings.Contains(out.String(), "none of its remote-tracking refs hold") {
 			t.Errorf("reason not named:\n%s", out.String())
+		}
+		// The message says what the count was measured against, and how to
+		// settle it, because that basis goes stale (2026-09-18).
+		if !strings.Contains(out.String(), "may well be pushed already") || !strings.Contains(out.String(), "--not FETCH_HEAD") {
+			t.Errorf("the message does not say what it measured or how to check:\n%s", out.String())
 		}
 	})
 
@@ -901,8 +906,47 @@ func TestRemoveKeptClone(t *testing.T) {
 		if _, err := os.Stat(kept); err != nil {
 			t.Errorf("a clone with unpushed work on an untracked branch must be kept: %v", err)
 		}
-		if !strings.Contains(out.String(), "unpushed commit") {
+		if !strings.Contains(out.String(), "none of its remote-tracking refs hold") {
 			t.Errorf("reason not named:\n%s", out.String())
+		}
+		// The message says what the count was measured against, and how to
+		// settle it, because that basis goes stale (2026-09-18).
+		if !strings.Contains(out.String(), "may well be pushed already") || !strings.Contains(out.String(), "--not FETCH_HEAD") {
+			t.Errorf("the message does not say what it measured or how to check:\n%s", out.String())
+		}
+	})
+
+	// The real shape this hit on the operator's own box: `report` pushed with
+	// `-u <url>`, so the branch tracks a URL, `@{upstream}` does not resolve,
+	// and no remote-tracking ref moves — every commit counts as unheld even
+	// after it reached the remote. The clone is kept either way; what matters
+	// is that the message does not claim the work is unpushed (2026-09-18).
+	t.Run("a stale tracking ref keeps the clone without claiming lost work", func(t *testing.T) {
+		home := newHome(t)
+		kept := filepath.Join(configDir(home), "feedback")
+		plain := strings.TrimPrefix(url, "file://")
+		git(t, kept, "config", "branch.main.remote", plain)
+		if err := os.WriteFile(filepath.Join(kept, "run.json"), []byte("{}\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		git(t, kept, "add", "-A")
+		git(t, kept, "commit", "-qm", "a run that was pushed")
+		git(t, kept, "push", "-q", plain, "HEAD:main")
+		if _, err := gitOut(kept, "rev-parse", "@{upstream}"); err == nil {
+			t.Skip("this git still resolves @{upstream}; the shape under test needs it to fail")
+		}
+		var out bytes.Buffer
+		if err := RemoveKeptClone(home, url, &out); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := os.Stat(kept); err != nil {
+			t.Errorf("the clone must be kept when the count cannot be trusted: %v", err)
+		}
+		if strings.Contains(out.String(), "unpushed") {
+			t.Errorf("the message claims unpushed work it cannot know about:\n%s", out.String())
+		}
+		if !strings.Contains(out.String(), "may well be pushed already") {
+			t.Errorf("the message does not say the commits may be pushed:\n%s", out.String())
 		}
 	})
 

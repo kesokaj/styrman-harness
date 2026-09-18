@@ -560,7 +560,13 @@ func RemoveKeptClone(home, url string, out io.Writer) error {
 		return leave("git could not report whether it has unpushed commits")
 	}
 	if ahead != "0" {
-		return leave(fmt.Sprintf("has %s unpushed commit(s)", ahead))
+		// What the count is measured AGAINST, because that basis goes stale:
+		// `report` pushed with `-u <url>`, which leaves the branch tracking a
+		// URL rather than a remote, so nothing updates the remote-tracking
+		// refs and commits long since pushed still count here. Saying "has N
+		// unpushed commits" sent the operator looking for work that was not
+		// lost (measured on the real clone, 2026-09-18).
+		return leave(fmt.Sprintf("has %s commit(s) that none of its remote-tracking refs hold — they may well be pushed already, since `report` left the branch tracking a URL and those refs go stale; `git -C %s fetch && git -C %s log --oneline HEAD --not FETCH_HEAD` says for certain", ahead, dir, dir))
 	}
 	if err := os.RemoveAll(dir); err != nil {
 		return err

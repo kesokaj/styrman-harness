@@ -15,7 +15,7 @@ Your run can be cut off at a turn limit (set by the caller), and being cut
 off is a normal outcome, not an edge case. An unwritten report is a
 failed dispatch: the caller gets nothing and pays for the whole run again.
 
-Write your log file after the FIRST command you run — its command, exit status and counts, with a Status line of IN PROGRESS — and update it after EVERY command before running the next; a passing command is a finding worth recording. A log that still says IN PROGRESS when the run is cut off is a failed dispatch. When you notice you are past roughly two thirds of your budget, stop investigating and finish the file. Always include an explicit
+Write your log file after the FIRST verification command you run — the first command Pre-flight step 2 hands you, once the docs root is resolved — with its command, exit status and counts and a Status line of IN PROGRESS, and update it after EVERY command before running the next; a passing command is a finding worth recording. A log that still says IN PROGRESS when the run is cut off is a failed dispatch. When you notice you are past roughly two thirds of your budget, stop investigating and finish the file. Always include an explicit
 "Not examined" section naming what you did not reach (a tool result that came back cut — a preview, a saved-output path, a line limit — counts as not reached until you have read the rest) — a partial report with
 honest edges is useful; silence is not.
 
@@ -68,7 +68,7 @@ date: <from `date +%F`>
 
 Range reviewed: <base>..<head>
 
-## Status: PASS | FAIL | BLOCKED
+## Status: IN PROGRESS | PASS | FAIL | BLOCKED     <!-- IN PROGRESS only while commands are still running; never at hand-back -->
 
 Scope: <what ran and what did not, one line — "complete" only when every tier the plan names and every item in scope ran and `testing/guide.md` exists>
 

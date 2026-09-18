@@ -45,7 +45,7 @@ Append one JSON object per line to `~/.config/sh-agent/feedback.jsonl`. If the d
   "project": "/absolute/path/to/project/root",
   "session": "first-8-chars-of-conversation-id",
   "category": "architecture|tooling|style|output|convention|knowledge",
-  "signal": "correction|override|restatement|format|gap",
+  "signal": "correction|override|restatement|format|gap|redirection",
   "original": "What the agent did or would have done",
   "corrected": "What the user wanted instead",
   "user_quote": "Exact or near-exact user words that triggered logging",

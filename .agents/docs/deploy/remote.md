@@ -120,10 +120,17 @@ ssh-keygen -Y sign -f ~/.ssh/id_ed25519 -n sh-agent-release SHA256SUMS
 printf '%s\n' 'ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR' > allowed_signers
 ssh-keygen -Y verify -f allowed_signers -I ostling.simon@gmail.com -n sh-agent-release -s SHA256SUMS.sig < SHA256SUMS   # exit 0: what the places will check, checked here first
 rm -f allowed_signers                                                      # it exists only for the check above: the line the PLACES verify against is compiled into the binary, and a signer file left on disk is the artifact release.go refuses to trust (security review 2026-09-17)
-# 4. the release, with notes read by the operator before the upload
+# 4. the release, with notes read by the operator before the upload — created with the
+#    notes ALONE, then one upload per asset: a create carrying every asset rolls the whole
+#    release back when a single upload fails, which is what GitHub did twice for v1.1.0
+#    (`HTTP 500: Error creating asset temp dir`), while one call per file then worked first
+#    time each. Retry an individual upload before calling it a failure.
 gh release create vX.Y.Z --repo kesokaj/styrman-harness --verify-tag --title "styrman-harness vX.Y.Z" \
-  --notes-file ../release-notes-vX.Y.Z.md \
-  sh-agent-linux-amd64 sh-agent-darwin-arm64 sh-agent-linux-arm64 SHA256SUMS SHA256SUMS.sig
+  --notes-file ../release-notes-vX.Y.Z.md
+for a in SHA256SUMS SHA256SUMS.sig sh-agent-linux-amd64 sh-agent-darwin-arm64 sh-agent-linux-arm64; do
+  gh release upload vX.Y.Z --repo kesokaj/styrman-harness "$a" --clobber || echo "retry $a by hand"
+done
+gh release view vX.Y.Z --repo kesokaj/styrman-harness --json assets --jq '.assets[].name'   # all five
 cd -
 ```
 `allowed_signers` is written only to run the check above and removed immediately; the line the PLACES verify against is compiled into the binary (`internal/harness/release.go`), so a file on any machine cannot decide what a genuine release is — which is exactly why this procedure does not leave one lying about. The release notes are built as § Release notes below says. Publishing a release changes NOTHING about the repository's visibility: `styrman-harness` stays private, the release page is readable only by accounts that can already read the repository, and every asset download needs that credential — which is what README § Install without cloning depends on. `gh repo view kesokaj/styrman-harness --json visibility` after the upload is the check; only a deliberate change in the repository's settings makes anything public.

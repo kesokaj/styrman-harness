@@ -861,8 +861,16 @@ func TestRemoveKeptClone(t *testing.T) {
 		}
 		// The message says what the count was measured against, and how to
 		// settle it, because that basis goes stale (2026-09-18).
-		if !strings.Contains(out.String(), "may well be pushed already") || !strings.Contains(out.String(), "--not FETCH_HEAD") {
+		// The settling command must cover the same refs as the count, or it
+		// tells the operator "nothing unique" about a commit on another
+		// branch (code review 2026-09-18).
+		if !strings.Contains(out.String(), "may well be pushed already") || !strings.Contains(out.String(), "--all --not --remotes FETCH_HEAD") {
 			t.Errorf("the message does not say what it measured or how to check:\n%s", out.String())
+		}
+		// And it must not paste the directory into that command: a path with
+		// a space or a metacharacter would ride along (security review).
+		if strings.Contains(out.String(), "git -C") {
+			t.Errorf("the message interpolates a path into a command to paste:\n%s", out.String())
 		}
 	})
 
@@ -911,8 +919,16 @@ func TestRemoveKeptClone(t *testing.T) {
 		}
 		// The message says what the count was measured against, and how to
 		// settle it, because that basis goes stale (2026-09-18).
-		if !strings.Contains(out.String(), "may well be pushed already") || !strings.Contains(out.String(), "--not FETCH_HEAD") {
+		// The settling command must cover the same refs as the count, or it
+		// tells the operator "nothing unique" about a commit on another
+		// branch (code review 2026-09-18).
+		if !strings.Contains(out.String(), "may well be pushed already") || !strings.Contains(out.String(), "--all --not --remotes FETCH_HEAD") {
 			t.Errorf("the message does not say what it measured or how to check:\n%s", out.String())
+		}
+		// And it must not paste the directory into that command: a path with
+		// a space or a metacharacter would ride along (security review).
+		if strings.Contains(out.String(), "git -C") {
+			t.Errorf("the message interpolates a path into a command to paste:\n%s", out.String())
 		}
 	})
 
@@ -932,8 +948,12 @@ func TestRemoveKeptClone(t *testing.T) {
 		git(t, kept, "add", "-A")
 		git(t, kept, "commit", "-qm", "a run that was pushed")
 		git(t, kept, "push", "-q", plain, "HEAD:main")
-		if _, err := gitOut(kept, "rev-parse", "@{upstream}"); err == nil {
-			t.Skip("this git still resolves @{upstream}; the shape under test needs it to fail")
+		// Key the guard on what RemoveKeptClone counts — commits no
+		// remote-tracking ref holds — rather than on @{upstream}, which is a
+		// symptom of the same setup and not what the code reads (code review
+		// 2026-09-18).
+		if n, err := gitOut(kept, "rev-list", "--count", "--all", "--not", "--remotes"); err != nil || n == "0" {
+			t.Skipf("the stale-ref shape did not reproduce here (count %q, err %v)", n, err)
 		}
 		var out bytes.Buffer
 		if err := RemoveKeptClone(home, url, &out); err != nil {

@@ -566,7 +566,17 @@ func RemoveKeptClone(home, url string, out io.Writer) error {
 		// refs and commits long since pushed still count here. Saying "has N
 		// unpushed commits" sent the operator looking for work that was not
 		// lost (measured on the real clone, 2026-09-18).
-		return leave(fmt.Sprintf("has %s commit(s) that none of its remote-tracking refs hold — they may well be pushed already, since `report` left the branch tracking a URL and those refs go stale; `git -C %s fetch && git -C %s log --oneline HEAD --not FETCH_HEAD` says for certain", ahead, dir, dir))
+		//
+		// The settling command covers the SAME refs as the count — `--all
+		// --not --remotes` — not just HEAD: with a commit on a second local
+		// branch, a HEAD-only check prints nothing while the count says 2,
+		// and the guide then tells the operator an empty list means the clone
+		// holds nothing unique. That would have been a hand-deletion of the
+		// only copy of that commit (code review 2026-09-18). The path is not
+		// interpolated: leave() already names the directory, and a path with
+		// a space or a shell metacharacter would ride into text the operator
+		// pastes (security review 2026-09-18).
+		return leave(fmt.Sprintf("has %s commit(s) that none of its remote-tracking refs hold — they may well be pushed already, since `report` pushed with `-u <url>`, which leaves the branch tracking a URL so those refs never move; to tell for certain, run `git fetch` in it and then `git log --oneline --all --not --remotes FETCH_HEAD`, which prints exactly what only this clone has", ahead))
 	}
 	if err := os.RemoveAll(dir); err != nil {
 		return err

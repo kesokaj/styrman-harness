@@ -113,9 +113,15 @@ GOPRIVATE='github.com/kesokaj/*' \
 ```
 
 ```bash
-# or the Releases page in a browser: download the binary, SHA256SUMS and SHA256SUMS.sig,
-# run the same three checks as the gh route on them (signature, checksum, version), then
-chmod +x ~/Downloads/sh-agent-darwin-arm64 && mv ~/Downloads/sh-agent-darwin-arm64 ~/.local/bin/sh-agent
+# or the Releases page in a browser: download the binary, SHA256SUMS and SHA256SUMS.sig to
+# ~/Downloads, then the same checks as the gh route on those files, as ONE chain (shown for a
+# Mac; on Linux replace `shasum -a 256 -c -` with `sha256sum -c -`):
+cd ~/Downloads \
+&& printf '%s\n' 'ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR' > allowed_signers \
+&& ssh-keygen -Y verify -f allowed_signers -I ostling.simon@gmail.com -n sh-agent-release -s SHA256SUMS.sig < SHA256SUMS \
+&& grep -v '^#' SHA256SUMS | shasum -a 256 -c - --ignore-missing \
+&& chmod +x sh-agent-darwin-arm64 && ./sh-agent-darwin-arm64 version \
+&& mv sh-agent-darwin-arm64 ~/.local/bin/sh-agent && rm allowed_signers SHA256SUMS SHA256SUMS.sig
 ```
 
 Then:

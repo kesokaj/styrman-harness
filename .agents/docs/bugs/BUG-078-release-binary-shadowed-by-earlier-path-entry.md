@@ -2,7 +2,7 @@
 owner: bugs
 date: 2026-09-18
 id: BUG-078
-status: open
+status: fixed
 area: installer/binary (PATH resolution, release install procedure)
 ---
 # BUG-078: verified v1.2.1 release binary installed to /usr/local/bin, but an earlier PATH entry kept running a stale (devel) build
@@ -29,7 +29,10 @@ The install procedure verified the *downloaded file* (signature, checksum, `./sh
 `Diagnosis missed:` the first instruction block treated "the file was moved into place" as "the binary is installed" (no post-move verification at all, and no `--clobber` on the download, so a pre-existing stale file at the download path was moved into the system path). The second attempt fixed the download-time check but still treated "`~/.local/bin` is where install writes" as the only candidate shadow, so deleting that one file was believed sufficient — `which -a` was not run until `/opt/devbox/bin/sh-agent` was also found to be shadowing.
 
 ## Fix
-Not fixed. Operator manually pointed `/opt/devbox/bin/sh-agent` at `/usr/local/bin/sh-agent`; re-install then correctly reported `release binary v1.2.1: installing the harness built into it`. No code or doc change has landed to prevent recurrence.
+`52574a0` adds `internal/harness/pathguard.go` `PathShadows`: `install` and `status` warn when an earlier PATH entry holds a different file than the one just installed. `8ce58a0` (review round 1) made identity `os.SameFile`, so a symlink or hard link to the installed binary is not a shadow; `b029ea1` (round 2) deleted the lexical directory comparison that had decided "on PATH" beside it, after two review rounds each found a directory form on which the two disagreed; `28e4747` (round 3) made `install --dry-run` print no PATH claim. README § Install without cloning and `remote.md` § First install now verify the downloaded file before the move and the shell's resolution (`sh-agent version` unqualified, `which -a`) after it. Each round's findings and their disposition are in `.agents/docs/reviews/2026-09-18-{review,security}-4cdc0b5-*.md` `## Outcome` sections.
+
+This fixes only the ordering PATH-shadow: a system or Homebrew directory listed before `~/.local/bin`. It does NOT catch the ordering that actually happened on devbox — the wrong (stale) binary ran the install itself and wrote its output first on its own PATH (`~/.local/bin`), so from that binary's own point of view nothing was shadowed; the code-side guard cannot see a binary it isn't running as. That case is caught only by the doc-side verify step (unqualified `sh-agent version`, `which -a` after the move), not by code.
+`Diagnosis missed:` the first fix (before review) decided "on PATH" by comparing directory names alongside a separate file-identity check; two review rounds each surfaced a directory form (`.local/bin//`, a symlinked directory) on which the two checks disagreed. Rather than patch a third form, the operator was asked what the directory-comparison mechanism was for and it was deleted — round 2 made identity-reached-by-the-walk the sole definition of "on PATH."
 
 ## Prevention
 Candidate rule (not yet written into any file — proposing, not applying): after installing or replacing the `sh-agent` binary, run `which -a sh-agent` and compare every match against the binary just installed; a "verified install" claim is only true once `sh-agent version` (run through the shell, unqualified — not by absolute path) reports the expected version. Separately: a downloaded release artifact is run (`version`) and checksum-verified before being moved into a system path, and the download step uses `--clobber` so a stale file at the download path can't be silently reused.

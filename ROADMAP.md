@@ -2,11 +2,9 @@
 
 <!-- Division of labor: ROADMAP.md = where the project is going while work is in progress; TODO.md = items the active plan will consume; .agents/docs/plans/ = how. Both ROADMAP sections and TODO are empty when the work is done; operator actions and ideas live in the newest handoff. -->
 
-Last reviewed: 2026-09-17
+Last reviewed: 2026-09-18
 
 ## Now
-
-- Release binary with the harness built in; `report` keeps nothing — `.agents/docs/plans/2026-09-17-release-binary.md`. Landed on `main` (cd0bbcb) and RELEASED as v1.1.0, then v1.2.0 (which delivers the graduated context rules to binary-only places); what remains needs the work Mac: the e2e legs there, `go install …@v1.1.0`, then the plan's Done row (see the newest handoff)
 
 ## Next
 

@@ -43,11 +43,13 @@ V=vX.Y.Z && ASSET=sh-agent-linux-amd64 \
 # the operator signed it once. The checksum and signer files leave with "$D". A system path
 # instead of ~/.local/bin is a `sudo mv` on that one line and changes nothing else.
 
+hash -r                               # bash (zsh: rehash): the shell caches where it last found sh-agent
 sh-agent version                      # unqualified: what the SHELL resolves, after the move
-which -a sh-agent                     # every candidate, in PATH order, when the version is wrong
+type sh-agent                         # when the version is wrong: the path the shell actually runs, cached or not
+which -a sh-agent                     # every candidate, in PATH order
 ```
 
-`sh-agent version` unqualified is the one that matters. A binary moved into a system path is not installed if an earlier `PATH` entry holds another `sh-agent`: that one runs, installs whatever source it resolves, and reports `drift none` about it. It tells stale from fresh, never genuine from forged — it is the suspect binary's own output; authenticity is the signature and checksum on the file, before the move. `install` and `status` name such a binary now (a `warning:` line and a `shadowed` line), and a symlink from the earlier entry to the installed binary settles it — it runs the same file, so it is not a shadow. `--clobber` matters for the same class of reason: without it a leftover file from an earlier attempt makes the download refuse, and the stale file is what gets moved.
+`sh-agent version` unqualified is the one that matters, and `hash -r` comes first because a shell caches where it last found `sh-agent`: `update` replaces `~/.local/bin/sh-agent` and nothing else, so a shell that once resolved the name to a copy elsewhere keeps running that copy whatever PATH says — devbox stayed on v1.2.1 this way after a successful update to v1.2.2 (BUG-079); `update` now says when it ran from such a copy. A binary moved into a system path is not installed if an earlier `PATH` entry holds another `sh-agent`: that one runs, installs whatever source it resolves, and reports `drift none` about it. It tells stale from fresh, never genuine from forged — it is the suspect binary's own output; authenticity is the signature and checksum on the file, before the move. `install` and `status` name such a binary now (a `warning:` line and a `shadowed` line), and a symlink from the earlier entry to the installed binary settles it — it runs the same file, so it is not a shadow. `--clobber` matters for the same class of reason: without it a leftover file from an earlier attempt makes the download refuse, and the stale file is what gets moved.
 
 ## The four places
 

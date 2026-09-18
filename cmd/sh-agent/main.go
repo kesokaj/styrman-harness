@@ -212,6 +212,9 @@ func run(args []string, out io.Writer) error {
 			if err != nil {
 				return fmt.Errorf("update: %w", err)
 			}
+			if !*check {
+				staleRunningNote(home, out)
+			}
 			return nil
 		}
 		if err := knownCheckout(*repoFlag, home, repo); err != nil {
@@ -498,7 +501,11 @@ func update(repo, home string, checkOnly bool, homeFlag, vendorFlag string, out 
 	if err != nil {
 		return err
 	}
-	return harness.Reinstall(repo, args, out)
+	if err := harness.Reinstall(repo, args, out); err != nil {
+		return err
+	}
+	staleRunningNote(home, out)
+	return nil
 }
 
 // shedKeptClone removes the full clone of the feedback repository that earlier
@@ -638,6 +645,21 @@ func selfExecutable() ([]byte, error) {
 		return nil, err
 	}
 	return os.ReadFile(p)
+}
+
+// staleRunningNote says when this update ran from a binary it did not
+// replace and a shell can reach that binary by name — the file is now behind
+// the one at ~/.local/bin, and a shell that has already resolved `sh-agent`
+// to it keeps running it whatever PATH says (BUG-079).
+func staleRunningNote(home string, out io.Writer) {
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	installed := filepath.Join(home, harness.BinPath)
+	if from, ok := harness.RunningElsewhere(os.Getenv("PATH"), installed, exe); ok {
+		fmt.Fprintf(out, "note: this update ran from %s, which update never replaces; the installed binary is %s. A shell that has already resolved `sh-agent` to the old path keeps running it until `hash -r` (bash) or `rehash` (zsh) — or remove it\n", from, installed)
+	}
 }
 
 // pathHint says, after an install, whether the next unqualified `sh-agent`

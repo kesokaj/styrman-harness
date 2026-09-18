@@ -1486,3 +1486,109 @@ func TestOffPathInstallNamesWhatAnswersAndDoesNotWarnTwice(t *testing.T) {
 		}
 	}
 }
+
+// `update` replaces ~/.local/bin/sh-agent and nothing else. On devbox it was
+// run by /usr/local/bin/sh-agent (v1.2.1), which stayed v1.2.1 while
+// ~/.local/bin became v1.2.2, and bash's command hash kept running the old
+// file — `which -a` showed the right order and `sh-agent version` printed the
+// wrong version. update now says when the binary it ran from is not the one
+// it installed and a shell can reach it by name (BUG-079).
+func TestUpdateNamesTheBinaryItRanFrom(t *testing.T) {
+	t.Setenv("SH_AGENT_REPO", "")
+	t.Chdir(t.TempDir())
+	defer func(v string) { version = v }(version)
+	version = "v1.0.0"
+
+	// A gh that answers the one call the up-to-date path makes.
+	ghDir := t.TempDir()
+	script := "#!/bin/sh" + "\n" + "printf " + "'v1.0.0" + "\\n" + "'" + "\n"
+	if err := os.WriteFile(filepath.Join(ghDir, "gh"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// A PATH directory whose sh-agent IS this process's executable — the
+	// shape of /usr/local/bin/sh-agent on devbox.
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	elsewhere := t.TempDir()
+	byName := filepath.Join(elsewhere, "sh-agent")
+	if err := os.Symlink(self, byName); err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	installed := filepath.Join(home, harness.BinPath)
+
+	want := "note: this update ran from " + byName + ", which update never replaces; the installed binary is " + installed + ". A shell that has already resolved `sh-agent` to the old path keeps running it until `hash -r` (bash) or `rehash` (zsh) — or remove it"
+
+	t.Run("reachable by name: named", func(t *testing.T) {
+		t.Setenv("PATH", ghDir+string(os.PathListSeparator)+elsewhere)
+		var out bytes.Buffer
+		if err := run([]string{"update", "--home", home}, &out); err != nil {
+			t.Fatalf("update: %v\n%s", err, out.String())
+		}
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("update did not name the binary it ran from:\nwant %q\n%s", want, out.String())
+		}
+	})
+
+	t.Run("not on PATH at all: silent", func(t *testing.T) {
+		// A test binary or a `go run` build is never reachable by name.
+		t.Setenv("PATH", ghDir)
+		var out bytes.Buffer
+		if err := run([]string{"update", "--home", home}, &out); err != nil {
+			t.Fatalf("update: %v\n%s", err, out.String())
+		}
+		if strings.Contains(out.String(), "which update never replaces") {
+			t.Errorf("update named a binary no shell can reach by name:\n%s", out.String())
+		}
+	})
+
+	t.Run("--check says nothing", func(t *testing.T) {
+		t.Setenv("PATH", ghDir+string(os.PathListSeparator)+elsewhere)
+		var out bytes.Buffer
+		if err := run([]string{"update", "--check", "--home", home}, &out); err != nil {
+			t.Fatalf("update --check: %v\n%s", err, out.String())
+		}
+		if strings.Contains(out.String(), "which update never replaces") {
+			t.Errorf("--check, which changes nothing, described a replacement:\n%s", out.String())
+		}
+	})
+}
+
+// The checkout path of update has the same shape: Reinstall writes
+// ~/.local/bin/sh-agent, and the process that ran update — a copy at a
+// system path, or a `go run` build — is not that file (BUG-079).
+func TestCheckoutUpdateNamesTheBinaryItRanFrom(t *testing.T) {
+	repo, _ := gitFixture(t)
+	home := t.TempDir()
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	elsewhere := t.TempDir()
+	byName := filepath.Join(elsewhere, "sh-agent")
+	if err := os.Symlink(self, byName); err != nil {
+		t.Fatal(err)
+	}
+	// Appended, so git and go stay reachable; no earlier entry holds THIS
+	// executable under the name, so the report is the appended one.
+	t.Setenv("PATH", os.Getenv("PATH")+string(os.PathListSeparator)+elsewhere)
+	installed := filepath.Join(home, harness.BinPath)
+	want := "note: this update ran from " + byName + ", which update never replaces; the installed binary is " + installed
+
+	var out bytes.Buffer
+	if err := update(repo, home, true, "", "", &out); err != nil {
+		t.Fatalf("update --check: %v\n%s", err, out.String())
+	}
+	if strings.Contains(out.String(), "which update never replaces") {
+		t.Errorf("--check, which changes nothing, described a replacement:\n%s", out.String())
+	}
+	out.Reset()
+	if err := update(repo, home, false, "", "", &out); err != nil {
+		t.Fatalf("update: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), want) {
+		t.Errorf("checkout update did not name the binary it ran from:\nwant %q\n%s", want, out.String())
+	}
+}

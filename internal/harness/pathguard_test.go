@@ -405,3 +405,60 @@ func TestExecutableAt(t *testing.T) {
 		})
 	}
 }
+
+// `update` replaces ~/.local/bin/sh-agent and nothing else; a process running
+// from another path a shell can reach by name has updated a file it is not
+// (BUG-079).
+func TestRunningElsewhere(t *testing.T) {
+	root := t.TempDir()
+	binDir := filepath.Join(root, "home", ".local", "bin")
+	installed := binAt(t, binDir)
+	sysDir := filepath.Join(root, "usr-local-bin")
+	sysBin := binAt(t, sysDir) // a different file, the devbox shape
+	linkDir := filepath.Join(root, "link")
+	if err := os.Mkdir(linkDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(installed, filepath.Join(linkDir, "sh-agent")); err != nil {
+		t.Fatal(err)
+	}
+	hidden := binAt(t, filepath.Join(root, "not-on-path"))
+	// PATH reaches the running system copy only through a link under another
+	// name — /opt/devbox/bin/sh-agent -> /usr/local/bin/sh-agent on devbox —
+	// so the spelling a shell uses is not the spelling the process runs from.
+	aliasDir := filepath.Join(root, "alias")
+	if err := os.Mkdir(aliasDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(sysBin, filepath.Join(aliasDir, "sh-agent")); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		name string
+		path string
+		exe  string
+		want string
+		ok   bool
+	}{
+		{"running the installed file itself", joinPath(binDir, sysDir), installed, "", false},
+		{"running a link to the installed file", joinPath(linkDir), filepath.Join(linkDir, "sh-agent"), "", false},
+		{"running a system copy a shell reaches by name", joinPath(binDir, sysDir), sysBin, sysBin, true},
+		{"reported at the PATH entry, whichever order", joinPath(sysDir, binDir), sysBin, sysBin, true},
+		{"running a file no PATH entry reaches: nobody's sh-agent", joinPath(binDir, sysDir), hidden, "", false},
+		{"reached only through a link: reported at the PATH entry, not the exe path", joinPath(binDir, aliasDir), sysBin, filepath.Join(aliasDir, "sh-agent"), true},
+		{"installed file missing: a reachable other copy still reported", joinPath(sysDir), sysBin, sysBin, true},
+		{"exe missing", joinPath(binDir), filepath.Join(root, "gone"), "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			binPath := installed
+			if tc.name == "installed file missing: a reachable other copy still reported" {
+				binPath = filepath.Join(root, "nowhere", "sh-agent")
+			}
+			got, ok := RunningElsewhere(tc.path, binPath, tc.exe)
+			if ok != tc.ok || got != tc.want {
+				t.Fatalf("RunningElsewhere = %q, %v; want %q, %v", got, ok, tc.want, tc.ok)
+			}
+		})
+	}
+}

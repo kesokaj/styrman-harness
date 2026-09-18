@@ -64,3 +64,30 @@ func executableAt(p string) (os.FileInfo, bool) {
 	}
 	return info, true
 }
+
+// RunningElsewhere reports where a shell finds the binary at exe by the name
+// of binPath, when exe is NOT the file at binPath. `update` replaces the file
+// at binPath and nothing else, so a process started from any other path has
+// just updated a file it is not running — and a shell that resolved the name
+// to that other path keeps running it whatever PATH says, because the shell
+// caches the lookup (BUG-079: /usr/local/bin/sh-agent ran `update`,
+// ~/.local/bin got v1.2.2, bash kept running v1.2.1 with the right PATH
+// order). A process no PATH entry reaches by name — a test binary, a `go run`
+// build — is nobody's `sh-agent` and is not reported.
+func RunningElsewhere(pathEnv, binPath, exe string) (string, bool) {
+	self, err := os.Stat(exe)
+	if err != nil {
+		return "", false
+	}
+	if inst, err := os.Stat(binPath); err == nil && os.SameFile(self, inst) {
+		return "", false
+	}
+	name := filepath.Base(binPath)
+	for _, dir := range filepath.SplitList(pathEnv) {
+		cand := filepath.Join(dir, name)
+		if info, err := os.Stat(cand); err == nil && os.SameFile(info, self) {
+			return cand, true
+		}
+	}
+	return "", false
+}

@@ -1786,4 +1786,27 @@ func TestInstallNamesEveryChange(t *testing.T) {
 	if info, _ := os.Stat(gamma); info.Mode().Perm() != 0o666 {
 		t.Errorf("--dry-run changed a mode: %o", info.Mode().Perm())
 	}
+
+	// 8. A directory at a destination cannot be replaced by the rename: the
+	// install errors, and the line is not printed for a change that did not
+	// happen (the line prints after the write).
+	if err := os.Chmod(victim, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(victim); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(victim, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	err := Install(DirSource(repo), home, files, VendorAll, false, &buf)
+	if err == nil {
+		t.Fatalf("a directory at a destination did not fail the install:\n%s", buf.String())
+	}
+	for _, l := range lines(buf.String(), "update") {
+		if strings.Contains(l, "skills/alpha/SKILL.md") {
+			t.Errorf("a line claimed a write that failed: %q (err %v)", l, err)
+		}
+	}
 }

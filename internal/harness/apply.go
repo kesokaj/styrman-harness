@@ -61,20 +61,23 @@ func Install(src Source, home string, files []File, vendor string, dryRun bool, 
 			// Every run names what it changes, not only --dry-run: a file that
 			// was not there is an `add`; one with other bytes an `update`; one
 			// that exists but could not be read is written over as before and
-			// the line says why (D6).
+			// the line says why (D6). The line prints AFTER the write, so a
+			// write that fails — a directory at the path, which the rename
+			// cannot replace — leaves no line claiming a change that did not
+			// happen (review of Phase 1).
+			line := "update  ~/" + f.Rel
 			switch {
 			case errors.Is(readErr, fs.ErrNotExist):
-				fmt.Fprintf(out, "add     ~/%s\n", f.Rel)
+				line = "add     ~/" + f.Rel
 			case readErr != nil:
-				fmt.Fprintf(out, "update  ~/%s (previous file unreadable: %v)\n", f.Rel, readErr)
-			default:
-				fmt.Fprintf(out, "update  ~/%s\n", f.Rel)
+				line = fmt.Sprintf("update  ~/%s (previous file unreadable: %v)", f.Rel, readErr)
 			}
 			if !dryRun {
 				if err := writeAtomic(dest, f.Data, f.Mode); err != nil {
 					return fmt.Errorf("writing %s: %w", dest, err)
 				}
 			}
+			fmt.Fprintln(out, line)
 		}
 		manifest = append(manifest, f.Rel)
 	}

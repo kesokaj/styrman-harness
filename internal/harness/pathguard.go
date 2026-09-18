@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"syscall"
 )
 
 // PathShadows walks PATH the way a shell does and reports two facts about the
@@ -110,12 +111,37 @@ func RunningElsewhere(pathEnv, binPath, exe string) (string, bool) {
 // the older-release branch the running file is the NEWER one (security review
 // 2026-09-18, round 2).
 func NoteRunningElsewhere(home string, out io.Writer) {
+	// The shell hazard is about the home a shell actually uses: a --home
+	// elsewhere is a scratch or test place, and the note would call ITS
+	// binary "the installed one" and send the reader to relink their real
+	// one (security audit 2026-09-18).
+	if real, err := os.UserHomeDir(); err != nil || filepath.Clean(real) != filepath.Clean(home) {
+		return
+	}
 	exe, err := os.Executable()
 	if err != nil {
 		return
 	}
 	installed := filepath.Join(home, BinPath)
-	if from, ok := RunningElsewhere(os.Getenv("PATH"), installed, exe); ok {
-		fmt.Fprintf(out, "note: this update ran from %s, not from the installed binary %s; update replaces only the installed one, so the file it ran from stays as it is. A shell that has already resolved `sh-agent` to that path keeps running it until `hash -r` (bash) or `rehash` (zsh); point it at the installed binary (`ln -sfn`) or remove it — when that path is root-owned, prefer removing it\n", from, installed)
+	from, ok := RunningElsewhere(os.Getenv("PATH"), installed, exe)
+	if !ok {
+		return
 	}
+	remedy := "point it at the installed binary (`ln -sfn`) or remove it"
+	if info, err := os.Lstat(from); err == nil && !ownedByCaller(info) {
+		// Not the caller's file: relinking a system path to a user file is
+		// not advice to give; removing it is (with whatever rights own it).
+		remedy = "it is not yours to relink — remove it, with the rights that own it, or leave it and run the installed one by its path"
+	}
+	fmt.Fprintf(out, "note: this update ran from %s, not from the installed binary %s; update replaces only the installed one, so the file it ran from stays as it is. A shell that has already resolved `sh-agent` to that path keeps running it until `hash -r` (bash) or `rehash` (zsh); %s\n", from, installed, remedy)
+}
+
+// ownedByCaller reports whether the file belongs to the user running this
+// process; unknown (no unix stat behind the FileInfo) reads as owned.
+func ownedByCaller(info os.FileInfo) bool {
+	st, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || st == nil {
+		return true
+	}
+	return int(st.Uid) == os.Getuid()
 }

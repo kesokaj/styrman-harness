@@ -169,6 +169,9 @@ func copyTree(src, dest string) error {
 		if err != nil {
 			return err
 		}
-		return writeAtomic(target, data, info.Mode().Perm()|0o600)
+		// As plan.go does for every deployed file: an adopted 0664 would sit
+		// group-writable in the tree every install ships, and git records only
+		// the x bit (security audit 2026-09-18).
+		return writeAtomic(target, data, info.Mode().Perm()&0o755|0o600)
 	})
 }

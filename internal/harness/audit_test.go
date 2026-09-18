@@ -1,0 +1,209 @@
+package harness
+
+import (
+	"bytes"
+	"os"
+	"path/filepath"
+	"strings"
+	"syscall"
+	"testing"
+	"unicode/utf8"
+)
+
+// The audit of 2026-09-18 (`reviews/2026-09-18-review-harness-merged.md`):
+// each test here pins one finding.
+
+// Finding 6: only a canonical vX.Y.Z is a release; a non-canonical spelling
+// compared equal to the running version and reached the download.
+func TestIsReleaseVersionIsCanonical(t *testing.T) {
+	for v, want := range map[string]bool{
+		"v1.2.3": true, "v0.0.0": true, "v10.20.30": true,
+		"v1.02.2": false, "v01.2.2": false, "v1.2.02": false,
+		"v1.2": false, "1.2.3": false, "v1.2.3-rc1": false, "v-1.2.3": false,
+		"v99999999999999999999.0.0": false, // overflows int: releaseParts would read it as 0
+	} {
+		if got := IsReleaseVersion(v); got != want {
+			t.Errorf("IsReleaseVersion(%q) = %v, want %v", v, got, want)
+		}
+	}
+}
+
+func TestNonCanonicalTagNeverReachesTheDownload(t *testing.T) {
+	r := newRelease(t, "v9.9.9")
+	r.env(t, true, true)
+	t.Setenv("GH_TAG", "v1.02.2")
+	home := t.TempDir()
+	dest := installedBinary(t, home)
+	before, _ := os.ReadFile(dest)
+	var out bytes.Buffer
+	err := UpdateFromRelease(home, "v1.0.0", false, nil, &out)
+	if err == nil || !strings.Contains(err.Error(), "not a vX.Y.Z release") {
+		t.Fatalf("a non-canonical tag was not refused before the download: err=%v\n%s", err, out.String())
+	}
+	if after, _ := os.ReadFile(dest); !bytes.Equal(before, after) {
+		t.Errorf("the installed binary changed")
+	}
+	if left, _ := filepath.Glob(filepath.Join(home, ".config", "sh-agent", "release-*")); len(left) != 0 {
+		t.Errorf("a download directory exists: %v", left)
+	}
+}
+
+// Finding 7: the BUG-079 note is about the shell that runs `sh-agent` from
+// the real home; a --home elsewhere is a scratch or test place and gets no
+// advice to relink anything. And "point it at the installed binary" is only
+// offered for a file the caller owns.
+func TestNoteRunningElsewhereOnlyForTheRealHome(t *testing.T) {
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	elsewhere := t.TempDir()
+	if err := os.Symlink(self, filepath.Join(elsewhere, "sh-agent")); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", elsewhere)
+	home := t.TempDir()
+	binAt(t, filepath.Join(home, ".local", "bin"))
+
+	t.Setenv("HOME", t.TempDir()) // the real home is somewhere else
+	var out bytes.Buffer
+	NoteRunningElsewhere(home, &out)
+	if out.Len() != 0 {
+		t.Errorf("a --home that is not the real home got the note:\n%s", out.String())
+	}
+
+	t.Setenv("HOME", home)
+	out.Reset()
+	NoteRunningElsewhere(home, &out)
+	if !strings.Contains(out.String(), "not from the installed binary") {
+		t.Errorf("the real home got no note:\n%s", out.String())
+	}
+}
+
+type fakeInfo struct {
+	os.FileInfo
+	sys any
+}
+
+func (f fakeInfo) Sys() any { return f.sys }
+
+func TestOwnedByCaller(t *testing.T) {
+	mine := &syscall.Stat_t{Uid: uint32(os.Getuid())}
+	other := &syscall.Stat_t{Uid: uint32(os.Getuid() + 1)}
+	if !ownedByCaller(fakeInfo{sys: mine}) {
+		t.Error("own uid reads as not owned")
+	}
+	if ownedByCaller(fakeInfo{sys: other}) {
+		t.Error("another uid reads as owned")
+	}
+	if !ownedByCaller(fakeInfo{sys: nil}) {
+		t.Error("unknown ownership must read as owned (the full remedy, as before)")
+	}
+}
+
+// Finding 1: adopt keeps group/other write bits that install strips.
+func TestAdoptStripsGroupAndOtherWrite(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root's umask makes mode assertions meaningless")
+	}
+	repo := newRepo(t)
+	home := t.TempDir()
+	src := filepath.Join(t.TempDir(), "widget")
+	if err := os.MkdirAll(src, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "SKILL.md"), []byte("---\nname: widget\ndescription: a widget\n---\nbody\n"), 0o666); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(filepath.Join(src, "SKILL.md"), 0o666); err != nil {
+		t.Fatal(err)
+	}
+	dest, err := Adopt(repo, home, src, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(filepath.Join(dest, "SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm()&0o022 != 0 {
+		t.Errorf("adopted file is group- or other-writable: %o", info.Mode().Perm())
+	}
+}
+
+// Finding 13: the throwaway clone's parent is created 0700, like the
+// release download's.
+func TestThrowawayParentIsPrivate(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root's umask makes mode assertions meaningless")
+	}
+	home := t.TempDir()
+	_, err := cloneThrowaway(home, filepath.Join(t.TempDir(), "no-such-repo.git"), "host")
+	if err == nil {
+		t.Fatal("cloning a missing repository succeeded")
+	}
+	info, err := os.Stat(filepath.Join(home, ".config", "sh-agent"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm()&0o077 != 0 {
+		t.Errorf("throwaway parent is %o, want 0700", info.Mode().Perm())
+	}
+}
+
+// Finding 14 and the 0% body: Diff renders the source copy into a temp file
+// under the home's own runtime directory, never the system temp dir.
+func TestDiffUsesTheHomeNotTmp(t *testing.T) {
+	repo := newRepo(t)
+	home := t.TempDir()
+	files, err := Plan(DirSource(repo), nil, VendorAll)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := Install(DirSource(repo), home, files, VendorAll, false, &out); err != nil {
+		t.Fatal(err)
+	}
+	victim := filepath.Join(home, ClaudeRoot, "skills", "alpha", "SKILL.md")
+	if err := os.WriteFile(victim, []byte("drifted\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "does-not-exist"))
+	out.Reset()
+	if err := Diff(home, files, &out); err != nil {
+		t.Fatalf("Diff with an unusable system temp dir: %v", err)
+	}
+	if !strings.Contains(out.String(), "-drifted") || !strings.Contains(out.String(), "skills/alpha/SKILL.md") {
+		t.Errorf("Diff printed no hunk for the drifted file:\n%s", out.String())
+	}
+	if left, _ := filepath.Glob(filepath.Join(home, ".config", "sh-agent", "sh-agent-diff-*")); len(left) != 0 {
+		t.Errorf("Diff left temp files: %v", left)
+	}
+}
+
+// Finding 15: cell must not cut a rune in half.
+func TestCellIsRuneSafe(t *testing.T) {
+	s := strings.Repeat("é", 40) + " " + strings.Repeat("ü", 40)
+	for max := 5; max < 120; max++ {
+		got := cell(s, max)
+		if !utf8.ValidString(got) {
+			t.Fatalf("cell(…, %d) produced invalid UTF-8: %q", max, got)
+		}
+	}
+}
+
+// Finding 16: a control character in a description must not break the YAML
+// DeriveAgy renders.
+func TestYamlQuoteEscapesControlCharacters(t *testing.T) {
+	for in, want := range map[string]string{
+		"plain":      `"plain"`,
+		`a"b\c`:      `"a\"b\\c"`,
+		"a\x01b":     "\"a\\u0001b\"",
+		"line\nnext": `"line\nnext"`,
+		"tab\there":  `"tab\there"`,
+	} {
+		if got := yamlQuote(in); got != want {
+			t.Errorf("yamlQuote(%q) = %s, want %s", in, got, want)
+		}
+	}
+}

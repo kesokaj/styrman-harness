@@ -393,12 +393,15 @@ func slashNote(inv Inventory) string {
 // cell shortens text for a table cell and escapes the column separator.
 func cell(s string, max int) string {
 	s = strings.Join(strings.Fields(s), " ")
-	if len(s) > max {
-		cut := strings.LastIndex(s[:max], " ")
-		if cut < max/2 {
-			cut = max
+	// By runes: a byte cut can split a multi-byte character (security audit
+	// 2026-09-18).
+	if r := []rune(s); len(r) > max {
+		head := string(r[:max])
+		cut := strings.LastIndex(head, " ")
+		if cut < len(head)/2 {
+			cut = len(head)
 		}
-		s = s[:cut] + "…"
+		s = head[:cut] + "…"
 	}
 	return strings.ReplaceAll(s, "|", `\|`)
 }

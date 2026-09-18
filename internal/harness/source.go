@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
+	"strings"
 
 	styrman "github.com/kesokaj/styrman-harness"
 )
@@ -41,14 +43,25 @@ func EmbeddedSource(version string) Source {
 // embedded files: "embedded:vX.Y.Z" names a release, never a path.
 const EmbeddedPrefix = "embedded:"
 
-var releaseVersion = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
+// Canonical only: `v1.02.2` compared equal to `v1.2.2` and reached the
+// download (security audit 2026-09-18).
+var releaseVersion = regexp.MustCompile(`^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
 
 // IsReleaseVersion reports whether a binary's version is a release tag. Only
 // a release binary installs its embedded files: a development build carries
 // whatever the tree held when it was built, which is stale the moment the
 // tree moves on (D14).
 func IsReleaseVersion(version string) bool {
-	return releaseVersion.MatchString(version)
+	if !releaseVersion.MatchString(version) {
+		return false
+	}
+	// A component that does not fit an int would compare as 0.
+	for _, part := range strings.Split(strings.TrimPrefix(version, "v"), ".") {
+		if _, err := strconv.Atoi(part); err != nil {
+			return false
+		}
+	}
+	return true
 }
 
 // path names a file for a message: its disk path for a tree on disk, its

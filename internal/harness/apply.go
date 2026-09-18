@@ -217,7 +217,14 @@ func Diff(home string, files []File, out io.Writer) error {
 		if bytes.Equal(existing, f.Data) || (f.KeepForeign && !IsOurs(existing)) {
 			continue
 		}
-		tmp, err := os.CreateTemp("", "sh-agent-diff-*")
+		// Under the home's own runtime directory, never the system temp dir:
+		// the rendered harness is the operator's, and this project keeps
+		// generated files out of /tmp (security audit 2026-09-18).
+		tmpDir := filepath.Join(home, ".config", "sh-agent")
+		if err := os.MkdirAll(tmpDir, 0o700); err != nil {
+			return err
+		}
+		tmp, err := os.CreateTemp(tmpDir, "sh-agent-diff-*")
 		if err != nil {
 			return err
 		}

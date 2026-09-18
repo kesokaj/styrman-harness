@@ -593,7 +593,9 @@ func TestAttributionSet(t *testing.T) {
 		big := `{"pad": "` + strings.Repeat("x", 1<<20) + `"}` + "\n"
 		p := write(t, home, big, 0o644)
 		out := run1(t, home)
-		if !strings.Contains(out, "settings: "+p+" is larger than 1 MiB") {
+		// One bound, in readSettings: install reports it through the same
+		// note status prints, not a settings: line of its own (audit 2026-09-18).
+		if !strings.Contains(out, p+" is larger than 1 MiB") {
 			t.Errorf("missing size line:\n%s", out)
 		}
 		data, _ := os.ReadFile(p)
@@ -1285,7 +1287,7 @@ func TestReleaseBinaryWithoutCheckout(t *testing.T) {
 		t.Errorf("render: %v\n%.200s", err, out.String())
 	}
 	out.Reset()
-	if err := run([]string{"adopt", "anything", "--home", home}, &out); err == nil || err.Error() != "adopt needs a harness checkout; this install is a release binary" {
+	if err := run([]string{"adopt", "anything", "--home", home}, &out); err == nil || err.Error() != "adopt needs a harness checkout (`git clone git@github.com:kesokaj/styrman-harness.git`, then run adopt from a build of it); this install is a release binary and carries no tree to adopt into" {
 		t.Errorf("adopt: err = %v", err)
 	}
 	// `update` on a release binary goes to the release flow (Phase 4). PATH is
@@ -1563,6 +1565,7 @@ func TestCheckoutUpdateNamesTheBinaryItRanFrom(t *testing.T) {
 	// Appended, so git and go stay reachable; no earlier entry holds THIS
 	// executable under the name, so the report is the appended one.
 	t.Setenv("PATH", os.Getenv("PATH")+string(os.PathListSeparator)+elsewhere)
+	t.Setenv("HOME", home) // the note is for the real home only
 	installed := filepath.Join(home, harness.BinPath)
 	// The fixture's built binary writes a marker, not ~/.local/bin/sh-agent;
 	// the note requires an installed file to be behind, so plant one — a
@@ -1588,5 +1591,230 @@ func TestCheckoutUpdateNamesTheBinaryItRanFrom(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), want) {
 		t.Errorf("checkout update did not name the binary it ran from:\nwant %q\n%s", want, out.String())
+	}
+}
+
+// plainCopyOf is the unpacked-zip place: this checkout's five harness
+// directories copied without .git.
+func plainCopyOf(t *testing.T) string {
+	t.Helper()
+	repo, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dst := filepath.Join(t.TempDir(), "copy")
+	for _, dir := range []string{"context", "skills", "agents", "commands", "rules"} {
+		src := filepath.Join(repo, dir)
+		err := filepath.WalkDir(src, func(path string, d os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			rel, _ := filepath.Rel(repo, path)
+			target := filepath.Join(dst, rel)
+			if d.IsDir() {
+				return os.MkdirAll(target, 0o755)
+			}
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			info, _ := d.Info()
+			return os.WriteFile(target, data, info.Mode().Perm())
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dst
+}
+
+// scratchClone clones this checkout into a temp dir, for a test that must
+// let `install` rebuild and run a child install without touching this tree.
+func scratchClone(t *testing.T) string {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not on PATH")
+	}
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("go is not on PATH")
+	}
+	repo, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dst := filepath.Join(t.TempDir(), "clone")
+	cmd := exec.Command("git", "clone", "-q", repo, dst)
+	cmd.Env = append(gitCleanEnv(), "GIT_CONFIG_NOSYSTEM=1")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git clone: %v\n%s", err, out)
+	}
+	return dst
+}
+
+// The audit of 2026-09-18 (`reviews/2026-09-18-review-harness-merged.md`,
+// findings 2, 8, 9): a plain copy is a real kind of place, and every refusal
+// on it names the cause and the alternative.
+func TestUpdateOnPlainCopyNamesTheAlternative(t *testing.T) {
+	copy := plainCopyOf(t)
+	home := t.TempDir()
+	var out bytes.Buffer
+	err := run([]string{"update", "--repo", copy, "--home", home}, &out)
+	if err == nil {
+		t.Fatalf("update on a plain copy succeeded:\n%s", out.String())
+	}
+	for _, want := range []string{"plain copy", "cannot be updated with git", "checkout", "release binary"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal lacks %q: %v", want, err)
+		}
+	}
+}
+
+func TestAdoptOnPlainCopySaysWhereToCommit(t *testing.T) {
+	copy := plainCopyOf(t)
+	home := t.TempDir()
+	src := filepath.Join(t.TempDir(), "widget")
+	if err := os.MkdirAll(src, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "SKILL.md"), []byte("---\nname: widget\ndescription: a widget\n---\nbody\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := run([]string{"adopt", src, "--repo", copy, "--home", home}, &out); err != nil {
+		t.Fatalf("adopt on a plain copy: %v\n%s", err, out.String())
+	}
+	if strings.Contains(out.String(), "commit and push the repo") {
+		t.Errorf("a plain copy has no repository to commit to:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "checkout") {
+		t.Errorf("the next step does not name a checkout:\n%s", out.String())
+	}
+}
+
+func TestAdoptOnReleaseBinaryNamesTheAlternative(t *testing.T) {
+	t.Setenv("SH_AGENT_REPO", "")
+	t.Chdir(t.TempDir())
+	defer func(v string) { version = v }(version)
+	version = "v9.9.9"
+	var out bytes.Buffer
+	err := run([]string{"adopt", "widget", "--home", t.TempDir()}, &out)
+	if err == nil {
+		t.Fatal("adopt on a release binary succeeded")
+	}
+	for _, want := range []string{"release binary", "checkout", "git clone"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal lacks %q: %v", want, err)
+		}
+	}
+}
+
+func TestStatusOnPlainCopyNamesTheRefusal(t *testing.T) {
+	t.Setenv(harness.ChildEnv, "1")
+	copy := plainCopyOf(t)
+	home := t.TempDir()
+	var out bytes.Buffer
+	if err := run([]string{"install", "--repo", copy, "--home", home}, &out); err != nil {
+		t.Fatalf("install from a plain copy: %v\n%s", err, out.String())
+	}
+	out.Reset()
+	if err := run([]string{"status", "--repo", copy, "--home", home}, &out); err != nil {
+		t.Fatalf("status: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "(plain copy, not its own git checkout; update is refused)") {
+		t.Errorf("status does not say a plain copy cannot update:\n%s", out.String())
+	}
+}
+
+func TestSyncIsInstall(t *testing.T) {
+	t.Setenv(harness.ChildEnv, "1")
+	repo, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	var out bytes.Buffer
+	if err := run([]string{"sync", "--repo", repo, "--home", home}, &out); err != nil {
+		t.Fatalf("sync: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "files managed") {
+		t.Errorf("sync did not install:\n%s", out.String())
+	}
+	if _, err := os.Stat(filepath.Join(home, ".config", "sh-agent", "state.json")); err != nil {
+		t.Errorf("sync wrote no manifest: %v", err)
+	}
+}
+
+func TestDiffVerbShowsDrift(t *testing.T) {
+	t.Setenv(harness.ChildEnv, "1")
+	repo, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	var out bytes.Buffer
+	if err := run([]string{"install", "--repo", repo, "--home", home}, &out); err != nil {
+		t.Fatalf("install: %v\n%s", err, out.String())
+	}
+	victim := filepath.Join(home, harness.ClaudeRoot, "AGENTS.md")
+	if err := os.WriteFile(victim, []byte("drifted\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	_ = run([]string{"diff", "--repo", repo, "--home", home}, &out)
+	if !strings.Contains(out.String(), "-drifted") || !strings.Contains(out.String(), "AGENTS.md") {
+		t.Errorf("diff printed no hunk for the drifted file:\n%s", out.String())
+	}
+}
+
+// BUG-080: a relative --home beside --repo resolved against the repo
+// directory on a real install (Reinstall runs the build's install with
+// cmd.Dir = repo) and against the invoking directory on --dry-run. --home is
+// made absolute before anything runs.
+func TestRelativeHomeResolvesAgainstTheInvokingDirectory(t *testing.T) {
+	repo := scratchClone(t) // the rebuild's child runs with cmd.Dir = repo
+	cwd := t.TempDir()
+	t.Chdir(cwd)
+	want := filepath.Join(cwd, "rel-home")
+	var out bytes.Buffer
+	if err := run([]string{"install", "--repo", repo, "--home", "rel-home"}, &out); err != nil {
+		t.Fatalf("install: %v\n%s", err, out.String())
+	}
+	if _, err := os.Stat(filepath.Join(want, ".config", "sh-agent", "state.json")); err != nil {
+		t.Errorf("the install did not land under the invoking directory's rel-home: %v\n%s", err, out.String())
+	}
+	if _, err := os.Stat(filepath.Join(repo, "rel-home")); err == nil {
+		t.Errorf("a rel-home directory appeared inside the repository (the child install resolved it against cmd.Dir)")
+	}
+}
+
+// Finding 11: one bound on the settings file, so status warns about an
+// oversized one the way install does.
+func TestStatusWarnsOnOversizedSettings(t *testing.T) {
+	t.Setenv(harness.ChildEnv, "1")
+	repo, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	var out bytes.Buffer
+	if err := run([]string{"install", "--repo", repo, "--home", home}, &out); err != nil {
+		t.Fatalf("install: %v\n%s", err, out.String())
+	}
+	settings := filepath.Join(home, harness.ClaudeRoot, "settings.json")
+	big := make([]byte, 1<<20+1)
+	copy(big, []byte("{"))
+	for i := 1; i < len(big)-1; i++ {
+		big[i] = ' '
+	}
+	big[len(big)-1] = '}'
+	if err := os.WriteFile(settings, big, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	if err := run([]string{"status", "--repo", repo, "--home", home}, &out); err != nil {
+		t.Fatalf("status: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "larger than 1 MiB") {
+		t.Errorf("status did not warn about an oversized settings file:\n%s", out.String())
 	}
 }

@@ -100,6 +100,13 @@ func run(args []string, out io.Writer) error {
 		}
 		home = h
 	}
+	// Absolute before anything runs: the checkout path rebuilds and runs
+	// the build's install with cmd.Dir = repo, so a relative --home landed
+	// inside the repository on a real install and under the invoking
+	// directory on --dry-run (BUG-080).
+	if abs, err := filepath.Abs(home); err == nil {
+		home = abs
+	}
 
 	switch cmd {
 	case "version":
@@ -247,13 +254,19 @@ func run(args []string, out io.Writer) error {
 			return errors.New("usage: sh-agent adopt <skill-name-or-path> [--force]")
 		}
 		if repo == "" {
-			return errors.New("adopt needs a harness checkout; this install is a release binary")
+			return errors.New("adopt needs a harness checkout (`git clone git@github.com:kesokaj/styrman-harness.git`, then run adopt from a build of it); this install is a release binary and carries no tree to adopt into")
 		}
 		dest, err := harness.Adopt(repo, home, fs.Arg(0), *force)
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(out, "adopted into %s\nnext: review it, run `sh-agent install`, then commit and push the repo\n", dest)
+		next := "commit and push the repo"
+		if !harness.IsCheckout(repo) {
+			// A plain copy has no repository: the adopted skill lives only
+			// here until it is copied into a checkout (audit 2026-09-18).
+			next = "copy it into your harness checkout and commit there — this tree is a plain copy with no repository"
+		}
+		fmt.Fprintf(out, "adopted into %s\nnext: review it, run `sh-agent install`, then %s\n", dest, next)
 		return nil
 	}
 	return fmt.Errorf("unknown command %q\n\n%s", cmd, usage)
@@ -557,9 +570,6 @@ func knownCheckout(repoFlag, home, repo string) error {
 	// A manifest written by an embedded install records a release, never a
 	// path: it is not handed to samePath, which would resolve it against the
 	// working directory (security review 2026-09-17, finding 2).
-	// A manifest written by an embedded install records a release, never a
-	// path: it is not handed to samePath, which would resolve it against the
-	// working directory (security review 2026-09-17, finding 2).
 	if release, ok := strings.CutPrefix(st.Repo, harness.EmbeddedPrefix); ok {
 		return fmt.Errorf("this home was installed from the release binary %s, not from a checkout; pass --repo %s to build and install from it", release, repo)
 	}
@@ -700,7 +710,7 @@ func attributionSet(home string, dryRun bool, out io.Writer) {
 		}
 		content := []byte("{\n  " + fragment + "\n}\n")
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			fmt.Fprintf(out, "settings: %s could not be written (%v); add the key by hand\n", path, err)
+			settingsUnwritable(out, path, err)
 			return
 		}
 		// O_EXCL: the Lstat above is advisory; whatever appears at the path
@@ -708,30 +718,27 @@ func attributionSet(home string, dryRun bool, out io.Writer) {
 		// instead of being written through or blocked on.
 		f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 		if err != nil {
-			fmt.Fprintf(out, "settings: %s could not be written (%v); add the key by hand\n", path, err)
+			settingsUnwritable(out, path, err)
 			return
 		}
 		if _, err := f.Write(content); err != nil {
 			f.Close()
-			fmt.Fprintf(out, "settings: %s could not be written (%v); add the key by hand\n", path, err)
+			settingsUnwritable(out, path, err)
 			return
 		}
 		if err := f.Sync(); err != nil {
 			f.Close()
-			fmt.Fprintf(out, "settings: %s could not be written (%v); add the key by hand\n", path, err)
+			settingsUnwritable(out, path, err)
 			return
 		}
 		if err := f.Close(); err != nil {
-			fmt.Fprintf(out, "settings: %s could not be written (%v); add the key by hand\n", path, err)
+			settingsUnwritable(out, path, err)
 			return
 		}
 		fmt.Fprintf(out, "settings: %s created with %s — Claude Code's commit and PR trailers are off\n", path, fragment)
 		return
 	case err != nil, !info.Mode().IsRegular():
-		return // attributionHint names it
-	case info.Size() > 1<<20:
-		fmt.Fprintf(out, "settings: %s is larger than 1 MiB, more than this tool will rewrite; add the key by hand\n", path)
-		return
+		return // attributionHint names it, and readSettings bounds the size
 	}
 	data, problem := readSettings(path)
 	if problem != "" {
@@ -819,6 +826,12 @@ func abandonTemp(tmpName, path string, cause error, out io.Writer) {
 	}
 }
 
+// settingsUnwritable is the one sentence for every way the settings file
+// could not be written; five call sites said it five times.
+func settingsUnwritable(out io.Writer, path string, err error) {
+	fmt.Fprintf(out, "settings: %s could not be written (%v); add the key by hand\n", path, err)
+}
+
 // readSettings reads the operator's settings file, bounded to a regular file
 // of at most one megabyte; problem names why it could not be read, without a
 // byte of its contents.
@@ -829,6 +842,10 @@ func readSettings(path string) (data []byte, problem string) {
 		return nil, "could not be read"
 	case !info.Mode().IsRegular():
 		return nil, "is not a regular file"
+	case info.Size() > 1<<20:
+		// One bound, here, so install and status say the same thing about
+		// a file this tool will not rewrite (audit 2026-09-18).
+		return nil, "is larger than 1 MiB, more than this tool will read or rewrite"
 	}
 	f, err := os.Open(path)
 	if err != nil {

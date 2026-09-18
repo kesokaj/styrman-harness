@@ -113,8 +113,8 @@ func UpdateFromRelease(home, version string, checkOnly bool, installArgs []strin
 	case !IsReleaseVersion(version):
 		fmt.Fprintf(out, "this binary reports version %q, which is not a release; leaving it alone — download %s by hand (README § Install without cloning)\n", version, tag)
 		return nil
-	case compareRelease(tag, version) < 0:
-		fmt.Fprintf(out, "the newest release %s is older than this binary %s; nothing installed\n", tag, version)
+	case compareRelease(tag, version) <= 0:
+		fmt.Fprintf(out, "the newest release %s is not newer than this binary %s; nothing installed\n", tag, version)
 		return nil
 	}
 	if checkOnly {

@@ -452,7 +452,9 @@ func alive(pid int) bool {
 // everything — slower, still correct (measured 2026-09-17).
 func cloneThrowaway(home, url, host string) (dir string, err error) {
 	dir = throwawayDir(home)
-	if err := os.MkdirAll(filepath.Dir(dir), 0o755); err != nil {
+	// 0700, as the release download's directory: nothing under it is anyone
+	// else's business (security audit 2026-09-18).
+	if err := os.MkdirAll(filepath.Dir(dir), 0o700); err != nil {
 		return "", err
 	}
 	if err := os.RemoveAll(dir); err != nil {

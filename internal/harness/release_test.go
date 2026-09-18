@@ -183,6 +183,7 @@ func TestUpdateFromReleaseReplacesAndInstalls(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", os.Getenv("PATH")+string(os.PathListSeparator)+elsewhere)
+	t.Setenv("HOME", home) // the note is for the real home only
 	if err := UpdateFromRelease(home, "v1.0.0", false, []string{"--home", home}, &out); err != nil {
 		t.Fatalf("update: %v\n%s", err, out.String())
 	}
@@ -569,7 +570,7 @@ func TestUpdateFromReleaseNeverGoesBackwards(t *testing.T) {
 		if err := UpdateFromRelease(home, "v1.0.0", checkOnly, nil, &out); err != nil {
 			t.Fatalf("checkOnly=%v: %v", checkOnly, err)
 		}
-		if !strings.Contains(out.String(), "the newest release v0.9.0 is older than this binary v1.0.0; nothing installed") {
+		if !strings.Contains(out.String(), "the newest release v0.9.0 is not newer than this binary v1.0.0; nothing installed") {
 			t.Errorf("checkOnly=%v output: %q", checkOnly, out.String())
 		}
 		if after, _ := os.ReadFile(dest); string(after) != string(before) {

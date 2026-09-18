@@ -294,6 +294,10 @@ func TestPathShadows(t *testing.T) {
 	if err := os.Link(bin, filepath.Join(hardDir, "sh-agent")); err != nil {
 		t.Fatal(err)
 	}
+	dirLink := filepath.Join(root, "bin-alias") // ~/bin -> ~/.local/bin, the round-2 repro
+	if err := os.Symlink(binDir, dirLink); err != nil {
+		t.Fatal(err)
+	}
 	plainDir := filepath.Join(root, "plain")
 	if err := os.Mkdir(plainDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -318,9 +322,12 @@ func TestPathShadows(t *testing.T) {
 		{"a file with no execute bit is not a binary", joinPath(plainDir, a, binDir), []string{aBin}, true},
 		{"the installed dir absent from PATH: every candidate wins, onPath false", joinPath(a, b), []string{aBin, bBin}, false},
 		{"a trailing slash on the installed dir still matches", joinPath(binDir+"/", a), nil, true},
-		// The review's exact repro: two definitions of "on PATH" disagreed here.
+		// Round 1's repro: a lexical "on PATH" and the file identity disagreed here.
 		{"a double trailing slash on the installed dir still matches", joinPath(a, binDir+"//", b), []string{aBin}, true},
 		{"a dot segment in the installed dir still matches", joinPath(binDir+"/.", a), nil, true},
+		// Round 2's repro: PATH reaches the bin dir only through a symlinked directory.
+		{"a symlinked directory that resolves to the bin dir: reached, and an earlier shadow is still named", joinPath(a, dirLink, b), []string{aBin}, true},
+		{"a symlinked directory first: nothing shadows", joinPath(dirLink, a), nil, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got, onPath := PathShadows(tc.path, bin)
@@ -338,11 +345,11 @@ func TestPathShadows(t *testing.T) {
 		})
 	}
 
-	t.Run("an installed binary that does not exist yet still reports shadows", func(t *testing.T) {
+	t.Run("an installed binary that does not exist: nothing reaches it, every candidate is a shadow", func(t *testing.T) {
 		missingDir := filepath.Join(root, "nowhere", ".local", "bin")
 		got, onPath := PathShadows(joinPath(a, missingDir), filepath.Join(missingDir, "sh-agent"))
-		if !onPath || len(got) != 1 || got[0] != aBin {
-			t.Fatalf("shadows = %v, onPath = %v; want [%s], true", got, onPath, aBin)
+		if onPath || len(got) != 1 || got[0] != aBin {
+			t.Fatalf("shadows = %v, onPath = %v; want [%s], false", got, onPath, aBin)
 		}
 	})
 

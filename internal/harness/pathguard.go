@@ -7,10 +7,15 @@ import (
 
 // PathShadows walks PATH the way a shell does and reports two facts about the
 // binary at binPath: the executables of the same name that PATH finds BEFORE
-// it (in PATH order, without repeats), and whether its directory is on PATH at
-// all. The callers print from these; they never re-derive "on PATH" by another
-// rule, because two definitions of it disagreed on a `.local/bin//` entry and
-// hid a real shadow (review of 2026-09-18).
+// it (in PATH order, without repeats), and whether PATH reaches it at all.
+//
+// "Reaches it" means one thing only: a PATH entry holds an executable that IS
+// the installed file, by os.SameFile — through its own directory, a symlinked
+// directory, a symlink or a hard link to it. There is no lexical comparison
+// of directory names anywhere: two rounds of review found a directory form
+// (`.local/bin//`, then a symlinked directory) on which a lexical "on PATH"
+// and the file identity disagreed, and each time the disagreement hid a real
+// shadow. One identity, one walk.
 //
 // An empty shadows result with onPath true means an unqualified `sh-agent`
 // runs the binary the install just wrote. Anything else means it does not —
@@ -18,18 +23,14 @@ import (
 // binary was installed to /usr/local/bin and then ignored for two more PATH
 // entries, while every command reported success and `status` reported drift
 // none, because drift is measured against whatever source the binary that
-// actually ran resolved (BUG-078).
+// actually ran resolved (BUG-078). When binPath does not exist, nothing can
+// reach it: onPath is false and every executable of that name is a shadow.
 func PathShadows(pathEnv, binPath string) (shadows []string, onPath bool) {
 	name := filepath.Base(binPath)
-	binDir := filepath.Clean(filepath.Dir(binPath))
 	target, haveTarget := executableAt(binPath)
 
 	seen := map[string]bool{}
 	for _, dir := range filepath.SplitList(pathEnv) {
-		if filepath.Clean(dir) == binDir {
-			// PATH reaches the installed binary here; nothing later can win.
-			return shadows, true
-		}
 		cand := filepath.Join(dir, name)
 		if dir == "" {
 			// POSIX: an empty PATH entry is the working directory. Join would
@@ -39,17 +40,15 @@ func PathShadows(pathEnv, binPath string) (shadows []string, onPath bool) {
 		if seen[cand] {
 			continue
 		}
+		seen[cand] = true
 		info, ok := executableAt(cand)
 		if !ok {
 			continue
 		}
-		// A symlink or hard link to the installed binary runs the same file,
-		// so it is not a shadow. This is how BUG-078 was settled on the
-		// operator's box, and the warning must go quiet once it is.
 		if haveTarget && os.SameFile(info, target) {
-			continue
+			// The shell would run the installed file here; nothing later can win.
+			return shadows, true
 		}
-		seen[cand] = true
 		shadows = append(shadows, cand)
 	}
 	return shadows, false

@@ -78,21 +78,22 @@ Harness state (feedback log, retro proposals and index) lives in `~/.config/sh-a
 A machine that only USES the harness needs no checkout: a release binary carries `context/`, `skills/`, `agents/`, `commands/` and `rules/` inside it, and installs them. Any of these gets you the binary, all with your own GitHub credential — the repository is private, so a download works only when you are logged in or hold the key:
 
 ```bash
-# gh, the shortest path. Everything is verified in a scratch directory and only the
-# binary moves to ~/.local/bin, so no checksum file or signer file is left in a PATH
-# directory. --clobber because a leftover file from an earlier attempt makes the
-# download refuse, and the stale file is then what you move.
-D=$(mktemp -d) && cd "$D"
-gh release download --repo kesokaj/styrman-harness --clobber \
-  --pattern 'sh-agent-linux-amd64' --pattern 'SHA256SUMS' --pattern 'SHA256SUMS.sig' --dir "$D"
-# The release signer — the same line that is compiled into every sh-agent and printed
-# in .agents/docs/deploy/remote.md § Releases. Take it from a checkout or a binary you
-# already trust, never from the release page: that page is what the signature checks.
-printf '%s\n' 'ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR' > allowed-signers
-ssh-keygen -Y verify -f allowed-signers -I ostling.simon@gmail.com -n sh-agent-release -s SHA256SUMS.sig < SHA256SUMS
-grep -v '^#' SHA256SUMS | sha256sum -c - --ignore-missing         # macOS: shasum -a 256 -c
-chmod +x sh-agent-linux-amd64 && ./sh-agent-linux-amd64 version   # check the FILE before it becomes `sh-agent`
-mv sh-agent-linux-amd64 ~/.local/bin/sh-agent && cd ~ && rm -r "$D"
+# gh, the shortest path — ONE chained command, so a failed check stops the move.
+# Everything is verified in a scratch directory and only the binary moves to
+# ~/.local/bin; no checksum or signer file is left in a PATH directory. --clobber
+# because a leftover file from an earlier attempt makes the download refuse, and the
+# stale file is then what you move. The signer line is the one compiled into every
+# sh-agent and printed in .agents/docs/deploy/remote.md § Releases: take it from a
+# checkout or a binary you already trust, never from the release page, which is what
+# the signature checks. On macOS replace `sha256sum -c -` with `shasum -a 256 -c -`.
+D=$(mktemp -d) && cd "$D" \
+&& gh release download --repo kesokaj/styrman-harness --clobber \
+     --pattern 'sh-agent-linux-amd64' --pattern 'SHA256SUMS' --pattern 'SHA256SUMS.sig' --dir "$D" \
+&& printf '%s\n' 'ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR' > allowed-signers \
+&& ssh-keygen -Y verify -f allowed-signers -I ostling.simon@gmail.com -n sh-agent-release -s SHA256SUMS.sig < SHA256SUMS \
+&& grep -v '^#' SHA256SUMS | sha256sum -c - --ignore-missing \
+&& chmod +x sh-agent-linux-amd64 && ./sh-agent-linux-amd64 version \
+&& mv sh-agent-linux-amd64 ~/.local/bin/sh-agent && cd ~ && rm -r "$D"
 
 # or go install, for v1.1.0 or newer (v1.0.0 has no harness built in). The module path
 # is an https URL and the repository is private, so git must be told to fetch it over

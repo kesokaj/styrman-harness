@@ -384,9 +384,9 @@ func status(src harness.Source, home, vendorFlag string, out io.Writer) error {
 	}
 	fmt.Fprintln(out, binaryLine)
 	// The line above describes the installed file; these say when that file is
-	// not the one an unqualified `sh-agent` runs (BUG-078). Only when this
-	// home's bin dir is on PATH: for a scratch home it never is, and the
-	// operator's own home is the one where the distinction bites.
+	// not the one an unqualified `sh-agent` runs (BUG-078). Only when PATH
+	// reaches the installed file at all: for a scratch home it never does, and
+	// the operator's own home is the one where the distinction bites.
 	if shadows, onPath := harness.PathShadows(os.Getenv("PATH"), filepath.Join(home, harness.BinPath)); onPath {
 		for _, s := range shadows {
 			fmt.Fprintf(out, "shadowed   %s comes first on PATH, so `sh-agent` runs that, not the binary above\n", s)
@@ -636,12 +636,12 @@ func selfExecutable() ([]byte, error) {
 }
 
 // pathHint says, after an install, whether the next unqualified `sh-agent`
-// runs the binary just written — one message per situation. A bin dir on PATH
-// that loses to an earlier entry is the BUG-078 case: install reports success
-// and `status` reports drift none, both about a binary the next command will
-// not run. A bin dir off PATH is the old note, naming what answers instead
-// when something does. Every fact comes from one PathShadows call, so the two
-// halves cannot disagree on what "on PATH" means.
+// runs the binary just written — one message per situation. PATH reaching the
+// file but only after an earlier entry is the BUG-078 case: install reports
+// success and `status` reports drift none, both about a binary the next
+// command will not run. PATH not reaching it is the old note, naming what
+// answers instead when something does. Every fact comes from one PathShadows
+// call, so the two halves cannot disagree on what "on PATH" means.
 func pathHint(home string, out io.Writer) error {
 	bin := filepath.Join(home, harness.BinPath)
 	binDir := filepath.Dir(bin)

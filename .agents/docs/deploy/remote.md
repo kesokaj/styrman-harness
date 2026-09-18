@@ -21,12 +21,21 @@ sh-agent status
 On a machine that installs from a RELEASE BINARY instead, the download is verified before it is moved and the install is verified after it — two different checks, and skipping the second is what BUG-078 cost:
 
 ```bash
-gh release download vX.Y.Z --repo kesokaj/styrman-harness --clobber \
-  --pattern 'sh-agent-<os>-<arch>' --pattern 'SHA256SUMS' --pattern 'SHA256SUMS.sig' --dir "$D"
-ssh-keygen -Y verify -f allowed-signers -I <signer> -n sh-agent-release -s SHA256SUMS.sig < SHA256SUMS
-grep -v '^#' SHA256SUMS | sha256sum -c - --ignore-missing
-./sh-agent-<os>-<arch> version        # the downloaded FILE, before it is moved anywhere
-mv …/sh-agent-<os>-<arch> ~/.local/bin/sh-agent    # or a system path; the checksum and signer files stay in "$D" and go with it
+# One chained command: a failed check stops the move. ASSET is sh-agent-linux-amd64,
+# sh-agent-darwin-arm64 or sh-agent-linux-arm64; the signer line is § Releases' allowed-signers
+# line, taken from this file in a checkout, never from the release page. macOS: shasum -a 256 -c -
+ASSET=sh-agent-linux-amd64 \
+&& D=$(mktemp -d) && cd "$D" \
+&& gh release download vX.Y.Z --repo kesokaj/styrman-harness --clobber \
+     --pattern "$ASSET" --pattern 'SHA256SUMS' --pattern 'SHA256SUMS.sig' --dir "$D" \
+&& printf '%s\n' 'ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR' > allowed-signers \
+&& ssh-keygen -Y verify -f allowed-signers -I ostling.simon@gmail.com -n sh-agent-release -s SHA256SUMS.sig < SHA256SUMS \
+&& grep -v '^#' SHA256SUMS | sha256sum -c - --ignore-missing \
+&& chmod +x "$ASSET" && "./$ASSET" version \
+&& mv "$ASSET" ~/.local/bin/sh-agent && cd ~ && rm -r "$D"
+# The last line: the downloaded FILE prints its version before it is moved anywhere; the
+# checksum and signer files leave with "$D". A system path instead of ~/.local/bin is a
+# `sudo mv` on that one line and changes nothing else.
 
 sh-agent version                      # unqualified: what the SHELL resolves, after the move
 which -a sh-agent                     # every candidate, in PATH order, when the version is wrong

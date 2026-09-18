@@ -116,3 +116,16 @@ Both runs are from the operator's own shell, on machines with no harness checkou
 - `linux/arm64`: built and published for all three releases, never executed on any machine.
 - The Claude Code side of the work Mac: still installed `--vendor antigravity` only, so `~/.claude` there holds nothing from any release and `claude` has not been started from it. devbox covers the Claude side on Linux.
 - `sh-agent update` has never run on devbox: that machine reached v1.2.1 by download and `install`, not by updating from an earlier release.
+
+## Added 2026-09-18 — v1.2.2 published and consumed
+
+v1.2.2 (release commit f3ec5dc on gated head f91257c, tag signed and verified before the push) was cut by `/preflight v1.2.2` from the operator's own turn and published with the create-then-upload-per-asset shape: five assets, each first attempt. Gate: `.agents/docs/reviews/2026-09-18-preflight-v1.2.2.md`.
+
+- **Published and verified as a consumer**, from a fresh scratch directory: `gh release download v1.2.2` (all five assets) → `ssh-keygen -Y verify` over `SHA256SUMS` as published → `Good "sh-agent-release" signature`; `sha256sum -c SHA256SUMS` → OK for all three binaries; `./sh-agent-linux-amd64 version` → `sh-agent v1.2.2`; and the new binding the docs now ask for, `test "$(./sh-agent-linux-amd64 version)" = "sh-agent $(sed -n 's/^# styrman-harness //p' SHA256SUMS)"` → exit 0. The downloaded `linux/amd64` binary is byte-identical to the one built here (`cmp`).
+- **Repository visibility** after the upload: `PRIVATE`.
+
+### Not exercised
+
+- `sh-agent update` from v1.2.1 to v1.2.2 on any place: the operator's Mac and devbox are the binary-only places, and both updates are theirs to run (the handoff's Next Steps). The cross-release update path itself is proven for v1.1.0 → v1.2.0 (Linux, scratch) and v1.2.0 → v1.2.1 (the Mac).
+- `darwin/arm64` and `linux/arm64` v1.2.2 binaries: built, checksummed, signed and published; not executed.
+- The README browser chain on a Mac, including its `shasum -a 256 -c - --ignore-missing` form.

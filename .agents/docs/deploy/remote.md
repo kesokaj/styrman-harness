@@ -21,21 +21,27 @@ sh-agent status
 On a machine that installs from a RELEASE BINARY instead, the download is verified before it is moved and the install is verified after it — two different checks, and skipping the second is what BUG-078 cost:
 
 ```bash
-# One chained command: a failed check stops the move. ASSET is sh-agent-linux-amd64,
-# sh-agent-darwin-arm64 or sh-agent-linux-arm64; the signer line is § Releases' allowed_signers
-# line, taken from this file in a checkout, never from the release page. macOS: shasum -a 256 -c -
-ASSET=sh-agent-linux-amd64 \
+# One chained command: a failed check stops the move. V is the version you expect, from OUTSIDE
+# the download (you cut it, or read it on a machine you already trust); ASSET is sh-agent-linux-amd64,
+# sh-agent-darwin-arm64 or sh-agent-linux-arm64; the signer line is § Releases' allowed_signers line,
+# taken from this file in a checkout, never from the release page. macOS: shasum -a 256 -c -
+V=vX.Y.Z && ASSET=sh-agent-linux-amd64 \
 && D=$(mktemp -d) && cd "$D" \
-&& gh release download vX.Y.Z --repo kesokaj/styrman-harness --clobber \
+&& gh release download "$V" --repo kesokaj/styrman-harness --clobber \
      --pattern "$ASSET" --pattern 'SHA256SUMS' --pattern 'SHA256SUMS.sig' --dir "$D" \
 && printf '%s\n' 'ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR' > allowed_signers \
 && ssh-keygen -Y verify -f allowed_signers -I ostling.simon@gmail.com -n sh-agent-release -s SHA256SUMS.sig < SHA256SUMS \
+&& grep -qxF "# styrman-harness $V" SHA256SUMS \
 && grep -v '^#' SHA256SUMS | sha256sum -c - --ignore-missing \
-&& chmod +x "$ASSET" && "./$ASSET" version \
+&& chmod +x "$ASSET" \
+&& test "$("./$ASSET" version)" = "sh-agent $V" \
 && mv "$ASSET" ~/.local/bin/sh-agent && cd ~ && rm -r "$D"
-# The last line: the downloaded FILE prints its version before it is moved anywhere; the
-# checksum and signer files leave with "$D". A system path instead of ~/.local/bin is a
-# `sudo mv` on that one line and changes nothing else.
+# The `grep` and the `test` tie the SIGNED checksum file and the binary to the version YOU named —
+# what `sh-agent update` does with the tag it asked GitHub for (update also refuses a tag that is not
+# newer than what it has, which no first install can mirror). Without them a genuinely signed
+# OLDER release, served whole, passes the signature and checksum steps: the signature only proves
+# the operator signed it once. The checksum and signer files leave with "$D". A system path
+# instead of ~/.local/bin is a `sudo mv` on that one line and changes nothing else.
 
 sh-agent version                      # unqualified: what the SHELL resolves, after the move
 which -a sh-agent                     # every candidate, in PATH order, when the version is wrong

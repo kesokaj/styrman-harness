@@ -78,21 +78,28 @@ Harness state (feedback log, retro proposals and index) lives in `~/.config/sh-a
 A machine that only USES the harness needs no checkout: a release binary carries `context/`, `skills/`, `agents/`, `commands/` and `rules/` inside it, and installs them. Any of these gets you the binary, all with your own GitHub credential — the repository is private, so a download works only when you are logged in or hold the key:
 
 ```bash
-# gh, the shortest path — ONE chained command, so a failed check stops the move.
-# Everything is verified in a scratch directory and only the binary moves to
-# ~/.local/bin; no checksum or signer file is left in a PATH directory. --clobber
-# because a leftover file from an earlier attempt makes the download refuse, and the
-# stale file is then what you move. The signer line is the one compiled into every
-# sh-agent and printed in .agents/docs/deploy/remote.md § Releases: take it from a
-# checkout or a binary you already trust, never from the release page, which is what
-# the signature checks. On macOS replace `sha256sum -c -` with `shasum -a 256 -c -`.
-D=$(mktemp -d) && cd "$D" \
-&& gh release download --repo kesokaj/styrman-harness --clobber \
+# gh, the shortest path — ONE chained command, so a failed check stops the move. V is the
+# version you expect, from a source OUTSIDE the download: the operator who cut it, or a checkout's
+# changelog — not the Releases page, which is the same server the assets come from. Two lines tie
+# the download to it — the SIGNED checksum file must name V, and the binary must be V — which is
+# what `sh-agent update` does with the tag it asked for (update also refuses a tag that is not
+# newer than what it has, which no first install can mirror). The guarantee is "the version you
+# named, or nothing" — never "the newest". Without those lines a genuinely signed OLDER release
+# passes every other check. Everything is verified in a scratch directory and only the binary moves to
+# ~/.local/bin. --clobber because a leftover file from an earlier attempt makes the download
+# refuse. The signer line is the one compiled into every sh-agent and printed in
+# .agents/docs/deploy/remote.md § Releases: take it from a checkout or a binary you already
+# trust, never from the release page. On macOS replace `sha256sum -c -` with `shasum -a 256 -c -`.
+V=vX.Y.Z \
+&& D=$(mktemp -d) && cd "$D" \
+&& gh release download "$V" --repo kesokaj/styrman-harness --clobber \
      --pattern 'sh-agent-linux-amd64' --pattern 'SHA256SUMS' --pattern 'SHA256SUMS.sig' --dir "$D" \
 && printf '%s\n' 'ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR' > allowed_signers \
 && ssh-keygen -Y verify -f allowed_signers -I ostling.simon@gmail.com -n sh-agent-release -s SHA256SUMS.sig < SHA256SUMS \
+&& grep -qxF "# styrman-harness $V" SHA256SUMS \
 && grep -v '^#' SHA256SUMS | sha256sum -c - --ignore-missing \
-&& chmod +x sh-agent-linux-amd64 && ./sh-agent-linux-amd64 version \
+&& chmod +x sh-agent-linux-amd64 \
+&& test "$(./sh-agent-linux-amd64 version)" = "sh-agent $V" \
 && mv sh-agent-linux-amd64 ~/.local/bin/sh-agent && cd ~ && rm -r "$D"
 ```
 
@@ -114,14 +121,20 @@ GOPRIVATE='github.com/kesokaj/*' \
 
 ```bash
 # or the Releases page in a browser: download the binary, SHA256SUMS and SHA256SUMS.sig to
-# ~/Downloads, then the same checks as the gh route on those files, as ONE chain (shown for a
-# Mac; on Linux replace `shasum -a 256 -c -` with `sha256sum -c -`):
-cd ~/Downloads \
+# ~/Downloads, then the same checks in a scratch directory so nothing else in ~/Downloads is
+# touched — ONE chain, shown for a Mac (on Linux: `sha256sum -c -`, and no xattr step). The
+# `ls` stops the chain before anything moves when a file is missing; the `xattr` line lifts the
+# browser quarantine, which would otherwise stop the binary from running at all:
+V=vX.Y.Z \
+&& ls ~/Downloads/sh-agent-darwin-arm64 ~/Downloads/SHA256SUMS ~/Downloads/SHA256SUMS.sig >/dev/null \
+&& D=$(mktemp -d) && mv ~/Downloads/sh-agent-darwin-arm64 ~/Downloads/SHA256SUMS ~/Downloads/SHA256SUMS.sig "$D" && cd "$D" \
 && printf '%s\n' 'ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR' > allowed_signers \
 && ssh-keygen -Y verify -f allowed_signers -I ostling.simon@gmail.com -n sh-agent-release -s SHA256SUMS.sig < SHA256SUMS \
+&& grep -qxF "# styrman-harness $V" SHA256SUMS \
 && grep -v '^#' SHA256SUMS | shasum -a 256 -c - --ignore-missing \
-&& chmod +x sh-agent-darwin-arm64 && ./sh-agent-darwin-arm64 version \
-&& mv sh-agent-darwin-arm64 ~/.local/bin/sh-agent && rm allowed_signers SHA256SUMS SHA256SUMS.sig
+&& chmod +x sh-agent-darwin-arm64 && { xattr -d com.apple.quarantine sh-agent-darwin-arm64 2>/dev/null || true; } \
+&& test "$(./sh-agent-darwin-arm64 version)" = "sh-agent $V" \
+&& mv sh-agent-darwin-arm64 ~/.local/bin/sh-agent && cd ~ && rm -r "$D"
 ```
 
 Then:
@@ -136,11 +149,7 @@ sh-agent status      # "source embedded vX.Y.Z" and "drift none"
 
 Make sure `~/.local/bin` is on your `PATH`. The assets are `sh-agent-linux-amd64`, `sh-agent-darwin-arm64` and `sh-agent-linux-arm64`, beside `SHA256SUMS` and `SHA256SUMS.sig`.
 
-On macOS, a binary downloaded **in a browser** is quarantined; one fetched by `gh` or `go install` is not:
-
-```bash
-xattr -d com.apple.quarantine ~/.local/bin/sh-agent   # only after a browser download
-```
+On macOS, a binary downloaded **in a browser** is quarantined and will not run until the attribute is removed; the browser chain above does that (`xattr -d com.apple.quarantine`) before it runs `version`. One fetched by `gh` or `go install` is not quarantined.
 
 To move such a place forward, run `sh-agent update` there: it asks GitHub for the newest release, refuses anything that is not a `vX.Y.Z` tag newer than what is installed, verifies `SHA256SUMS.sig` against the key compiled into the binary and each binary against its checksum, and only then replaces itself and reinstalls. It needs `gh` on `PATH` (`gh auth login` once) and `ssh-keygen`, which every machine with OpenSSH has. `sh-agent update --check` only reports, exiting 2 when a newer release exists. `sh-agent adopt` needs a checkout and says so.
 

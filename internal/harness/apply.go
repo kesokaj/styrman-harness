@@ -45,9 +45,12 @@ func Install(src Source, home string, files []File, vendor string, dryRun bool, 
 			// the fix (security review of v1.0.0, round 2, measured on a real
 			// install). Correct the mode in place; the contents are already
 			// right, and a chmod that fails is not worth failing an install
-			// over — the next run with changed bytes will set it.
-			if !dryRun {
-				if info, statErr := os.Stat(dest); statErr == nil && info.Mode().Perm() != f.Mode.Perm() {
+			// over — the next run with changed bytes will set it. The probe
+			// runs on a dry run too, so it names the same `mode` line the
+			// real run would (plan sh-agent-works-everywhere, D7, D8).
+			if info, statErr := os.Stat(dest); statErr == nil && info.Mode().Perm() != f.Mode.Perm() {
+				fmt.Fprintf(out, "mode    ~/%s (%04o -> %04o)\n", f.Rel, info.Mode().Perm(), f.Mode.Perm())
+				if !dryRun {
 					if err := os.Chmod(dest, f.Mode.Perm()); err != nil {
 						fmt.Fprintf(out, "note: could not correct the mode of ~/%s (%v)\n", f.Rel, err)
 					}
@@ -55,10 +58,22 @@ func Install(src Source, home string, files []File, vendor string, dryRun bool, 
 			}
 		default:
 			counts["written"]++
-			if dryRun {
-				fmt.Fprintf(out, "write   ~/%s\n", f.Rel)
-			} else if err := writeAtomic(dest, f.Data, f.Mode); err != nil {
-				return fmt.Errorf("writing %s: %w", dest, err)
+			// Every run names what it changes, not only --dry-run: a file that
+			// was not there is an `add`; one with other bytes an `update`; one
+			// that exists but could not be read is written over as before and
+			// the line says why (D6).
+			switch {
+			case errors.Is(readErr, fs.ErrNotExist):
+				fmt.Fprintf(out, "add     ~/%s\n", f.Rel)
+			case readErr != nil:
+				fmt.Fprintf(out, "update  ~/%s (previous file unreadable: %v)\n", f.Rel, readErr)
+			default:
+				fmt.Fprintf(out, "update  ~/%s\n", f.Rel)
+			}
+			if !dryRun {
+				if err := writeAtomic(dest, f.Data, f.Mode); err != nil {
+					return fmt.Errorf("writing %s: %w", dest, err)
+				}
 			}
 		}
 		manifest = append(manifest, f.Rel)
@@ -80,8 +95,8 @@ func Install(src Source, home string, files []File, vendor string, dryRun bool, 
 			continue
 		}
 		counts["removed"]++
+		fmt.Fprintf(out, "remove  ~/%s (no longer in the source)\n", rel)
 		if dryRun {
-			fmt.Fprintf(out, "remove  ~/%s (no longer in the repo)\n", rel)
 			continue
 		}
 		if err := os.Remove(dest); err != nil {

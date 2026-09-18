@@ -26,13 +26,13 @@ gh release download vX.Y.Z --repo kesokaj/styrman-harness --clobber \
 ssh-keygen -Y verify -f allowed-signers -I <signer> -n sh-agent-release -s SHA256SUMS.sig < SHA256SUMS
 grep -v '^#' SHA256SUMS | sha256sum -c - --ignore-missing
 ./sh-agent-<os>-<arch> version        # the downloaded FILE, before it is moved anywhere
-mv …/sh-agent-<os>-<arch> ~/.local/bin/sh-agent    # or a system path
+mv …/sh-agent-<os>-<arch> ~/.local/bin/sh-agent    # or a system path; the checksum and signer files stay in "$D" and go with it
 
 sh-agent version                      # unqualified: what the SHELL resolves, after the move
 which -a sh-agent                     # every candidate, in PATH order, when the version is wrong
 ```
 
-`sh-agent version` unqualified is the one that matters. A binary moved into a system path is not installed if an earlier `PATH` entry holds another `sh-agent`: that one runs, installs whatever source it resolves, and reports `drift none` about it. `install` and `status` name such a binary now (a `warning:` line and a `shadowed` line), and a symlink from the earlier entry to the installed binary settles it — it runs the same file, so it is not a shadow. `--clobber` matters for the same class of reason: without it a leftover file from an earlier attempt makes the download refuse, and the stale file is what gets moved.
+`sh-agent version` unqualified is the one that matters. A binary moved into a system path is not installed if an earlier `PATH` entry holds another `sh-agent`: that one runs, installs whatever source it resolves, and reports `drift none` about it. It tells stale from fresh, never genuine from forged — it is the suspect binary's own output; authenticity is the signature and checksum on the file, before the move. `install` and `status` name such a binary now (a `warning:` line and a `shadowed` line), and a symlink from the earlier entry to the installed binary settles it — it runs the same file, so it is not a shadow. `--clobber` matters for the same class of reason: without it a leftover file from an earlier attempt makes the download refuse, and the stale file is what gets moved.
 
 ## The four places
 

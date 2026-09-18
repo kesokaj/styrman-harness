@@ -5,65 +5,63 @@ import (
 	"path/filepath"
 )
 
-// PathShadows returns the executables named like binPath that a shell finds on
-// PATH BEFORE binPath itself, in PATH order, without repeats.
+// PathShadows walks PATH the way a shell does and reports two facts about the
+// binary at binPath: the executables of the same name that PATH finds BEFORE
+// it (in PATH order, without repeats), and whether its directory is on PATH at
+// all. The callers print from these; they never re-derive "on PATH" by another
+// rule, because two definitions of it disagreed on a `.local/bin//` entry and
+// hid a real shadow (review of 2026-09-18).
 //
-// An empty result means an unqualified `sh-agent` runs the binary the install
-// just wrote. A non-empty one means it does not — which is how a downloaded,
-// signature-verified, checksum-verified release binary was installed to
-// /usr/local/bin and then ignored for two more PATH entries, while every
-// command reported success and `status` reported drift none, because drift is
-// measured against whatever source the binary that actually ran resolved
-// (BUG-078).
-//
-// resolve reports the real path of an executable file at a location, and false
-// when there is none; it is injected so the tests need no real files.
-func PathShadows(pathEnv, binPath string, resolve func(string) (string, bool)) []string {
+// An empty shadows result with onPath true means an unqualified `sh-agent`
+// runs the binary the install just wrote. Anything else means it does not —
+// which is how a downloaded, signature-verified, checksum-verified release
+// binary was installed to /usr/local/bin and then ignored for two more PATH
+// entries, while every command reported success and `status` reported drift
+// none, because drift is measured against whatever source the binary that
+// actually ran resolved (BUG-078).
+func PathShadows(pathEnv, binPath string) (shadows []string, onPath bool) {
 	name := filepath.Base(binPath)
 	binDir := filepath.Clean(filepath.Dir(binPath))
-	target, haveTarget := resolve(binPath)
+	target, haveTarget := executableAt(binPath)
 
-	var shadows []string
 	seen := map[string]bool{}
 	for _, dir := range filepath.SplitList(pathEnv) {
-		if dir == "" {
-			dir = "." // POSIX: an empty PATH entry means the working directory.
-		}
 		if filepath.Clean(dir) == binDir {
 			// PATH reaches the installed binary here; nothing later can win.
-			break
+			return shadows, true
 		}
 		cand := filepath.Join(dir, name)
+		if dir == "" {
+			// POSIX: an empty PATH entry is the working directory. Join would
+			// print it as a bare name that reads like a command, not a file.
+			cand = "." + string(filepath.Separator) + name
+		}
 		if seen[cand] {
 			continue
 		}
-		got, ok := resolve(cand)
+		info, ok := executableAt(cand)
 		if !ok {
 			continue
 		}
-		// A symlink or bind that resolves to the installed binary runs the same
-		// file, so it is not a shadow. This is how BUG-078 was settled on the
+		// A symlink or hard link to the installed binary runs the same file,
+		// so it is not a shadow. This is how BUG-078 was settled on the
 		// operator's box, and the warning must go quiet once it is.
-		if haveTarget && got == target {
+		if haveTarget && os.SameFile(info, target) {
 			continue
 		}
 		seen[cand] = true
 		shadows = append(shadows, cand)
 	}
-	return shadows
+	return shadows, false
 }
 
-// ResolveExecutable reports the real path of an executable file at p. A
-// directory, a missing file, a dangling symlink, or a file with no execute bit
-// is not one.
-func ResolveExecutable(p string) (string, bool) {
-	real, err := filepath.EvalSymlinks(p)
-	if err != nil {
-		return "", false
-	}
-	info, err := os.Stat(real)
+// executableAt reports the file a shell would execute at p, following
+// symlinks. A directory, a missing file, a dangling symlink, or a file with no
+// execute bit is not one.
+func executableAt(p string) (os.FileInfo, bool) {
+	info, err := os.Stat(p)
 	if err != nil || info.IsDir() || info.Mode().Perm()&0o111 == 0 {
-		return "", false
+		return nil, false
 	}
-	return real, true
+	return info, true
 }

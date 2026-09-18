@@ -249,112 +249,116 @@ func TestManagedDirsRefuseSymlinks(t *testing.T) {
 	}
 }
 
-// fakeResolve turns a set of "this location holds an executable that really is
-// <target>" facts into the resolver PathShadows takes.
-func fakeResolve(files map[string]string) func(string) (string, bool) {
-	return func(p string) (string, bool) {
-		real, ok := files[p]
-		return real, ok
+// binAt writes an executable named sh-agent into dir and returns its path.
+func binAt(t *testing.T, dir string) string {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
 	}
+	p := filepath.Join(dir, "sh-agent")
+	if err := os.WriteFile(p, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return p
 }
+
+func joinPath(dirs ...string) string { return strings.Join(dirs, string(os.PathListSeparator)) }
 
 // A binary correctly installed to ~/.local/bin is worthless when an earlier
 // PATH entry holds another one; nothing said so, and a verified release binary
-// was silently ignored on two machines (BUG-078).
+// was silently ignored on two machines (BUG-078). Real files, not a fake
+// resolver: identity is os.SameFile, which a fake cannot stand in for.
 func TestPathShadows(t *testing.T) {
-	const bin = "/home/u/.local/bin/sh-agent"
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	binDir := filepath.Join(home, ".local", "bin")
+	bin := binAt(t, binDir)
+	a, b, c := filepath.Join(root, "a"), filepath.Join(root, "b"), filepath.Join(root, "c")
+	aBin, bBin := binAt(t, a), binAt(t, b)
+	binAt(t, c)
+	empty := filepath.Join(root, "empty")
+	if err := os.Mkdir(empty, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	linkDir := filepath.Join(root, "link")
+	if err := os.Mkdir(linkDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(bin, filepath.Join(linkDir, "sh-agent")); err != nil {
+		t.Fatal(err)
+	}
+	hardDir := filepath.Join(root, "hard")
+	if err := os.Mkdir(hardDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Link(bin, filepath.Join(hardDir, "sh-agent")); err != nil {
+		t.Fatal(err)
+	}
+	plainDir := filepath.Join(root, "plain")
+	if err := os.Mkdir(plainDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(plainDir, "sh-agent"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
 	for _, tc := range []struct {
-		name  string
-		path  string
-		files map[string]string
-		want  []string
+		name   string
+		path   string
+		want   []string
+		onPath bool
 	}{
-		{
-			name:  "installed dir first — nothing shadows it",
-			path:  "/home/u/.local/bin:/usr/local/bin:/usr/bin",
-			files: map[string]string{bin: bin, "/usr/local/bin/sh-agent": "/usr/local/bin/sh-agent"},
-			want:  nil,
-		},
-		{
-			name:  "an earlier entry wins",
-			path:  "/opt/devbox/bin:/home/u/.local/bin",
-			files: map[string]string{bin: bin, "/opt/devbox/bin/sh-agent": "/opt/devbox/bin/sh-agent"},
-			want:  []string{"/opt/devbox/bin/sh-agent"},
-		},
-		{
-			name: "every earlier entry is named, in PATH order",
-			path: "/a:/b:/home/u/.local/bin:/c",
-			files: map[string]string{
-				bin: bin, "/a/sh-agent": "/a/sh-agent", "/b/sh-agent": "/b/sh-agent",
-				"/c/sh-agent": "/c/sh-agent",
-			},
-			want: []string{"/a/sh-agent", "/b/sh-agent"},
-		},
-		{
-			name:  "a link to the installed binary is not a shadow",
-			path:  "/opt/devbox/bin:/home/u/.local/bin",
-			files: map[string]string{bin: bin, "/opt/devbox/bin/sh-agent": bin},
-			want:  nil,
-		},
-		{
-			name:  "a repeated PATH entry is reported once",
-			path:  "/a:/a:/a:/home/u/.local/bin",
-			files: map[string]string{bin: bin, "/a/sh-agent": "/a/sh-agent"},
-			want:  []string{"/a/sh-agent"},
-		},
-		{
-			name:  "a directory that holds no sh-agent is skipped",
-			path:  "/empty:/a:/home/u/.local/bin",
-			files: map[string]string{bin: bin, "/a/sh-agent": "/a/sh-agent"},
-			want:  []string{"/a/sh-agent"},
-		},
-		{
-			name:  "the installed dir absent from PATH: every candidate wins",
-			path:  "/a:/b",
-			files: map[string]string{bin: bin, "/a/sh-agent": "/a/sh-agent", "/b/sh-agent": "/b/sh-agent"},
-			want:  []string{"/a/sh-agent", "/b/sh-agent"},
-		},
-		{
-			name:  "an unresolvable installed binary still reports shadows",
-			path:  "/a:/home/u/.local/bin",
-			files: map[string]string{"/a/sh-agent": "/a/sh-agent"},
-			want:  []string{"/a/sh-agent"},
-		},
-		{
-			name:  "an empty PATH entry means the working directory",
-			path:  ":/home/u/.local/bin",
-			files: map[string]string{bin: bin, "sh-agent": "sh-agent"},
-			want:  []string{"sh-agent"},
-		},
-		{
-			name:  "a trailing slash on the installed dir still matches",
-			path:  "/home/u/.local/bin/:/a",
-			files: map[string]string{bin: bin, "/a/sh-agent": "/a/sh-agent"},
-			want:  nil,
-		},
+		{"installed dir first — nothing shadows it", joinPath(binDir, a, b), nil, true},
+		{"an earlier entry wins", joinPath(a, binDir), []string{aBin}, true},
+		{"every earlier entry is named, in PATH order; later ones are not", joinPath(a, b, binDir, c), []string{aBin, bBin}, true},
+		{"a symlink to the installed binary is not a shadow", joinPath(linkDir, binDir), nil, true},
+		{"a hard link to the installed binary is not a shadow", joinPath(hardDir, binDir), nil, true},
+		{"a repeated PATH entry is reported once", joinPath(a, a, a, binDir), []string{aBin}, true},
+		{"a directory that holds no sh-agent is skipped", joinPath(empty, a, binDir), []string{aBin}, true},
+		{"a file with no execute bit is not a binary", joinPath(plainDir, a, binDir), []string{aBin}, true},
+		{"the installed dir absent from PATH: every candidate wins, onPath false", joinPath(a, b), []string{aBin, bBin}, false},
+		{"a trailing slash on the installed dir still matches", joinPath(binDir+"/", a), nil, true},
+		// The review's exact repro: two definitions of "on PATH" disagreed here.
+		{"a double trailing slash on the installed dir still matches", joinPath(a, binDir+"//", b), []string{aBin}, true},
+		{"a dot segment in the installed dir still matches", joinPath(binDir+"/.", a), nil, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := PathShadows(tc.path, bin, fakeResolve(tc.files))
+			got, onPath := PathShadows(tc.path, bin)
+			if onPath != tc.onPath {
+				t.Fatalf("onPath = %v, want %v", onPath, tc.onPath)
+			}
 			if len(got) != len(tc.want) {
-				t.Fatalf("PathShadows = %v, want %v", got, tc.want)
+				t.Fatalf("shadows = %v, want %v", got, tc.want)
 			}
 			for i := range got {
 				if got[i] != tc.want[i] {
-					t.Fatalf("PathShadows = %v, want %v", got, tc.want)
+					t.Fatalf("shadows = %v, want %v", got, tc.want)
 				}
 			}
 		})
 	}
+
+	t.Run("an installed binary that does not exist yet still reports shadows", func(t *testing.T) {
+		missingDir := filepath.Join(root, "nowhere", ".local", "bin")
+		got, onPath := PathShadows(joinPath(a, missingDir), filepath.Join(missingDir, "sh-agent"))
+		if !onPath || len(got) != 1 || got[0] != aBin {
+			t.Fatalf("shadows = %v, onPath = %v; want [%s], true", got, onPath, aBin)
+		}
+	})
+
+	t.Run("an empty PATH entry is the working directory and prints as ./sh-agent", func(t *testing.T) {
+		t.Chdir(a)
+		got, onPath := PathShadows(joinPath("", binDir), bin)
+		if !onPath || len(got) != 1 || got[0] != "./sh-agent" {
+			t.Fatalf("shadows = %v, onPath = %v; want [./sh-agent], true", got, onPath)
+		}
+	})
 }
 
-// ResolveExecutable is the real-filesystem half: PathShadows is only as honest
-// as what it calls an executable.
-func TestResolveExecutable(t *testing.T) {
+// executableAt is what PathShadows calls a binary; it is only as honest as this.
+func TestExecutableAt(t *testing.T) {
 	dir := t.TempDir()
-	exe := filepath.Join(dir, "exe")
-	if err := os.WriteFile(exe, []byte("#!/bin/sh\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	exe := binAt(t, dir)
 	plain := filepath.Join(dir, "plain")
 	if err := os.WriteFile(plain, []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
@@ -371,28 +375,25 @@ func TestResolveExecutable(t *testing.T) {
 	if err := os.Mkdir(sub, 0o755); err != nil {
 		t.Fatal(err)
 	}
-
-	realExe, err := filepath.EvalSymlinks(exe)
-	if err != nil {
-		t.Fatal(err)
+	exeInfo, ok := executableAt(exe)
+	if !ok {
+		t.Fatal("an executable file was not recognised")
+	}
+	if info, ok := executableAt(link); !ok || !os.SameFile(info, exeInfo) {
+		t.Errorf("a symlink must resolve to the same file as its target: ok=%v", ok)
 	}
 	for _, tc := range []struct {
 		name string
 		path string
-		want string
-		ok   bool
 	}{
-		{"an executable file", exe, realExe, true},
-		{"a symlink resolves to its target, so a link is not a second binary", link, realExe, true},
-		{"a file with no execute bit", plain, "", false},
-		{"a dangling symlink", dangling, "", false},
-		{"a directory", sub, "", false},
-		{"a missing path", filepath.Join(dir, "nope"), "", false},
+		{"a file with no execute bit", plain},
+		{"a dangling symlink", dangling},
+		{"a directory", sub},
+		{"a missing path", filepath.Join(dir, "nope")},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, ok := ResolveExecutable(tc.path)
-			if ok != tc.ok || got != tc.want {
-				t.Fatalf("ResolveExecutable(%s) = %q, %v; want %q, %v", tc.path, got, ok, tc.want, tc.ok)
+			if _, ok := executableAt(tc.path); ok {
+				t.Errorf("executableAt(%s) = ok; want not an executable", tc.path)
 			}
 		})
 	}

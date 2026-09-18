@@ -82,8 +82,16 @@ A machine that only USES the harness needs no checkout: a release binary carries
 gh release download --repo kesokaj/styrman-harness --pattern 'sh-agent-linux-amd64' --dir ~/.local/bin
 mv ~/.local/bin/sh-agent-linux-amd64 ~/.local/bin/sh-agent && chmod +x ~/.local/bin/sh-agent
 
-# or go install, over SSH, for v1.1.0 or newer (v1.0.0 has no harness built in)
-GOPRIVATE=github.com/kesokaj/* go install github.com/kesokaj/styrman-harness/cmd/sh-agent@v1.1.0
+# or go install, for v1.1.0 or newer (v1.0.0 has no harness built in). The module path
+# is an https URL and the repository is private, so git must be told to fetch it over
+# SSH — without this it fails with "could not read Username for 'https://github.com'".
+# This form changes no git config:
+GOPRIVATE='github.com/kesokaj/*' \
+  GIT_CONFIG_COUNT=1 \
+  GIT_CONFIG_KEY_0='url.git@github.com:.insteadOf' GIT_CONFIG_VALUE_0='https://github.com/' \
+  go install github.com/kesokaj/styrman-harness/cmd/sh-agent@v1.1.0
+# (or, if you would rather set it once for this machine:
+#   git config --global url."git@github.com:".insteadOf https://github.com/ )
 
 # or the Releases page in a browser, then make it executable
 chmod +x ~/Downloads/sh-agent-darwin-arm64 && mv ~/Downloads/sh-agent-darwin-arm64 ~/.local/bin/sh-agent

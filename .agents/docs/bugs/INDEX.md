@@ -83,3 +83,4 @@
 | BUG-070 | cmd/sh-agent/main.go (update) | `context/AGENTS.md` § Hard rules, "When a command has a read-only mode" bullet |
 | BUG-071 | internal/harness/report_test.go (test premises) | `context/AGENTS.md` § Hard rules, "A test that sets up an unusual condition proves the condition HOLDS" clause |
 | BUG-072 | process/verifier-dispatch | `context/AGENTS.md` § Definition of Done, step 1, "While that dispatch is IN FLIGHT the tree stays frozen" sentence |
+| BUG-075 | 2026-09-18 | README.md § Install without cloning | fixed | documented `go install` line for v1.1.0 failed (https module path, no SSH rewrite) | a doc command is RUN as written before the release that documents it, not read; when it needs a tag the release creates, run it right after in the same task |

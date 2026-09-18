@@ -29,3 +29,20 @@ The release was cut by `/preflight v1.1.0` from the operator's own turn, on the 
 - **`go install github.com/kesokaj/styrman-harness/cmd/sh-agent@v1.1.0`** — untested; the tag now exists, so it can be.
 - **A real `sh-agent report` from this published install.** The operator authorised exactly one real report today (D25) and it ran earlier from the checkout; a second was not authorised, so the golden path's report leg is owed on the work Mac.
 - **`update` actually replacing a binary from a real release.** `--check` reached GitHub and compared versions, but no newer release exists to update TO. The replacement path is covered against local assets by the rehearsal (`.agents/scratch/v110-rehearsal/`) and by the unit tests.
+
+## Added 2026-09-18 — everything the Linux box can still settle
+
+Run after the release, on `main` at c7a6116 (the tag's content plus the kept-clone message fix), all in `.agents/scratch/`:
+
+- **`go install` from the tag works, and its version comes from build info.** `GOPATH=<scratch> GOPRIVATE='github.com/kesokaj/*' go install github.com/kesokaj/styrman-harness/cmd/sh-agent@v1.1.0` → exit 0 once git was told to fetch over SSH; the binary reports `sh-agent v1.1.0`, and `go version -m` shows `mod … v1.1.0` with NO `-ldflags` setting — so this is the `debug.ReadBuildInfo().Main.Version` branch of D6/D21, which nothing before could exercise. Installing from it, run from `/` with `SH_AGENT_REPO` unset: 260 files, `source embedded v1.1.0`, drift none. **This closes the last assumption in the plan's Risks.**
+- **The README's first install path runs verbatim.** `gh release download --repo kesokaj/styrman-harness --pattern 'sh-agent-linux-amd64' --dir …` then `mv`/`chmod` → `sh-agent v1.1.0`, and it installs 260 files. The only deviation from the README was `--dir` pointing at scratch instead of `~/.local/bin`, so the operator's installed binary was left alone.
+- **The README's `go install` path did NOT run verbatim** — recorded as BUG-075 and fixed in the same task. As shipped in v1.1.0 it failed with `could not read Username for 'https://github.com': terminal prompts disabled`: the comment said "over SSH" but the command gave git no way to use SSH. README now carries the working form.
+- **All three published binaries verify.** `gh release download v1.1.0` with no pattern fetched all five assets; `sha256sum -c SHA256SUMS` → `OK` for `sh-agent-linux-amd64`, `sh-agent-darwin-arm64` and `sh-agent-linux-arm64`; `ssh-keygen -Y verify` over the file as published → good signature. `file` reports the darwin asset as `Mach-O 64-bit arm64` and the linux/arm64 asset as `ELF 64-bit LSB … ARM aarch64`, so the cross-compilation produced the right architectures even though neither can be executed here.
+- **`sh-agent update` on the real home** (the operator asked): `up to date with upstream`, the old kept feedback clone correctly KEPT, 260 files unchanged. The clone was then measured — local `HEAD` `e973bac`, remote `main` `09586ff`, tracking ref stale at `71f749e`, and after a fetch `git log --oneline HEAD --not FETCH_HEAD` empty — so it holds nothing unique and is the operator's to delete. The misleading wording that prompted the check is BUG-074, fixed.
+
+### Still only the Mac can settle these
+
+- Running a `darwin/arm64` binary at all: the README one-liner, `sh-agent install`, `status` showing `source embedded v1.1.0`, and the macOS `xattr` quarantine note, which no Linux box can exercise.
+- `sh-agent report` from a release-binary install, leaving no `feedback` or `report-*` directory behind.
+- The edge case: `sh-agent update` with a swapped signature file refusing and leaving the binary untouched, run against the real release rather than a fixture.
+- Whether both CLIs start cleanly from a home installed by a release binary, which needs the sandbox home that no longer exists here.

@@ -46,3 +46,16 @@ Run after the release, on `main` at c7a6116 (the tag's content plus the kept-clo
 - `sh-agent report` from a release-binary install, leaving no `feedback` or `report-*` directory behind.
 - The edge case: `sh-agent update` with a swapped signature file refusing and leaving the binary untouched, run against the real release rather than a fixture.
 - Whether both CLIs start cleanly from a home installed by a release binary, which needs the sandbox home that no longer exists here.
+
+## Added 2026-09-18 — v1.2.0, and the first real cross-release update
+
+v1.2.0 was cut with the CORRECTED procedure (create the release with notes alone, then one upload per asset). It published first time, with no rollback — the shape v1.1.0's two `HTTP 500`s taught.
+
+- **Published and verified as a consumer:** `gh release download v1.2.0` (all five assets), `sha256sum -c SHA256SUMS` → OK for all three binaries, `ssh-keygen -Y verify` over the file as published → good signature, `./sh-agent-linux-amd64 version` → `sh-agent v1.2.0`.
+- **The cross-release update path, which could not exist until now.** A scratch place was installed from the v1.1.0 binary (`source embedded v1.1.0`), then `sh-agent update` ran against the real GitHub: `downloading sh-agent-linux-amd64 v1.2.0`, `verified and installed`, the new binary's install, and `4 written, 256 unchanged`. The binary's hash changed, and `status` now reports `source embedded v1.2.0`, `binary v1.2.0`, drift none.
+- **Those four files are the point of the release:** `context/AGENTS.md` and `skills/preflight/SKILL.md`, one copy per vendor. A binary-only place picking up new rules is exactly what the release binary was built for, and this is the first time it has happened end to end.
+- **The embed-contamination guard ran twice**, as the corrected guide says: once among the pre-tag checks and once immediately before the builds.
+
+### Still only the Mac can settle these
+
+Unchanged from the section above, now owed against v1.2.0 rather than v1.1.0: running any `darwin/arm64` binary at all, the macOS `xattr` quarantine note, `report` from a release-binary install leaving nothing behind, the swapped-signature edge case, and a clean start of both CLIs from a home installed by a release binary.

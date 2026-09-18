@@ -52,6 +52,7 @@
 | BUG-065 | 2026-09-17 | skills/feedback | fixed | `/feedback` loaded the harness's `feedback` skill instead of Claude Code's built-in feedback command | a skill/agent/command name never shadows a built-in slash command of either CLI; check the CLI's built-in list before naming one |
 | BUG-067 | 2026-09-17 | cmd/sh-agent/main.go (knownCheckout) | fixed | `knownCheckout` resolved an `embedded:vX.Y.Z` manifest value as a filesystem path via `samePath` | when a field gains a value of a new kind, grep every reader of that field in the same change, not just the one that prompted it |
 | BUG-073 | 2026-09-17 | process/dated trail records | fixed | new retro write clobbered an existing `2026-09-17-retro-3.md` from another session; `git status` showed MODIFIED not new | before writing a dated trail file, `ls` the target dir in the same turn and pick the next free suffix from disk, never from session memory |
+| BUG-074 | 2026-09-18 | internal/harness/report.go (RemoveKeptClone) | fixed | update refused to remove kept clone, saying "2 unpushed commit(s)" when both were already on the remote | a count-based message names what it was measured against (remote-tracking refs, which go stale after a `-u <url>` push) and never overstates it as a stronger conclusion |
 
 ## Graduated
 

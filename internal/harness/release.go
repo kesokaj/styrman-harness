@@ -132,8 +132,8 @@ func UpdateFromRelease(home, version string, checkOnly bool, installArgs []strin
 	// A random directory, and one whose siblings from an interrupted earlier
 	// update are cleared first: a predictable name is one another local
 	// account can pre-create as a symlink for these writes to follow.
-	base := filepath.Join(home, ".config", "sh-agent")
-	if err := os.MkdirAll(base, 0o700); err != nil {
+	base, err := ConfigDir(home)
+	if err != nil {
 		return err
 	}
 	for _, stale := range globOrNil(filepath.Join(base, "release-*")) {

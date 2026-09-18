@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"testing"
 	"unicode/utf8"
 )
@@ -80,27 +79,6 @@ func TestNoteRunningElsewhereOnlyForTheRealHome(t *testing.T) {
 	}
 }
 
-type fakeInfo struct {
-	os.FileInfo
-	sys any
-}
-
-func (f fakeInfo) Sys() any { return f.sys }
-
-func TestOwnedByCaller(t *testing.T) {
-	mine := &syscall.Stat_t{Uid: uint32(os.Getuid())}
-	other := &syscall.Stat_t{Uid: uint32(os.Getuid() + 1)}
-	if !ownedByCaller(fakeInfo{sys: mine}) {
-		t.Error("own uid reads as not owned")
-	}
-	if ownedByCaller(fakeInfo{sys: other}) {
-		t.Error("another uid reads as owned")
-	}
-	if !ownedByCaller(fakeInfo{sys: nil}) {
-		t.Error("unknown ownership must read as owned (the full remedy, as before)")
-	}
-}
-
 // Finding 1: adopt keeps group/other write bits that install strips.
 func TestAdoptStripsGroupAndOtherWrite(t *testing.T) {
 	if os.Geteuid() == 0 {
@@ -138,11 +116,19 @@ func TestThrowawayParentIsPrivate(t *testing.T) {
 		t.Skip("root's umask makes mode assertions meaningless")
 	}
 	home := t.TempDir()
+	// Every install creates ~/.config/sh-agent first (SaveState), and did so
+	// at 0755: a MkdirAll(…, 0700) afterwards is a no-op on an existing dir
+	// (security review round 2 of the audit, measured on the operator's
+	// own home). The dir pre-exists here, loose, as on every real machine.
+	cfg := filepath.Join(home, ".config", "sh-agent")
+	if err := os.MkdirAll(cfg, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	_, err := cloneThrowaway(home, filepath.Join(t.TempDir(), "no-such-repo.git"), "host")
 	if err == nil {
 		t.Fatal("cloning a missing repository succeeded")
 	}
-	info, err := os.Stat(filepath.Join(home, ".config", "sh-agent"))
+	info, err := os.Stat(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,5 +191,67 @@ func TestYamlQuoteEscapesControlCharacters(t *testing.T) {
 		if got := yamlQuote(in); got != want {
 			t.Errorf("yamlQuote(%q) = %s, want %s", in, got, want)
 		}
+	}
+}
+
+// Finding 5, second round: the runtime directory holds the feedback log,
+// the proposals and, briefly, a clone of the private feedback repository;
+// it is 0700 after every install, whatever it was before.
+func TestInstallMakesTheConfigDirPrivate(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root's umask makes mode assertions meaningless")
+	}
+	repo := newRepo(t)
+	for _, pre := range []string{"absent", "0755"} {
+		t.Run(pre, func(t *testing.T) {
+			home := t.TempDir()
+			cfg := filepath.Join(home, ".config", "sh-agent")
+			if pre == "0755" {
+				if err := os.MkdirAll(cfg, 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			files, err := Plan(DirSource(repo), nil, VendorAll)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var out bytes.Buffer
+			if err := Install(DirSource(repo), home, files, VendorAll, false, &out); err != nil {
+				t.Fatal(err)
+			}
+			info, err := os.Stat(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if info.Mode().Perm()&0o077 != 0 {
+				t.Errorf("after install, %s is %o, want 0700", cfg, info.Mode().Perm())
+			}
+		})
+	}
+}
+
+// The reviewer's low: a lexical compare of the home path misses a symlinked
+// $HOME; identity is os.SameFile here as everywhere else.
+func TestNoteRunningElsewhereThroughASymlinkedHome(t *testing.T) {
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	elsewhere := t.TempDir()
+	if err := os.Symlink(self, filepath.Join(elsewhere, "sh-agent")); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", elsewhere)
+	home := t.TempDir()
+	binAt(t, filepath.Join(home, ".local", "bin"))
+	link := filepath.Join(t.TempDir(), "home-link")
+	if err := os.Symlink(home, link); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", link) // the shell's home is the link; --home is the target
+	var out bytes.Buffer
+	NoteRunningElsewhere(home, &out)
+	if !strings.Contains(out.String(), "not from the installed binary") {
+		t.Errorf("a symlinked $HOME suppressed the note:\n%s", out.String())
 	}
 }

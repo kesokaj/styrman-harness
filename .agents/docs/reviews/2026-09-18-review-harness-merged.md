@@ -70,6 +70,6 @@ Written by the main agent after the fix round (batch A: `internal/harness`; batc
 14. `Diff` in `/tmp` — **fixed**: under `~/.config/sh-agent/` (internal/harness/apply.go:227); `TestDiffUsesTheHomeNotTmp` also covers the 0% body.
 15. `cell` by bytes — **fixed** (internal/harness/inventory.go:398); `TestCellIsRuneSafe`.
 16. `yamlQuote` control characters — **fixed**, escaped as `\uXXXX` (internal/harness/frontmatter.go:180); `TestYamlQuoteEscapesControlCharacters` — whose expected string the file tool converted into the character itself on first write (BUG-057's class, caught by grepping for the escape).
-17. `LoadState` and `s.Repo` — **left**, main agent, as reasoned above.
+17. `LoadState` and `s.Repo` — **left**, main agent, with the reason narrowed after security's round 2: not "the attacker already has the user's rights" (a `state.json` from a dotfiles sync, a restored backup or a shared `--home` is none of that) but that `knownCheckout`'s comparison is real when the cwd walk finds a checkout, and a recorded path that names no harness is refused by `ResolveSource` before anything is built or run. Sanitising `Repo` further is a Follow-up, not a fix this round makes.
 18. the duplicated comment — **fixed**.
 19. `report: --repo is not used here` undocumented — **fixed** by `documentation`.

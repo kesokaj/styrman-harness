@@ -61,7 +61,33 @@ func SaveState(home string, s State) error {
 	if err != nil {
 		return err
 	}
+	if _, err := ConfigDir(home); err != nil {
+		return err
+	}
 	return writeAtomic(statePath(home), append(data, '\n'), 0o644)
+}
+
+// ConfigDir returns ~/.config/sh-agent, created 0700 or tightened to it: the
+// feedback log, the retro proposals and, briefly, a clone of the private
+// feedback repository live there, and every install used to create the
+// directory 0755 on the way to state.json — after which a later
+// MkdirAll(…, 0700) was a no-op (security review of the 2026-09-18 audit,
+// round 2, measured on the operator's own home).
+func ConfigDir(home string) (string, error) {
+	dir := filepath.Join(home, ".config", "sh-agent")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	info, err := os.Stat(dir)
+	if err != nil {
+		return "", err
+	}
+	if info.Mode().Perm()&0o077 != 0 {
+		if err := os.Chmod(dir, 0o700); err != nil {
+			return "", err
+		}
+	}
+	return dir, nil
 }
 
 func RemoveState(home string) error {

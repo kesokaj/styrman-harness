@@ -220,28 +220,40 @@ func Diff(home string, files []File, out io.Writer) error {
 		// Under the home's own runtime directory, never the system temp dir:
 		// the rendered harness is the operator's, and this project keeps
 		// generated files out of /tmp (security audit 2026-09-18).
-		tmpDir := filepath.Join(home, ".config", "sh-agent")
-		if err := os.MkdirAll(tmpDir, 0o700); err != nil {
-			return err
-		}
-		tmp, err := os.CreateTemp(tmpDir, "sh-agent-diff-*")
+		tmpDir, err := ConfigDir(home)
 		if err != nil {
 			return err
 		}
-		if _, err := tmp.Write(f.Data); err != nil {
+		if err := diffOne(f, dest, tmpDir, out); err != nil {
 			return err
 		}
-		tmp.Close()
-		cmd := exec.Command("diff", "-u", "-L", "installed ~/"+f.Rel, "-L", "repo ~/"+f.Rel, dest, tmp.Name())
-		cmd.Stdout, cmd.Stderr = out, out
-		if err := cmd.Run(); err != nil {
-			var exit *exec.ExitError
-			if !errors.As(err, &exit) || exit.ExitCode() > 1 {
-				os.Remove(tmp.Name())
-				return fmt.Errorf("diff %s: %w", f.Rel, err)
-			}
+	}
+	return nil
+}
+
+// diffOne renders one source file beside its installed copy and runs the
+// system diff; the temp file goes on every path, including a failed write
+// (reviews of the 2026-09-18 audit).
+func diffOne(f File, dest, tmpDir string, out io.Writer) error {
+	tmp, err := os.CreateTemp(tmpDir, "sh-agent-diff-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	_, werr := tmp.Write(f.Data)
+	if cerr := tmp.Close(); werr == nil {
+		werr = cerr
+	}
+	if werr != nil {
+		return werr
+	}
+	cmd := exec.Command("diff", "-u", "-L", "installed ~/"+f.Rel, "-L", "repo ~/"+f.Rel, dest, tmp.Name())
+	cmd.Stdout, cmd.Stderr = out, out
+	if err := cmd.Run(); err != nil {
+		var exit *exec.ExitError
+		if !errors.As(err, &exit) || exit.ExitCode() > 1 {
+			return fmt.Errorf("diff %s: %w", f.Rel, err)
 		}
-		os.Remove(tmp.Name())
 	}
 	return nil
 }

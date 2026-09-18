@@ -1,0 +1,55 @@
+---
+owner: main
+date: 2026-09-18
+---
+# sh-agent — every verb on every kind of place
+
+The verb × place-kind matrix of `plans/2026-09-18-sh-agent-works-everywhere.md` (Phase 3 on this box; Phase 4 on real machines). A cell is `exercised` (ran, output logged), `refused` (a message naming the cause and the alternative), `n/a` (the verb has no meaning there), or `remainder` (no machine here can run it). Nothing is blank.
+
+## How the cells were run (this box, 2026-09-18, tree 3209cf3)
+
+`.agents/scratch/matrix/run.sh`, log `.agents/scratch/matrix/run.log` (gitignored; 53 cells). Three place kinds built from this checkout: **checkout** — `git clone` of this repository, driven by a development build (`go build ./cmd/sh-agent`, version `(devel)`) with `--repo`; **plain copy** — `git archive HEAD | tar -x`, no `.git`, the same development build with `--repo`; **release binary** — `go build -trimpath -ldflags "-X main.version=v9.9.9"` of this tree, no `--repo`. Each kind gets a fresh `--home`. `report` only ever `--dry-run`; `update` runs with a PATH that holds no `gh`, so nothing reaches the network. Every line below is quoted from the log.
+
+## Matrix
+
+| Verb | Checkout | Plain copy | Release binary |
+|---|---|---|---|
+| `version` | exercised: `sh-agent (devel)` | exercised: `sh-agent (devel)` | exercised: `sh-agent v9.9.9` |
+| `install --dry-run` | exercised: 260 `add` lines, `[dry-run] 260 written, 0 unchanged…`, nothing on disk | exercised: same, with `plain copy, not its own git checkout: the running binary is installed as is` | exercised: same, with `release binary v9.9.9: installing the harness built into it and the running binary` |
+| `install` (fresh home) | exercised: `building sh-agent from …/checkout`, 260 `add`, `260 written, 0 unchanged, 0 removed, 0 kept — 260 files managed` | exercised: 260 `add`, the plain-copy line, 260 written | exercised: 260 `add`, the release line, 260 written |
+| `status` | exercised: `repo …/checkout (main @ 3209cf3, clean)`, `installed … from commit 3209cf3`, `binary 3209cf35f155`, `drift none — 259 files match the repo` | exercised: `repo …/plain (plain copy, not its own git checkout; update is refused)`, `installed … from commit ` (empty — no commit to name), drift none | exercised: `source embedded v9.9.9 (release binary; update downloads the newest release)`, `installed … from release v9.9.9`, drift none. `binary 3209cf35f155+dirty` here because a LOCAL build has no module version and `releaseFromInfo` falls back to the VCS revision; a published release prints `binary vX.Y.Z` (devbox and the Mac, `2026-09-17-release-binary-e2e.md`) |
+| `list` | exercised: 27 skills, 7 agents, 0 commands, 0 rules | exercised: same | exercised: same (from the embedded files) |
+| `render` | exercised: the assembled context, first lines | exercised | exercised |
+| `sync` | exercised: identical to `install` — `0 written, 260 unchanged` on the second run | exercised | exercised |
+| `diff` (after a drifted file) | exercised: a unified hunk for `~/.claude/AGENTS.md` (`-drift`), temp copy under the home's `.config/sh-agent/`, nothing left | exercised | exercised |
+| `status` (after a drifted file) | exercised: `differs ~/.claude/AGENTS.md`, `drift 0 missing, 1 differ, 0 stale — run `sh-agent diff`, then `sh-agent install``, exit 1 | exercised, exit 1 | exercised, exit 1 |
+| `install` (repairs drift) | exercised: one `update ~/.claude/AGENTS.md`, `1 written, 259 unchanged` | exercised | exercised |
+| `update --check` | exercised: `up to date with upstream (3209cf3)`, exit 0 | refused: `not its own git checkout; a plain copy cannot be updated with git — `install` still deploys it as it is; to move forward, use a checkout (`git clone git@github.com:kesokaj/styrman-harness.git`) or a release binary (README § Install without cloning)` | refused (no `gh` on PATH): `update: this install has no checkout; install gh and run gh auth login, or download a newer release by hand (README § Install without cloning)`. The real path — `gh` present, a published newer release — is Phase 4's (v1.1.0→v1.2.0 on Linux scratch, v1.2.0→v1.2.1 and v1.2.1→v1.2.2 on the Mac and devbox, `2026-09-17-release-binary-e2e.md`) |
+| `update` | exercised: `up to date with upstream (3209cf3)`, `building sh-agent from …/checkout`, `update ~/.local/bin/sh-agent`, `1 written, 259 unchanged`; no BUG-079 note (not the real home) | refused: the same message as `--check` | refused (no `gh`): the same message as `--check`; see Phase 4 |
+| `adopt <dir>` | exercised: `adopted into …/checkout/skills/widget`, `next: review it, run `sh-agent install`, then commit and push the repo` | exercised: `adopted into …/plain/skills/widget`, `next: … then copy it into your harness checkout and commit there — this tree is a plain copy with no repository` | refused: `adopt needs a harness checkout (`git clone git@github.com:kesokaj/styrman-harness.git`, then run adopt from a build of it); this install is a release binary and carries no tree to adopt into` |
+| `report --dry-run` | exercised: skips the absent logs, `[dry-run] would clone …styrman-harness-feedback.git into …/.config/sh-agent/report-<pid>, blob-less and limited to reports/dave/, and remove it after the push`, would write `state.json` and `report.json`; nothing written, nothing cloned | exercised: same, plus `report: harness is a plain copy, not a git checkout: harness_commit is null` | exercised: same, plus `report: harness is the release binary v9.9.9, not a checkout: harness_commit is null, harness_version is set` |
+| `report` (real) | remainder on this box by rule (never run in a dispatch); exercised on this box on 2026-09-17 (`2026-09-17-release-binary-phase-3-real-report.md`) and on the Mac and devbox on 2026-09-18 from release binaries | same | exercised on the Mac and devbox (v1.2.1, v1.2.2) |
+| `uninstall --dry-run` | exercised: lists what would be removed, nothing removed | exercised | exercised |
+| `uninstall` | exercised: the manifest's files removed | exercised | exercised |
+| `status` (after uninstall) | exercised: `installed nothing — run `sh-agent install``, exit 1 (and `uncommitted changes` on the clone, from the adopted widget) | exercised, exit 1 | exercised, exit 1 |
+| `install --repo <tree>` | n/a (it IS the tree) | n/a | refused: `this is the release binary v9.9.9: it installs the harness built into it and never a tree on disk, so --repo=… is refused — unset it, or build sh-agent from that tree and run that build's install` |
+| `$SH_AGENT_REPO` set | n/a | n/a | refused: the same, naming `$SH_AGENT_REPO=…` |
+
+## The two orderings
+
+- **First install into an empty home** — every kind above: 260 `add` lines, a manifest, `status` drift none from a fresh home. The E2E golden criterion (a real CLI reading the installed files) is Phase 4's on the Mac and devbox; on this box it was done from the real home on 2026-09-18 (`claude -p` quoting a context rule after `sh-agent update`, `2026-09-17-release-binary-e2e.md`).
+- **Update over an existing install**, including from a binary outside `~/.local/bin` — the checkout row above (rebuild, `update ~/.local/bin/sh-agent`); the release path on real machines (Phase 4); the BUG-079 note observed live in `2026-09-18-verify-bug079-stale-running-binary-3.md`.
+
+## Silent cells
+
+None. Every cell either ran with output or refused with a message that names the cause and the alternative; the explorer's static read (`plans/2026-09-18-recon-sh-agent-audit.md`) found none in the code either.
+
+## Remainder (no machine here)
+
+- `linux/arm64`: built and published for every release since v1.1.0; never executed.
+- The darwin swapped-signature edge case of `update` (a tampered `SHA256SUMS.sig` refused, binary untouched): proven on Linux against the real releases; not run on the Mac.
+- `update` from a release binary with `gh` present on THIS box: not run here by rule (the operator's machines are the binary-only places); proven on the Mac and devbox.
+
+## Real machines (Phase 4)
+
+Filled from the operator's pasted output. See § Real machines when it exists; until then the release-binary cells that need a real home, a real shell and a published release are those marked "Phase 4" above.

@@ -89,6 +89,24 @@ lists every one of them.
 A real end-to-end run against the feedback repository is an e2e-tier check the main
 agent runs and logs, not a bare `verifier` dispatch.
 
+## 3c. Verb × place-kind matrix (change to `cmd/sh-agent` or `internal/harness` that touches a verb's behavior or a refusal message)
+
+`.agents/docs/testing/sh-agent-matrix.md` is the reproducible spec: every `sh-agent`
+verb run against a checkout clone, a `git archive` plain copy, and a release-stamped
+local build, each from a fresh scratch home, driven by `.agents/scratch/matrix/run.sh`
+(gitignored; `git clone` of the checkout for the checkout kind, `go build ./cmd/sh-agent`
+for the development binary both the checkout and plain-copy kinds run,
+`go build -trimpath -ldflags "-X main.version=vX.Y.Y"` for the release-shaped binary,
+`git archive HEAD | tar -x` for the plain copy). `report` runs only `--dry-run`; `update`
+runs with a PATH holding no `gh`, so nothing reaches the network.
+
+Run it, then update the matrix file's table and its "How the cells were run" line (tree
+SHA and date) in the same change. Every cell is `exercised` (ran, output logged),
+`refused` (a message naming the cause and the alternative), `n/a` (the verb has no
+meaning there), or `remainder` (no machine here can run it) — none blank. Pass means: no
+silent cell; every `refused` cell's message names both the cause and the alternative;
+and `status` reports drift none from a fresh home on each of the three place kinds.
+
 ## 4. Sandbox start of each CLI (change to `context/`, `agents/`, or `skills/`)
 
 One start of Claude Code and one of Antigravity in the sandbox (paths and flags in

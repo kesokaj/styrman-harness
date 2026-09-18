@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"syscall"
 )
 
 // PathShadows walks PATH the way a shell does and reports two facts about the
@@ -115,7 +114,15 @@ func NoteRunningElsewhere(home string, out io.Writer) {
 	// elsewhere is a scratch or test place, and the note would call ITS
 	// binary "the installed one" and send the reader to relink their real
 	// one (security audit 2026-09-18).
-	if real, err := os.UserHomeDir(); err != nil || filepath.Clean(real) != filepath.Clean(home) {
+	real, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	realInfo, err1 := os.Stat(real)
+	homeInfo, err2 := os.Stat(home)
+	if err1 != nil || err2 != nil || !os.SameFile(realInfo, homeInfo) {
+		// Identity, not spelling: a symlinked $HOME is the same directory
+		// (review of the 2026-09-18 audit, round 2).
 		return
 	}
 	exe, err := os.Executable()
@@ -128,20 +135,11 @@ func NoteRunningElsewhere(home string, out io.Writer) {
 		return
 	}
 	remedy := "point it at the installed binary (`ln -sfn`) or remove it"
-	if info, err := os.Lstat(from); err == nil && !ownedByCaller(info) {
-		// Not the caller's file: relinking a system path to a user file is
-		// not advice to give; removing it is (with whatever rights own it).
-		remedy = "it is not yours to relink — remove it, with the rights that own it, or leave it and run the installed one by its path"
+	// Replacing a directory entry — relinking or removing — is governed by
+	// the DIRECTORY's owner, not the file's (security review of the audit,
+	// round 2): /usr/local/bin is root's whoever owns the file in it.
+	if info, err := os.Stat(filepath.Dir(from)); err == nil && !ownedByCaller(info) {
+		remedy = "it is not yours to relink — remove it, with the rights that own its directory, or leave it and run the installed one by its path"
 	}
 	fmt.Fprintf(out, "note: this update ran from %s, not from the installed binary %s; update replaces only the installed one, so the file it ran from stays as it is. A shell that has already resolved `sh-agent` to that path keeps running it until `hash -r` (bash) or `rehash` (zsh); %s\n", from, installed, remedy)
-}
-
-// ownedByCaller reports whether the file belongs to the user running this
-// process; unknown (no unix stat behind the FileInfo) reads as owned.
-func ownedByCaller(info os.FileInfo) bool {
-	st, ok := info.Sys().(*syscall.Stat_t)
-	if !ok || st == nil {
-		return true
-	}
-	return int(st.Uid) == os.Getuid()
 }

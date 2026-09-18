@@ -137,3 +137,15 @@ v1.2.2 (release commit f3ec5dc on gated head f91257c, tag signed and verified be
 - **This Linux box (checkout place):** `sh-agent update` → `up to date with upstream (790550c)`, rebuilt from the checkout, `0 written, 260 unchanged`; `sh-agent version` → `sh-agent 790550c1f7a6`; `status` → `binary 790550c1f7a6`, drift none, no `shadowed` line. The kept feedback clone here is still declined by `update` (two commits it cannot prove pushed), as intended.
 
 Still not exercised: the README browser chain on the Mac; `linux/arm64`; the swapped-signature edge on darwin.
+
+## Added 2026-09-18 — v1.2.3 published and consumed
+
+v1.2.3 (release commit 91fcf13 on gated head 30f7488; gate `.agents/docs/reviews/2026-09-18-preflight-v1.2.3.md`, SHIP) was cut by `/preflight v1.2.3` on the operator's "approved go go go" and published create-then-upload-per-asset: five assets, each first attempt; repository `PRIVATE` after.
+
+- **Published and verified as a consumer**, from a fresh directory, with the by-hand chain's own checks as README now writes them: `ssh-keygen -Y verify` → good signature; `grep -qxF "# styrman-harness v1.2.3" SHA256SUMS` → 0; `sha256sum -c` → OK ×3; `./sh-agent-linux-amd64 version` = `sh-agent v1.2.3`; byte-identical to the build.
+- **The published binary installed into a scratch home**: `release binary v1.2.3: installing the harness built into it and the running binary`, `260 written`; `status` → `source embedded v1.2.3`, `binary v1.2.3`, drift none; `~/.config/sh-agent` created `700`.
+
+### Not exercised
+
+- `sh-agent update` v1.2.2 → v1.2.3 on the Mac and devbox (Phase 4 of the plan, the operator's), and every Phase 5 real-machine cell.
+- `darwin/arm64` and `linux/arm64` v1.2.3 binaries: built, signed, published; not executed.

@@ -64,7 +64,7 @@ E2E criteria: (golden) on a machine with no harness, `sh-agent install` from a r
 - [x] Checkpoint — expect: the matrix complete for this box — evidence: `testing/sh-agent-matrix.md` (53 cells, none blank) and `testing/2026-09-18-verify-sh-agent-works-everywhere-phase-3.md` (PASS at e7fec88), 2026-09-18
 
 ### Phase 4 — release
-- [ ] `/preflight vX.Y.Z` from the operator's own turn (PATCH if only fixes; MINOR if Phase 1's lines count as new behaviour — D3) — verify: the gate, who: user + AI — expect: SHIP, published, consumed from a fresh download — docs: release entry
+- [x] `/preflight vX.Y.Z` from the operator's own turn (PATCH if only fixes; MINOR if Phase 1's lines count as new behaviour — D3) — verify: the gate, who: user + AI — expect: SHIP, published, consumed from a fresh download — docs: release entry. Evidence: v1.2.3, PATCH per D3; the operator's "approved go go go" on the proposed version and notes; gate `reviews/2026-09-18-preflight-v1.2.3.md` SHIP (verifier PASS 250, reviewer APPROVE, security six lows none reopening, docs lens APPROVE); tag signed and verified before the push; five assets; consumed from a fresh download and installed from the published binary (`testing/2026-09-17-release-binary-e2e.md` § Added 2026-09-18 — v1.2.3); entry `changes/2026-09-18-release-v1.2.3.md`, 2026-09-18
 - [ ] Mac and devbox `update` to it; `sh-agent version` unqualified — verify: e2e, who: user — expect: the new version, no note or a note that is true
 - [ ] Checkpoint — expect: the release published and consumed from a fresh download; the Mac and devbox on it — evidence: the gate report and the pasted `sh-agent version` lines, date
 

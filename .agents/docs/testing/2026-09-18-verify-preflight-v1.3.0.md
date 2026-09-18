@@ -4,7 +4,7 @@ date: 2026-09-18
 ---
 # Verification — preflight-v1.3.0   (2026-09-18)
 
-Range reviewed: v1.2.3..8e1b044
+Range reviewed: v1.2.3..10a9fe2
 
 ## Status: PASS
 
@@ -186,4 +186,31 @@ Second pre-gate commit moved HEAD to 8e1b044: AGENTS.md and skills/preflight/SKI
   matches expectation, no parse error
 
 Top-level Status stays PASS; Round 3 confirms no regression from the second
+pre-gate commit.
+
+## Round 4 (10a9fe2)
+
+### Status: PASS
+
+Third pre-gate commit moved HEAD to 10a9fe2: skills/preflight/SKILL.md (one line),
+two docs under .agents/docs, records.
+
+- `go test -count=1 ./...` -> exit 0, all packages ok
+- `go build -o .agents/scratch/verify-v130/sh-agent-built ./cmd/sh-agent` -> exit 0
+  (this round did not re-install into the scratch home, per the dispatched
+  command list - only built a fresh binary on disk)
+- `sh-agent-built status --home .agents/scratch/verify-v130/home` -> exit 0,
+  "drift none - 259 files match the repo" (matches expectation). Also correctly
+  reports the scratch home's installed binary as stale: "installed ... from
+  commit 8e1b044+dirty" and "binary 8e1b044cb053+dirty - older than the repo
+  (10a9fe2); run `sh-agent update`" - expected, since this round's dispatch did
+  not include an `install` step to refresh that home to 10a9fe2; the doc/skill
+  file content still matches (no drift) because none of this round's three
+  changed files render differently for this vendor's installed set, or install
+  was not re-run to pick up the one-line SKILL.md change - the binary-staleness
+  message is accurate status reporting, not a defect.
+- `sh-agent-built list` -> exit 0, "### Skills (27)", "### Subagents (7)" -
+  matches expectation, no parse error
+
+Top-level Status stays PASS; Round 4 confirms no regression from the third
 pre-gate commit.

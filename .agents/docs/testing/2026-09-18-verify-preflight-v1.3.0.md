@@ -4,7 +4,7 @@ date: 2026-09-18
 ---
 # Verification — preflight-v1.3.0   (2026-09-18)
 
-Range reviewed: v1.2.3..94bec82
+Range reviewed: v1.2.3..8e1b044
 
 ## Status: PASS
 
@@ -162,3 +162,28 @@ binary per guide tier 3a.
 
 Top-level Status stays PASS; Round 2 confirms no regression from the pre-gate
 commit.
+
+## Round 3 (8e1b044)
+
+### Status: PASS
+
+Second pre-gate commit moved HEAD to 8e1b044: AGENTS.md and skills/preflight/SKILL.md
+(two lines each; no Go; plus records).
+
+- `go test -race -count=1 ./...` -> exit 0, all packages ok
+- `go build -o .agents/scratch/verify-v130/sh-agent-built ./cmd/sh-agent` -> exit 0
+- `sh-agent-built install --home .agents/scratch/verify-v130/home` -> exit 0,
+  "1 written, 259 unchanged, 0 removed, 0 kept - 260 files managed" (`update
+  ~/.local/bin/sh-agent` only). Not a drift/content bug: rebuilding at a new
+  commit legitimately changes the binary (Go's automatic VCS build-info stamping
+  embeds the commit hash), so the binary file itself differs while every
+  rendered/copied doc and skill file (259) stays unchanged - consistent with the
+  two-line AGENTS.md/preflight SKILL.md diff.
+- `sh-agent-built status --home .agents/scratch/verify-v130/home` -> exit 0,
+  "installed ... from commit 8e1b044+dirty", "drift none - 259 files match the
+  repo"
+- `sh-agent-built list` -> exit 0, "### Skills (27)", "### Subagents (7)" -
+  matches expectation, no parse error
+
+Top-level Status stays PASS; Round 3 confirms no regression from the second
+pre-gate commit.

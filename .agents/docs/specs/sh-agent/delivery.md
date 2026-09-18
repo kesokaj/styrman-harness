@@ -4,7 +4,7 @@ date: 2026-09-17
 ---
 # Delivery and the feedback loop — what this harness is building toward
 
-The picture in one place, because the operator is discarding the agent's memory and the trail has to carry everything on its own. Written 2026-09-17. What is DECIDED lives in `REQUIREMENTS.md` R8 and ADR-030; what is PLANNED lives in `.agents/docs/plans/2026-09-17-delivery-rework.md`; this document is the narrative that makes both readable to someone arriving cold.
+The picture in one place, because the operator is discarding the agent's memory and the trail has to carry everything on its own. Written 2026-09-17. What is DECIDED lives in `REQUIREMENTS.md` R8 and R9, ADR-030 and ADR-033 (the release binaries a binary-only place updates to); what is PLANNED lives in `.agents/docs/plans/2026-09-17-delivery-rework.md`; this document is the narrative that makes both readable to someone arriving cold.
 
 ## The problem, in the operator's words
 
@@ -53,7 +53,7 @@ Originals never leave `~/.config/sh-agent/`. R7 keeps that as the one place harn
 ## What is deliberately NOT being built
 
 - **A webservice**, for delivery or for feedback. Git already carries both halves. A service adds hosting, per-machine authentication and an attack surface, for one user, against R3, R4 and local-by-default. A dashboard over collected data stays possible later without changing how any machine reports.
-- **A signed-tag delivery channel.** ADR-026 designed one on 2026-09-16 to give a consumer host a trust root; ADR-030 withdrew it the next day because the operator authenticates as themselves everywhere, so it solved a problem that was not there. Tags survive as release markers — `v1.0.0` stands, and the versioning rule and signing recipe stay in `deploy/remote.md`.
+- **A signed-tag delivery channel.** ADR-026 designed one on 2026-09-16 to give a consumer host a trust root; ADR-030 withdrew it the next day because the operator authenticates as themselves everywhere, so it solved a problem that was not there. Tags survive as release markers — `v1.0.0` stands, and the versioning rule and signing recipe stay in `deploy/remote.md`. ADR-033 later restored a narrower channel: the binaries published with a tag, which a binary-only place updates to after verifying their signed checksums — an asset the place fetches, never a push to a machine.
 - **Vendored mirrors.** Two projects kept a `.git`-less copy refreshed by hand, which is why a mirror refresh kept appearing as a task in three repositories at once. They retire. Each consumer's own session does that work in its own repository.
 - **Per-machine keys of any kind**, for the reason above.
 

@@ -523,6 +523,19 @@ func TestAdopt(t *testing.T) {
 	}
 }
 
+// gitInit makes a directory its own git checkout, which is what IsCheckout
+// reads and what separates a tree update can move forward from a plain copy.
+func gitInit(t *testing.T, dir string) {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	cmd := exec.Command("git", "init", "--quiet", dir)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v\n%s", err, out)
+	}
+}
+
 func TestResolveSource(t *testing.T) {
 	t.Setenv("SH_AGENT_REPO", "")
 	cwd := t.TempDir()
@@ -567,15 +580,55 @@ func TestResolveSource(t *testing.T) {
 		t.Errorf("the embedded source has no context/AGENTS.md: %v", err)
 	}
 
-	if src, err := ResolveSource(repo, home, "v1.2.3"); err != nil || src.Dir != repo {
-		t.Errorf("explicit repo: %+v, %v", src, err)
+	// A development build takes the path it is given.
+	if src, err := ResolveSource(repo, home, ""); err != nil || src.Dir != repo {
+		t.Errorf("explicit repo, development build: %+v, %v", src, err)
 	}
 	if err := SaveState(home, State{Repo: repo}); err != nil {
 		t.Fatal(err)
 	}
-	// The recorded tree comes before the embedded files.
-	if src, err := ResolveSource("", home, "v1.2.3"); err != nil || src.Dir != repo {
-		t.Errorf("repo from state: %+v, %v", src, err)
+	// The recorded tree comes before the embedded files for a DEVELOPMENT
+	// build, which has nothing of its own to offer.
+	if src, err := ResolveSource("", home, ""); err != nil || src.Dir != repo {
+		t.Errorf("repo from state, development build: %+v, %v", src, err)
+	}
+	// A RELEASE binary takes NO tree on this machine: not the recorded one,
+	// whether a plain copy or a real checkout, and not the working directory.
+	// What it installs is the published repository at the tagged commit, which
+	// it carries; `update` replaces the whole binary to change that (ADR-034 —
+	// the operator, after a box installed months-old content from a recorded
+	// plain copy while reporting no drift: "the binary should only use the
+	// published git repo in github always and only").
+	if src, err := ResolveSource("", home, "v1.2.3"); err != nil || src.Dir != "" || src.Version != "v1.2.3" {
+		t.Errorf("recorded plain copy, release binary: %+v, %v — want the embedded files", src, err)
+	}
+	checkout := newRepo(t)
+	gitInit(t, checkout)
+	if err := SaveState(home, State{Repo: checkout}); err != nil {
+		t.Fatal(err)
+	}
+	if src, err := ResolveSource("", home, "v1.2.3"); err != nil || src.Dir != "" {
+		t.Errorf("recorded checkout, release binary: %+v, %v — want the embedded files", src, err)
+	}
+	// Standing inside a tree does not change it either.
+	t.Chdir(checkout)
+	if src, err := ResolveSource("", home, "v1.2.3"); err != nil || src.Dir != "" {
+		t.Errorf("inside a checkout, release binary: %+v, %v — want the embedded files", src, err)
+	}
+	// A named path is REFUSED, not ignored: doing something other than what
+	// was typed is what D15 exists to prevent.
+	if _, err := ResolveSource(checkout, home, "v1.2.3"); err == nil || !strings.Contains(err.Error(), "release binary") {
+		t.Errorf("--repo on a release binary: err = %v, want a refusal naming the release binary", err)
+	}
+	t.Setenv("SH_AGENT_REPO", checkout)
+	if _, err := ResolveSource("", home, "v1.2.3"); err == nil || !strings.Contains(err.Error(), "release binary") {
+		t.Errorf("$SH_AGENT_REPO on a release binary: err = %v, want a refusal", err)
+	}
+	t.Setenv("SH_AGENT_REPO", "")
+	os.Unsetenv("SH_AGENT_REPO")
+	t.Chdir(cwd)
+	if err := SaveState(home, State{Repo: repo}); err != nil {
+		t.Fatal(err)
 	}
 
 	// A manifest written by an embedded install records no path: its repo

@@ -1190,11 +1190,28 @@ func TestReleaseBinaryWithoutCheckout(t *testing.T) {
 	defer func(v string) { version = v }(version)
 	version = "v9.9.9"
 
-	// An explicit --repo that is not a tree is refused, never replaced by the
-	// embedded files.
+	// A release binary takes no tree at all, so --repo is refused whatever it
+	// points at — and refused, not ignored (ADR-034).
 	out.Reset()
-	if err := run([]string{"install", "--repo", t.TempDir(), "--home", home}, &out); err == nil || !strings.Contains(err.Error(), "not a harness checkout") {
-		t.Errorf("release binary, bad --repo: err = %v, want the refusal", err)
+	if err := run([]string{"install", "--repo", t.TempDir(), "--home", home}, &out); err == nil || !strings.Contains(err.Error(), "never a tree on disk") {
+		t.Errorf("release binary, --repo at a non-tree: err = %v, want the refusal", err)
+	}
+	out.Reset()
+	realTree := filepath.Join(t.TempDir(), "harness")
+	for rel, body := range map[string]string{
+		"context/AGENTS.md": "# ctx\n",
+		"skills/s/SKILL.md": "---\nname: s\ndescription: \"x\"\n---\nbody\n",
+	} {
+		full := filepath.Join(realTree, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := run([]string{"install", "--repo", realTree, "--home", home}, &out); err == nil || !strings.Contains(err.Error(), "never a tree on disk") {
+		t.Errorf("release binary, --repo at a real tree: err = %v, want the same refusal", err)
 	}
 
 	out.Reset()

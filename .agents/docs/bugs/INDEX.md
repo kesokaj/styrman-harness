@@ -55,6 +55,7 @@
 | BUG-074 | 2026-09-18 | internal/harness/report.go (RemoveKeptClone) | fixed | update refused to remove kept clone, saying "2 unpushed commit(s)" when both were already on the remote | a count-based message names what it was measured against (remote-tracking refs, which go stale after a `-u <url>` push) and never overstates it as a stronger conclusion |
 | BUG-075 | 2026-09-18 | README.md § Install without cloning | fixed | documented `go install` line for v1.1.0 failed (https module path, no SSH rewrite) | a doc command is RUN as written before the release that documents it, not read; when it needs a tag the release creates, run it right after in the same task |
 | BUG-076 | 2026-09-18 | internal/harness/repo.go (ResolveSource) | fixed | operator saw "harness repo not found" on a stale dev-build binary and thought the download-without-cloning feature was broken | a refusal error names the precondition that failed (this build has no harness built in), not only the alternatives to try |
+| BUG-077 | 2026-09-18 | internal/harness/repo.go (ResolveSource), delivery model | fixed | release binary on devbox silently installed a stale plain-copy tree instead of its embedded harness, reporting "drift none" | decide source order per kind of build; a ship-with-it artifact never silently prefers a tree found on the machine, and an unupdatable copy never outranks one that can update |
 
 ## Graduated
 

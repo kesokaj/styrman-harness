@@ -47,7 +47,7 @@ Commands:
   version                 print the build version
 
 Flags accepted by every command:
-  --repo DIR        harness checkout (default: --repo, $SH_AGENT_REPO, the working directory or its parents, the last install, then — in a release binary — the harness built into it)
+  --repo DIR        harness checkout, for a build made from one (default: --repo, $SH_AGENT_REPO, the working directory or its parents, then the last install). A release binary installs the harness built into it and refuses --repo (ADR-034)
   --home DIR        install under DIR instead of $HOME (for testing)
   --vendor VENDOR   target vendor: all, antigravity (or agy), claude (default: from manifest if installed, else all)
 `

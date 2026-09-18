@@ -20,6 +20,32 @@ import (
 // checkout's code, so a typo must not hand that to whatever harness-shaped
 // tree the shell happens to be in. version is the running binary's.
 func ResolveSource(explicit, home, version string) (Source, error) {
+	// A RELEASE binary installs the harness built into it and nothing else.
+	// Those files are the published repository at the tagged commit, signed
+	// and verified on the way in, and `update` replaces the whole binary to
+	// change them — so no tree on this machine takes part: not the working
+	// directory, not the one the last install recorded, not one named on the
+	// command line. A recorded plain copy silently winning is what stranded a
+	// box on months-old content while reporting no drift (ADR-034, the
+	// operator: "the binary should only use the published git repo in github
+	// always and only"). A named path is REFUSED rather than ignored, because
+	// silently doing something other than what the operator typed is the
+	// habit D15 exists to prevent.
+	if IsReleaseVersion(version) {
+		for _, named := range []string{explicit, os.Getenv("SH_AGENT_REPO")} {
+			if named != "" {
+				return Source{}, fmt.Errorf("this is the release binary %s: it installs the harness built into it and never a tree on disk, so %s is refused — drop it, or build sh-agent from that tree and run that build's install", version, named)
+			}
+		}
+		return EmbeddedSource(version), nil
+	}
+
+	// A development build has nothing of its own to install, so it looks for a
+	// tree: an explicit path, then $SH_AGENT_REPO, then the working directory
+	// and its parents, then the path the last install recorded. A path the
+	// operator named is used or refused, never silently replaced by one the
+	// walk finds (D15): install builds and runs the checkout's code, so a typo
+	// must not hand that to whatever harness-shaped tree the shell is in.
 	for _, named := range []string{explicit, os.Getenv("SH_AGENT_REPO")} {
 		if named == "" {
 			continue
@@ -47,15 +73,6 @@ func ResolveSource(explicit, home, version string) (Source, error) {
 			return absSource(c)
 		}
 	}
-	if IsReleaseVersion(version) {
-		return EmbeddedSource(version), nil
-	}
-	// Name the precondition that failed, not only the ways out. This binary
-	// may carry the harness (a release) or not (a development build), and the
-	// old message said neither — it told the operator to find a checkout when
-	// the real answer was "this build has nothing built in", which sent them
-	// looking for a repository they had been told they would not need
-	// (2026-09-18, on the work Mac).
 	built := "this build carries no version stamp, so it has no harness built in"
 	if version != "" && version != "unknown" {
 		built = fmt.Sprintf("this build is %s, a development build rather than a vX.Y.Z release, so it has no harness built in", version)

@@ -539,8 +539,20 @@ func TestResolveSource(t *testing.T) {
 	// A development build with no tree found keeps the error: only a release
 	// binary may install the files it carries (D14).
 	for _, v := range []string{"", "b64ffe886729", "b64ffe886729+dirty", "(devel)", "v1.2.3-rc.1", "v1.2.3-0.20260917090000-b64ffe886729", "1.2.3", "v1.2"} {
-		if _, err := ResolveSource("", home, v); err == nil || !strings.Contains(err.Error(), "harness repo not found") {
+		_, err := ResolveSource("", home, v)
+		if err == nil || !strings.Contains(err.Error(), "harness repo not found") {
 			t.Errorf("version %q with no tree: err = %v, want harness repo not found", v, err)
+			continue
+		}
+		// The message says WHY the embedded fallback was refused — this build
+		// has no harness in it — and names the release-binary way out. Saying
+		// only "run from inside the checkout" sent the operator looking for a
+		// repository they had been told they would not need (2026-09-18).
+		if !strings.Contains(err.Error(), "no harness built in") || !strings.Contains(err.Error(), "release binary") {
+			t.Errorf("version %q: err = %v, want it to name the missing harness and the release-binary path", v, err)
+		}
+		if v != "" && v != "unknown" && !strings.Contains(err.Error(), v) {
+			t.Errorf("version %q: err = %v, want it to quote the version", v, err)
 		}
 	}
 

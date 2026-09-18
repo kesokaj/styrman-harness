@@ -53,6 +53,8 @@
 | BUG-067 | 2026-09-17 | cmd/sh-agent/main.go (knownCheckout) | fixed | `knownCheckout` resolved an `embedded:vX.Y.Z` manifest value as a filesystem path via `samePath` | when a field gains a value of a new kind, grep every reader of that field in the same change, not just the one that prompted it |
 | BUG-073 | 2026-09-17 | process/dated trail records | fixed | new retro write clobbered an existing `2026-09-17-retro-3.md` from another session; `git status` showed MODIFIED not new | before writing a dated trail file, `ls` the target dir in the same turn and pick the next free suffix from disk, never from session memory |
 | BUG-074 | 2026-09-18 | internal/harness/report.go (RemoveKeptClone) | fixed | update refused to remove kept clone, saying "2 unpushed commit(s)" when both were already on the remote | a count-based message names what it was measured against (remote-tracking refs, which go stale after a `-u <url>` push) and never overstates it as a stronger conclusion |
+| BUG-075 | 2026-09-18 | README.md § Install without cloning | fixed | documented `go install` line for v1.1.0 failed (https module path, no SSH rewrite) | a doc command is RUN as written before the release that documents it, not read; when it needs a tag the release creates, run it right after in the same task |
+| BUG-076 | 2026-09-18 | internal/harness/repo.go (ResolveSource) | fixed | operator saw "harness repo not found" on a stale dev-build binary and thought the download-without-cloning feature was broken | a refusal error names the precondition that failed (this build has no harness built in), not only the alternatives to try |
 
 ## Graduated
 
@@ -83,4 +85,3 @@
 | BUG-070 | cmd/sh-agent/main.go (update) | `context/AGENTS.md` § Hard rules, "When a command has a read-only mode" bullet |
 | BUG-071 | internal/harness/report_test.go (test premises) | `context/AGENTS.md` § Hard rules, "A test that sets up an unusual condition proves the condition HOLDS" clause |
 | BUG-072 | process/verifier-dispatch | `context/AGENTS.md` § Definition of Done, step 1, "While that dispatch is IN FLIGHT the tree stays frozen" sentence |
-| BUG-075 | 2026-09-18 | README.md § Install without cloning | fixed | documented `go install` line for v1.1.0 failed (https module path, no SSH rewrite) | a doc command is RUN as written before the release that documents it, not read; when it needs a tag the release creates, run it right after in the same task |

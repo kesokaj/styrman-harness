@@ -50,7 +50,17 @@ func ResolveSource(explicit, home, version string) (Source, error) {
 	if IsReleaseVersion(version) {
 		return EmbeddedSource(version), nil
 	}
-	return Source{}, errors.New("harness repo not found: run from inside the checkout, pass --repo, or set SH_AGENT_REPO")
+	// Name the precondition that failed, not only the ways out. This binary
+	// may carry the harness (a release) or not (a development build), and the
+	// old message said neither — it told the operator to find a checkout when
+	// the real answer was "this build has nothing built in", which sent them
+	// looking for a repository they had been told they would not need
+	// (2026-09-18, on the work Mac).
+	built := "this build carries no version stamp, so it has no harness built in"
+	if version != "" && version != "unknown" {
+		built = fmt.Sprintf("this build is %s, a development build rather than a vX.Y.Z release, so it has no harness built in", version)
+	}
+	return Source{}, fmt.Errorf("harness repo not found and %s: run from inside the checkout, pass --repo, set SH_AGENT_REPO, or install from a release binary (README § Install without cloning)", built)
 }
 
 func absSource(dir string) (Source, error) {

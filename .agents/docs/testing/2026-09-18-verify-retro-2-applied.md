@@ -4,7 +4,7 @@ date: 2026-09-18
 ---
 # Verification — retro-2-applied (2026-09-18)
 
-Range reviewed: working tree at 4705771 + uncommitted
+Range reviewed: v1.3.0..42fad8f
 
 ## Status: PASS (round 1 and round 2 both pass; see Round 2 section)
 
@@ -53,3 +53,17 @@ Tree frozen for this round: yes, confirmed by the coordinator (main agent edits 
 - `.../sh-agent-built list` → exit 0. `repo has 27 skills, 7 agents, 0 commands, 0 rules`; both tables complete, no parse-error lines.
 
 ### Status: PASS
+
+## Round 3 (42fad8f)
+
+### Status: PASS
+
+### Commands
+- `go test -race -count=1 ./...` → exit 0. `ok github.com/kesokaj/styrman-harness 1.093s`, `ok .../cmd/sh-agent 6.379s`, `ok .../internal/harness 2.831s`. Saved `.agents/scratch/verify-v140/go-test-round3.txt`.
+- `go build -o .agents/scratch/verify-v140/sh-agent-built ./cmd/sh-agent` → exit 0
+- `.../sh-agent-built status --home .agents/scratch/verify-v140/home` → exit 0. `drift none — 259 files match the repo` (repo now at 42fad8f; the three post-round-2 prose edits — AGENTS.md rule 6 scope sentence, delivery.md § The model / :37 trim — touch no installed file, so no drift is expected). `git status --short` at this point shows only `.agents/docs/retros/2026-09-18-retro-2.md` (modified after the commit) and this testing log itself — no source/config drift.
+- `.../sh-agent-built list` → exit 0. `repo has 27 skills, 7 agents, 0 commands, 0 rules`, no parse errors.
+
+### Status: PASS
+
+## Status: PASS (rounds 1, 2, 3 all pass — see sections above)

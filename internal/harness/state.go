@@ -93,10 +93,20 @@ func ConfigDir(home string) (string, error) {
 func TightenConfigDir(home string, dryRun bool, out io.Writer) {
 	dir := filepath.Join(home, ".config", "sh-agent")
 	info, err := os.Lstat(dir)
-	if err != nil || info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+	if err != nil {
 		return
 	}
-	if info.Mode().Perm()&0o077 == 0 || !ownedByCaller(info) {
+	// Names what it declines to touch, as install's `keep` line does
+	// (security review of the audit, round 3).
+	if info.Mode()&os.ModeSymlink != 0 {
+		fmt.Fprintf(out, "note: ~/.config/sh-agent is a symlink; its target's mode is yours to set (0700 keeps the feedback log private)\n")
+		return
+	}
+	if !info.IsDir() || info.Mode().Perm()&0o077 == 0 {
+		return
+	}
+	if !ownedByCaller(info) {
+		fmt.Fprintf(out, "note: ~/.config/sh-agent is not yours to tighten (mode %04o); ask its owner for 0700 — the feedback log lives there\n", info.Mode().Perm())
 		return
 	}
 	fmt.Fprintf(out, "mode    ~/.config/sh-agent (%04o -> 0700)\n", info.Mode().Perm())

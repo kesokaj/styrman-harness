@@ -291,6 +291,9 @@ func TestInstallMakesTheConfigDirPrivate(t *testing.T) {
 		if strings.Contains(out.String(), "mode    ~/.config/sh-agent") {
 			t.Errorf("install claimed a mode change through a symlink:\n%s", out.String())
 		}
+		if !strings.Contains(out.String(), "note: ~/.config/sh-agent is a symlink; its target's mode is yours to set") {
+			t.Errorf("install did not name the symlink it left alone:\n%s", out.String())
+		}
 	})
 }
 

@@ -57,6 +57,7 @@
 | BUG-076 | 2026-09-18 | internal/harness/repo.go (ResolveSource) | fixed | operator saw "harness repo not found" on a stale dev-build binary and thought the download-without-cloning feature was broken | a refusal error names the precondition that failed (this build has no harness built in), not only the alternatives to try |
 | BUG-077 | 2026-09-18 | internal/harness/repo.go (ResolveSource), delivery model | fixed | release binary on devbox silently installed a stale plain-copy tree instead of its embedded harness, reporting "drift none" | decide source order per kind of build; a ship-with-it artifact never silently prefers a tree found on the machine, and an unupdatable copy never outranks one that can update |
 | BUG-078 | 2026-09-18 | installer/binary (PATH resolution, release install procedure) | fixed | verified v1.2.1 binary moved to `/usr/local/bin`, but two earlier `PATH` entries kept an old `(devel)` build running | install/status warn on an earlier-PATH shadow via file identity (`PathShadows`); docs verify unqualified `sh-agent version`/`which -a` after move — still doesn't catch the running-binary-writes-its-own-install case |
+| BUG-079 | 2026-09-18 | internal/harness/release.go (UpdateFromRelease), shell hash cache | open | `update` reported success but running shell kept executing stale v1.2.1 via bash's command hash, invisible to `which -a` | compare running binary (`os.Executable()`) to the one just written via `os.SameFile`, warn and name `hash -r`/`rehash`; docs add `type sh-agent` before `which -a` |
 
 ## Graduated
 

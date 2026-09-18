@@ -6,8 +6,6 @@ Last reviewed: 2026-09-18
 
 ## Now
 
-- sh-agent works everywhere — every verb on every kind of place, `install` proven to install, audited, released — `.agents/docs/plans/2026-09-18-sh-agent-works-everywhere.md` (the operator's Definition of Done for this session, 2026-09-18)
-
 ## Next
 
 ## Later / Ideas

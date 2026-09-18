@@ -145,7 +145,12 @@ v1.2.3 (release commit 91fcf13 on gated head 30f7488; gate `.agents/docs/reviews
 - **Published and verified as a consumer**, from a fresh directory, with the by-hand chain's own checks as README now writes them: `ssh-keygen -Y verify` → good signature; `grep -qxF "# styrman-harness v1.2.3" SHA256SUMS` → 0; `sha256sum -c` → OK ×3; `./sh-agent-linux-amd64 version` = `sh-agent v1.2.3`; byte-identical to the build.
 - **The published binary installed into a scratch home**: `release binary v1.2.3: installing the harness built into it and the running binary`, `260 written`; `status` → `source embedded v1.2.3`, `binary v1.2.3`, drift none; `~/.config/sh-agent` created `700`.
 
+### The v1.2.2 → v1.2.3 update, on all three machines (the operator's runs, 2026-09-18)
+
+Logged cell by cell in `sh-agent-matrix.md` § Real machines: this box (checkout place), the work Mac (darwin/arm64 release binary), devbox (linux/amd64 release binary). Each printed the `mode ~/.config/sh-agent (0755 -> 0700)` line on its first run, `version` unqualified reported the new version, `type` named the installed path, `status` drift none with no `shadowed` line, and the runtime dir was `700` after. The `darwin/arm64` binary has now run on the Mac; `linux/arm64` still has not run anywhere.
+
 ### Not exercised
 
-- `sh-agent update` v1.2.2 → v1.2.3 on the Mac and devbox (Phase 4 of the plan, the operator's), and every Phase 5 real-machine cell.
-- `darwin/arm64` and `linux/arm64` v1.2.3 binaries: built, signed, published; not executed.
+- The README browser chain on the Mac (`shasum -a 256 -c - --ignore-missing`, Gatekeeper, `xattr`) — the operator's, when convenient.
+- `linux/arm64`: built, signed, published for every release since v1.1.0; never executed.
+- The darwin swapped-signature edge case of `update`: proven on Linux against the real releases; not run on the Mac.

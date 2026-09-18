@@ -32,9 +32,16 @@ func ResolveSource(explicit, home, version string) (Source, error) {
 	// silently doing something other than what the operator typed is the
 	// habit D15 exists to prevent.
 	if IsReleaseVersion(version) {
-		for _, named := range []string{explicit, os.Getenv("SH_AGENT_REPO")} {
-			if named != "" {
-				return Source{}, fmt.Errorf("this is the release binary %s: it installs the harness built into it and never a tree on disk, so %s is refused — drop it, or build sh-agent from that tree and run that build's install", version, named)
+		for _, from := range []struct{ origin, path string }{
+			{"--repo", explicit},
+			{"$SH_AGENT_REPO", os.Getenv("SH_AGENT_REPO")},
+		} {
+			if from.path != "" {
+				// Name WHERE the path came from: an exported $SH_AGENT_REPO in
+				// a shell profile makes every command on the machine fail, and
+				// "drop it" is unactionable without knowing which one to drop
+				// (code review 2026-09-18; BUG-076's rule).
+				return Source{}, fmt.Errorf("this is the release binary %s: it installs the harness built into it and never a tree on disk, so %s=%s is refused — unset it, or build sh-agent from that tree and run that build's install", version, from.origin, from.path)
 			}
 		}
 		return EmbeddedSource(version), nil

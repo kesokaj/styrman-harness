@@ -580,6 +580,22 @@ func TestResolveSource(t *testing.T) {
 		t.Errorf("the embedded source has no context/AGENTS.md: %v", err)
 	}
 
+	// The working-directory walk, for a development build: standing inside a
+	// harness tree, or anywhere under it, finds that tree. Nothing pinned this
+	// before, so deleting the walk kept the suite green (code review
+	// 2026-09-18).
+	nested := filepath.Join(repo, "skills", "alpha", "references")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, dir := range []string{repo, nested} {
+		t.Chdir(dir)
+		if src, err := ResolveSource("", t.TempDir(), ""); err != nil || src.Dir != repo {
+			t.Errorf("development build in %s: %+v, %v — want the tree walked up to", dir, src, err)
+		}
+	}
+	t.Chdir(cwd)
+
 	// A development build takes the path it is given.
 	if src, err := ResolveSource(repo, home, ""); err != nil || src.Dir != repo {
 		t.Errorf("explicit repo, development build: %+v, %v", src, err)
@@ -617,12 +633,17 @@ func TestResolveSource(t *testing.T) {
 	}
 	// A named path is REFUSED, not ignored: doing something other than what
 	// was typed is what D15 exists to prevent.
-	if _, err := ResolveSource(checkout, home, "v1.2.3"); err == nil || !strings.Contains(err.Error(), "release binary") {
-		t.Errorf("--repo on a release binary: err = %v, want a refusal naming the release binary", err)
+	// The refusal names WHICH input carried the path: an exported
+	// $SH_AGENT_REPO makes every command on the machine fail, and "unset it"
+	// is unactionable without knowing which one (code review 2026-09-18).
+	if _, err := ResolveSource(checkout, home, "v1.2.3"); err == nil ||
+		!strings.Contains(err.Error(), "release binary") || !strings.Contains(err.Error(), "--repo="+checkout) {
+		t.Errorf("--repo on a release binary: err = %v, want a refusal naming --repo and the path", err)
 	}
 	t.Setenv("SH_AGENT_REPO", checkout)
-	if _, err := ResolveSource("", home, "v1.2.3"); err == nil || !strings.Contains(err.Error(), "release binary") {
-		t.Errorf("$SH_AGENT_REPO on a release binary: err = %v, want a refusal", err)
+	if _, err := ResolveSource("", home, "v1.2.3"); err == nil ||
+		!strings.Contains(err.Error(), "release binary") || !strings.Contains(err.Error(), "$SH_AGENT_REPO="+checkout) {
+		t.Errorf("$SH_AGENT_REPO on a release binary: err = %v, want a refusal naming the variable", err)
 	}
 	t.Setenv("SH_AGENT_REPO", "")
 	os.Unsetenv("SH_AGENT_REPO")

@@ -521,6 +521,16 @@ func RemoveKeptClone(home, url string, out io.Writer) error {
 		fmt.Fprintf(out, "kept %s: %s — remove it by hand when you are done with it\n", dir, why)
 		return nil
 	}
+	// Every guard below but the two Lstat checks asks git, and git's answers
+	// can be redirected by its environment — the same reason SendReport
+	// refuses these before writing anything. This path DELETES, and now does
+	// so on release-binary places too, so it refuses them as well (security
+	// review 2026-09-18).
+	for _, k := range gitRedirects {
+		if _, set := os.LookupEnv(k); set {
+			return leave(k + " is set, so git cannot be trusted to describe it")
+		}
+	}
 	// A link is not the clone: what it points at is somewhere the operator
 	// chose, and this function's business is one directory (BUG-036's rule).
 	if info.Mode()&os.ModeSymlink != 0 {

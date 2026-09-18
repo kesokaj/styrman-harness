@@ -1060,6 +1060,26 @@ func TestRemoveKeptClone(t *testing.T) {
 		}
 	})
 
+	// git's answers can be redirected by its environment, and every guard but
+	// the two Lstat checks asks git — on a path that DELETES. SendReport
+	// refuses these variables for the same reason (security review
+	// 2026-09-18).
+	t.Run("a redirect variable keeps the clone", func(t *testing.T) {
+		home := newHome(t)
+		kept := filepath.Join(configDir(home), "feedback")
+		t.Setenv("GIT_DIR", filepath.Join(t.TempDir(), "elsewhere.git"))
+		var out bytes.Buffer
+		if err := RemoveKeptClone(home, url, &out); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := os.Stat(kept); err != nil {
+			t.Errorf("a clone must be kept while git can be redirected: %v", err)
+		}
+		if !strings.Contains(out.String(), "GIT_DIR is set") {
+			t.Errorf("reason not named:\n%s", out.String())
+		}
+	})
+
 	t.Run("nothing there says nothing", func(t *testing.T) {
 		home := filepath.Join(t.TempDir(), "home")
 		var out bytes.Buffer

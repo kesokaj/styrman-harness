@@ -281,10 +281,22 @@ func installFiles(src harness.Source, home, vendor string, dryRun bool, out io.W
 }
 
 func report(repoFlag, feedbackFlag, home string, dryRun bool, out io.Writer) error {
-	src, err := harness.ResolveSource(repoFlag, home, buildVersion())
-	if err != nil {
+	// `report` READS a source, it never installs one, so a release binary
+	// takes its own files directly rather than going through the refusal
+	// ResolveSource owes `install`: an exported $SH_AGENT_REPO would otherwise
+	// send a record with harness_version, drift, skills and agents all null —
+	// a machine reporting nothing useful, which is the shape BUG-077 was about
+	// (security review 2026-09-18).
+	var src harness.Source
+	if v := buildVersion(); harness.IsReleaseVersion(v) {
+		src = harness.EmbeddedSource(v)
+		if repoFlag != "" {
+			fmt.Fprintf(out, "report: --repo is not used here; this release binary reports the harness built into it\n")
+		}
+	} else if resolved, err := harness.ResolveSource(repoFlag, home, buildVersion()); err != nil {
 		fmt.Fprintf(out, "report: %v\n", err)
-		src = harness.Source{}
+	} else {
+		src = resolved
 	}
 	host, err := os.Hostname()
 	if err != nil {

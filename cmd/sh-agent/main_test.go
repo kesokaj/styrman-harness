@@ -1147,6 +1147,31 @@ func TestReleaseBinaryUpdateShedsKeptClone(t *testing.T) {
 	}
 }
 
+// TestReportOnReleaseBinaryIgnoresRepoFlags: `report` reads a source, never
+// installs one, so a release binary reports the harness it carries even when
+// $SH_AGENT_REPO is exported — otherwise the refusal ResolveSource owes
+// `install` would send a record with harness_version, drift, skills and agents
+// all null, which is the useless-record shape BUG-077 was about (security
+// review 2026-09-18).
+func TestReportOnReleaseBinaryIgnoresRepoFlags(t *testing.T) {
+	t.Chdir(t.TempDir())
+	defer func(v string) { version = v }(version)
+	version = "v9.9.9"
+	t.Setenv("SH_AGENT_REPO", t.TempDir()) // exported in a shell profile, say
+
+	home := t.TempDir()
+	var out bytes.Buffer
+	// A feedback path that is not a checkout stops it before any network use;
+	// the record's notes are printed before that.
+	_ = run([]string{"report", "--home", home, "--dry-run", "--feedback-repo", t.TempDir()}, &out)
+	if strings.Contains(out.String(), "is refused") {
+		t.Errorf("report refused over an exported $SH_AGENT_REPO:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "release binary v9.9.9") {
+		t.Errorf("the record does not name the release binary as its harness:\n%s", out.String())
+	}
+}
+
 // TestReleaseFromInfo: a release build uses -trimpath, which keeps -ldflags
 // out of the build info, so status reads an installed release binary's
 // version from the module version Go stamps at a clean tag; anything else

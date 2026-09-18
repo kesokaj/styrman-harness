@@ -56,8 +56,6 @@
 | BUG-075 | 2026-09-18 | README.md § Install without cloning | fixed | documented `go install` line for v1.1.0 failed (https module path, no SSH rewrite) | a doc command is RUN as written before the release that documents it, not read; when it needs a tag the release creates, run it right after in the same task |
 | BUG-076 | 2026-09-18 | internal/harness/repo.go (ResolveSource) | fixed | operator saw "harness repo not found" on a stale dev-build binary and thought the download-without-cloning feature was broken | a refusal error names the precondition that failed (this build has no harness built in), not only the alternatives to try |
 | BUG-077 | 2026-09-18 | internal/harness/repo.go (ResolveSource), delivery model | fixed | release binary on devbox silently installed a stale plain-copy tree instead of its embedded harness, reporting "drift none" | decide source order per kind of build; a ship-with-it artifact never silently prefers a tree found on the machine, and an unupdatable copy never outranks one that can update |
-| BUG-083 | 2026-09-18 | agents/verifier | open | rewritten "write log EARLY, IN PROGRESS" rule followed in only 1 of 3 behavioural runs | verify an agent-definition change with dispatches that don't repeat the changed rule, report n of N; the enforcement is dispatch text (BUG-064), not the definition alone |
-| BUG-084 | 2026-09-18 | skills/feedback-log, agents/verifier | fixed | retro-added signal missing from JSON schema line; verifier Status template missing IN PROGRESS; "first command" rule unsatisfiable given Pre-flight order | when a value joins a vocabulary, grep the file and its consumers for every enumeration (schema, template, table) and change them together; an ordinal-step rule is checked against the agent's own step order |
 
 ## Graduated
 
@@ -93,3 +91,5 @@
 | BUG-080 | cmd/sh-agent/main.go (install/update, checkout path) | `context/AGENTS.md` § Hard rules, "When a command has a read-only mode" bullet |
 | BUG-081 | process (review — fix verification against a fresh fixture) | `context/AGENTS.md` § Definition of Done, step 2 ("that test builds the ARRANGEMENT the finding measured" clause) |
 | BUG-082 | tooling (must-fail mutation harness, audit scripts) | `context/AGENTS.md` § Hard rules, the mutation clause ("counts as a verdict only when the mutated code COMPILED and a named test failed") |
+| BUG-083 | agents/verifier | `AGENTS.md` § Testing (behavioural-run sentence: "the dispatch text does NOT repeat the changed rule … the result is reported as n of N runs, never \"works\"") |
+| BUG-084 | skills/feedback-log, agents/verifier | `context/AGENTS.md` § Hard rules, "A behaviour change includes the text that DESCRIBES it" bullet ("Two shapes hide best: a value joining a VOCABULARY …") |

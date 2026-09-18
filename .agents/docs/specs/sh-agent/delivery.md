@@ -4,7 +4,7 @@ date: 2026-09-17
 ---
 # Delivery and the feedback loop — what this harness is building toward
 
-The picture in one place, because the operator is discarding the agent's memory and the trail has to carry everything on its own. Written 2026-09-17. What is DECIDED lives in `REQUIREMENTS.md` R8 and R9, ADR-030 and ADR-033 (the release binaries a binary-only place updates to); what is PLANNED lives in `.agents/docs/plans/2026-09-17-delivery-rework.md`; this document is the narrative that makes both readable to someone arriving cold.
+The picture in one place, because the operator is discarding the agent's memory and the trail has to carry everything on its own. Written 2026-09-17. What is DECIDED lives in `REQUIREMENTS.md` R8 and R9, ADR-030 and ADR-033 (§ The model below is their one-paragraph statement); what is PLANNED lives in `.agents/docs/plans/2026-09-17-delivery-rework.md`; this document is the narrative that makes both readable to someone arriving cold.
 
 ## The problem, in the operator's words
 
@@ -25,12 +25,16 @@ And the loop back:
 
 The normal flow is deliberately dull: the operator edits this repository, is happy with it, then goes to each place and runs one command. There is no push, no timer that has to work, no service that has to be up. A timer is a convenience some machines add; it is not the mechanism.
 
+## The model
+
+The one statement of what a tag delivers, to which kind of place, and how a place moves forward; every other living file points here (project `AGENTS.md` § How the harness works, rule 6). A **checkout place** follows `main`: `sh-agent update` fetches, refuses a dirty checkout, fast-forwards, rebuilds the binary from the checkout and reinstalls; a tag changes nothing for it. A **binary-only place** moves only when a new `vX.Y.Z` tag is published: `sh-agent update` downloads the newest release's binary (a canonical `vX.Y.Z` tag, newer than the running one), verifies `SHA256SUMS.sig` against the signer line compiled into the binary and the binary against its checksum, replaces `~/.local/bin/sh-agent` and installs the harness embedded in it. A tag is therefore a release marker that also carries the binaries a binary-only place updates to; nothing is ever pushed to any machine, and a tag without its assets is a marker no place can update to (R8, R9; ADR-033, superseding ADR-030 D2).
+
 ## How a machine gets the harness
 
 Two ways, and no third:
 
-1. **A checkout the operator owns**, kept current with `sh-agent update`. This is the normal path. `update` fetches, refuses a dirty checkout on every path, fast-forwards, rebuilds the binary and reinstalls.
-2. **A release binary**, installed with `sh-agent install` and moved forward by `sh-agent update`. One downloaded file carrying `context/`, `skills/`, `agents/`, `commands/` and `rules/` inside it, for a place that only USES the harness: the operator wanted no `.agents/docs` trail of this repository sitting beside their other projects, where a session opened there could mistake it for the project's own. `update` there asks GitHub for the newest release, refuses a tag that is not `vX.Y.Z` or is not newer, verifies `SHA256SUMS.sig` against the key compiled into the binary and each binary against its checksum, replaces `~/.local/bin/sh-agent` and reinstalls. That place changes only when a release is cut (ADR-033).
+1. **A checkout the operator owns**, kept current with `sh-agent update` (§ The model). This is the normal path.
+2. **A release binary**, installed with `sh-agent install` and moved forward by `sh-agent update` (§ The model). One downloaded file carrying `context/`, `skills/`, `agents/`, `commands/` and `rules/` inside it, for a place that only USES the harness: the operator wanted no `.agents/docs` trail of this repository sitting beside their other projects, where a session opened there could mistake it for the project's own. What `update` does there is § The model. That place changes only when a release is cut (ADR-033).
 
 A plain copy with no `.git` — the unpacked zip — still installs, and `update` refuses it with a message naming `install` still deploying it as it is and the two alternatives: a checkout, or a release binary; it is no longer one of the ways in: it is the fallback for a machine that can reach neither of them.
 
@@ -53,7 +57,7 @@ Originals never leave `~/.config/sh-agent/`. R7 keeps that as the one place harn
 ## What is deliberately NOT being built
 
 - **A webservice**, for delivery or for feedback. Git already carries both halves. A service adds hosting, per-machine authentication and an attack surface, for one user, against R3, R4 and local-by-default. A dashboard over collected data stays possible later without changing how any machine reports.
-- **A signed-tag delivery channel.** ADR-026 designed one on 2026-09-16 to give a consumer host a trust root; ADR-030 withdrew it the next day because the operator authenticates as themselves everywhere, so it solved a problem that was not there. Tags survive as release markers — `v1.0.0` stands, and the versioning rule and signing recipe stay in `deploy/remote.md`. ADR-033 later restored a narrower channel: the binaries published with a tag, which a binary-only place updates to after verifying their signed checksums — an asset the place fetches, never a push to a machine.
+- **A signed-tag delivery channel.** ADR-026 designed one on 2026-09-16 to give a consumer host a trust root; ADR-030 withdrew it the next day because the operator authenticates as themselves everywhere, so it solved a problem that was not there. Tags survive as release markers — `v1.0.0` stands, and the versioning rule and signing recipe stay in `deploy/remote.md`; what a tag delivers today is § The model.
 - **Vendored mirrors.** Two projects kept a `.git`-less copy refreshed by hand, which is why a mirror refresh kept appearing as a task in three repositories at once. They retire. Each consumer's own session does that work in its own repository.
 - **Per-machine keys of any kind**, for the reason above.
 

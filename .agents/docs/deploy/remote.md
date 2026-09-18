@@ -5,7 +5,7 @@ target: remote
 ---
 # Deploy — other machines
 
-The harness reaches a machine one way: `sh-agent` (R8, R9, ADR-030, ADR-033). Git is the transport for a checkout place and a signed release download for a binary-only one (§ Releases), both on the operator's own credentials; there is no push-based deploy, no CI, no hooks, no service.
+The harness reaches a machine one way: `sh-agent` (R8, R9, ADR-030, ADR-033); what each kind of place fetches is `specs/sh-agent/delivery.md` § The model, on the operator's own credentials; there is no push-based deploy, no CI, no hooks, no service.
 
 ## First install on a machine
 
@@ -88,11 +88,11 @@ Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
 
 On a box where nobody edits the checkout the timer simply keeps it current; on a box where somebody does, it now declines instead of deploying their draft.
 
-The timer follows `main` by fast-forward: its trust root is whoever can push to this repository, exactly as a hand-typed `sh-agent update` is. That is the operator, on their own machines, and the accepted position (ADR-030). A box where that is not acceptable runs `sh-agent update --check` on the timer and updates by hand. A checkout place never installs from a tag; a binary-only place installs only from one (§ Releases).
+The timer follows `main` by fast-forward: its trust root is whoever can push to this repository, exactly as a hand-typed `sh-agent update` is. That is the operator, on their own machines, and the accepted position (ADR-030). A box where that is not acceptable runs `sh-agent update --check` on the timer and updates by hand. What a tag delivers, and to which place: `specs/sh-agent/delivery.md` § The model.
 
 ## Releases — signed tags, as release markers
 
-A release is an SSH-signed annotated `vX.Y.Z` tag on `main`, and the binaries published with it. A tag marks a version; it also carries the `sh-agent` binaries that a BINARY-ONLY place updates to, while a checkout place still follows `main` with `sh-agent update` and a tag changes nothing for it (ADR-033, superseding ADR-030 D2's "a tag delivers nothing"; ADR-030 D2 withdrew ADR-026's tag channel, and this restores a narrower one: the assets, verified by signature, never a push to a machine). A release is cut by `/preflight vX.Y.Z` from the operator's own turn, from this checkout (never a plain copy), on a machine holding the signing key. Nothing else is tagged: no lightweight tag, no `-rc` suffix, no other prefix. Only a canonical `vX.Y.Z` (no leading zeros, e.g. never `v1.02.2`) counts as a release tag anywhere in this repository's tooling, so never cut one with a leading zero — every place refuses it. The tag is the only version tracking; there is no version file.
+A release is an SSH-signed annotated `vX.Y.Z` tag on `main`, and the binaries published with it. What a tag delivers, and to which kind of place, is `specs/sh-agent/delivery.md` § The model (ADR-033, superseding ADR-030 D2; the history of the channel is there too). A release is cut by `/preflight vX.Y.Z` from the operator's own turn, from this checkout (never a plain copy), on a machine holding the signing key. Nothing else is tagged: no lightweight tag, no `-rc` suffix, no other prefix. Only a canonical `vX.Y.Z` (no leading zeros, e.g. never `v1.02.2`) counts as a release tag anywhere in this repository's tooling, so never cut one with a leading zero — every place refuses it. The tag is the only version tracking; there is no version file.
 
 The signer — the allowed_signers line `verify-tag` checks against:
 ```
@@ -125,7 +125,7 @@ git push origin main
 git push origin vX.Y.Z                                                                                  # plain pushes, never --force
 ```
 
-Then the release's binaries, which is how a binary-only place updates (R9, ADR-033). Built here, from the tagged tree, never by a service:
+Then the release's binaries (`specs/sh-agent/delivery.md` § The model; R9, ADR-033). Built here, from the tagged tree, never by a service:
 ```bash
 # 0. the contamination guard AGAIN, here: it ran before the tag so a bad tree is
 #    never tagged, and it runs again here because `go:embed` reads the working
@@ -192,7 +192,7 @@ Download: see README § Install without cloning. Existing binary-only places: `s
 An entry's `## Type` decides its group: `feature` → New features; `task` or `refactor` that changes behaviour → Improvements and optimisation; `bugfix` → Fixes, with its BUG id; rules, skills, docs and context → Other updates. An empty group is left out. The same text goes into the release's own `changes/` entry.
 A tag that fails any check: `git tag -d vX.Y.Z`, fix, re-gate. A pushed tag is never moved or deleted; a bad release gets the next PATCH. `git` is never run under `sudo`. Rehearsed 2026-09-16 in `.agents/scratch/tagcheck/`: the operator's key passes; a lightweight tag reads `commit`, an unsigned annotated tag has no armor line and fails `verify-tag` with "no signature found", a foreign key fails with "No principal matched". The stricter forms above (`test` assertions, tag-on-HEAD, parent-is-gated-head, records-only diff, ancestor, the private-key-derived fingerprint) were rehearsed the same day in the same scratch repo: passing on a records-only release commit tagged at HEAD, failing on a tag made on the earlier commit, on a release commit carrying a source change, on a dirty tree, and on the unsigned tag.
 
-Version: MINOR for anything an installed place gains (a new or changed skill, agent, command, rule, context rule or installer behaviour), PATCH for a fix to released behaviour only, MAJOR for what an existing deployment must react to (a moved install path, a dropped vendor, a `state.json` or manifest shape change, a new required flag) — the context's Git rule. First tag `v1.0.0`, base ref for its gate 4aa19be. The gate's verification row: the `AGENTS.md` Setup commands, `go run ./cmd/sh-agent install --home .agents/scratch/home` with `status` reporting no drift, and `sh-agent list` — 27 skills and 7 agents today; a release that changes them says so in its changelog entry. There is no deploy step after the push: a checkout place picks the commit up, and a binary-only place the release, with `sh-agent update` when the operator runs it. The handoff after a release names the live tag.
+Version: MINOR for anything an installed place gains (a new or changed skill, agent, command, rule, context rule or installer behaviour), PATCH for a fix to released behaviour only, MAJOR for what an existing deployment must react to (a moved install path, a dropped vendor, a `state.json` or manifest shape change, a new required flag) — the context's Git rule. First tag `v1.0.0`, base ref for its gate 4aa19be. The gate's verification row: the `AGENTS.md` Setup commands, `go run ./cmd/sh-agent install --home .agents/scratch/home` with `status` reporting no drift, and `sh-agent list` — 27 skills and 7 agents today; a release that changes them says so in its changelog entry. There is no deploy step after the push: each place moves forward with `sh-agent update` when the operator runs it (`specs/sh-agent/delivery.md` § The model). The handoff after a release names the live tag.
 
 ## Verify
 

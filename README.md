@@ -56,9 +56,9 @@ flowchart LR
 Teal is **update**, indigo **install**, amber **report back**, plum **release**. A dashed line is a gap: done by hand, or limited to one machine.
 
 - **Install:** clone `styrman-harness` with your own SSH key or `gh` login and run `go run ./cmd/sh-agent install`, or download a release's `sh-agent` binary with that credential and run `sh-agent install`, which installs the harness built into it (§ Install without cloning). Either way installed files go into `~/.claude` and `~/.gemini/config`, no repository is created, and the next session reads them.
-- **Update:** edit and push `main` in your checkout. At a checkout place, when you decide, `sh-agent update` fetches, refuses a dirty checkout, fast-forwards, rebuilds and reinstalls. At a binary-only place, `sh-agent update` downloads the newest release, verifies its signed checksums, replaces `~/.local/bin/sh-agent` and reinstalls — so that place changes only when you cut a release. Nothing pushes to a machine.
+- **Update:** edit and push `main` in your checkout. At each place, when you decide, `sh-agent update` moves it forward — what that means for a checkout place and for a binary-only place is `.agents/docs/specs/sh-agent/delivery.md` § The model. Nothing pushes to a machine.
 - **Report back:** sessions log corrections and retros under `~/.config/sh-agent/`. Before each report, read what was added since the last one. `sh-agent report` sends a redacted copy and a metrics record to `styrman-harness-feedback` through a throwaway clone holding only this machine's own reports, removed after the push — no machine keeps a copy of any other's. Back at the harness, `/retro --harness` applies the proposals queued on that machine; other places' reports are read by hand.
-- **Release:** `/preflight vX.Y.Z` in your own turn gates, pushes an SSH-signed tag on `main`, and publishes that tag's binaries with checksums signed by the same key. Checkout places follow `main`; binary-only places update to the newest release.
+- **Release:** `/preflight vX.Y.Z` in your own turn gates, pushes an SSH-signed tag on `main`, and publishes that tag's binaries with checksums signed by the same key; what each kind of place does with it is `.agents/docs/specs/sh-agent/delivery.md` § The model.
 
 ## Install
 
@@ -242,4 +242,4 @@ gofmt -l cmd internal && go vet ./... && go test -race ./...   # gofmt takes the
 go run ./cmd/sh-agent install --home .agents/scratch/home   # never test against your real $HOME; scratch lives in the repo, never /tmp
 ```
 
-See `AGENTS.md` for the repo rules and `.agents/docs/plans/2026-09-03-rebuild.md` for the rebuild checklist. To cut a release, see `.agents/docs/deploy/remote.md` § Releases — signed `vX.Y.Z` tags via `/preflight`. A tag is a release marker that also carries the binaries a binary-only place updates to; a checkout place follows `main` with `sh-agent update`, and a binary-only place moves only when a new tag is published (ADR-033). How the harness reaches each machine and reports back: `.agents/docs/deploy/remote.md` § The four places.
+See `AGENTS.md` for the repo rules and `.agents/docs/plans/2026-09-03-rebuild.md` for the rebuild checklist. To cut a release, see `.agents/docs/deploy/remote.md` § Releases — signed `vX.Y.Z` tags via `/preflight`. What a tag delivers, and to which place: `.agents/docs/specs/sh-agent/delivery.md` § The model. How the harness reaches each machine and reports back: `.agents/docs/deploy/remote.md` § The four places.

@@ -17,9 +17,12 @@ Your run can be cut off at a turn limit (set by the caller), and being cut
 off is a normal outcome, not an edge case. An unwritten report is a
 failed dispatch: the caller gets nothing and pays for the whole run again.
 
-Write your report file as soon as you have one finding worth recording, then
-UPDATE it as you go. When you notice you are past roughly two thirds of your
-budget, stop investigating and finish the file. Always include an explicit
+Write your report file as soon as you have one finding worth recording — and
+in any case once a third of your budget is spent, with `Status: IN PROGRESS`,
+the range line and what you have read so far, because a clean run that is cut
+off otherwise leaves nothing on disk — then UPDATE it as you go. When you
+notice you are past roughly two thirds of your budget, stop investigating and
+finish the file. A report still IN PROGRESS at hand-back is a failed dispatch. Always include an explicit
 "Not examined" section naming what you did not reach (a tool result that came back cut — a preview, a saved-output path, a line limit — counts as not reached until you have read the rest) — a partial report with
 honest edges is useful; silence is not.
 
@@ -69,6 +72,8 @@ date: <from `date +%F`>
 # Review — <slug>   (<date>)
 
 Range reviewed: <base>..<head> or the file named by the dispatch
+
+## Status: IN PROGRESS | COMPLETE     <!-- IN PROGRESS only while still reading; never at hand-back -->
 
 ## Verdict: APPROVE | APPROVE WITH NITS | REQUEST CHANGES
 

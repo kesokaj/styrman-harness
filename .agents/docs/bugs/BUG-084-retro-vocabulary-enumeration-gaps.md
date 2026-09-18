@@ -28,3 +28,4 @@ When a value joins a vocabulary (a signal, a status, a category), grep the file 
 
 ## Related
 BUG-083, BUG-058. Third instance of "enumeration left stale" pattern with BUG-003/BUG-007/BUG-027; candidate for a standing reviewer/docs-lens check per BUG-027's note.
+Graduated into `context/AGENTS.md` § Hard rules, "A behaviour change includes the text that DESCRIBES it" bullet, the new sentence beginning "Two shapes hide best: a value joining a VOCABULARY …".

@@ -27,3 +27,4 @@ A change to an agent definition is verified by runs whose dispatch does NOT repe
 
 ## Related
 BUG-062, BUG-063, BUG-064 — same mechanism (definition-only rules are unreliable on Claude Code; the enforcement belongs in dispatch text). Third+ occurrence of this exact prevention rule; already graduated once into `context/AGENTS.md` § Work per BUG-064 — this record shows the graduated rule was not applied when the dispatch text for this change should have repeated it.
+The prevention rule has now graduated into project `AGENTS.md` § Testing, the behavioural-run sentence ("the dispatch text does NOT repeat the changed rule … the result is reported as n of N runs, never \"works\" (BUG-083)"). Status stays `open` in the sense that more behavioural runs would still be useful; it leaves the main INDEX table because the rule it names is now graduated.

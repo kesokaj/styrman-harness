@@ -2,7 +2,7 @@
 owner: bugs
 date: 2026-09-21
 id: BUG-085
-status: open
+status: fixed
 area: context / installer (Antigravity global rules)
 ---
 # BUG-085: Antigravity loads only the first 24,000 bytes of the deployed global context
@@ -20,7 +20,11 @@ Antigravity CLI (1.2.7) truncates `~/.gemini/config/rules/AGENTS.md` (27,114 byt
 Probe (2026-09-21): a second rules file `~/.gemini/config/rules/aa-canary-bug085.md` (45 bytes, one canary sentence) was placed beside `AGENTS.md` (27,114 bytes) in the real home; `agy -p` was asked for the canary word and for AGENTS.md's last heading and truncation. The canary was UNKNOWN and the string does not occur anywhere in the session's conversation DB — no `<RULE[...aa-canary-bug085.md]>` block was built at all. AGENTS.md's own truncation grew from 3,114 to 3,456 bytes lost (342 bytes more), i.e. it was allowed only 23,658 bytes with the second file present. The cap is therefore on the whole global-rules block, not per file: a second file costs the first one room and, once the block fills, is dropped silently with no marker of its own. Splitting the context into several `rules/` files cannot fix this bug; pruning the deployed context under the cap is the only fix. Whether a second file loads when the block is under the cap was not tested.
 
 ## Fix
-Not fixed. Proposed in `.agents/docs/plans/2026-09-21-context-audit-assessment.md` Phase 1: a test rendering the real Antigravity rules file that fails above the observed cap minus a margin; prune `context/AGENTS.md` and `context/dev-setup.md` under the cap (duplicates of skill content first); a canary sentence as the LAST line of the deployed context, asked for by the real-home smoke check on both CLIs. The proposed two-file probe to learn whether the cap is per-file was run 2026-09-21: the cap is per whole rules block, not per file, and a second file is silently dropped once the block is full, so splitting context across multiple files is not a viable fix.
+Pruned `context/AGENTS.md` and `context/dev-setup.md` under the cap in commit 1df57f3 (Phase 1 of `.agents/docs/plans/2026-09-21-context-consolidation.md`; 27,163 → 20,012 bytes, 44 operator-approved actions), then 20,205 bytes after Phase 3 (807de3f). Pinned by `TestRenderedContextFitsAntigravityBlock` (`internal/harness/size_test.go`, budget 22,000 bytes; must-fail mutation verified in 94a6596). A canary sentence sits as the last line of the deployed context (770e76a), asked for by the real-home smoke check. The real home on this box was updated to 94a6596 on 2026-09-21; Antigravity's own conversation store then held one `<RULE[…/AGENTS.md]>` block with the canary line and zero `<truncated` markers (`.agents/docs/testing/2026-09-21-verify-real-home-smoke-5.md`).
+
+Still open elsewhere: the Mac and the devbox get the fix at their next `sh-agent update` to a release carrying it (v1.5.0 pending).
+
+The proposed two-file probe to learn whether the cap is per-file was run 2026-09-21: the cap is per whole rules block, not per file, and a second file is silently dropped once the block is full, so splitting context across multiple files is not a viable fix.
 
 ## Prevention
 A deployed file that a vendor caps is pinned by a test that renders it from the real repo against the observed cap with a margin. Every smoke check asks one question answerable ONLY from the file's last section — never a question (like a skill count) the CLI can answer from its own internal listing, because that gives a false pass on a truncated file.

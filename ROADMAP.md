@@ -6,8 +6,6 @@ Last reviewed: 2026-09-21
 
 ## Now
 
-- `.agents/docs/plans/2026-09-21-context-consolidation.md` — context under Antigravity's block cap, pinned, canaried, no regrowth (BUG-085); cold-reader check pending
-
 ## Next
 
 ## Later / Ideas

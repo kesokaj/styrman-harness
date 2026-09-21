@@ -56,6 +56,7 @@
 | BUG-075 | 2026-09-18 | README.md § Install without cloning | fixed | documented `go install` line for v1.1.0 failed (https module path, no SSH rewrite) | a doc command is RUN as written before the release that documents it, not read; when it needs a tag the release creates, run it right after in the same task |
 | BUG-076 | 2026-09-18 | internal/harness/repo.go (ResolveSource) | fixed | operator saw "harness repo not found" on a stale dev-build binary and thought the download-without-cloning feature was broken | a refusal error names the precondition that failed (this build has no harness built in), not only the alternatives to try |
 | BUG-077 | 2026-09-18 | internal/harness/repo.go (ResolveSource), delivery model | fixed | release binary on devbox silently installed a stale plain-copy tree instead of its embedded harness, reporting "drift none" | decide source order per kind of build; a ship-with-it artifact never silently prefers a tree found on the machine, and an unupdatable copy never outranks one that can update |
+| BUG-085 | 2026-09-21 | context / installer (Antigravity global rules) | open | Antigravity truncates the deployed global context (`~/.gemini/config/rules/AGENTS.md`, 27,114 B) at byte 24,000, dropping GCP/stack bullets and the whole `## Installed` inventory every session | pin a deployed vendor-capped file's rendered size with a test against the observed cap; smoke-check with a question answerable only from the file's last section, never one the CLI can answer from its own listing |
 
 ## Graduated
 

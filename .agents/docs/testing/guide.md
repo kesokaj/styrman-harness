@@ -119,6 +119,11 @@ that quotes the new wording, log grepped for parse errors. The full skill-matrix
 scenarios are `.agents/docs/testing/skill-matrix.md` — run the matrix in full only
 before saying "complete" or "all skills"; a targeted change runs only the matrix row(s)
 it affects.
+A sandbox home that must be logged in is built under `.agents/scratch/` (gitignored, never
+embedded: `go:embed` covers only the five source directories); any credential file copied into
+it from the real home is `chmod 600`, lives only for the run, and is deleted by name right
+after (security review 2026-09-21). Prefer the real-home smoke checks of § 5 when the change
+needs no separate home.
 
 ## 5. Real-home smoke checks (after any install into a real home)
 
@@ -127,6 +132,14 @@ questions — including the canary word GANNET that ends the rendered context, w
 truncated file fails (BUG-085) — one skill load, one agent dispatch) from that home, on each
 CLI, before the install is called done. The Mac procedure is
 `.agents/docs/testing/2026-09-04-verify-mac-real-home.md`.
+Run them from a fresh clone of the demo service, never from inside a harness checkout: the
+canary word is written in this repo's README and AGENTS.md, so a session started here could
+answer it from the project context without the global context having loaded. On Antigravity
+the answer counts only with the store check beside it (`strings` the newest
+`~/.gemini/antigravity-cli/conversations/*.db`: one `<RULE[...AGENTS.md]>` block, the canary
+line inside it, no `<truncated` line). A headless Antigravity check that needs tools uses the
+real settings' `permissions.allow` entries; `--dangerously-skip-permissions` only inside a
+throwaway clone, and never as the standing way.
 
 After any `sh-agent update`, also run the deploy guides' post-update check from that
 home: `hash -r` (bash) or `rehash` (zsh), then `sh-agent version` unqualified and

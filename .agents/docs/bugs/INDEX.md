@@ -81,9 +81,9 @@
 | BUG-057 | internal/harness (report_test.go fixture authoring) | `context/AGENTS.md` § Hard rules, "Ask git what actually changed" bullet |
 | BUG-058 | internal/harness (report.go — review Outcome accuracy) | `context/AGENTS.md` § Definition of Done, step 2 |
 | BUG-061 | agents/changelog (ADR authoring) | `agents/changelog.md` § Rules (first bullet) and `context/AGENTS.md` § Definition of Done, step 4 |
-| BUG-066 | embed.go / release build | `context/AGENTS.md` § Hard rules, "A test that a generated or embedded artifact matches its source asserts BOTH directions" bullet |
-| BUG-068 | process / mutation testing | `context/AGENTS.md` § Hard rules, "A must-fail MUTATION asserts its target text is unique" clause |
-| BUG-069 | internal/harness/report.go (RemoveKeptClone) | `context/AGENTS.md` § Hard rules, "A guard in front of a destructive or irreversible action" bullet |
+| BUG-066 | embed.go / release build | `skills/review-standards/SKILL.md` § 2 (generated-counterpart checklist item); one-line version in `context/AGENTS.md` § Hard rules |
+| BUG-068 | process / mutation testing | `skills/review-standards/SKILL.md` § 2 (mutation checklist item), cited from `skills/bug/SKILL.md` Step 3 and `skills/feature/SKILL.md` Step 4 |
+| BUG-069 | internal/harness/report.go (RemoveKeptClone) | one-line form in `context/AGENTS.md` § Hard rules; `err == nil && somethingToLose` example in `skills/golang/SKILL.md` § Error Handling |
 | BUG-070 | cmd/sh-agent/main.go (update) | `context/AGENTS.md` § Hard rules, "When a command has a read-only mode" bullet |
 | BUG-071 | internal/harness/report_test.go (test premises) | `context/AGENTS.md` § Hard rules, "A test that sets up an unusual condition proves the condition HOLDS" clause |
 | BUG-072 | process/verifier-dispatch | `context/AGENTS.md` § Definition of Done, step 1, "While that dispatch is IN FLIGHT the tree stays frozen" sentence |
@@ -91,6 +91,6 @@
 | BUG-079 | internal/harness/release.go (UpdateFromRelease), internal/harness/pathguard.go, shell hash cache | `context/AGENTS.md` § Hard rules, "A claim that something works states HOW it was verified" bullet; § Definition of Done, step 2 |
 | BUG-080 | cmd/sh-agent/main.go (install/update, checkout path) | `context/AGENTS.md` § Hard rules, "When a command has a read-only mode" bullet |
 | BUG-081 | process (review — fix verification against a fresh fixture) | `context/AGENTS.md` § Definition of Done, step 2 ("that test builds the ARRANGEMENT the finding measured" clause) |
-| BUG-082 | tooling (must-fail mutation harness, audit scripts) | `context/AGENTS.md` § Hard rules, the mutation clause ("counts as a verdict only when the mutated code COMPILED and a named test failed") |
+| BUG-082 | tooling (must-fail mutation harness, audit scripts) | `skills/review-standards/SKILL.md` § 2 (mutation checklist item, names BUG-082) |
 | BUG-083 | agents/verifier | `AGENTS.md` § Testing (behavioural-run sentence: "the dispatch text does NOT repeat the changed rule … the result is reported as n of N runs, never \"works\"") |
 | BUG-084 | skills/feedback-log, agents/verifier | `context/AGENTS.md` § Hard rules, "A behaviour change includes the text that DESCRIBES it" bullet ("Two shapes hide best: a value joining a VOCABULARY …") |

@@ -42,7 +42,7 @@ Compare with your hypothesis. Agreement: proceed. Disagreement: read its evidenc
 
 ## Step 3: Failing test first
 
-Write the test that captures the bug at the right tier (unit beside the code; integration when a real dependency is involved; e2e when only the running artifact shows it). Run it. It must fail for the reason in the problem note; if it fails for another reason, fix the test before touching the implementation. For UI bugs that a spec cannot capture, script the repro in the browser and confirm the bug is observable; that script is re-run after the fix.
+Write the test that captures the bug at the right tier (unit beside the code; integration when a real dependency is involved; e2e when only the running artifact shows it). Run it. It must fail for the reason in the problem note; if it fails for another reason, fix the test before touching the implementation. A must-fail mutation cited as evidence follows the protocol in review-standards § 2 (unique target, restore from a saved copy, `git diff` read, compiled and a named test failed). For UI bugs that a spec cannot capture, script the repro in the browser and confirm the bug is observable; that script is re-run after the fix.
 
 ## Step 4: Smallest fix
 

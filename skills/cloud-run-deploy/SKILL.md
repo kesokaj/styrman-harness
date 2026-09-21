@@ -22,9 +22,9 @@ Registry only when explicitly requested.
 ## Pre-flight
 
 1. **Defaults:** read the project's `docs/deploy/gcp.md` (`.agents/docs/` or `docs/`):
-   project ID, region, Artifact Registry repo, service name, visibility. If it is
-   missing or empty, ask the user for all five and write them there before anything
-   else. Never guess a project; `gcloud config get project` and `.env` are
+   project ID, region, Artifact Registry repo, service name, the service account it
+   runs as, visibility. If it is missing or empty, ask the user for all six and write
+   them there before anything else. Never guess a project; `gcloud config get project` and `.env` are
    cross-checks, not sources.
 2. **Auth:** if any gcloud/docker-push command fails with a credential error, stop and
    apply the `gcloud-setup` skill.
@@ -34,6 +34,7 @@ Registry only when explicitly requested.
    Artifact Registry repo and Cloud Run service should live in the same region.
 5. **Registry auth (once per machine/region):**
    `gcloud auth configure-docker ${REGION}-docker.pkg.dev`
+- The service account the service will run as exists (`gcloud iam service-accounts describe NAME@PROJECT.iam.gserviceaccount.com`) and holds `roles/secretmanager.secretAccessor` on every secret the deploy names — the operator names it with the other defaults (`docs/deploy/gcp.md`); never fall back to the default compute account.
 
 ## Build — dual architecture
 
@@ -80,6 +81,7 @@ Common flags — apply deliberately, not by default:
 | `--allow-unauthenticated` | Public services only. Omit for internal services (IAM-gated is the safe default). |
 | `--set-env-vars KEY=VALUE` | Plain config. Never put secrets here. |
 | `--set-secrets KEY=SECRET_NAME:latest` | Secrets via Secret Manager — the only acceptable way to pass credentials. |
+| `--service-account NAME@PROJECT.iam.gserviceaccount.com` | A dedicated service account per service, never the project's default compute account; grant it `roles/secretmanager.secretAccessor` on each secret `--set-secrets` names and nothing it does not use. |
 | `--min-instances` / `--max-instances` | Cold-start vs cost trade-off; confirm with the user before setting min > 0 (it bills continuously). |
 | `--memory` / `--cpu` | Only when the defaults (512Mi / 1 CPU) are proven insufficient. |
 

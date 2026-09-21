@@ -1,7 +1,7 @@
 ## Environment & Stack
 
 - **Local by default.** Build, run, and test on the machine in front of you, the way the project's `docs/deploy/local.md` says. Nothing goes to a cloud unless the user says so.
-- **GCP is the only cloud.** When the user says to use GCP, deploy, or push an image, ask for the defaults before doing anything — project ID, region, Artifact Registry repository, service name, and whether the service is public — never assume or invent them, never fall back to another project's value, and record them in the project's `docs/deploy/gcp.md` so the next session does not ask again. Never suggest another cloud provider.
+- **GCP is the only cloud.** When the user says to use GCP, deploy, or push an image, ask for the defaults before doing anything — project ID, region, Artifact Registry repository, service name, the service account it runs as, and whether the service is public — never assume or invent them, never fall back to another project's value, and record them in the project's `docs/deploy/gcp.md` so the next session does not ask again. Never suggest another cloud provider.
 - **Backend: Go** (`golang` skill): `cmd/<app>/` + `internal/`, `log/slog` JSON logging.
 - **Frontend: TanStack Start + TypeScript + Tailwind**, fully contained in one `web/` or `ui/` directory inside the Go project (`frontend`, `typescript` skills). Shipped JS runs on plain V8: no Node-only APIs outside the server entry.
 - **Machines:** macOS (Apple Silicon) runs Docker via Colima; Linux boxes use plain Docker. Remote boxes or VMs only on explicit request — ask for access details, never assume them.

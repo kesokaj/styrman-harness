@@ -60,7 +60,7 @@ E2E criteria: (1) golden: in this checkout without `CLAUDE.md`, Claude Code name
 - [x] Checkpoint — expect: `go test -race ./...` exit 0 — evidence: `verifier` log `testing/2026-09-21-project-agents-md-native.md` PASS (251 tests, size 20,328, install drift none, asset gone, global stub kept, root CLAUDE.md absent), 2026-09-21; the punctuation fix after it re-checked bare by the main agent
 
 ### Phase 2 — Release
-- [ ] `/preflight v1.6.0` — who: user's word "cut a new minor" (2026-09-21) — expect: SHIP, signed tag, five assets
+- [x] `/preflight v1.6.0` — who: user's word "cut a new minor" (2026-09-21) — expect: SHIP, signed tag, five assets (gate `reviews/2026-09-21-preflight-v1.6.0.md` SHIP; the tag and assets follow this release commit, 2026-09-21)
 
 ## Risks
 

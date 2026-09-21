@@ -62,5 +62,5 @@ Backup and versioning only: no CI, no hooks, ever. Commit and push to the curren
 
 ## Project layout
 
-Root: `AGENTS.md` alone — no `CLAUDE.md`, no `GEMINI.md`; a one-line `@AGENTS.md` stub in `CLAUDE.md` only where Claude Code cannot read `AGENTS.md` (before 2.1.277, Bedrock, telemetry off) —, `REQUIREMENTS.md`, `TODO.md`, `ROADMAP.md` ("Now" points at the active plan), `README.md`; the trail is `.agents/docs/`, scaffolded by `/init-project` (`docs/` in this file means that root). Every `docs/` artifact starts with frontmatter `owner:` and `date:`; `changes/` and `DECISIONS.md` are append-only; comments say why, not what.
+Root: `AGENTS.md` alone — no `CLAUDE.md`, no `GEMINI.md`; a one-line `@AGENTS.md` stub in `CLAUDE.md` only where Claude Code cannot read `AGENTS.md` (before 2.1.277, Bedrock, telemetry off); then `REQUIREMENTS.md`, `TODO.md`, `ROADMAP.md` ("Now" points at the active plan), `README.md`; the trail is `.agents/docs/`, scaffolded by `/init-project` (`docs/` in this file means that root). Every `docs/` artifact starts with frontmatter `owner:` and `date:`; `changes/` and `DECISIONS.md` are append-only; comments say why, not what.
 

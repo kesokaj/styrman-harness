@@ -8,7 +8,7 @@
 
 ## R2 — Standards, not vendor formats
 
-The context follows the agents.md standard and is named `AGENTS.md` at every level. A project has no `CLAUDE.md`: Claude Code 2.1.277+ reads `AGENTS.md` natively, and a one-line `@AGENTS.md` stub is written by hand only where it cannot (before 2.1.277, Bedrock, Vertex, Foundry, or telemetry disabled). `~/.claude/CLAUDE.md` stays a one-line import: Claude reads a user-level `AGENTS.md` only as an ancestor file, and a project with its own `CLAUDE.md`, or one outside the home directory, would then lose the global context. Skills follow the Agent Skills `SKILL.md` standard so that anything from skills.sh or any other source drops into `skills/` unchanged.
+The context follows the agents.md standard and is named `AGENTS.md` at every level. A project has no `CLAUDE.md`: Claude Code 2.1.277+ reads `AGENTS.md` natively, and a one-line `@AGENTS.md` stub is written by hand only where it cannot (before 2.1.277, Bedrock, Vertex, Foundry, or telemetry disabled). `~/.claude/CLAUDE.md` stays a one-line import: Claude reads a user-level `AGENTS.md` only as an ancestor file, and a project with its own `CLAUDE.md`, or one outside the home directory, would then lose the global context. Native reading also loads an `AGENTS.md` in any directory above the project and, on read, in any subdirectory; a template `AGENTS.md` never sits beside source. Skills follow the Agent Skills `SKILL.md` standard so that anything from skills.sh or any other source drops into `skills/` unchanged.
 
 ## R3 — No hooks, no gates, no CI
 

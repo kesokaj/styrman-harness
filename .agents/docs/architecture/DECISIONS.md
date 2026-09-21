@@ -315,3 +315,11 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
 **Rejected:** a symmetric no-stub layout at the user level (measured: any project with a `CLAUDE.md`, or outside the home directory, loses the global context); an `--claude-stub` flag on `/init-project` (a by-hand line, not code); removing stubs from existing projects on update (silent loss on older or flag-less sessions).
 
 **Consequences:** a project root is `AGENTS.md` alone on both vendors; the one remaining stub is `~/.claude/CLAUDE.md`; places on Claude Code before 2.1.277 need the by-hand line; the release carrying this is v1.6.0, a MINOR (init-project behaviour changes for every user). Plan: `.agents/docs/plans/2026-09-21-project-agents-md-native.md`.
+
+## ADR-037: Native AGENTS.md reading has a wider scope than the stub did     (2026-09-21) — Accepted
+
+**Context:** Claude Code v2.1.277+ reads a project's `AGENTS.md` natively (ADR-036), but the native reader also loads an `AGENTS.md` in any directory above the project and, when Claude reads a file there, in any subdirectory — a vendored or cloned subtree's `AGENTS.md` becomes live instruction text. The v1.6.0 gate's security review (`.agents/docs/reviews/2026-09-21-security-v1.5.0-HEAD.md`, finding 1) noted this scope difference from the CLAUDE.md stub, which confined project instructions to the one imported root file. The operator approved the REQUIREMENTS.md R2 addition on 2026-09-21 ("this is approved").
+
+**Decision:** `REQUIREMENTS.md` R2 gains the sentence "Native reading also loads an `AGENTS.md` in any directory above the project and, on read, in any subdirectory; a template `AGENTS.md` never sits beside source." (same commit as this ADR). `/init-project` already states this scope in its summary (commit 2facb44: "native AGENTS.md reading also loads an `AGENTS.md` in any directory above the project and, when Claude reads a file there, in any subdirectory").
+
+**Consequences:** `skills/init-project/assets/AGENTS.md` stays a template under `assets/`, never beside source. A project vendoring a subtree with its own `AGENTS.md` expects it to load as live instruction. Not measured on this box (docs-based). REQUIREMENTS.md is not part of what a release tag delivers; checkout places follow `main`.

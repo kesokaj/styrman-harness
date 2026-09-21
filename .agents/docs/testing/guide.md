@@ -119,8 +119,9 @@ it affects.
 ## 5. Real-home smoke checks (after any install into a real home)
 
 The three checks in `.agents/docs/testing/2026-09-03-verify-real-home.md` (context
-questions, one skill load, one agent dispatch) from that home, on each CLI, before the
-install is called done. The Mac procedure is
+questions — including the canary word GANNET that ends the rendered context, which a
+truncated file fails (BUG-085) — one skill load, one agent dispatch) from that home, on each
+CLI, before the install is called done. The Mac procedure is
 `.agents/docs/testing/2026-09-04-verify-mac-real-home.md`.
 
 After any `sh-agent update`, also run the deploy guides' post-update check from that

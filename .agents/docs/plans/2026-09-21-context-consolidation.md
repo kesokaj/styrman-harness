@@ -58,13 +58,13 @@ E2E criteria:
 
 ## Phases
 
-- [ ] Cold-reader check — design ready and implementation ready (<reviews/ paths>), or the user's same-turn override quoted with its date
+- [x] Cold-reader check — three rounds (`reviews/2026-09-21-coldread-context-consolidation-r1.md`, `-r2.md`, `-r3.md`), cap reached with one narrow residue; the operator's override: "approved" (2026-09-21), option 1 — proceed with the default G3 task for `context/dev-setup.md` (D15)
 
 ### Phase 0 — Record, canary, docs
-- [ ] `REQUIREMENTS.md` § Known limits bullet (Interfaces text) and its ADR by `changelog`, read against the diff, one commit — verify: `git diff --stat` shows the two files, AI — expect: bullet first under Known limits; ADR names BUG-085 and the 22,000 budget — docs: `REQUIREMENTS.md`
-- [ ] `Canary` in `render.go`, appended last; `TestInventoryAndRender` asserts the rendered context's last line is `Canary` — verify: unit, `go test -race ./internal/harness -run 'TestInventoryAndRender|TestPlanFromFSSource' -count=1`, AI — expect: red before the render change (assertion fails on the inventory line), green after
-- [ ] Smoke-check docs: the canary question in `2026-09-03-verify-real-home.md` context row and guide § 5; the README row named in Surfaces; this repo's `AGENTS.md` § Testing — verify: `grep -n GANNET` over the four files, AI — expect: four hits — docs: `README.md`, `.agents/docs/testing/2026-09-03-verify-real-home.md`
-- [ ] Checkpoint — expect: `go test -race ./...` exit 0; scratch-home install then `status` drift none; `tail -1 .agents/scratch/x/.claude/AGENTS.md` is the canary — evidence: command and exit status, <date>
+- [x] `REQUIREMENTS.md` § Known limits bullet (Interfaces text) and its ADR by `changelog`, read against the diff, one commit (ADR-035; committed 2026-09-21, `git diff --stat`: 2 files, 11 insertions) — verify: `git diff --stat` shows the two files, AI — expect: bullet first under Known limits; ADR names BUG-085 and the 22,000 budget — docs: `REQUIREMENTS.md`
+- [x] `Canary` in `render.go`, appended last; `TestInventoryAndRender` asserts the rendered context's last line is `Canary` (red first: "ends with … `go-style`\n"; green after the append; full `go test -race ./...` exit 0, 2026-09-21) — verify: unit, `go test -race ./internal/harness -run 'TestInventoryAndRender|TestPlanFromFSSource' -count=1`, AI — expect: red before the render change (assertion fails on the inventory line), green after
+- [x] Smoke-check docs: the canary question in `2026-09-03-verify-real-home.md` context row and guide § 5; the README row named in Surfaces; (`grep -l GANNET` over the four files: 4, 2026-09-21) this repo's `AGENTS.md` § Testing — verify: `grep -n GANNET` over the four files, AI — expect: four hits — docs: `README.md`, `.agents/docs/testing/2026-09-03-verify-real-home.md`
+- [x] Checkpoint — expect: `go test -race ./...` exit 0; scratch-home install then `status` drift none; `tail -1 .agents/scratch/x/.claude/AGENTS.md` is the canary — evidence: `testing/2026-09-21-context-consolidation-phase-0.md` PASS (250 pass, 0 fail; drift none; canary last; 27,163 bytes, over the cap by design until Phase 1), 2026-09-21
 
 ### Phase 1 — Pin and prune
 - [ ] `size_test.go` with `TestRenderedContextFitsAntigravityBlock`, run bare first — verify: unit, `go test ./internal/harness -run TestRenderedContextFitsAntigravityBlock -count=1`, AI — expect: FAIL naming about 27,160 bytes and 22,000
@@ -81,7 +81,7 @@ E2E criteria:
 - [ ] Checkpoint — expect: `go test -race ./...` exit 0; install and status drift none — evidence: command and exit status, the behavioural tally, <date>
 
 ### Phase 3 — Sufficiency (goldfish)
-- [ ] Three `reviewer` dispatches, each given ONE file (`context/AGENTS.md`, `context/dev-setup.md`, this repo's `AGENTS.md`) and the prompt's G1, G2, G3 questions verbatim, the G3 tasks being "release v1.4.0 as this repo did it" for the project `AGENTS.md`, "close a bug record after a fix" for `context/AGENTS.md`, and "deploy a new Go service to Cloud Run for the first time" for `context/dev-setup.md` (Open row, cap) — verify: reports under `reviews/`, AI — expect: per file, G1 errors, G2 findings kept, G3 questions, and the two verdicts SUFFICIENT and MINIMAL
+- [ ] Three `reviewer` dispatches, each given ONE file (`context/AGENTS.md`, `context/dev-setup.md`, this repo's `AGENTS.md`) and the prompt's G1, G2, G3 questions verbatim, the G3 tasks being "release v1.4.0 as this repo did it" for the project `AGENTS.md`, "close a bug record after a fix" for `context/AGENTS.md`, and "deploy a new Go service to Cloud Run for the first time" for `context/dev-setup.md` (D15) — verify: reports under `reviews/`, AI — expect: per file, G1 errors, G2 findings kept, G3 questions, and the two verdicts SUFFICIENT and MINIMAL
 - [ ] Fixes for material G1 errors and blocking G3 questions, in the file a goldfish would look, each re-checked against the size budget — verify: the size test bare, AI — expect: PASS
 - [ ] Checkpoint — expect: three reports on disk, `go test -race ./...` exit 0 — evidence: report paths, command and exit status, <date>
 
@@ -116,4 +116,4 @@ D13 — 2026-09-21 — A pruning row classified MOVE-TO-SCOPED is never deleted 
 D14 — 2026-09-21 — The retro size check lives in Step 6 (apply), the only step at which the addition exists on disk, not in Step 2, which already has five items and runs before any draft — supersedes the Step 2 wording of D11's round — by: cold read round 2, gap 1
 Rejected: splitting into `rules/` files — the cap is per block (BUG-085 probe). Pinning 12,000 chars — `context/AGENTS.md` alone is 23,194 chars. Dropping the inventory — asserted by tests and read by the smoke check. A size check at install time — a binary-only place cannot act on it.
 Open: the approved deletions leave the file over 22,000 — default: a second numbered table of further cuts; the budget is never raised by the implementer.
-Open (cold read round 3, at the cap): the G3 task for `context/dev-setup.md` was unnamed — default: "deploy a new Go service to Cloud Run for the first time", which exercises the stack, Docker and GCP-defaults material that file holds; awaiting the operator's word.
+D15 — 2026-09-21 — The G3 task for `context/dev-setup.md` is "deploy a new Go service to Cloud Run for the first time"; the cold-reader check closed at its cap on this one item — by: "approved" (option 1, 2026-09-21)

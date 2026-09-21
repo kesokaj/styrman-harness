@@ -200,6 +200,11 @@ func TestInventoryAndRender(t *testing.T) {
 	if strings.Contains(s, "Alpha does things") {
 		t.Errorf("deployed context should carry names only, not descriptions")
 	}
+	// The canary is the LAST line: a check that reads it proves the whole
+	// file loaded (BUG-085). Anything after it would be unproven.
+	if !strings.HasSuffix(s, "\n"+Canary+"\n") {
+		t.Errorf("context should end with the canary line %q, ends with %q", Canary, s[max(0, len(s)-80):])
+	}
 	full := RenderInventory(inv)
 	for _, want := range []string{"| `alpha` | auto |", "| `beta` | `/beta` |", "| `reviewer` | opus |", "| `/deploy` |", "| `go-style` |", "Beta: slash only"} {
 		if !strings.Contains(full, want) {

@@ -22,6 +22,10 @@ go test -race ./...
 ```bash
 go run ./cmd/sh-agent list      # sanity: every skill and agent parses; its section headers print the counts
 go run ./cmd/sh-agent render | wc -l   # rendered context/AGENTS.md must stay under 100 lines
+go test ./internal/harness/... -run TestRenderedContextFitsAntigravityBlock -v   # a change to context/*.md
+  # or rules/*.md must pass this: it renders the real checkout plus every rules/*.md and pins the
+  # result under 22,000 bytes, inside Antigravity's 24,000-byte global rules block (REQUIREMENTS §
+  # Known limits, ADR-035); already covered by `go test ./...` in § 1, named here explicitly
 ```
 
 ## 3. Scratch-home install and drift check

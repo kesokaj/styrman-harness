@@ -88,7 +88,7 @@ E2E criteria:
 ### Phase 4 — E2E and release
 - [ ] This box's real home at the pushed commit (the hourly timer or `sh-agent update`) — who: user — expect: `sh-agent status` installed from the head commit, drift none
 - [ ] Real-home smoke on both CLIs from a fresh clone of the demo service: the three checks plus the canary; on Antigravity, the conversation-store grep — verify: e2e, AI — expect: GANNET on both; `grep -c '^<truncated'` 0
-- [ ] Must-fail mutation of the size test (E2E edge, in place per D12) — verify: unit, AI — expect: the padded file fails the test naming the excess; `git diff --stat` empty after restore
+- [x] Must-fail mutation of the size test (E2E edge, in place per D12) — verify: unit, AI — expect: the padded file fails the test naming the excess; `git diff --stat` empty after restore (2026-09-21: 2,010 bytes appended to `context/AGENTS.md`, saved copy in `.agents/scratch/AGENTS.md.mutation-copy`; test FAIL "block is 22215 bytes … cut 215 bytes", exit 1, no Go change so the build stood; restored by copy, `cmp` identical, `git diff --stat` empty, test PASS again)
 - [ ] Mac smoke (Antigravity-only place) after its `sh-agent update` — who: user — expect: GANNET
 - [ ] BUG-085 status fixed in the record and the index (`bugs`), `changes/` entry, `documentation` for README and the guide — verify: `git diff --stat`, AI — expect: the files named
 - [ ] Checkpoint — expect: everything above ticked, `go test -race ./...` exit 0 — evidence: `verifier` log `testing/<date>-context-consolidation-phase-4.md`, <date>

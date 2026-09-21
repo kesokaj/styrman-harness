@@ -21,6 +21,8 @@ The map in `README.md` § How it works defines how the harness reaches a machine
 
 ```bash
 gofmt -l cmd internal && go vet ./... && go test -race ./...   # before any completion claim; gofmt takes the source dirs, not `.`, because it walks .agents/scratch and the Go tool does not (BUG-048)
+# a change to context/*.md or rules/*.md must also pass TestRenderedContextFitsAntigravityBlock (internal/harness/size_test.go,
+# part of `go test ./...` above), which pins the rendered context under 22,000 bytes inside Antigravity's 24,000-byte block (ADR-035)
 go run ./cmd/sh-agent install --home .agents/scratch/home  # exercise the installer against a scratch home (gitignored)
 go run ./cmd/sh-agent list                              # sanity-check skills and agents parse
 govulncheck ./...                                       # clean on go1.25.8+ (see below); on an older Go it reports two stdlib advisories — watch for NEW ones

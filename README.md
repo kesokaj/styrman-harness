@@ -204,7 +204,7 @@ Every customization is a file in a directory. Drop it in, run `sh-agent install`
 | `skills/<name>/SKILL.md` | a skill (Agent Skills standard); the model loads it when the description matches, and `/name` types it | `~/.claude/skills/<name>/` | `~/.gemini/config/skills/<name>/` |
 | `agents/<name>.md` | a subagent in Claude Code format (`name`, `description`, `tools`, `model`, …) | `~/.claude/agents/<name>.md` | `~/.gemini/config/agents/<name>/agent.md`, tools and model translated |
 | `commands/<name>.md` (or `workflows/`) | a plain markdown prompt invoked as `/name`; frontmatter `description` optional | `~/.claude/commands/<name>.md` | `~/.gemini/config/workflows/<name>.md` |
-| `rules/<name>.md` | an always-on or path-scoped rule (Claude: `paths:` frontmatter; Antigravity: `trigger: glob` + `globs:`; both ignore the other's keys) | `~/.claude/rules/<name>.md` | `~/.gemini/config/rules/<name>.md` |
+| `rules/<name>.md` | an always-on or path-scoped rule (Claude: `paths:` frontmatter; Antigravity: `trigger: glob` + `globs:`; both ignore the other's keys) — on Antigravity it shares the same 24,000-byte global rules block as the context, so `rules/*.md` counts toward the budget `TestRenderedContextFitsAntigravityBlock` (`internal/harness/size_test.go`) pins under 22,000 bytes (REQUIREMENTS § Known limits) | `~/.claude/rules/<name>.md` | `~/.gemini/config/rules/<name>.md` |
 | `context/<name>.md` | more global context, appended after `AGENTS.md` | part of `~/.claude/AGENTS.md` | part of `~/.gemini/config/rules/AGENTS.md` |
 
 A skill is the portable way to write a command: both vendors run any skill as `/name` without translation, and the model can load it itself when the description matches — every harness skill works both ways, so the agent can run `/handoff` or `/retro` for you. Add `disable-model-invocation: true` only to a skill that must never fire on its own (none of the harness's own do). Prefer a skill over `commands/` for anything new.
@@ -238,6 +238,9 @@ cmd/sh-agent  the binary; internal/harness is its logic and tests
 
 ```bash
 gofmt -l cmd internal && go vet ./... && go test -race ./...   # gofmt takes the source dirs: unlike the Go tool it walks .agents/scratch
+# TestRenderedContextFitsAntigravityBlock (internal/harness/size_test.go) is part of `go test ./...` above and is
+# the check a change to context/*.md or rules/*.md must pass: it renders the real checkout and pins the result
+# under 22,000 bytes, inside Antigravity's 24,000-byte global rules block (REQUIREMENTS § Known limits, ADR-035)
 # govulncheck: clean on go1.25.8+; an older Go reports two stdlib advisories, fixed by a newer Go on the machine, never a pin here (ADR-029)
 go run ./cmd/sh-agent install --home .agents/scratch/home   # never test against your real $HOME; scratch lives in the repo, never /tmp
 ```

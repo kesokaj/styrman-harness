@@ -6,6 +6,8 @@ Last reviewed: 2026-09-21
 
 ## Now
 
+- `.agents/docs/plans/2026-09-21-project-agents-md-native.md` — projects use `AGENTS.md` alone; v1.6.0; cold read pending
+
 ## Next
 
 ## Later / Ideas

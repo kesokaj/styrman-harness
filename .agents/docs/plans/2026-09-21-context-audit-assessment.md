@@ -93,7 +93,9 @@ What a rule file would and would not do here:
 - **Path scoping is Claude Code's deterministic lever, with a caveat.** A `paths:` rule loads when a matching file is READ (DOCUMENTED above), never when the operator says a word. "Ship means /preflight" and "ask for the GCP defaults" must stay always-on or in a skill description. On Antigravity, Model Decision mode is description-triggered, but README exposes only glob for Antigravity and CLI 1.2.7's support for it is UNVERIFIED.
 - **Rules do not change the growth engine.** The retro target table and the `bugs` graduation rule route every new rule into the context; a `rules/` row and a delete/merge action in that table are what change the next retro's output, and they belong in the same commit as the first rule file.
 
-Recommendation: later. After the pruning review shows whether any MOVE-TO-SCOPED residue exists, after the two-file probe shows a split helps, with a smoke check per rule file on both CLIs before any content depends on it, and with the retro table changed in the same commit.
+Recommendation: later. After the pruning review shows whether any MOVE-TO-SCOPED residue exists, with a smoke check per rule file on both CLIs before any content depends on it, and with the retro table changed in the same commit.
+
+**Probe result (2026-09-21, after the refute pass, operator-approved):** a 45-byte second rules file beside `AGENTS.md` in the real home never appeared in the CLI's prompt (no `<RULE[...]>` block, canary UNKNOWN, string absent from the conversation store), and the AGENTS.md cut grew from `<truncated 3114 bytes>` to `<truncated 3456 bytes>`. MEASURED. The cap is on the whole rules block, not per file (INFERRED from the two numbers): a split buys nothing, pruning is the only fix, and `rules/` on Antigravity is limited to whatever room the context leaves. Recorded in BUG-085.
 
 ## Recommendation
 

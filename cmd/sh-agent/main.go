@@ -5,7 +5,8 @@
 //	sh-agent install [--dry-run]     deploy the repo into ~/.claude and ~/.gemini/config
 //	sh-agent status                  show drift between the repo and what is installed
 //	sh-agent diff                    unified diff of every drifted file
-//	sh-agent update [--check]        checkout: git pull and reinstall; release binary: download and verify the newest release
+//	sh-agent update [--check|--dry-run]  checkout: git pull and reinstall; release binary: download and verify the newest release
+//	sh-agent update --from-zip FILE  zip place: install the harness in a repository zip with the running binary
 //	sh-agent uninstall [--dry-run]   remove exactly what install wrote
 //	sh-agent list                    print the skill and agent inventory
 //	sh-agent render                  print the assembled context file
@@ -22,6 +23,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -38,7 +40,8 @@ Commands:
   install [--vendor V] [--dry-run]  deploy context, skills, and agents into ~/.claude and/or ~/.gemini/config (alias: sync)
   status                  show what is installed and whether it drifted from the repo (exit 1 on drift)
   diff                    unified diff of every drifted file
-  update [--check]        checkout: git fetch, pull --ff-only and reinstall when behind; release binary: download the newest release, verify its signed checksums, replace the binary and reinstall (--check only reports, exit 2 when behind)
+  update [--check|--dry-run]  checkout: git fetch, pull --ff-only and reinstall when behind; release binary: download the newest release, verify its signed checksums, replace the binary and reinstall (--check only reports, exit 2 when behind; --dry-run reports what update would do and changes nothing)
+  update --from-zip FILE [--dry-run]  zip place: unpack a repository zip you downloaded, install its harness and the running binary (nothing in the zip replaces the binary), delete the unpacked copy
   uninstall [--dry-run]   remove exactly the files install wrote, nothing else
   list                    print the skill and agent inventory
   render                  print the assembled context file
@@ -88,6 +91,7 @@ func run(args []string, out io.Writer) error {
 	check := fs.Bool("check", false, "update: only report whether the repo is behind")
 	force := fs.Bool("force", false, "adopt: replace an existing skill")
 	feedbackFlag := fs.String("feedback-repo", "", "report: feedback checkout (never cloned into)")
+	fromZip := fs.String("from-zip", "", "update: install the harness in this repository zip with the running binary")
 	if err := fs.Parse(reorder(rest)); err != nil {
 		return err
 	}
@@ -106,6 +110,29 @@ func run(args []string, out io.Writer) error {
 	// directory on --dry-run (BUG-080).
 	if abs, err := filepath.Abs(home); err == nil {
 		home = abs
+	}
+
+	// A zip place (R8, ADR-038): the operator named the archive, so no tree
+	// is resolved — not the working directory, not the manifest, and not a
+	// release binary's embedded files. Every refusal comes before any command
+	// runs: `uninstall --from-zip` must not uninstall, `report --from-zip`
+	// must not report, and an empty value is refused rather than read as no
+	// flag — that would fall through to a normal update, which on a release
+	// binary downloads and replaces the binary.
+	zipSet := false
+	fs.Visit(func(f *flag.Flag) { zipSet = zipSet || f.Name == "from-zip" })
+	if zipSet {
+		switch {
+		case cmd != "update":
+			return fmt.Errorf("--from-zip belongs to update: sh-agent update --from-zip <file>")
+		case *fromZip == "" || strings.HasPrefix(*fromZip, "-"):
+			// A value that looks like a flag was a flag: `--from-zip --dry-run`
+			// must not read --dry-run as the file and run a real update.
+			return errors.New("--from-zip needs a file: sh-agent update --from-zip <file>")
+		case *check || *repoFlag != "":
+			return errors.New("--from-zip installs the named zip; --check/--repo do not apply to it")
+		}
+		return updateFromZip(*fromZip, home, *vendorFlag, *dryRun, out)
 	}
 
 	switch cmd {
@@ -189,6 +216,13 @@ func run(args []string, out io.Writer) error {
 		if err != nil {
 			return err
 		}
+		// A zip install is not compared: the zip is not kept, and the source
+		// this binary resolves (its embedded files, a checkout) is not what was
+		// installed (ADR-038).
+		if st, found, err := harness.LoadState(home); err == nil && found && strings.HasPrefix(st.Repo, harness.ZipPrefix) {
+			fmt.Fprintln(out, "diff       not compared — this home was installed from a zip that is not kept; run update --from-zip <file> again to change it")
+			return nil
+		}
 		files, err := harness.Plan(src, nil, vendor)
 		if err != nil {
 			return err
@@ -196,6 +230,13 @@ func run(args []string, out io.Writer) error {
 		return harness.Diff(home, files, out)
 
 	case "update":
+		// A dry run of update is its --check: it reports, and changes nothing —
+		// no download, no binary replaced, no kept clone shed, no pull. It
+		// says what a real update would do instead.
+		dry := *dryRun
+		if dry {
+			*check = true
+		}
 		if repo == "" {
 			// A release binary has no source to build from: the newest
 			// release is downloaded and verified instead (Phase 4).
@@ -217,6 +258,10 @@ func run(args []string, out io.Writer) error {
 			// known, and only there can its positive case be tested.
 			err = harness.UpdateFromRelease(home, src.Version, *check, args, out)
 			if errors.Is(err, harness.ErrNewerRelease) {
+				if dry {
+					fmt.Fprintln(out, "[dry-run] update would download that release, verify its signed checksums, replace the binary and reinstall")
+					return nil
+				}
 				return exitCode(2)
 			}
 			if err != nil {
@@ -227,7 +272,13 @@ func run(args []string, out io.Writer) error {
 		if err := knownCheckout(*repoFlag, home, repo); err != nil {
 			return err
 		}
-		return update(repo, home, *check, *homeFlag, *vendorFlag, out)
+		err := update(repo, home, *check, *homeFlag, *vendorFlag, out)
+		var code exitCode
+		if dry && errors.As(err, &code) && code == 2 {
+			fmt.Fprintln(out, "[dry-run] update would pull those commits, rebuild and reinstall")
+			return nil
+		}
+		return err
 
 	case "list":
 		inv, err := harness.LoadInventory(src)
@@ -345,11 +396,23 @@ func resolveVendor(flagVal, home string) (string, error) {
 
 func status(src harness.Source, home, vendorFlag string, out io.Writer) error {
 	repo := src.Dir
+	// Read first: the source line says when this home came from a zip, which
+	// the embedded files or a checkout beside it do not describe (ADR-038).
+	st, found, err := harness.LoadState(home)
+	if err != nil {
+		return err
+	}
+	zipSum, fromZip := strings.CutPrefix(st.Repo, harness.ZipPrefix+"sha256:")
+	fromZip = found && fromZip
+	zipNote := ""
+	if fromZip {
+		zipNote = "; this home was installed from a zip — run update --from-zip <file> again to change it"
+	}
 	var info harness.RepoInfo
 	switch {
 	case repo == "":
 		// The embedded files: no git state to show, and none is asked (D17).
-		fmt.Fprintf(out, "source     embedded %s (release binary; update downloads the newest release)\n", src.Version)
+		fmt.Fprintf(out, "source     embedded %s (release binary; update downloads the newest release%s)\n", src.Version, zipNote)
 	default:
 		info = harness.Inspect(repo)
 		dirty := "clean"
@@ -361,16 +424,12 @@ func status(src harness.Source, home, vendorFlag string, out io.Writer) error {
 			dirty = "uncommitted changes"
 		}
 		if info.Commit == "" {
-			fmt.Fprintf(out, "repo       %s (plain copy, not its own git checkout; update is refused)\n", repo)
+			fmt.Fprintf(out, "repo       %s (plain copy, not its own git checkout; update is refused%s)\n", repo, zipNote)
 		} else {
-			fmt.Fprintf(out, "repo       %s (%s @ %s, %s)\n", repo, info.Branch, info.Commit, dirty)
+			fmt.Fprintf(out, "repo       %s (%s @ %s, %s%s)\n", repo, info.Branch, info.Commit, dirty, zipNote)
 		}
 	}
 
-	st, found, err := harness.LoadState(home)
-	if err != nil {
-		return err
-	}
 	if !found {
 		fmt.Fprintln(out, "installed  nothing — run `sh-agent install`")
 		return exitCode(1)
@@ -382,6 +441,8 @@ func status(src harness.Source, home, vendorFlag string, out io.Writer) error {
 	from := "commit " + st.Commit
 	if release, ok := strings.CutPrefix(st.Repo, harness.EmbeddedPrefix); ok {
 		from = "release " + release
+	} else if fromZip {
+		from = "zip sha256:" + short(zipSum)
 	}
 	fmt.Fprintf(out, "installed  %s from %s (vendor: %s, %d files, manifest ~/.config/sh-agent/state.json)\n", st.InstalledAt, from, vDisplay, len(st.Files))
 	// The line describes the installed file, not this process: status may
@@ -441,6 +502,24 @@ func status(src harness.Source, home, vendorFlag string, out io.Writer) error {
 		fmt.Fprintf(out, "agy        ~/%s  (rules/AGENTS.md, skills/, agents/, workflows/, rules/)\n", harness.AgyRoot)
 	}
 
+	if fromZip {
+		// The zip is not kept, so its content cannot be compared; say so and
+		// check what can be checked — every file the install wrote is there.
+		var missing []string
+		for _, rel := range st.Files {
+			if _, err := os.Lstat(filepath.Join(home, rel)); err != nil {
+				missing = append(missing, rel)
+			}
+		}
+		fmt.Fprintf(out, "drift      not compared — installed from a zip that is not kept; %d of %d manifest files present\n", len(st.Files)-len(missing), len(st.Files))
+		for _, rel := range missing {
+			fmt.Fprintf(out, "  missing  ~/%s\n", rel)
+		}
+		if len(missing) > 0 {
+			return exitCode(1)
+		}
+		return nil
+	}
 	files, err := harness.Plan(src, nil, vendor)
 	if err != nil {
 		return err
@@ -573,6 +652,9 @@ func knownCheckout(repoFlag, home, repo string) error {
 	if release, ok := strings.CutPrefix(st.Repo, harness.EmbeddedPrefix); ok {
 		return fmt.Errorf("this home was installed from the release binary %s, not from a checkout; pass --repo %s to build and install from it", release, repo)
 	}
+	if sum, ok := strings.CutPrefix(st.Repo, harness.ZipPrefix+"sha256:"); ok {
+		return fmt.Errorf("this home was installed from a zip (sha256 %s), not from a checkout; pass --repo %s to build and install from it", short(sum), repo)
+	}
 	if samePath(st.Repo, repo) {
 		return nil
 	}
@@ -624,6 +706,7 @@ func reorder(args []string) []string {
 		"-home": true, "--home": true,
 		"-vendor": true, "--vendor": true,
 		"-feedback-repo": true, "--feedback-repo": true,
+		"-from-zip": true, "--from-zip": true,
 	}
 	var flags, positional []string
 	for i := 0; i < len(args); i++ {
@@ -958,4 +1041,96 @@ func versionFromInfo(info *debug.BuildInfo) string {
 		rev = rev[:12]
 	}
 	return rev + modified
+}
+
+// updateFromZip installs the harness in the repository zip the operator
+// downloaded, with the running binary: unpack, install, delete the unpacked
+// copy (R8, R9's zip place; ADR-038). Nothing is fetched, and nothing in the
+// zip replaces the binary: the running one is installed as in every install.
+func updateFromZip(zipPath, home, vendorFlag string, dryRun bool, out io.Writer) (err error) {
+	vendor, err := resolveVendor(vendorFlag, home)
+	if err != nil {
+		return err
+	}
+	// A dry run writes nothing, so it never creates ~/.config/sh-agent: when
+	// that directory is absent it unpacks under the system temp directory
+	// instead (plan D10).
+	parent := filepath.Join(home, ".config", "sh-agent")
+	if dryRun {
+		if _, err := os.Stat(parent); err != nil {
+			parent = ""
+		}
+	} else {
+		// Created here, and removed again if anything below fails — the unpack
+		// or the install that can still refuse the zip's content — so a
+		// refused zip leaves the home as it was (BUG-093).
+		// `=`, not `:=`: the deferred check must see the function's result, not
+		// a block-scoped copy of it.
+		var created []string
+		if created, err = harness.MkdirAllTracked(parent); err != nil {
+			return err
+		}
+		defer func() {
+			if err != nil {
+				harness.RemoveCreated(created)
+			}
+		}()
+	}
+	dir, sum, err := harness.UnpackZip(zipPath, parent)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if rerr := os.RemoveAll(dir); rerr != nil {
+			fmt.Fprintf(out, "warning: could not remove the unpacked copy %s: %v\n", dir, rerr)
+		}
+	}()
+	prefix := ""
+	if dryRun {
+		prefix = "[dry-run] "
+	}
+	fmt.Fprintf(out, "%szip %s (sha256 %s, UNVERIFIED — a zip carries no signature; trust rests on your own download): installing its harness and the running binary %s; nothing is downloaded and nothing in the zip replaces the binary\n", prefix, zipPath, sum, buildVersion())
+	src := harness.Source{FS: os.DirFS(dir), Dir: dir, Origin: harness.ZipPrefix + "sha256:" + sum}
+	if err := installFiles(src, home, vendor, dryRun, out); err != nil {
+		return err
+	}
+	// Only after a successful install: a refused or dry run changes nothing,
+	// not even a stale leftover from an interrupted run.
+	if !dryRun {
+		sweepStaleZipDirs(parent, time.Hour, out)
+	}
+	return nil
+}
+
+// sweepStaleZipDirs removes zip-* directories under parent older than age:
+// what an interrupted --from-zip left behind. A younger one may belong to a
+// run in progress and is kept; a symlink is never followed or removed. Names
+// are matched, never globbed, so a home path holding glob metacharacters
+// cannot reach another directory.
+func sweepStaleZipDirs(parent string, age time.Duration, out io.Writer) {
+	entries, err := os.ReadDir(parent)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if !strings.HasPrefix(e.Name(), "zip-") || e.Type()&fs.ModeSymlink != 0 || !e.IsDir() {
+			continue
+		}
+		d := filepath.Join(parent, e.Name())
+		info, err := os.Lstat(d)
+		if err != nil || time.Since(info.ModTime()) <= age {
+			continue
+		}
+		if err := os.RemoveAll(d); err != nil {
+			fmt.Fprintf(out, "warning: could not remove the leftover %s: %v\n", d, err)
+		}
+	}
+}
+
+// short is the first 12 hex digits of a sha256, enough to tell zips apart.
+func short(sum string) string {
+	if len(sum) > 12 {
+		return sum[:12]
+	}
+	return sum
 }

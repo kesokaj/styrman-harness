@@ -52,7 +52,7 @@ go run ./cmd/sh-agent install        # installs the running binary as is; never 
 sh-agent status                      # first line names a plain copy with no commit; must end with "drift none"
 ```
 
-`sh-agent update` refuses a plain copy, by design, with a message naming `install` still deploying it as it is and the two alternatives — a checkout, or a release binary. To move it forward, unpack a newer copy and run `install` from it again; to roll back, install the earlier one. This path is no longer one of the two ways in (R8 names a checkout and a release binary); it stays because the code path does and because it is the fallback when neither of those can reach GitHub.
+`sh-agent update` refuses a plain copy, by design, with a message naming `install` still deploying it as it is and the alternatives. To move it forward, unpack a newer copy and run `install` from it again; to roll back, install the earlier one. This path is not one of the ways in — `.agents/docs/specs/sh-agent/delivery.md` § The model names the three (a checkout, a release binary, a zip place — `README.md` § Install from a zip (no SSH, no gh)) and this plain copy as their fallback; it stays because the code path does and because it is the fallback when none of the three can reach GitHub.
 
 ## Report back
 

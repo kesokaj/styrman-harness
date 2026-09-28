@@ -71,9 +71,20 @@ func ResolveSource(explicit, home, version string) (Source, error) {
 			}
 		}
 	}
-	// An embedded install records a release, not a path (EmbeddedPrefix).
-	if st, found, err := LoadState(home); err == nil && found && !strings.HasPrefix(st.Repo, EmbeddedPrefix) {
-		candidates = append(candidates, st.Repo)
+	// An embedded install records a release and a zip install an archive's
+	// hash, never a path (EmbeddedPrefix, ZipPrefix): neither is a candidate.
+	zipNote := ""
+	if st, found, err := LoadState(home); err == nil && found {
+		switch {
+		case strings.HasPrefix(st.Repo, ZipPrefix):
+			sum := strings.TrimPrefix(st.Repo, ZipPrefix+"sha256:")
+			if len(sum) > 12 {
+				sum = sum[:12]
+			}
+			zipNote = fmt.Sprintf("this home was installed from a zip (sha256 %s); a development build needs a checkout or --repo — or run `sh-agent update --from-zip <file>` again. ", sum)
+		case !strings.HasPrefix(st.Repo, EmbeddedPrefix):
+			candidates = append(candidates, st.Repo)
+		}
 	}
 	for _, c := range candidates {
 		if c != "" && IsRepo(c) {
@@ -84,7 +95,7 @@ func ResolveSource(explicit, home, version string) (Source, error) {
 	if version != "" && version != "unknown" {
 		built = fmt.Sprintf("this build is %s, a development build rather than a vX.Y.Z release, so it has no harness built in", version)
 	}
-	return Source{}, fmt.Errorf("harness repo not found and %s: run from inside the checkout, pass --repo, set SH_AGENT_REPO, or install from a release binary (README § Install without cloning)", built)
+	return Source{}, fmt.Errorf("%sharness repo not found and %s: run from inside the checkout, pass --repo, set SH_AGENT_REPO, or install from a release binary (README § Install without cloning)", zipNote, built)
 }
 
 func absSource(dir string) (Source, error) {

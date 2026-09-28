@@ -284,7 +284,7 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
 
 **Consequences:** A release cut by the procedure ADR-033 described, without D26's version marker, is correctly uninstallable by this code — `/preflight` Step 6 and `.agents/docs/deploy/remote.md` § Releases write that line, and a release rehearsal is part of Phase 5. Downgrade protection means a bad release is followed by the next PATCH, never by re-pointing a tag.
 
-## ADR-034: A release binary installs only what it carries     (2026-09-18) — Accepted
+## ADR-034: A release binary installs only what it carries     (2026-09-18) — Accepted — superseded in part by ADR-038 (a zip named with `--from-zip`)
 
 **Context:** `ResolveSource`'s order (plan D4: explicit `--repo`, `$SH_AGENT_REPO`, the working directory and its parents, the path the last install recorded, then the embedded files) was written for a development build, which carries nothing and must find a tree. Applied to a release binary it produced a silent failure on the operator's second machine: `argolis-devbox` still had an old unpacked bundle at `/opt/devbox/deploy/harness` recorded in its manifest, so the v1.2.0 binary installed THAT tree's months-old content and reported `drift none` — measured against the old tree. The machine's Claude Code then quoted the `rm -r` rule instead of the fail-closed rule shipped in v1.2.0, which is how the staleness was noticed at all. The machine was also stuck: `install` kept choosing the copy and `update` refuses a plain copy, with no flag to say "use what you carry".
 
@@ -323,3 +323,31 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
 **Decision:** `REQUIREMENTS.md` R2 gains the sentence "Native reading also loads an `AGENTS.md` in any directory above the project and, on read, in any subdirectory; a template `AGENTS.md` never sits beside source." (same commit as this ADR). `/init-project` already states this scope in its summary (commit 2facb44: "native AGENTS.md reading also loads an `AGENTS.md` in any directory above the project and, when Claude reads a file there, in any subdirectory").
 
 **Consequences:** `skills/init-project/assets/AGENTS.md` stays a template under `assets/`, never beside source. A project vendoring a subtree with its own `AGENTS.md` expects it to load as live instruction. Not measured on this box (docs-based). REQUIREMENTS.md is not part of what a release tag delivers; checkout places follow `main`.
+
+## ADR-038: A third way in — the zip place (`sh-agent update --from-zip`)     (2026-09-28) — Accepted
+
+**Context:** A machine that can neither hold the operator's SSH key nor run `gh`, such as a corporate workstation, could not reach the harness. A checkout needs git over SSH, and a release binary's `update` downloads through `gh`. The operator can download the repository zip in a browser. They asked for "the --from-zip option so i can run manually" and approved the exact REQUIREMENTS text on 2026-09-28 ("approve as written").
+
+**Decision:**
+- **The command.** `sh-agent update --from-zip <file>` unpacks the zip under `~/.config/sh-agent/zip-*`, installs that tree with the running binary, and deletes the directory. A dry run with no config directory unpacks under the system temp directory. The running binary is installed as every install installs it; nothing in the zip replaces it, nothing is rebuilt, and nothing is fetched. The first output line says `UNVERIFIED`.
+- **What is unpacked.** Every entry's name is checked: an absolute name, a backslash or a `..` element refuses the whole zip. Only the five trees the binary embeds (`context`, `skills`, `agents`, `commands`, `rules`) are written; their entries must be regular files within 16 MiB each and 128 MiB in total, at most 5,000 entries. GitHub's single top folder is stripped. A tracked symlink outside the five trees, such as this repository's `.agents/skills`, is skipped, never written.
+- **The manifest** records `zip:sha256:<hex>`, never the deleted path. `status` then reports presence, not content: the zip is not kept, so there is nothing to diff against.
+- **REQUIREMENTS.**
+  - R8's first sentence becomes the three-way statement.
+  - R9 gains the zip place as a sub-bullet under Update. It is a new kind of place inside the Update procedure, not a fifth procedure, so R9's "Four procedures" and ADR-031 stand (the operator: "Go with your recommendations").
+  - The README map, `specs/sh-agent/delivery.md` § The model, and `AGENTS.md` rule 1 change in the same commit (rule 3).
+
+**Supersedes:** ADR-034 in part. A release binary installs a tree on disk only when the operator names a zip with `--from-zip`; a recorded or discovered path is still refused. The "two ways, and no third" statement in `delivery.md` is amended. The existing plain-copy fallback (an unpacked tree installed by a binary built from it) is unchanged.
+
+**Rejected:**
+- reading the zip in place as an `fs.FS`, because the approved text says it unpacks into a temporary directory;
+- routing through `Reinstall`, which rebuilds;
+- per-file hashes in the manifest, a schema change that this repository's version rule treats as MAJOR;
+- verifying a zip signature in this change: deferred to the operator, since it needs a signed release zip and so a change to R9's Release procedure (see Consequences).
+
+**Consequences:**
+- A zip place never auto-updates: the operator repeats the download.
+- The zip is unsigned. The first output line says `UNVERIFIED`, which discloses the risk but does not control it. The control would be a signed release zip: `/preflight` publishes a `git archive` zip under the signed `SHA256SUMS`, and `--from-zip` verifies it. That changes R9's Release procedure and awaits the operator's decision (security review 2026-09-28, medium).
+- If a zip's harness needs a newer binary, the operator downloads that binary by hand too; the install output says nothing in the zip replaces the binary.
+- After a zip install, a development build with no checkout names the zip install in its not-found error, while a release binary works from its embedded files.
+- The release carrying this is v1.8.0, a MINOR. Plan: `.agents/docs/plans/2026-09-28-update-from-zip.md`.

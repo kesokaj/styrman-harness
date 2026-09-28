@@ -254,9 +254,13 @@ func checkoutShaped(t *testing.T) string {
 
 // plainCopy copies this checkout's deployable trees into a directory with
 // no .git: what an unpacked bundle is (R8).
+// checkoutRoot is this checkout, resolved once at package load: tests that
+// move the working directory (isolate) still find it.
+var checkoutRoot, checkoutRootErr = filepath.Abs("../..")
+
 func plainCopy(t *testing.T) string {
 	t.Helper()
-	src, err := filepath.Abs("../..")
+	src, err := checkoutRoot, checkoutRootErr
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -116,7 +116,11 @@ func Install(src Source, home string, files []File, vendor string, dryRun bool, 
 	// command (D17); a tree on disk records its path and commit.
 	repo, commit := EmbeddedPrefix+src.Version, ""
 	var info RepoInfo
-	if src.Dir != "" {
+	if src.Origin != "" {
+		// A zip's tree is deleted once this returns: the manifest names the
+		// archive, never the unpack directory (ZipPrefix, ADR-038).
+		repo = src.Origin
+	} else if src.Dir != "" {
 		repo = src.Dir
 		info = Inspect(repo) // empty for a plain copy: no commit of another repo is recorded
 		commit = info.Commit

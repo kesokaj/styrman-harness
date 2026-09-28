@@ -213,6 +213,7 @@ func secretShaped(name string) bool {
 		"*.pem", "*.key", "*.p12", "*.pfx", "*.keystore", "*.jks",
 		"*.tfvars", "*.tfstate", "*.tfstate.backup",
 		"*credentials*.json", "*-key.json", "id_rsa", "id_ed25519", "id_ecdsa", "id_dsa",
+		"*oauth-token*", // the Antigravity CLI keeps its login in antigravity-oauth-token
 	} {
 		if ok, _ := filepath.Match(pattern, name); ok {
 			return true

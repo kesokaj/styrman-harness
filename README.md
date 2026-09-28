@@ -23,6 +23,7 @@ flowchart LR
     subgraph placeLane["Each place"]
         checkoutPlace["Checkout<br/>the normal path"]
         binaryPlace["Release binary<br/>harness built in, no repository"]
+        zipPlace["Zip place<br/>repo zip downloaded by hand, no tree kept"]
         installer["sh-agent install / sh-agent update"]
         homeFiles["~/.claude and ~/.gemini/config<br/>installed files, no repository"]
         sessions["Claude Code and Antigravity sessions<br/>feedback-log skill logs, /retro queues"]
@@ -36,8 +37,10 @@ flowchart LR
     preflight -- "signed binaries" --> releases
     harnessRepo -- "clone once, update pulls" --> checkoutPlace
     releases -- "update downloads and verifies" --> binaryPlace
+    harnessRepo -. "zip, downloaded by hand; update --from-zip repeats it" .-> zipPlace
     checkoutPlace --> installer
     binaryPlace --> installer
+    zipPlace -.-> installer
     installer -- "writes files" --> homeFiles
     homeFiles -- "read at session start" --> sessions
     sessions -- "logs" --> configDir
@@ -47,16 +50,16 @@ flowchart LR
     configDir -. "same machine only" .-> retroHarness
     readReports -.-> edit
     retroHarness --> edit
-    linkStyle 0,1,5,6 stroke:#0B7A74,stroke-width:2px
+    linkStyle 0,1,5,6,7 stroke:#0B7A74,stroke-width:2px
     linkStyle 2,3,4 stroke:#8A3A78,stroke-width:2px
-    linkStyle 7,8,9,10 stroke:#3B4FB8,stroke-width:2px
-    linkStyle 11,12,13,14,15,16,17 stroke:#A8660F,stroke-width:2px
+    linkStyle 8,9,10,11,12 stroke:#3B4FB8,stroke-width:2px
+    linkStyle 13,14,15,16,17,18,19 stroke:#A8660F,stroke-width:2px
 ```
 
 Teal is **update**, indigo **install**, amber **report back**, plum **release**. A dashed line is a gap: done by hand, or limited to one machine.
 
-- **Install:** clone `styrman-harness` with your own SSH key or `gh` login and run `go run ./cmd/sh-agent install`, or download a release's `sh-agent` binary with that credential and run `sh-agent install`, which installs the harness built into it (§ Install without cloning). Either way installed files go into `~/.claude` and `~/.gemini/config`, no repository is created, and the next session reads them.
-- **Update:** edit and push `main` in your checkout. At each place, when you decide, `sh-agent update` moves it forward — what that means for a checkout place and for a binary-only place is `.agents/docs/specs/sh-agent/delivery.md` § The model. Nothing pushes to a machine.
+- **Install:** clone `styrman-harness` with your own SSH key or `gh` login and run `go run ./cmd/sh-agent install`, or download a release's `sh-agent` binary with that credential and run `sh-agent install`, which installs the harness built into it (§ Install without cloning). Either way installed files go into `~/.claude` and `~/.gemini/config`, no repository is created, and the next session reads them. A machine that can reach neither downloads the repository zip by hand instead (§ Install from a zip (no SSH, no gh)).
+- **Update:** edit and push `main` in your checkout. At each place, when you decide, `sh-agent update` moves it forward — what that means for a checkout place, a binary-only place and a zip place is `.agents/docs/specs/sh-agent/delivery.md` § The model. Nothing pushes to a machine.
 - **Report back:** sessions log corrections and retros under `~/.config/sh-agent/`. Before each report, read what was added since the last one. `sh-agent report` sends a redacted copy and a metrics record to `styrman-harness-feedback` through a throwaway clone holding only this machine's own reports, removed after the push — no machine keeps a copy of any other's. Back at the harness, `/retro --harness` applies the proposals queued on that machine; other places' reports are read by hand.
 - **Release:** `/preflight vX.Y.Z` in your own turn gates, pushes an SSH-signed tag on `main`, and publishes that tag's binaries with checksums signed by the same key; what each kind of place does with it is `.agents/docs/specs/sh-agent/delivery.md` § The model.
 
@@ -153,6 +156,17 @@ On macOS, a binary downloaded **in a browser** is quarantined and will not run u
 
 To move such a place forward, run `sh-agent update` there: it asks GitHub for the newest release, refuses anything that is not a canonical `vX.Y.Z` tag (no leading zeros) newer than what is installed — an older or equal release prints "the newest release X is not newer than this binary Y; nothing installed" — verifies `SHA256SUMS.sig` against the key compiled into the binary and each binary against its checksum, and only then replaces itself and reinstalls. It needs `gh` on `PATH` (`gh auth login` once) and `ssh-keygen`, which every machine with OpenSSH has. `sh-agent update --check` only reports, exiting 2 when a newer release exists. `sh-agent adopt` needs a checkout and says so.
 
+## Install from a zip (no SSH, no gh)
+
+A machine that can neither hold your SSH key nor run `gh` — a corporate workstation, say — still reaches the harness: download the repository zip in a browser (GitHub's "Code → Download ZIP" on `main`, or a release's "Source code (zip)"), download a release `sh-agent` binary by hand from the Releases page (§ Install without cloning covers verifying it, since a zip carries no binary), and run:
+
+```bash
+sh-agent update --from-zip ~/Downloads/styrman-harness-main.zip
+sh-agent status      # "installed … from zip sha256:<hex>"; reports presence, not content — the zip is not kept
+```
+
+`--from-zip` unpacks the zip into a temporary directory, installs that tree and the running binary, and deletes the directory. The binary is copied into `~/.local/bin` the way every install copies it, but nothing in the zip replaces it and nothing is fetched. `--dry-run` does the same unpack-and-plan without writing a file, a manifest, or a binary, and still removes the temporary directory. The zip is unsigned, and the command says so with `UNVERIFIED` in its first line: nothing verifies it, so trust rests entirely on your own download, the same as any other file you'd trust from this private repository. `update --dry-run` on the other two kinds of place reports what an update would do and changes nothing. Moving a zip place forward means repeating the download and `--from-zip`; a zip whose harness needs a newer binary means downloading that binary by hand too.
+
 ## Daily commands
 
 | Command | What it does |
@@ -160,7 +174,7 @@ To move such a place forward, run `sh-agent update` there: it asks GitHub for th
 | `sh-agent status` | Shows what is installed, from which commit, the running binary's build (with a warning when it is older than the checkout), a note when `~/.claude/settings.json` is missing or sets `attribution.commit` to anything but `""` (install writes the key when it is absent), and every file that drifted. Exit 1 on drift. |
 | `sh-agent diff` | Unified diff of every drifted file (installed vs repo); renders its temporary copies under `~/.config/sh-agent/`, removed after, never the system temp dir. |
 | `sh-agent install` (or `sync`) | From its own git checkout, rebuilds the binary with `go build`, then deploys the repo; from a release binary deploys the harness built into it and copies the running binary (nothing to build from); from a plain copy (no `.git`) deploys the running binary as is (`--vendor antigravity\|claude\|all`). Idempotent; removes files a previous install wrote that the repo no longer has. `--dry-run` prints what would change without changing anything. Every run prints one line per file it changes — `add` (not there before), `update` (other bytes, or a previous file it could not read), `mode` (permission corrected, bytes unchanged, and also the runtime directory `~/.config/sh-agent`, tightened to 0700 by every install when it is yours and not a symlink (either case gets a `note:` instead)), `remove` (no longer in the source) and `keep` (a managed path holds a file sh-agent did not write and it is left alone) — and counts the unchanged; `--dry-run` prints the same lines and writes nothing. |
-| `sh-agent update` | At a checkout: `git fetch`; refuses a checkout with uncommitted changes, because it deploys the working tree rather than the fetched commit (BUG-046); if behind, `pull --ff-only`, rebuild, and reinstall. At a release-binary install: downloads the newest release, refuses a tag that is not `vX.Y.Z` or is not newer, verifies the signed `SHA256SUMS` and the binary's own checksum, replaces `~/.local/bin/sh-agent` and reinstalls. Either way `--check` only reports (exit 2 when behind or when a newer release exists). It also removes the full feedback clone older versions kept at `~/.config/sh-agent/feedback`, when that clone is clean and fully pushed. |
+| `sh-agent update` | At a checkout: `git fetch`; refuses a checkout with uncommitted changes, because it deploys the working tree rather than the fetched commit (BUG-046); if behind, `pull --ff-only`, rebuild, and reinstall. At a release-binary install: downloads the newest release, refuses a tag that is not `vX.Y.Z` or is not newer, verifies the signed `SHA256SUMS` and the binary's own checksum, replaces `~/.local/bin/sh-agent` and reinstalls. Either way `--check` only reports (exit 2 when behind or when a newer release exists). It also removes the full feedback clone older versions kept at `~/.config/sh-agent/feedback`, when that clone is clean and fully pushed. A zip place runs `update --from-zip <file>` instead (§ Install from a zip); `update --dry-run` reports what an update would do and changes nothing. |
 | `sh-agent uninstall` | Removes exactly the files it installed (from its manifest) and nothing else. `--dry-run` prints what would be removed without removing anything. |
 | `sh-agent list` | Prints the skill and agent inventory. |
 | `sh-agent render` | Prints the assembled context file. |
@@ -168,7 +182,7 @@ To move such a place forward, run `sh-agent update` there: it asks GitHub for th
 | `sh-agent report` | Sends a redacted copy of `~/.config/sh-agent/` (feedback log, retro index, proposals, manifest) and a `report.json` metrics record to the private feedback repository, one directory per machine per run. It clones a throwaway holding only this machine's reports, pushes, and removes it — nothing of that repository stays on the machine. `--dry-run` prints every file and redaction and writes nothing; `--feedback-repo DIR` names a checkout to use instead, which is written into and never removed. On a release-binary install, `--repo` is ignored with a note (`report: --repo is not used here; this release binary reports the harness built into it`) — `report` always reports the harness built into the binary there. See `.agents/docs/deploy/local.md` § Report back. |
 | `sh-agent version` | Prints the build version. |
 
-Every command accepts `--vendor VENDOR` (target `antigravity` / `agy` or `claude`; default is the vendor recorded by the existing install, else `all` — `--vendor all` widens a single-vendor install to both through `install`; `update` keeps the recorded vendor instead), `--home DIR` (install somewhere other than `$HOME`, used by the tests) and, for a build made FROM a checkout, `--repo DIR`. Such a build finds the checkout from `--repo`, then `$SH_AGENT_REPO`, then the working directory or any of its parents, then the path it recorded at the last install — so `sh-agent update` works from anywhere the discovered checkout agrees with the one already on record. When it does not — standing in a harness-shaped directory that is not the installed checkout (an unpacked copy, a second clone) — install and update refuse rather than build and deploy that tree: `"checkout %s is not the installed one (%s); pass --repo %s to build and install from it"`, or, on a release-binary install, `"this home was installed from the release binary %s, not from a checkout; pass --repo %s to build and install from it"`. A RELEASE binary uses none of that: it installs the harness built into it, wherever it is run and whatever trees are on the machine, and refuses `--repo` rather than appearing to accept one (ADR-034).
+Every command accepts `--vendor VENDOR` (target `antigravity` / `agy` or `claude`; default is the vendor recorded by the existing install, else `all` — `--vendor all` widens a single-vendor install to both through `install`; `update` keeps the recorded vendor instead), `--home DIR` (install somewhere other than `$HOME`, used by the tests) and, for a build made FROM a checkout, `--repo DIR`. Such a build finds the checkout from `--repo`, then `$SH_AGENT_REPO`, then the working directory or any of its parents, then the path it recorded at the last install — so `sh-agent update` works from anywhere the discovered checkout agrees with the one already on record. When it does not — standing in a harness-shaped directory that is not the installed checkout (an unpacked copy, a second clone) — install and update refuse rather than build and deploy that tree: `"checkout %s is not the installed one (%s); pass --repo %s to build and install from it"`, or, on a release-binary install, `"this home was installed from the release binary %s, not from a checkout; pass --repo %s to build and install from it"`. A RELEASE binary uses none of that: it installs the harness built into it, wherever it is run and whatever trees are on the machine, and refuses `--repo` rather than appearing to accept one (ADR-034); the one tree it installs is a zip the operator names with `update --from-zip` (ADR-038).
 
 ## The loop: edit on one machine, pull on another
 
@@ -179,7 +193,7 @@ vim context/dev-setup.md && sh-agent install && git commit -am "context: tweak" 
 sh-agent update      # fetches, refuses a dirty checkout, pulls, rebuilds, reinstalls
 ```
 
-`sh-agent` is the only way the harness reaches a machine (R8): a checkout kept current with `update`, or a release binary with the harness built into it, installed with `sh-agent install` and moved forward by `sh-agent update`, which downloads the newest release and verifies its signed checksums (§ Install without cloning). A plain copy of the repository with no `.git` still installs — the running binary as is, and `update` refuses it, so unpack a newer copy to move forward — but it is the fallback for a machine that can reach neither of the two, not a way in. No project vendors a copy.
+`sh-agent` is the single channel the harness reaches a machine through (R8): a checkout kept current with `update`, a release binary with the harness built into it, installed with `sh-agent install` and moved forward by `sh-agent update`, which downloads the newest release and verifies its signed checksums (§ Install without cloning), or a zip place, moved forward by repeating the download and `sh-agent update --from-zip <file>` (§ Install from a zip (no SSH, no gh)). A plain copy of the repository with no `.git` still installs — the running binary as is, and `update` refuses it, so unpack a newer copy to move forward — but it is the fallback for a machine that can reach none of the three, not a way in. No project vendors a copy.
 
 And back: `sh-agent report --dry-run` lists every file and every redaction it would make — what was caught, never what was missed, so before every report, not just the first, read what was added under `~/.config/sh-agent/` since the last one — then `sh-agent report`, so each machine's corrections and retro proposals reach the feedback repository where the harness is improved from them.
 

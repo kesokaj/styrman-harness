@@ -26,6 +26,10 @@ type Source struct {
 	// Version is the release the embedded files came with, and "" for a tree
 	// on disk, whose git state says what it is.
 	Version string
+	// Origin, when set, is what the manifest records as the source instead of
+	// Dir: a zip's tree is unpacked into a directory that is deleted once the
+	// install is done, so the manifest names the archive (ZipPrefix).
+	Origin string
 }
 
 // DirSource reads the tree at dir.

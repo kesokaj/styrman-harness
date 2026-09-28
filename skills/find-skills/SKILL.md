@@ -1,6 +1,6 @@
 ---
 name: find-skills
-description: Helps users discover and install agent skills when they ask questions like "how do I do X", "find a skill for X", "is there a skill that can...", or express interest in extending capabilities. Do NOT use for writing new skills from scratch (use distill) or fixing broken skills (use skill-repair).
+description: Helps users discover and install agent skills when they ask questions like "how do I do X", "find a skill for X", "is there a skill that can...", or express interest in extending capabilities. This skill should be used when the user is looking for functionality that might exist as an installable skill.
 ---
 
 # Find Skills
@@ -94,16 +94,13 @@ Learn more: https://skills.sh/vercel-labs/agent-skills/react-best-practices
 
 ### Step 6: Offer to Install
 
-This operator keeps every skill in the `styrman-harness` repo, which deploys them to both Claude Code and Antigravity. Install **into the repo**, not into an agent directory:
+If the user wants to proceed, you can install the skill for them:
 
 ```bash
-cd "$(sh-agent status | sed -n 's/^repo  *\([^ ]*\).*/\1/p')"   # the harness checkout
-npx skills add <owner/repo> -s <skill> -y      # lands in skills/<skill> via the .agents/skills symlink
-sh-agent install                                 # deploys to ~/.claude and ~/.gemini/config
-# then commit and push the harness repo; record provenance in skills/VENDORED.md
+npx skills add <owner/repo@skill> -g -y
 ```
 
-If a skill was already installed globally with `npx skills add -g`, bring it into the repo with `sh-agent adopt <skill>` instead. A plain global install works too, but it is neither versioned nor deployed to Antigravity, and `sh-agent install` never removes it.
+The `-g` flag installs globally (user-level) and `-y` skips confirmation prompts.
 
 ## Common Skill Categories
 

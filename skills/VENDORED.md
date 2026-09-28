@@ -33,7 +33,7 @@ Notes:
   job on both CLIs, and `sh-agent adopt` replaced the manifest repair. `find-skills` (vendored verbatim)
   still names `skill-repair` in its description; harmless — the model finds no such skill — and fixed
   by the next re-fetch, not by editing the vendored file.
-- `find-skills` is NOT verbatim: its Step 6 opening ("This operator keeps every skill in the `styrman-harness` repo… Install **into the repo**") has been a local edit since the first commit, which the vendored-verbatim rule forbids. It stays until the operator chooses between forking it under another name and moving that routing into a harness rule; a re-fetch drops it (recorded 2026-09-28).
+- `find-skills` is verbatim again at `435076e` (restored 2026-09-28). Its old local Step 6 edit, which routed installs into this repository, now lives in the global context's § Global vs project.
 - `anti-ui-slop` includes its own LICENSE and NOTICE from the upstream archive; the
   optional paid UIZZE MCP is NOT configured — the free playbooks work standalone.
 - To add a skill: run `npx skills add <owner/repo> -s <skill> -y` from the repo root (it lands

@@ -64,7 +64,7 @@ One main table, newest last, one row per bug, and below it a `## Graduated` tabl
 
 | ID | Date | Area | Status | Symptom | Prevention |
 |---|---|---|---|---|---|
-| BUG-001 | 2026-09-03 | installer | fixed | status counted the binary as stale | status and diff plan without the binary; exclude it from stale checks |
+| BUG-001 | YYYY-MM-DD | <area> | fixed | <symptom, one line> | <prevention rule, one line> |
 ```
 
 Keep each cell to one line; the record has the detail. When a fix lands later for an open bug, update its `status` in both files — that is the one allowed edit to a past record. When a dispatch says a bug's prevention rule graduated in this repository — into its `AGENTS.md`, its `context/AGENTS.md` where it has one, a `.agents/rules/` file, a skill, an agent definition or a test — move that bug's row from the main table to the `## Graduated` table at the bottom of `INDEX.md` (columns `| ID | Area | Graduated to |`), and leave the record file untouched. A rule promoted from a project to the harness leaves the project's row where it is.

@@ -85,7 +85,9 @@ func UnpackZip(zipPath, parent string) (dir, sum string, err error) {
 	}
 	defer func() {
 		if err != nil {
-			os.RemoveAll(tmp)
+			if rerr := os.RemoveAll(tmp); rerr != nil {
+				err = errors.Join(err, fmt.Errorf("could not remove %s: %w", tmp, rerr))
+			}
 		}
 	}()
 	var total int64

@@ -511,7 +511,8 @@ func TestCheckoutUpdateDryRunChangesNothing(t *testing.T) {
 	}
 }
 
-// The sweep runs only after the zip is unpacked: a refused run changes
+// The sweep runs only after a successful install: a run refused at any point
+// (the unpack here; the install below) changes nothing, not even a stale leftover.
 // nothing, not even a stale leftover.
 func TestUpdateFromZipRefusedRunSweepsNothing(t *testing.T) {
 	isolate(t)
@@ -547,5 +548,35 @@ func TestFromZipDashValueRefused(t *testing.T) {
 	}
 	if entries, _ := os.ReadDir(home); len(entries) != 0 {
 		t.Errorf("wrote %d entries", len(entries))
+	}
+}
+
+// A zip the INSTALL refuses (it unpacks fine) sweeps nothing either: the sweep
+// sits after installFiles, not between the unpack and the install.
+func TestUpdateFromZipInstallRefusalSweepsNothing(t *testing.T) {
+	isolate(t)
+	tree := plainCopy(t)
+	bad := filepath.Join(tree, "skills", "zz-broken", "SKILL.md")
+	if err := os.MkdirAll(filepath.Dir(bad), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(bad, []byte("---\nname: zz-broken\n---\nno description\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	zp := zipOfTree(t, tree)
+	home := t.TempDir()
+	stale := filepath.Join(home, ".config", "sh-agent", "zip-old")
+	if err := os.MkdirAll(stale, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	past := time.Now().Add(-3 * time.Hour)
+	if err := os.Chtimes(stale, past, past); err != nil {
+		t.Fatal(err)
+	}
+	if err := run([]string{"update", "--from-zip", zp, "--home", home}, &bytes.Buffer{}); err == nil {
+		t.Fatal("the broken zip was installed")
+	}
+	if _, err := os.Stat(stale); err != nil {
+		t.Errorf("an install refusal swept %s", stale)
 	}
 }

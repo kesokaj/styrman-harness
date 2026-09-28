@@ -408,3 +408,24 @@ func TestSecretShapedCLITokenFiles(t *testing.T) {
 		}
 	}
 }
+
+// The report sweep matches names, never a glob built from the home: a home
+// holding glob metacharacters must not reach another home's clone.
+func TestSweepInterruptedClonesGlobCharsInHome(t *testing.T) {
+	base := t.TempDir()
+	home, other := filepath.Join(base, "h[1]"), filepath.Join(base, "h1")
+	// A pid that is not running: the sweep removes such a directory.
+	mine, theirs := filepath.Join(home, ".config", "sh-agent", "report-999999"), filepath.Join(other, ".config", "sh-agent", "report-999999")
+	for _, d := range []string{mine, theirs} {
+		if err := os.MkdirAll(d, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sweepInterruptedClones(home, &bytes.Buffer{})
+	if _, err := os.Stat(theirs); err != nil {
+		t.Errorf("another home's %s was swept", theirs)
+	}
+	if _, err := os.Stat(mine); err == nil {
+		t.Errorf("the home's own stale %s was not swept", mine)
+	}
+}

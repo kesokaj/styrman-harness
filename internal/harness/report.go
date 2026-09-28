@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -408,7 +409,16 @@ func throwawayDir(home string) string {
 // is still running is left alone, so two runs never delete each other's clone.
 func sweepInterruptedClones(home string, out io.Writer) {
 	mine := throwawayDir(home)
-	matches, _ := filepath.Glob(filepath.Join(home, ".config", "sh-agent", "report-*"))
+	// Names from ReadDir, never a glob built from the home: a home path holding
+	// glob metacharacters would otherwise reach another directory.
+	cfg := filepath.Join(home, ".config", "sh-agent")
+	entries, _ := os.ReadDir(cfg)
+	var matches []string
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), "report-") && e.IsDir() && e.Type()&fs.ModeSymlink == 0 {
+			matches = append(matches, filepath.Join(cfg, e.Name()))
+		}
+	}
 	for _, dir := range matches {
 		if dir == mine {
 			continue // this run's own path, replaced by cloneThrowaway

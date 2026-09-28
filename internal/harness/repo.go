@@ -20,10 +20,12 @@ import (
 // checkout's code, so a typo must not hand that to whatever harness-shaped
 // tree the shell happens to be in. version is the running binary's.
 func ResolveSource(explicit, home, version string) (Source, error) {
-	// A RELEASE binary installs the harness built into it and nothing else.
-	// Those files are the published repository at the tagged commit, signed
-	// and verified on the way in, and `update` replaces the whole binary to
-	// change them — so no tree on this machine takes part: not the working
+	// A RELEASE binary installs the harness built into it — the published
+	// repository at the tagged commit, signed and verified on the way in — and
+	// `update` replaces the whole binary to change them. The one tree it
+	// installs is a zip the operator names with `update --from-zip`, which
+	// never passes through here (ADR-038). Otherwise no tree on this machine
+	// takes part: not the working
 	// directory, not the one the last install recorded, not one named on the
 	// command line. A recorded plain copy silently winning is what stranded a
 	// box on months-old content while reporting no drift (ADR-034, the

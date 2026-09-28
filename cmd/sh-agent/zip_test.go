@@ -196,6 +196,26 @@ func TestStatusAfterZip(t *testing.T) {
 	}
 }
 
+// A manifest written before the verdict was recorded ("zip:sha256:<hex>", no
+// ";…" part) still reads: status names the zip and claims no verdict.
+func TestStatusLegacyZipManifest(t *testing.T) {
+	isolate(t)
+	defer func(v string) { version = v }(version)
+	version = "v1.2.3"
+	home := t.TempDir()
+	if err := harness.SaveState(home, harness.State{Repo: harness.ZipPrefix + "sha256:0123456789abcdef0123"}); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	_ = run([]string{"status", "--home", home}, &out)
+	if !strings.Contains(out.String(), "from zip sha256:0123456789ab ") {
+		t.Errorf("status does not name the legacy zip install:\n%s", out.String())
+	}
+	if strings.Contains(out.String(), "verified") {
+		t.Errorf("status claims a verdict the legacy manifest never recorded:\n%s", out.String())
+	}
+}
+
 func TestKnownCheckoutZip(t *testing.T) {
 	isolate(t)
 	home := t.TempDir()

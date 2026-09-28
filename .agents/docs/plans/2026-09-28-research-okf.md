@@ -200,15 +200,12 @@ The consumer survey covered the six projects on this Linux box. The harness is a
 
 **Cost:** four or five markdown files, docs only. Nothing changes in `context/`, the skills, the agents, the templates, the Go code, `REQUIREMENTS.md` or `DECISIONS.md`. It uses 0 bytes of the context budget and needs no release.
 
-**Found along the way, not part of this approval** (details in `.agents/scratch/research/okf/check-harness.md` and `consumers.md`):
+**Found along the way in this repo, not part of this approval** (details in `.agents/scratch/research/okf/check-harness.md`). The consumer survey also turned up problems inside other projects. They were removed from this table on the operator's correction: this repo's trail tracks only this repo, and the survey was only there to establish whether any project uses OKF.
 
 | # | Problem | Recommendation |
 |---|---|---|
 | 1 | `owner:` means different things: our deploy guides say `main`, the `/init-project` deploy templates say `documentation`, and `testing/guide.md` says `verifier` | defer: decide whether `owner:` names the writer or the lane |
 | 2 | `plans/2026-09-21-context-audit-prompt.md` has no frontmatter (`context/AGENTS.md:65`). `handoffs/2026-09-04-argolis-devbox-instructions.md` also lacks it, but handoffs are immutable. | **fixed** in this record's commit, as the operator asked on 2026-09-28; the handoff is left alone |
-| 3 | unifi-home-network: the config snapshot and MCP quirks live only in its 2026-09-14 handoff (Next Step 5, marked optional) | fix, in that project |
-| 4 | ranta-rankare: BUG-005's prevention rule is half applied; `app.py:43-45` and `:251` name no source or as-of date | fix, in that project |
-| 5 | valkompass: the README names a Cloud Run revision that was deleted on 2026-09-22 | defer: the project is torn down |
 
 ## Corrections from verification
 

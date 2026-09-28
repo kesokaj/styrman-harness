@@ -153,9 +153,9 @@ The scope items, as put to the operator in chat and approved with "go all":
 ### Phase 3 — Done
 
 - [x] `reviewer` (diff only), then `/review --docs` over the range — expect: findings fixed or rebutted in the report's `## Outcome`. — done: code APPROVE WITH NITS (1 finding), docs REQUEST CHANGES (2 findings); all fixed (D5), Outcome sections written; `testing/2026-09-28-verify-time-sortable-names-fixes.md` PASS.
-- [ ] Commit and push the feature, with this feature's change entry and handoff written under timed names.
-- [ ] **E2E 1 (agy cold resume)**, 2 runs, on a fresh clone of the pushed HEAD, from the Phase 2 sandbox home with the new harness installed (D2). Question: "State the status and the single next step." Verify: the answer's cited handoff, AI. Expect: this feature's timed handoff named as the source in n of 2; an honest failure otherwise.
-- [ ] Checkpoint — expect: tree clean and pushed; handoff written. Evidence: `git status`, `git log @{u}..HEAD` empty, <date>.
+- [x] Commit and push the feature, with this feature's change entry and handoff written under timed names. — `9a17e0a`: `changes/2026-09-28-1450-…`, `handoffs/2026-09-28-1450-…`.
+- [x] **E2E 1 (agy cold resume)**, 2 runs, on a fresh clone of the pushed HEAD, from the Phase 2 sandbox home with the new harness installed (D2). Question: "State the status and the single next step." Verify: the answer's cited handoff, AI. Expect: this feature's timed handoff named as the source in n of 2; an honest failure otherwise. — done: 2 of 2 on this repo, plus 2 of 2 on a clean demo; the old-context control was also 2 of 2 (via `git log`, 9 calls against 7), so the control did not fail (`testing/2026-09-28-verify-time-sortable-names-e2e1.md`, BUG-091 for the first, invalid attempt).
+- [x] Checkpoint — expect: tree clean and pushed; handoff written. Evidence: the closing commit's `git status` and `git log @{u}..HEAD` both empty, 2026-09-28.
 
 ## Risks
 

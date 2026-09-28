@@ -61,6 +61,7 @@
 | BUG-088 | 2026-09-28 | process (research / handoff / issue lists) | fixed | cross-project survey's incidental findings about other projects landed in this repo's plan table, handoff Next Steps, and an issue list | a finding about another project stays out of this project's trail/handoff/issue lists; a cross-project survey records only the answer to the question it was run for |
 | BUG-089 | 2026-09-28 | agents/changelog | fixed | changelog agent's date rule said "run `date +%F` yourself" but its `tools:` list has no Bash | check an instruction's named commands against the agent's `tools:` list; a Bash-less agent gets the command's output in its dispatch instead |
 | BUG-090 | 2026-09-28 | process / behavioural runs of agents/*.md | fixed | changelog-agent fixture claimed an endpoint that its `main.go` didn't have; agent correctly refused, run produced no artifact | assert every claimed fixture fact (grep/git log) before the CLI starts; recurrence of BUG-087's rule, not applied here |
+| BUG-091 | 2026-09-28 | process / sandbox runs of the CLIs | fixed | headless agy auto-denied a tool call in a sandbox home missing `settings.json`; must-fail control run inside a styrman-harness clone answered correctly regardless of injected context | copy agy's `settings.json` (no credential) into the sandbox home too; check runs using tools for the "auto-denied" line; run context-change controls outside any harness clone |
 
 ## Graduated
 

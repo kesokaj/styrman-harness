@@ -149,8 +149,8 @@ Recon: `.agents/docs/plans/2026-09-28-recon-from-zip.md`.
 ### Phase 4 — Matrix (item 7) and release
 
 - [x] `testing/skill-matrix.md`: restore the lists the scenarios need (`bash`, `python3`, `curl` for Claude; the matching named agy commands), keep `edit_file(*)` and `list_dir(*)` out, and state that the allowlist lets scenarios run and is not a security boundary, because the sandbox runs as the operator's OS user; the protection is the throwaway home, with the copied token deleted by name after each batch — verify: read against the v1.8.0 gate code review's findings 1–3 (`reviews/2026-09-28-review-v1.7.0-381e86d-code.md`), AI — expect: each finding closed or rebutted.
-- [ ] `/preflight v1.8.0` over `v1.7.0..HEAD` — expect: VERDICT SHIP; tag, binaries, notes.
-- [ ] Checkpoint — expect: the release published; handoff written — evidence: the gate report path and release URL, <date>.
+- [x] `/preflight v1.8.0` over `v1.7.0..HEAD` — expect: VERDICT SHIP; tag, binaries, notes.
+- [x] Checkpoint — expect: the release published; handoff written — evidence: the gate report path and release URL, <date>.
 
 ## Risks
 

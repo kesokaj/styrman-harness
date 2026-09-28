@@ -352,7 +352,7 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
 - After a zip install, a development build with no checkout names the zip install in its not-found error, while a release binary works from its embedded files.
 - The release carrying this is v1.8.0, a MINOR. Plan: `.agents/docs/plans/2026-09-28-update-from-zip.md`.
 
-## ADR-039: Release zips are signed, and `--from-zip` verifies them     (2026-09-28) — Accepted
+## ADR-039: Release zips are signed, and `--from-zip` verifies them     (2026-09-28) — Accepted; its one-file refusal superseded by ADR-041
 
 **Context:** The v1.8.0 gate left one medium open by decision: an unsigned zip becomes the agents' instructions, and `UNVERIFIED` only discloses that (`reviews/2026-09-28-preflight-v1.8.0.md` row 1; ADR-038's Consequences). The operator approved the signed-zip option: "All approved" (2026-09-28).
 
@@ -380,7 +380,7 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
 - The release carrying this is v1.9.0, a MINOR. Plan: `.agents/docs/plans/2026-09-28-signed-zip.md`.
 
 
-## ADR-040: An unsigned zip needs `--unverified`     (2026-09-28) — Accepted
+## ADR-040: An unsigned zip needs `--unverified`     (2026-09-28) — Superseded by ADR-041
 
 **Context:** ADR-039 left one item open: a zip with neither `SHA256SUMS` nor `SHA256SUMS.sig` beside it still installed, marked `UNVERIFIED`, with exit 0. A marking discloses the risk but does not control it (security reviews 2026-09-28, medium, carried in `reviews/2026-09-28-preflight-v1.9.0.md` row 1). The docs gate also found R9's "a zip without them" imprecise, because a zip with only one of the two files was already refused (row 2). The v1.9.0 handoff proposed the exact R9 text, and the operator approved it: "Go approved all" (2026-09-28).
 
@@ -400,3 +400,24 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
 - A `main` zip now needs one more word on the command line.
 - The refusal names the flag. That is not the bypass ADR-039 forbids, because the flag cannot pass a failed check, only a missing one; the refusals for failed checks still never mention it.
 - The release carrying this is v2.0.0, a MAJOR. `deploy/remote.md`'s version rule names "a new required flag" as something an existing deployment must react to: a zip place that installs a `main` zip must now pass `--unverified`. A place that installs a release zip with its sums, a checkout, or a release-binary place is unaffected.
+
+## ADR-041: The zip place accepts the zip it is given     (2026-09-28) — Accepted
+
+**Context:** ADR-040 made an unsigned zip need `--unverified` and refused a zip with only one of `SHA256SUMS`/`SHA256SUMS.sig` beside it. Its gate then raised further hardening: stray-argument refusals, agent-proof refusal wording, a downgrade check. The operator stopped that line before any release carried it: "Don't complicate things. Just accept the zip. This is a workaround for environments that can't use the normal way." (2026-09-28), then "Go approved allowed".
+
+**Decision:**
+- `update --from-zip` has no `--unverified` flag.
+- A zip without the full pair beside it (neither file, or only one) is installed, marked `UNVERIFIED` in the output and `;unverified` in the manifest.
+- A zip WITH the pair is still verified automatically, and refused if that check fails. That costs the operator nothing, and it is what R9's Release bullet publishes the pair for.
+- An older release's zip installs; there is no downgrade check.
+
+**Supersedes:** ADR-040 whole, and ADR-039's "one file alone is refused" behaviour. R9's zip-place clause is restored to the v1.9.0 text ("a zip without them is installed marked `UNVERIFIED`"), which the code now matches exactly.
+
+**Rejected:**
+- `--unverified` (ADR-040): friction on the one path meant for machines where nothing else works;
+- a downgrade check: a zip place has no other way to roll back.
+
+**Consequences:**
+- The v1.8.0/v1.9.0 security medium, that an unsigned zip installs, is accepted by the operator, not controlled. `UNVERIFIED` discloses it.
+- Removing a `.sig` beside a tampered release zip turns a refusal into an `UNVERIFIED` install. That is the same trust as any unsigned zip, and the output says so.
+- The release carrying this is v1.10.0, a MINOR relative to v1.9.0: a half pair now installs rather than refusing, and nothing becomes required.

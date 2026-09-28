@@ -473,14 +473,15 @@ func TestVerifyZipSums(t *testing.T) {
 			t.Errorf("err = %v, want ErrZipUnsigned", err)
 		}
 	})
-	t.Run("sig missing", func(t *testing.T) {
+	// Half the pair is no pair: the zip is unsigned, and installs UNVERIFIED
+	// like any zip without its sums (R9, ADR-041).
+	t.Run("sig missing: unsigned", func(t *testing.T) {
 		dir, zp, _ := signedZipDir(t, "v1.2.3")
-		os.Remove(filepath.Join(dir, "SHA256SUMS.sig"))
-		if _, err := VerifyZipSums(zp, zipSum(t, zp)); err == nil || errors.Is(err, ErrZipUnsigned) || !strings.Contains(err.Error(), "SHA256SUMS.sig") {
-			t.Errorf("err = %v, want a refusal naming SHA256SUMS.sig", err)
+		if err := os.Remove(filepath.Join(dir, "SHA256SUMS.sig")); err != nil {
+			t.Fatal(err)
 		}
-		if _, err := VerifyZipSums(zp, zipSum(t, zp)); err != nil && strings.Contains(strings.ToLower(err.Error()), "unverified") {
-			t.Errorf("the refusal suggests removing the checksums (a bypass): %v", err)
+		if _, err := VerifyZipSums(zp, zipSum(t, zp)); !errors.Is(err, ErrZipUnsigned) {
+			t.Errorf("err = %v, want ErrZipUnsigned", err)
 		}
 	})
 	t.Run("foreign key", func(t *testing.T) {
@@ -513,15 +514,13 @@ func TestVerifyZipSums(t *testing.T) {
 			t.Errorf("the refusal points at the stale release: %v", err)
 		}
 	})
-	t.Run("sig present, sums missing", func(t *testing.T) {
+	t.Run("sig present, sums missing: unsigned", func(t *testing.T) {
 		dir, zp, _ := signedZipDir(t, "v1.2.3")
-		os.Remove(filepath.Join(dir, "SHA256SUMS"))
-		_, err := VerifyZipSums(zp, zipSum(t, zp))
-		if err == nil || errors.Is(err, ErrZipUnsigned) || !strings.Contains(err.Error(), "has no SHA256SUMS") {
-			t.Errorf("err = %v, want a refusal naming SHA256SUMS", err)
+		if err := os.Remove(filepath.Join(dir, "SHA256SUMS")); err != nil {
+			t.Fatal(err)
 		}
-		if err != nil && strings.Contains(strings.ToLower(err.Error()), "unverified") {
-			t.Errorf("the refusal suggests installing unverified (a bypass): %v", err)
+		if _, err := VerifyZipSums(zp, zipSum(t, zp)); !errors.Is(err, ErrZipUnsigned) {
+			t.Errorf("err = %v, want ErrZipUnsigned", err)
 		}
 	})
 	t.Run("sums unreadable: refused, not unsigned", func(t *testing.T) {

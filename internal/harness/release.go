@@ -425,15 +425,15 @@ func SwapReleaseSigner(line string) (restore func()) {
 	return func() { releaseSigner = old }
 }
 
-// ErrZipUnsigned: no SHA256SUMS and no SHA256SUMS.sig beside a zip — a zip of
-// a branch, which nothing signs. The caller refuses it unless the operator
-// passed --unverified, and then installs it marked UNVERIFIED (ADR-040).
+// ErrZipUnsigned: no SHA256SUMS and SHA256SUMS.sig pair beside a zip — a zip
+// of a branch, which nothing signs, or a release zip downloaded without them.
+// The caller installs it marked UNVERIFIED (R9, ADR-041).
 var ErrZipUnsigned = errors.New("no signed SHA256SUMS beside the zip")
 
 // VerifyZipSums verifies a release zip against the SHA256SUMS and
 // SHA256SUMS.sig beside it: the signature with the compiled-in signer, then
 // the zip's own line, by its file name, against sum. It returns the release
-// the signed file names. Neither file present is ErrZipUnsigned; anything
+// the signed file names. The pair not both present is ErrZipUnsigned; anything
 // else that fails is a refusal (plan D7).
 func VerifyZipSums(zipPath, sum string) (string, error) {
 	dir := filepath.Dir(zipPath)
@@ -447,7 +447,7 @@ func VerifyZipSums(zipPath, sum string) (string, error) {
 			return "", fmt.Errorf("cannot check for signed checksums beside %s: %w", filepath.Base(zipPath), e)
 		}
 	}
-	if sumsErr != nil && sigErr != nil {
+	if sumsErr != nil || sigErr != nil {
 		return "", ErrZipUnsigned
 	}
 	keygen, err := sshKeygen()

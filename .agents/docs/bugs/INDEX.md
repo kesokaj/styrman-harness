@@ -59,6 +59,7 @@
 | BUG-086 | 2026-09-21 | process / shell usage | fixed | installer piped into `head -1` died on SIGPIPE; `status` then reported nothing installed | never pipe a side-effecting command (install/update/report/git write) into an early-exiting filter (`head`, `grep -q`); run it bare and redirect to a scratch file instead |
 | BUG-088 | 2026-09-28 | process (research / handoff / issue lists) | fixed | cross-project survey's incidental findings about other projects landed in this repo's plan table, handoff Next Steps, and an issue list | a finding about another project stays out of this project's trail/handoff/issue lists; a cross-project survey records only the answer to the question it was run for |
 | BUG-089 | 2026-09-28 | agents/changelog | fixed | changelog agent's date rule said "run `date +%F` yourself" but its `tools:` list has no Bash | check an instruction's named commands against the agent's `tools:` list; a Bash-less agent gets the command's output in its dispatch instead |
+| BUG-092 | 2026-09-28 | process / behavioural runs of agents/*.md | fixed | probe's `demo()` extraction truncated at a heredoc's `}`, empty `$d` left `cd` a no-op, one `claude -p` run wrote a fake change entry into this repo | never extract shared shell code by line-range `sed`; source fixture files whole, assert them, and use `cd <dir> \|\| exit 1` |
 
 ## Graduated
 

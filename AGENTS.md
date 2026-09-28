@@ -63,7 +63,7 @@ There is no test framework beyond `go test`. A change to `context/`, `agents/`, 
 
 A behavioural or sandbox run proves its setup before its output counts (BUG-087, BUG-090, BUG-091):
 - the run script asserts every fact the dispatch states about the fixture (a `grep` for the line, a `git log` for the commit) before the CLI starts;
-- a sandbox home for headless agy carries the real home's `~/.gemini/antigravity-cli/settings.json` (it holds no credential) beside the copied token, and a run that uses tools is checked for the "auto-denied" stderr line before its output is read;
+- a sandbox home for headless agy gets its own `~/.gemini/antigravity-cli/settings.json`, written for the run: a `permissions.allow` list of only the tools the run needs (a read-only run: `read_file(*)`, `list_dir(*)` and `command(<name>)` for each read-only command) and the scratch clone as its only `trustedWorkspaces` entry, deleted by name with the copied token — never a copy of the real home's file, whose `toolPermission: always-proceed` approves every tool and whose trusted workspaces include real checkouts — and a run that uses tools is checked for the "auto-denied" stderr line before its output is read;
 - the must-fail control for a change to `context/` runs in a project that does not contain the harness source, never in a clone of this repository, whose own `context/` carries the new text.
 
 ## Release

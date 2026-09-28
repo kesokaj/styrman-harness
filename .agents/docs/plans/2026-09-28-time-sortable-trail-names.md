@@ -135,24 +135,24 @@ The scope items, as put to the operator in chat and approved with "go all":
 
 ### Phase 2 — Behavioural runs
 
-- [ ] **Changelog agent**, 3 runs, plus a 3-run must-fail control.
+- [x] **Changelog agent**, 3 runs, plus a 3-run must-fail control.
   - Setup: `claude -p --agents <json from agents/changelog.md>` in a scratch clone of a small repo, prompt on stdin. `--allowedTools` names exactly the agent's own tools (Read, Grep, Glob, Edit, Write, plus Agent for the dispatch), with no Bash, the same as production.
   - The dispatch says what the new description tells a dispatcher to say, "Stamp: <output of `date +%F-%H%M`>", and names no file-name format.
   - Control: the same dispatch with the definition from HEAD (`git show HEAD:agents/changelog.md`).
   - Verify: `ls changes/` in each clone. AI.
   - Expect: a name matching `^[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{4}-` in n of 3 for the new definition, and the control's names recorded (a control that also writes timed names means the dispatch alone carries the behaviour, which is reported, not hidden). The tool-call order is read from the subagent transcript.
-- [ ] **Handoff skill**, 3 runs. The new `SKILL.md` is copied into the scratch clone at `.claude/skills/handoff-probe/SKILL.md`, and the copy's frontmatter line `name: handoff` is changed to `name: handoff-probe`. Nothing else changes, so the probe cannot collide with the installed `handoff`. It is invoked as `/handoff-probe`, from the real home. Verify: `ls <docs-root>/handoffs/`, AI. Expect: a timed name in n of 3.
-- [ ] **Context rule**, 3 runs: `claude -p --append-system-prompt "$(cat <rendered new context>)"`, asked to "write a handoff note for this session into the trail" in a scratch clone, naming no format. Expect: a timed name in n of 3.
-- [ ] **Sandbox start of each CLI** (guide § 4).
+- [x] **Handoff skill**, 3 runs. The new `SKILL.md` is copied into the scratch clone at `.claude/skills/handoff-probe/SKILL.md`, and the copy's frontmatter line `name: handoff` is changed to `name: handoff-probe`. Nothing else changes, so the probe cannot collide with the installed `handoff`. It is invoked as `/handoff-probe`, from the real home. Verify: `ls <docs-root>/handoffs/`, AI. Expect: a timed name in n of 3.
+- [x] **Context rule**, 3 runs: `claude -p --append-system-prompt "$(cat <rendered new context>)"`, asked to "write a handoff note for this session into the trail" in a scratch clone, naming no format. Expect: a timed name in n of 3.
+- [x] **Sandbox start of each CLI** (guide § 4).
   - Setup: a sandbox home under `.agents/scratch/`, `sh-agent install --home` into it, credential files copied with `chmod 600` and deleted by name after.
   - Each CLI is asked "how are handoff files named, and which is newest when a date-only and a timed name share a day?"
   - Expect: the timed form and "the timed one" on both CLIs; `cli-*.log` has no parse-error line.
-- [ ] **E2E 2 (`/init-project` warning).** Sandbox home as above, on a scratch clone of this repo (must fire) and on a scratch project with only timed names (must stay silent). Expect: the warning with a count, then none; `git status` shows no rename.
-- [ ] Checkpoint — expect: every run above at or above 2 of 3 (the init-project and sandbox runs: 1 of 1 each); failures are recorded, not hidden. Evidence: `testing/2026-09-28-verify-time-sortable-names-phase-2.md`, <date>.
+- [x] **E2E 2 (`/init-project` warning).** Sandbox home as above, on a scratch clone of this repo (must fire) and on a scratch project with only timed names (must stay silent). Expect: the warning with a count, then none; `git status` shows no rename.
+- [x] Checkpoint — expect: every run above at or above 2 of 3 (the init-project and sandbox runs: 1 of 1 each); failures are recorded, not hidden. Evidence: `testing/2026-09-28-verify-time-sortable-names-phase-2.md`: changelog, handoff and context each 3 of 3 with every control 0 of 3; sandbox 1 of 1 on both CLIs; E2E 2 fired (160) and stayed silent; 2026-09-28.
 
 ### Phase 3 — Done
 
-- [ ] `reviewer` (diff only), then `/review --docs` over the range — expect: findings fixed or rebutted in the report's `## Outcome`.
+- [x] `reviewer` (diff only), then `/review --docs` over the range — expect: findings fixed or rebutted in the report's `## Outcome`. — done: code APPROVE WITH NITS (1 finding), docs REQUEST CHANGES (2 findings); all fixed (D5), Outcome sections written; `testing/2026-09-28-verify-time-sortable-names-fixes.md` PASS.
 - [ ] Commit and push the feature, with this feature's change entry and handoff written under timed names.
 - [ ] **E2E 1 (agy cold resume)**, 2 runs, on a fresh clone of the pushed HEAD, from the Phase 2 sandbox home with the new harness installed (D2). Question: "State the status and the single next step." Verify: the answer's cited handoff, AI. Expect: this feature's timed handoff named as the source in n of 2; an honest failure otherwise.
 - [ ] Checkpoint — expect: tree clean and pushed; handoff written. Evidence: `git status`, `git log @{u}..HEAD` empty, <date>.
@@ -169,6 +169,7 @@ Assumptions:
 - D2 — 2026-09-28 — E2E 1 can only see the new context sentence once the context is installed where agy reads it. The real home runs v1.6.0 and R6 forbids installing into it from development. So E2E 1 runs from the Phase 2 sandbox home, with the new harness installed, on a fresh clone of the pushed HEAD, not from the real home — by: implementer.
 - D3 — 2026-09-28 — The changelog agent keeps its tools; its dispatcher passes the stamp from `date +%F-%H%M` (the description, preflight's dispatch line), and the agent names the file from it. Adding Bash to a records agent widens what it can do in order to read a clock — by: cold read round 1 (`reviews/2026-09-28-coldread-time-sortable-names-r1.md`, finding 1).
 - D4 — 2026-09-28 — The changelog agent's rule 2 ("run `date +%F` yourself") is deleted in the same edit, because the agent has no Bash; rule 3 takes its place — by: cold read round 3 (`reviews/2026-09-28-coldread-time-sortable-names-r3.md`); a bug record follows at Done.
+- D5 — 2026-09-28 — Supersedes the Surfaces note that `skills/handoff/SKILL.md:62` stays as it was: it now also names `date +%F-%H%M` for the file name. `skills/preflight/SKILL.md:40`'s changelog dispatch passes the stamp like `:86` — by: docs-lens review (`reviews/2026-09-28-review-time-sortable-names-docs.md`, findings 1 and 2).
 - Open: whether E2E 1 should also be repeated on the real home after the operator next runs `sh-agent update` — default: listed in the handoff's Next Steps as an operator smoke check, not run here.
 - Rejected:
   - an `INDEX.md` per trail folder: measured at 240 locate calls against 472 writes (`.agents/scratch/trail-search/`, 2026-09-28);

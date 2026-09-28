@@ -59,7 +59,7 @@ List each relevant artifact with a one-line summary of what it contains and why 
 
 The handoff records the remainder — it is never a substitute for rows already due:
 
-1. Run `date +%F` and use that date everywhere below — never a date from memory.
+1. Run `date +%F` and use that date everywhere below, and `date +%F-%H%M` for the handoff's file name (Step 5) — never a date from memory.
 2. If the session changed source files and no `changes/` entry covers those changes, dispatch the `changelog` agent **before** writing the handoff.
 3. Bring `ROADMAP.md` and `TODO.md` current yourself (Definition of Done step 4): both are empty (headers only) at every checkpoint, not just at Done — a ticked line is deleted in the commit that ticks it; while a plan is in progress "Now" names it and `TODO.md` holds only items the plan will consume. Anything the operator must do, and any deferred idea worth keeping, goes in this handoff's Next Steps, not in those files. The dispatches above record; they do not own those two lines.
 4. Only then write the handoff (Step 4).

@@ -658,6 +658,40 @@ func TestUpdateFromZipUnsignedSaysUnverified(t *testing.T) {
 	}
 }
 
+// Half the signed pair beside a zip (only SHA256SUMS, or only its .sig) is no
+// pair: the zip installs, marked UNVERIFIED (R9, ADR-041).
+func TestUpdateFromZipHalfPairSaysUnverified(t *testing.T) {
+	isolate(t)
+	for _, name := range []string{"SHA256SUMS", "SHA256SUMS.sig"} {
+		t.Run(name, func(t *testing.T) {
+			zp := markedZip(t)
+			beside := filepath.Join(filepath.Dir(zp), name)
+			if err := os.WriteFile(beside, []byte("# styrman-harness v1.2.3\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			other := "SHA256SUMS.sig"
+			if name == other {
+				other = "SHA256SUMS"
+			}
+			if _, err := os.Stat(filepath.Join(filepath.Dir(zp), other)); !errors.Is(err, fs.ErrNotExist) {
+				t.Fatalf("setup: %s must be absent (stat err = %v)", other, err)
+			}
+			home := t.TempDir()
+			var out bytes.Buffer
+			if err := run([]string{"update", "--from-zip", zp, "--home", home}, &out); err != nil {
+				t.Fatalf("a zip with only %s beside it was refused: %v\n%s", name, err, out.String())
+			}
+			if !strings.Contains(out.String(), "UNVERIFIED") || strings.Contains(out.String(), "VERIFIED against") {
+				t.Errorf("a half pair is not marked UNVERIFIED:\n%s", out.String())
+			}
+			st, found, err := harness.LoadState(home)
+			if err != nil || !found || !strings.HasSuffix(st.Repo, ";unverified") {
+				t.Errorf("manifest repo = %q (found=%v, err=%v), want the ;unverified verdict", st.Repo, found, err)
+			}
+		})
+	}
+}
+
 // A release zip with its signed SHA256SUMS beside it installs and says
 // VERIFIED; the same zip with one byte changed is refused, home untouched.
 func TestUpdateFromZipVerifiedAndTampered(t *testing.T) {

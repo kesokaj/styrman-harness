@@ -335,18 +335,21 @@ func TestUnpackZipRefusesDuplicateName(t *testing.T) {
 // A refusal found after the names pass — a symlink, a duplicate, a size —
 // must still leave no parent directory behind (BUG-093's second half).
 func TestUnpackZipLateRefusalCreatesNoParent(t *testing.T) {
-	cases := map[string]zipEntry{
-		"symlink":   {name: "top/skills/alpha/link", body: "/etc/passwd", mode: fs.ModeSymlink | 0o777},
-		"duplicate": {name: "top/skills/alpha/SKILL.md", body: "---\nname: alpha\ndescription: again\n---\n"},
+	cases := map[string]struct {
+		entry zipEntry
+		want  string
+	}{
+		"symlink":   {zipEntry{name: "top/skills/alpha/link", body: "/etc/passwd", mode: fs.ModeSymlink | 0o777}, "is a symlink"},
+		"duplicate": {zipEntry{name: "top/skills/alpha/SKILL.md", body: "---\nname: alpha\ndescription: again\n---\n"}, "appears twice"},
 	}
-	for name, extra := range cases {
+	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
 			zp := filepath.Join(t.TempDir(), "late.zip")
-			writeZip(t, zp, append(harnessEntries(t, "top/"), extra))
+			writeZip(t, zp, append(harnessEntries(t, "top/"), c.entry))
 			home := t.TempDir()
 			parent := filepath.Join(home, ".config", "sh-agent")
-			if _, _, err := UnpackZip(zp, parent, nil); err == nil {
-				t.Fatal("UnpackZip accepted the zip")
+			if _, _, err := UnpackZip(zp, parent, nil); err == nil || !strings.Contains(err.Error(), c.want) {
+				t.Fatalf("err = %v, want the %q refusal", err, c.want)
 			}
 			if entries, _ := os.ReadDir(home); len(entries) != 0 {
 				t.Errorf("a late refusal left %d entries under the home (the parent chain)", len(entries))

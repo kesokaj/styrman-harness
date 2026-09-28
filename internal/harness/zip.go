@@ -15,8 +15,11 @@ import (
 )
 
 // ZipPrefix marks a manifest's repo value written by an install from a zip:
-// "zip:sha256:<hex>" names the archive the operator passed, never a path —
-// the unpacked tree is deleted once the install is done (ADR-038).
+// "zip:sha256:<hex>;verified vX.Y.Z" or "zip:sha256:<hex>;unverified" names
+// the archive the operator passed and whether it was checked against a
+// release's signed SHA256SUMS, never a path — the unpacked tree is deleted
+// once the install is done (ADR-038, ADR-039). A manifest written before the
+// verdict was recorded carries the bare "zip:sha256:<hex>".
 const ZipPrefix = "zip:"
 
 // Limits on an archive handed to UnpackZip. Variables so tests can lower

@@ -442,7 +442,12 @@ func status(src harness.Source, home, vendorFlag string, out io.Writer) error {
 	if release, ok := strings.CutPrefix(st.Repo, harness.EmbeddedPrefix); ok {
 		from = "release " + release
 	} else if fromZip {
-		from = "zip sha256:" + short(zipSum)
+		// A manifest from before the verdict was recorded has no ";…" part.
+		sum, trust, _ := strings.Cut(zipSum, ";")
+		from = "zip sha256:" + short(sum)
+		if trust != "" {
+			from += " (" + trust + ")"
+		}
 	}
 	fmt.Fprintf(out, "installed  %s from %s (vendor: %s, %d files, manifest ~/.config/sh-agent/state.json)\n", st.InstalledAt, from, vDisplay, len(st.Files))
 	// The line describes the installed file, not this process: status may
@@ -653,6 +658,7 @@ func knownCheckout(repoFlag, home, repo string) error {
 		return fmt.Errorf("this home was installed from the release binary %s, not from a checkout; pass --repo %s to build and install from it", release, repo)
 	}
 	if sum, ok := strings.CutPrefix(st.Repo, harness.ZipPrefix+"sha256:"); ok {
+		sum, _, _ = strings.Cut(sum, ";")
 		return fmt.Errorf("this home was installed from a zip (sha256 %s), not from a checkout; pass --repo %s to build and install from it", short(sum), repo)
 	}
 	if samePath(st.Repo, repo) {
@@ -1109,7 +1115,13 @@ func updateFromZip(zipPath, home, vendorFlag string, dryRun bool, out io.Writer)
 		trust = "VERIFIED against the signed SHA256SUMS of release " + verifiedTag
 	}
 	fmt.Fprintf(out, "%szip %s (sha256 %s, %s): installing its harness and the running binary %s; nothing is downloaded and nothing in the zip replaces the binary\n", prefix, zipPath, sum, trust, buildVersion())
-	src := harness.Source{FS: os.DirFS(dir), Dir: dir, Origin: harness.ZipPrefix + "sha256:" + sum}
+	// The manifest keeps the verdict too, so status can tell a verified install
+	// from an unverified one after the output has scrolled away.
+	origin := harness.ZipPrefix + "sha256:" + sum + ";unverified"
+	if verifiedTag != "" {
+		origin = harness.ZipPrefix + "sha256:" + sum + ";verified " + verifiedTag
+	}
+	src := harness.Source{FS: os.DirFS(dir), Dir: dir, Origin: origin}
 	if err := installFiles(src, home, vendor, dryRun, out); err != nil {
 		return err
 	}

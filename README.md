@@ -11,7 +11,7 @@ flowchart LR
     subgraph checkoutLane["Your harness checkout"]
         edit["Edit context/, skills/, agents/, commands/, rules/"]
         ship["gofmt, vet, test -race<br/>commit and push main"]
-        preflight["/preflight vX.Y.Z<br/>SSH-signed tag, signed binaries"]
+        preflight["/preflight vX.Y.Z<br/>SSH-signed tag, signed binaries and zip"]
         retroHarness["/retro --harness<br/>applies the proposals queued on this machine"]
         readReports["Read reports/HOST/RUN/<br/>by hand: not built yet"]
     end
@@ -163,7 +163,7 @@ A machine that can neither hold your SSH key nor run `gh` — a corporate workst
 
 ```bash
 sh-agent update --from-zip ~/Downloads/styrman-harness-vX.Y.Z.zip   # SHA256SUMS and SHA256SUMS.sig beside it: verified
-sh-agent status      # "installed … from zip sha256:<hex>"; reports presence, not content — the zip is not kept
+sh-agent status      # "installed … from zip sha256:<hex> (verified vX.Y.Z)" or "(unverified)"; reports presence, not content — the zip is not kept
 ```
 
 `--from-zip` unpacks the zip into a temporary directory, installs that tree and the running binary, and deletes the directory. The binary is copied into `~/.local/bin` the way every install copies it, but nothing in the zip replaces it and nothing is fetched. `--dry-run` does the same unpack-and-plan without writing a file, a manifest, or a binary, and still removes the temporary directory. With the release's `SHA256SUMS` and `SHA256SUMS.sig` beside it, the zip is verified before anything is written: the signature against the signer built into the binary, then the zip's own checksum line, which needs the release's own file name. The first line then says `VERIFIED against the signed SHA256SUMS of release vX.Y.Z`, and any failure refuses the zip. Without them — a `main` zip — the first line says `UNVERIFIED`, and trust rests on your own download (ADR-039). `update --dry-run` on the other two kinds of place reports what an update would do and changes nothing. Moving a zip place forward means repeating the download and `--from-zip`; a zip whose harness needs a newer binary means downloading that binary by hand too.

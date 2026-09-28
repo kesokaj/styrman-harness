@@ -415,8 +415,9 @@ func TestSecretShapedCLITokenFiles(t *testing.T) {
 func TestSweepInterruptedClonesGlobCharsInHome(t *testing.T) {
 	base := t.TempDir()
 	home, other := filepath.Join(base, "h[1]"), filepath.Join(base, "h1")
-	// A pid that is not running: the sweep removes such a directory.
-	mine, theirs := filepath.Join(home, ".config", "sh-agent", "report-999999"), filepath.Join(other, ".config", "sh-agent", "report-999999")
+	// Pid 0 is never a running process (alive(0) is false), so the sweep removes
+	// such a directory; a high pid could be live on a box with a large pid_max.
+	mine, theirs := filepath.Join(home, ".config", "sh-agent", "report-0"), filepath.Join(other, ".config", "sh-agent", "report-0")
 	for _, d := range []string{mine, theirs} {
 		if err := os.MkdirAll(d, 0o700); err != nil {
 			t.Fatal(err)
@@ -563,6 +564,29 @@ func TestVerifyZipSums(t *testing.T) {
 		}
 		if _, err := VerifyZipSums(renamed, zipSum(t, renamed)); err == nil || !strings.Contains(err.Error(), "no line names") {
 			t.Errorf("err = %v, want no line names", err)
+		}
+	})
+	// GitHub's own "Source code (zip)" beside the release's sums: a different
+	// name and different bytes. Renaming it only trades one refusal for a
+	// checksum mismatch, so both refusals name the file the release published.
+	t.Run("github source archive", func(t *testing.T) {
+		dir, _, _ := signedZipDir(t, "v1.2.3")
+		src := filepath.Join(dir, "styrman-harness-1.2.3.zip")
+		writeZip(t, src, harnessEntries(t, "styrman-harness-1.2.3/"))
+		_, err := VerifyZipSums(src, zipSum(t, src))
+		if err == nil || !strings.Contains(err.Error(), "publishes styrman-harness-v1.2.3.zip") {
+			t.Errorf("err = %v, want it to name the zip the release publishes", err)
+		}
+		renamed := filepath.Join(dir, "styrman-harness-v1.2.3.zip")
+		if err := os.Rename(src, renamed); err != nil {
+			t.Fatal(err)
+		}
+		_, err = VerifyZipSums(renamed, zipSum(t, renamed))
+		if err == nil || !strings.Contains(err.Error(), "checksum mismatch") || !strings.Contains(err.Error(), "download styrman-harness-v1.2.3.zip from the release's assets") {
+			t.Errorf("err = %v, want a mismatch that names the release's own zip", err)
+		}
+		if err != nil && strings.Contains(strings.ToLower(err.Error()), "unverified") {
+			t.Errorf("the refusal suggests installing unverified (a bypass): %v", err)
 		}
 	})
 }

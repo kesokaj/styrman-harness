@@ -32,7 +32,11 @@ const ReleaseNamespace = "sh-agent-release"
 // It is COMPILED IN, never read from a file on the machine: a signer file
 // anywhere on disk would otherwise decide what counts as a genuine release,
 // which is the one thing the operator's key is supposed to decide. It is a
-// variable only so a test can substitute a test key's line.
+// variable so a test can substitute a test key's line (SwapReleaseSigner), and
+// that also lets a build replace it with `-ldflags -X`: whoever builds the
+// binary chooses what it trusts. The release binaries are built from the tag
+// with no -X (`.agents/docs/deploy/remote.md` § Releases), and a binary from
+// anywhere else carries whatever signer its builder chose.
 //
 // What is NOT pinned this way is ssh-keygen itself, the program that checks
 // the signature; sshKeygen prefers a system path for exactly that reason, but
@@ -461,10 +465,27 @@ func VerifyZipSums(zipPath, sum string) (string, error) {
 	}
 	want, err := checksumFor(string(sums), what)
 	if err != nil {
-		return "", fmt.Errorf("the signed SHA256SUMS beside it are release %s's and do not list %s: %w — put the zip in a folder with its own release's SHA256SUMS and SHA256SUMS.sig, under the release's own file name", tag, what, err)
+		return "", fmt.Errorf("the signed SHA256SUMS beside it are release %s's and do not list %s: %w — release %s publishes %s: if that is the release you want, download that file from its assets (GitHub's \"Source code\" archive is a different file); otherwise put this zip in a folder with its own release's SHA256SUMS and SHA256SUMS.sig", tag, what, err, tag, zipNamesIn(sums))
 	}
 	if want != sum {
-		return "", fmt.Errorf("checksum mismatch for %s against the signed SHA256SUMS of %s: the zip is not the one that release published — download it again", what, tag)
+		return "", fmt.Errorf("checksum mismatch for %s against the signed SHA256SUMS of %s: the zip is not the one that release published — download %s from the release's assets again (GitHub's \"Source code\" archive is a different file)", what, tag, zipNamesIn(sums))
 	}
 	return tag, nil
+}
+
+// zipNamesIn lists the .zip files a SHA256SUMS names, for a refusal that has
+// to say which file the release actually published. The sums are already
+// signature-checked when this runs, so the names are the release's own.
+func zipNamesIn(sums []byte) string {
+	var names []string
+	for _, line := range strings.Split(string(sums), "\n") {
+		f := strings.Fields(line)
+		if len(f) == 2 && strings.HasSuffix(f[1], ".zip") {
+			names = append(names, strings.TrimPrefix(f[1], "*"))
+		}
+	}
+	if len(names) == 0 {
+		return "no zip"
+	}
+	return strings.Join(names, ", ")
 }

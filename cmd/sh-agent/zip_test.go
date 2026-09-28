@@ -171,7 +171,7 @@ func TestStatusAfterZip(t *testing.T) {
 	if err := run([]string{"status", "--home", home}, &out); err != nil {
 		t.Fatalf("status after a zip install: %v\n%s", err, out.String())
 	}
-	for _, want := range []string{"from zip sha256:", "installed from a zip", "not compared", "manifest files present"} {
+	for _, want := range []string{"from zip sha256:", "(unverified)", "installed from a zip", "not compared", "manifest files present"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("status lacks %q:\n%s", want, out.String())
 		}
@@ -516,7 +516,6 @@ func TestCheckoutUpdateDryRunChangesNothing(t *testing.T) {
 
 // The sweep runs only after a successful install: a run refused at any point
 // (the unpack here; the install below) changes nothing, not even a stale leftover.
-// nothing, not even a stale leftover.
 func TestUpdateFromZipRefusedRunSweepsNothing(t *testing.T) {
 	isolate(t)
 	home := t.TempDir()
@@ -675,11 +674,23 @@ func TestUpdateFromZipVerifiedAndTampered(t *testing.T) {
 	defer harness.SwapReleaseSigner("test@signer " + f[0] + " " + f[1])()
 
 	var out bytes.Buffer
-	if err := run([]string{"update", "--from-zip", zp, "--home", t.TempDir()}, &out); err != nil {
+	vhome := t.TempDir()
+	if err := run([]string{"update", "--from-zip", zp, "--home", vhome}, &out); err != nil {
 		t.Fatalf("verified zip: %v\n%s", err, out.String())
 	}
 	if !strings.Contains(out.String(), "VERIFIED against the signed SHA256SUMS of release v1.2.3") {
 		t.Errorf("a verified zip does not say so:\n%s", out.String())
+	}
+	// The verdict outlives the output: status reads it from the manifest. It
+	// needs a release version to resolve a source, as in TestStatusAfterZip.
+	defer func(v string) { version = v }(version)
+	version = "v1.2.3"
+	var st bytes.Buffer
+	if err := run([]string{"status", "--home", vhome}, &st); err != nil {
+		t.Fatalf("status after a verified zip: %v\n%s", err, st.String())
+	}
+	if !strings.Contains(st.String(), "(verified v1.2.3)") {
+		t.Errorf("status does not record the verified install:\n%s", st.String())
 	}
 
 	data[len(data)/2] ^= 0xff

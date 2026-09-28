@@ -132,6 +132,10 @@ func run(args []string, out io.Writer) error {
 			return errors.New("--from-zip needs a file: sh-agent update --from-zip <file>")
 		case *check || *repoFlag != "":
 			return errors.New("--from-zip installs the named zip; --check/--repo do not apply to it")
+		case fs.NArg() != 0:
+			// A stray word is never ignored here: `--unverified false` would
+			// otherwise read as the flag set and install an unsigned zip.
+			return fmt.Errorf("--from-zip takes no other arguments (got %q); a flag is on when named: --unverified, never --unverified false", fs.Args())
 		}
 		return updateFromZip(*fromZip, home, *vendorFlag, *dryRun, *unverified, out)
 	}
@@ -1096,7 +1100,7 @@ func updateFromZip(zipPath, home, vendorFlag string, dryRun, allowUnverified boo
 		tag, err := harness.VerifyZipSums(zipPath, sum)
 		if errors.Is(err, harness.ErrZipUnsigned) {
 			if !allowUnverified {
-				return fmt.Errorf("%s has no signed SHA256SUMS or SHA256SUMS.sig beside it, so it cannot be verified: put it in one folder with its release's SHA256SUMS and SHA256SUMS.sig, or pass --unverified to install it anyway, with trust resting on your own download", filepath.Base(zipPath))
+				return fmt.Errorf("%s has no signed SHA256SUMS or SHA256SUMS.sig beside it, so it cannot be verified: put it in one folder with its release's SHA256SUMS and SHA256SUMS.sig, or, when the operator decides to trust this download, pass --unverified (an agent never adds it on its own)", filepath.Base(zipPath))
 			}
 			return nil
 		}

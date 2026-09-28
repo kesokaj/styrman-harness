@@ -426,8 +426,8 @@ func TestUpdateFromZipRefusedContentWritesNothing(t *testing.T) {
 	}
 	zp := zipOfTree(t, tree)
 	home := t.TempDir()
-	if err := run([]string{"update", "--from-zip", zp, "--unverified", "--home", home}, &bytes.Buffer{}); err == nil {
-		t.Fatal("a zip with a skill that has no description was installed")
+	if err := run([]string{"update", "--from-zip", zp, "--unverified", "--home", home}, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "has no description") {
+		t.Fatalf("err = %v, want the install's own refusal of a skill with no description", err)
 	}
 	if entries, _ := os.ReadDir(home); len(entries) != 0 {
 		t.Errorf("a refused install left %d entries under a fresh home", len(entries))
@@ -551,8 +551,8 @@ func TestUpdateFromZipRefusedRunSweepsNothing(t *testing.T) {
 	if err := os.WriteFile(notZip, []byte("not a zip"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := run([]string{"update", "--from-zip", notZip, "--unverified", "--home", home}, &bytes.Buffer{}); err == nil {
-		t.Fatal("a file that is not a zip was accepted")
+	if err := run([]string{"update", "--from-zip", notZip, "--unverified", "--home", home}, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "not a readable zip") {
+		t.Fatalf("err = %v, want the not-a-zip refusal", err)
 	}
 	if _, err := os.Stat(stale); err != nil {
 		t.Errorf("a refused run swept %s", stale)
@@ -595,8 +595,8 @@ func TestUpdateFromZipInstallRefusalSweepsNothing(t *testing.T) {
 	if err := os.Chtimes(stale, past, past); err != nil {
 		t.Fatal(err)
 	}
-	if err := run([]string{"update", "--from-zip", zp, "--unverified", "--home", home}, &bytes.Buffer{}); err == nil {
-		t.Fatal("the broken zip was installed")
+	if err := run([]string{"update", "--from-zip", zp, "--unverified", "--home", home}, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "has no description") {
+		t.Fatalf("err = %v, want the install's own refusal of a skill with no description", err)
 	}
 	if _, err := os.Stat(stale); err != nil {
 		t.Errorf("an install refusal swept %s", stale)
@@ -639,6 +639,9 @@ func TestUpdateFromZipForeignSignatureRefused(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "does not verify") {
 			t.Fatalf("%v: err = %v, want the signature refusal\n%s", extra, err, out.String())
 		}
+		if strings.Contains(strings.ToLower(err.Error()), "unverified") {
+			t.Errorf("%v: a failed-check refusal names --unverified (ADR-040): %v", extra, err)
+		}
 		if entries, _ := os.ReadDir(home); len(entries) != 0 {
 			t.Errorf("%v: a refused zip left %d entries", extra, len(entries))
 		}
@@ -661,9 +664,27 @@ func TestUpdateFromZipUnsignedRefusedWithoutFlag(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "no signed SHA256SUMS") || !strings.Contains(err.Error(), "--unverified") {
 			t.Fatalf("%v: err = %v, want the unsigned refusal naming --unverified\n%s", extra, err, out.String())
 		}
+		if !strings.Contains(err.Error(), "an agent never adds it on its own") {
+			t.Errorf("%v: the refusal does not tell an agent the flag is the operator's call: %v", extra, err)
+		}
 		if entries, _ := os.ReadDir(home); len(entries) != 0 {
 			t.Errorf("%v: a refused zip left %d entries", extra, len(entries))
 		}
+	}
+}
+
+// `--unverified false` is not a way to say no: the stray word is refused, and
+// nothing is installed.
+func TestFromZipStrayArgumentRefused(t *testing.T) {
+	isolate(t)
+	zp := markedZip(t)
+	home := t.TempDir()
+	err := run([]string{"update", "--from-zip", zp, "--unverified", "false", "--home", home}, &bytes.Buffer{})
+	if err == nil || !strings.Contains(err.Error(), "takes no other arguments") {
+		t.Errorf("err = %v, want the stray argument refused", err)
+	}
+	if entries, _ := os.ReadDir(home); len(entries) != 0 {
+		t.Errorf("a refused run left %d entries", len(entries))
 	}
 }
 
@@ -765,6 +786,9 @@ func TestUpdateFromZipVerifiedAndTampered(t *testing.T) {
 	}
 	if strings.Contains(fmt.Sprint(err), "move SHA256SUMS") {
 		t.Errorf("the refusal suggests removing the checksums: %v", err)
+	}
+	if strings.Contains(strings.ToLower(fmt.Sprint(err)), "unverified") {
+		t.Errorf("a failed-check refusal names --unverified (ADR-040): %v", err)
 	}
 	if entries, _ := os.ReadDir(home); len(entries) != 0 {
 		t.Errorf("a tampered zip left %d entries", len(entries))

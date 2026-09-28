@@ -21,6 +21,7 @@ Research a topic, compare alternatives, and optionally build a full spec with im
 
 - Search the web and read existing project code.
 - Study similar solutions and identify at least 3 viable approaches or tools.
+- Record only the answer to the question the research was run for. A finding about ANOTHER project is not this project's work: it stays out of this project's plans, handoff and issue lists, and is mentioned to the operator once, in chat, if at all.
 
 ### Step 2: Compare
 

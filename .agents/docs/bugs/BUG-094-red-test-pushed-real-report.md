@@ -2,7 +2,7 @@
 owner: bugs
 date: 2026-09-28
 id: BUG-094
-status: open
+status: fixed
 area: tests / cmd/sh-agent report path
 ---
 # BUG-094: A red test run pushed a real report to the feedback repository
@@ -19,7 +19,9 @@ A red-phase test for a missing refusal or guard executes the real command it mea
 ## Fix
 The refusal now runs before any command (`cmd/sh-agent/main.go`, the `zipSet` block ahead of the first `switch`). The test now sets `PATH` to an empty temp directory so git/gh are unreachable even if the refusal regresses. A mutation run (refusal disabled, `PATH` empty) pushed nothing, confirmed via `gh api .../commits`. Every later run used `-timeout`.
 
-Remediation of the already-pushed record (`reports/dave/2026-09-28-172114/report.json` in `styrman-harness-feedback`, commit `c5d47b2`) is unresolved: removing it requires another push (force-push is forbidden), which is the operator's decision — status stays `open` until they act. Content read back: metrics only (host "dave", linux/amd64, `harness_commit` 1cb2608, drift 257, 27 skills, 7 agents, `go1.27.1`), no files, no redactions, no secrets, no corrections.
+Remediation of the already-pushed record (`reports/dave/2026-09-28-172114/report.json` in `styrman-harness-feedback`, commit `c5d47b2`) was operator-approved ("All approved", 2026-09-28). Content read back: metrics only (host "dave", linux/amd64, `harness_commit` 1cb2608, drift 257, 27 skills, 7 agents, `go1.27.1`), no files, no redactions, no secrets, no corrections.
+
+The pushed report was removed from `styrman-harness-feedback` by an ordinary commit, `1703cea` ("Remove the report a styrman-harness test pushed by mistake (BUG-094)…"), no force-push.
 
 ## Prevention
 A test for a command with an outward-facing side effect (report, download, push, deploy) cuts that reach first — empty `PATH`, no reachable credentials — before the command can run, and above all when the test is written ahead of the refusal or guard it checks: the red run executes the real thing. `--home` pointing at scratch does not isolate credentials that live elsewhere (`~/.ssh`, `gh` auth).

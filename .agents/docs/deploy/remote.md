@@ -142,18 +142,25 @@ for target in linux/amd64 darwin/arm64 linux/arm64; do
     go build -trimpath -ldflags "-X main.version=vX.Y.Z" \
     -o ".agents/scratch/release-vX.Y.Z/sh-agent-${target%/*}-${target#*/}" ./cmd/sh-agent
 done
+# 1b. the zip of the tagged tree, for a zip place (ADR-039): `update --from-zip` verifies it
+#     against this release's signed SHA256SUMS when both sit beside it
+git archive --format=zip --prefix=styrman-harness-vX.Y.Z/ -o .agents/scratch/release-vX.Y.Z/styrman-harness-vX.Y.Z.zip vX.Y.Z
 # 2. the checksums, with the VERSION as the first line — `sh-agent update` refuses a
 #    release whose signed SHA256SUMS names another version or none (D26 of the
 #    release-binary plan), and `sha256sum -c` ignores a '#' line
 cd .agents/scratch/release-vX.Y.Z
 printf '# styrman-harness %s\n' vX.Y.Z > SHA256SUMS
-sha256sum sh-agent-linux-amd64 sh-agent-darwin-arm64 sh-agent-linux-arm64 >> SHA256SUMS
+sha256sum sh-agent-linux-amd64 sh-agent-darwin-arm64 sh-agent-linux-arm64 styrman-harness-vX.Y.Z.zip >> SHA256SUMS
 sha256sum -c SHA256SUMS                                                    # exit 0: the file describes these files
 # 3. signed with the same key as the tag, in the namespace the binary verifies
 ssh-keygen -Y sign -f ~/.ssh/id_ed25519 -n sh-agent-release SHA256SUMS
 printf '%s\n' 'ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR' > allowed_signers
 ssh-keygen -Y verify -f allowed_signers -I ostling.simon@gmail.com -n sh-agent-release -s SHA256SUMS.sig < SHA256SUMS   # exit 0: what the places will check, checked here first
 rm -f allowed_signers                                                      # it exists only for the check above: the line the PLACES verify against is compiled into the binary, and a signer file left on disk is the artifact release.go refuses to trust (security review 2026-09-17)
+# 3b. BEFORE anything is published: this host's own built binary verifies the release zip,
+#     so a binary carrying a stray -ldflags signer never ships (ADR-039)
+mkdir -p ../zipcheck && "./sh-agent-$(go env GOOS)-$(go env GOARCH)" update --from-zip styrman-harness-vX.Y.Z.zip --home ../zipcheck --dry-run > ../zipcheck.out   # into a file, never a pipe (BUG-086)
+grep -q "VERIFIED against the signed SHA256SUMS of release vX.Y.Z" ../zipcheck.out   # exit 0
 # 4. the release, with notes read by the operator before the upload — created with the
 #    notes ALONE, then one upload per asset: a create carrying every asset rolls the whole
 #    release back when a single upload fails, which is what GitHub did twice for v1.1.0
@@ -161,10 +168,10 @@ rm -f allowed_signers                                                      # it 
 #    time each. Retry an individual upload before calling it a failure.
 gh release create vX.Y.Z --repo kesokaj/styrman-harness --verify-tag --title "styrman-harness vX.Y.Z" \
   --notes-file ../release-notes-vX.Y.Z.md
-for a in SHA256SUMS SHA256SUMS.sig sh-agent-linux-amd64 sh-agent-darwin-arm64 sh-agent-linux-arm64; do
+for a in SHA256SUMS SHA256SUMS.sig sh-agent-linux-amd64 sh-agent-darwin-arm64 sh-agent-linux-arm64 styrman-harness-vX.Y.Z.zip; do
   gh release upload vX.Y.Z --repo kesokaj/styrman-harness "$a" --clobber || echo "retry $a by hand"
 done
-gh release view vX.Y.Z --repo kesokaj/styrman-harness --json assets --jq '.assets[].name'   # all five
+gh release view vX.Y.Z --repo kesokaj/styrman-harness --json assets --jq '.assets[].name'   # all six
 cd -
 ```
 `allowed_signers` is written only to run the check above and removed immediately; the line the PLACES verify against is compiled into the binary (`internal/harness/release.go`), so a file on any machine cannot decide what a genuine release is — which is exactly why this procedure does not leave one lying about. The release notes are built as § Release notes below says. Before this repository is ever made public, read the trail for what it names: `.agents/docs/` carries hostnames (`spgo-mac.roam.internal`, `devbox`), machine paths (`/opt/devbox/deploy/harness`), and a report record's contents, all of which are fine inside a private repository and are internal identifiers outside one. There is no secret in them — that is checked every release — but publication is a separate decision from releasing, and this is the paragraph that says so (security review 2026-09-18).
@@ -173,7 +180,7 @@ Publishing a release changes NOTHING about the repository's visibility: `styrman
 
 Upload the assets one call at a time, not all of them on `gh release create`: a single create-with-assets call ROLLS THE WHOLE RELEASE BACK when one upload fails, which is what GitHub's upload endpoint did twice for v1.1.0 (`HTTP 500: Error creating asset temp dir`, both attempts leaving no release and the tag intact). Create the release with `--notes-file` alone, then `gh release upload vX.Y.Z --repo kesokaj/styrman-harness <asset> --clobber` per file, retrying an individual upload before calling it a failure.
 
-After the upload: `gh release view vX.Y.Z --repo kesokaj/styrman-harness --json assets --jq '.assets[].name'` lists the five assets, and nothing further is pushed anywhere — a binary-only place picks the release up the next time the operator runs `sh-agent update` there.
+After the upload: `gh release view vX.Y.Z --repo kesokaj/styrman-harness --json assets --jq '.assets[].name'` lists the six assets, and nothing further is pushed anywhere — a binary-only place picks the release up the next time the operator runs `sh-agent update` there.
 
 ### Release notes
 

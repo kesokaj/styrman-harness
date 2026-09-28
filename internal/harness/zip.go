@@ -48,13 +48,20 @@ var zipTrees = map[string]bool{"context": true, "skills": true, "agents": true, 
 // names and sizes, counted by decompressing. GitHub's single top folder is
 // stripped; entries outside the five trees are never written. On any error
 // the directory this call made is removed.
-func UnpackZip(zipPath, parent string) (dir, sum string, err error) {
+func UnpackZip(zipPath, parent string, check func(sum string) error) (dir, sum string, err error) {
 	data, err := readCapped(zipPath, maxZipArchiveBytes)
 	if err != nil {
 		return "", "", fmt.Errorf("%s: reading the archive: %w", zipPath, err)
 	}
 	h := sha256.Sum256(data)
 	sum = hex.EncodeToString(h[:])
+	// The check — a signature verification — sees the hash of the very bytes
+	// that will be unpacked, and a refusal leaves nothing behind.
+	if check != nil {
+		if err := check(sum); err != nil {
+			return "", "", err
+		}
+	}
 	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
 		return "", "", fmt.Errorf("%s: not a readable zip: %w", zipPath, err)

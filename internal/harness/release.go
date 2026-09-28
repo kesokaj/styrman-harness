@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -217,69 +218,11 @@ func downloadRelease(dir, tag, asset string, out io.Writer) ([]byte, error) {
 // says the checksum file is the operator's, the checksum says the binary is
 // the one that file names.
 func verifyRelease(keygen, dir, tag, asset string, data []byte) error {
-	sumsPath := filepath.Join(dir, "SHA256SUMS")
-	if _, err := os.Stat(sumsPath); err != nil {
-		return fmt.Errorf("release %s has no SHA256SUMS", tag)
-	}
-	sums, err := readCapped(sumsPath, maxSumsBytes)
+	sums, named, err := verifySignedSums(keygen, dir, dir, "release "+tag)
 	if err != nil {
-		return fmt.Errorf("release %s: SHA256SUMS is not usable: %w", tag, err)
-	}
-	if _, err := os.Stat(filepath.Join(dir, "SHA256SUMS.sig")); err != nil {
-		return fmt.Errorf("release %s has no SHA256SUMS.sig", tag)
-	}
-	identity, _, ok := strings.Cut(releaseSigner, " ")
-	if !ok || identity == "" {
-		return errors.New("the compiled-in release signer line has no identity")
-	}
-	signers := filepath.Join(dir, "allowed_signers")
-	if err := os.WriteFile(signers, []byte(releaseSigner+"\n"), 0o600); err != nil {
 		return err
 	}
-	verify := exec.Command(keygen, "-Y", "verify",
-		"-f", signers,
-		"-I", identity,
-		"-n", ReleaseNamespace,
-		"-s", filepath.Join(dir, "SHA256SUMS.sig"))
-	verify.Stdin = strings.NewReader(string(sums))
-	var verifyErr bytes.Buffer
-	verify.Stderr = &verifyErr
-	if err := verify.Run(); err != nil {
-		// A verifier that could not RUN is not a release that failed to
-		// verify; saying the latter would read as a tampered release when the
-		// machine's OpenSSH is broken (code review 2026-09-17). Either way
-		// nothing is installed.
-		// What ssh-keygen SAID, not just that it failed: an OpenSSH too old
-		// for `-Y verify` exits 255 like a bad signature does, so without its
-		// message a broken tool reads as a tampered release (code review
-		// 2026-09-17, round 2).
-		said := firstStderrLine(verifyErr.String())
-		var exit *exec.ExitError
-		if !errors.As(err, &exit) {
-			if said != "" {
-				return fmt.Errorf("could not run %s to verify the release: %w (%s)", keygen, err, said)
-			}
-			return fmt.Errorf("could not run %s to verify the release: %w", keygen, err)
-		}
-		// No attempt to tell a bad signature from a broken tool by its
-		// wording — the first attempt at that misread `Signature
-		// verification failed: incorrect signature` as a tool complaint. The
-		// verdict stays the same and ssh-keygen's own words ride along, so an
-		// OpenSSH too old for `-Y verify` ("unknown option -- Y", also exit
-		// 255) is visible instead of looking like a tampered release.
-		if said != "" {
-			return fmt.Errorf("SHA256SUMS signature does not verify (%s: %s)", filepath.Base(keygen), said)
-		}
-		return errors.New("SHA256SUMS signature does not verify")
-	}
-	// Only now that the signature holds is anything in the file believed —
-	// including the version it names, which is why the marker is inside the
-	// signed bytes rather than beside them.
-	marker := sumsVersionMarker.FindSubmatch(sums)
-	if marker == nil {
-		return fmt.Errorf("the signed SHA256SUMS of %s names no release version; it cannot be told apart from another release's", tag)
-	}
-	if named := string(marker[1]); named != tag {
+	if named != tag {
 		return fmt.Errorf("the signed SHA256SUMS says %s but this is release %s", named, tag)
 	}
 	want, err := checksumFor(string(sums), asset)
@@ -291,6 +234,66 @@ func verifyRelease(keygen, dir, tag, asset string, data []byte) error {
 		return fmt.Errorf("checksum mismatch for %s", asset)
 	}
 	return nil
+}
+
+// verifySignedSums checks sumsDir's SHA256SUMS against SHA256SUMS.sig with the
+// compiled-in signer (written to signersDir for ssh-keygen) and returns the
+// file and the release it names. what names the subject in messages.
+func verifySignedSums(keygen, sumsDir, signersDir, what string) (sums []byte, tag string, err error) {
+	sumsPath := filepath.Join(sumsDir, "SHA256SUMS")
+	if _, err := os.Stat(sumsPath); err != nil {
+		return nil, "", fmt.Errorf("%s has no SHA256SUMS", what)
+	}
+	sums, err = readCapped(sumsPath, maxSumsBytes)
+	if err != nil {
+		return nil, "", fmt.Errorf("%s: SHA256SUMS is not usable: %w", what, err)
+	}
+	if _, err := os.Stat(filepath.Join(sumsDir, "SHA256SUMS.sig")); err != nil {
+		return nil, "", fmt.Errorf("%s has no SHA256SUMS.sig", what)
+	}
+	identity, _, ok := strings.Cut(releaseSigner, " ")
+	if !ok || identity == "" {
+		return nil, "", errors.New("the compiled-in release signer line has no identity")
+	}
+	signers := filepath.Join(signersDir, "allowed_signers")
+	if err := os.WriteFile(signers, []byte(releaseSigner+"\n"), 0o600); err != nil {
+		return nil, "", err
+	}
+	verify := exec.Command(keygen, "-Y", "verify",
+		"-f", signers,
+		"-I", identity,
+		"-n", ReleaseNamespace,
+		"-s", filepath.Join(sumsDir, "SHA256SUMS.sig"))
+	verify.Stdin = strings.NewReader(string(sums))
+	var verifyErr bytes.Buffer
+	verify.Stderr = &verifyErr
+	if err := verify.Run(); err != nil {
+		// A verifier that could not RUN is not a release that failed to
+		// verify; saying the latter would read as a tampered release when the
+		// machine's OpenSSH is broken. Either way nothing is installed.
+		// What ssh-keygen SAID rides along: an OpenSSH too old for `-Y verify`
+		// exits 255 like a bad signature does.
+		said := firstStderrLine(verifyErr.String())
+		var exit *exec.ExitError
+		if !errors.As(err, &exit) {
+			if said != "" {
+				return nil, "", fmt.Errorf("could not run %s to verify the release: %w (%s)", keygen, err, said)
+			}
+			return nil, "", fmt.Errorf("could not run %s to verify the release: %w", keygen, err)
+		}
+		if said != "" {
+			return nil, "", fmt.Errorf("SHA256SUMS signature does not verify (%s: %s)", filepath.Base(keygen), said)
+		}
+		return nil, "", errors.New("SHA256SUMS signature does not verify")
+	}
+	// Only now that the signature holds is anything in the file believed —
+	// including the version it names, which is why the marker is inside the
+	// signed bytes rather than beside them.
+	marker := sumsVersionMarker.FindSubmatch(sums)
+	if marker == nil {
+		return nil, "", fmt.Errorf("the signed SHA256SUMS of %s names no release version; it cannot be told apart from another release's", what)
+	}
+	return sums, string(marker[1]), nil
 }
 
 // checksumFor reads one file's hash out of a sha256sum-format listing, in
@@ -407,4 +410,61 @@ func firstLineOfError(err error) string {
 
 func firstStderrLine(s string) string {
 	return strings.TrimSpace(strings.SplitN(s, "\n", 2)[0])
+}
+
+// SwapReleaseSigner replaces the compiled-in release signer and returns the
+// function that restores it. It exists for tests of commands that verify a
+// release; nothing else calls it.
+func SwapReleaseSigner(line string) (restore func()) {
+	old := releaseSigner
+	releaseSigner = line
+	return func() { releaseSigner = old }
+}
+
+// ErrZipUnsigned: no SHA256SUMS and no SHA256SUMS.sig beside a zip — a zip of
+// a branch, which nothing signs. The caller installs it marked UNVERIFIED.
+var ErrZipUnsigned = errors.New("no signed SHA256SUMS beside the zip")
+
+// VerifyZipSums verifies a release zip against the SHA256SUMS and
+// SHA256SUMS.sig beside it: the signature with the compiled-in signer, then
+// the zip's own line, by its file name, against sum. It returns the release
+// the signed file names. Neither file present is ErrZipUnsigned; anything
+// else that fails is a refusal (plan D7).
+func VerifyZipSums(zipPath, sum string) (string, error) {
+	dir := filepath.Dir(zipPath)
+	_, sumsErr := os.Stat(filepath.Join(dir, "SHA256SUMS"))
+	_, sigErr := os.Stat(filepath.Join(dir, "SHA256SUMS.sig"))
+	// Only "does not exist" means unsigned. Any other error (a folder that
+	// cannot be read, say) is a refusal: an unreadable signature is not the
+	// absence of one.
+	for _, e := range []error{sumsErr, sigErr} {
+		if e != nil && !errors.Is(e, fs.ErrNotExist) {
+			return "", fmt.Errorf("cannot check for signed checksums beside %s: %w", filepath.Base(zipPath), e)
+		}
+	}
+	if sumsErr != nil && sigErr != nil {
+		return "", ErrZipUnsigned
+	}
+	keygen, err := sshKeygen()
+	if err != nil {
+		return "", fmt.Errorf("%w; the zip has signed checksums beside it and cannot be verified without it", err)
+	}
+	signersDir, err := os.MkdirTemp("", "sh-agent-verify-*")
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(signersDir)
+	what := filepath.Base(zipPath)
+	sums, tag, err := verifySignedSums(keygen, dir, signersDir, what)
+	if err != nil {
+		return "", err
+	}
+	want, err := checksumFor(string(sums), what)
+	if err != nil {
+		return "", fmt.Errorf("the signed SHA256SUMS beside it are release %s's and do not list %s: %w — put the zip in a folder with its own release's SHA256SUMS and SHA256SUMS.sig, under the release's own file name", tag, what, err)
+	}
+	if want != sum {
+		return "", fmt.Errorf("checksum mismatch for %s against the signed SHA256SUMS of %s: the zip is not the one that release published — download it again", what, tag)
+	}
+	return tag, nil
 }

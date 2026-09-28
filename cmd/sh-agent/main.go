@@ -1076,7 +1076,22 @@ func updateFromZip(zipPath, home, vendorFlag string, dryRun bool, out io.Writer)
 			}
 		}()
 	}
-	dir, sum, err := harness.UnpackZip(zipPath, parent)
+	// A release zip with its signed SHA256SUMS beside it is verified before a
+	// byte is written; without them it is installed marked UNVERIFIED (ADR-039,
+	// plan D3/D4). Any other verification failure refuses the zip.
+	verifiedTag := ""
+	check := func(sum string) error {
+		tag, err := harness.VerifyZipSums(zipPath, sum)
+		if errors.Is(err, harness.ErrZipUnsigned) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		verifiedTag = tag
+		return nil
+	}
+	dir, sum, err := harness.UnpackZip(zipPath, parent, check)
 	if err != nil {
 		return err
 	}
@@ -1089,7 +1104,11 @@ func updateFromZip(zipPath, home, vendorFlag string, dryRun bool, out io.Writer)
 	if dryRun {
 		prefix = "[dry-run] "
 	}
-	fmt.Fprintf(out, "%szip %s (sha256 %s, UNVERIFIED — a zip carries no signature; trust rests on your own download): installing its harness and the running binary %s; nothing is downloaded and nothing in the zip replaces the binary\n", prefix, zipPath, sum, buildVersion())
+	trust := "UNVERIFIED — no signed SHA256SUMS beside it; trust rests on your own download"
+	if verifiedTag != "" {
+		trust = "VERIFIED against the signed SHA256SUMS of release " + verifiedTag
+	}
+	fmt.Fprintf(out, "%szip %s (sha256 %s, %s): installing its harness and the running binary %s; nothing is downloaded and nothing in the zip replaces the binary\n", prefix, zipPath, sum, trust, buildVersion())
 	src := harness.Source{FS: os.DirFS(dir), Dir: dir, Origin: harness.ZipPrefix + "sha256:" + sum}
 	if err := installFiles(src, home, vendor, dryRun, out); err != nil {
 		return err

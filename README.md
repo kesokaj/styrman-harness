@@ -17,7 +17,7 @@ flowchart LR
     end
     subgraph githubLane["GitHub, private"]
         harnessRepo[("styrman-harness<br/>main: what checkout places follow<br/>tags: release markers")]
-        releases[("Releases<br/>platform binaries + signed SHA256SUMS")]
+        releases[("Releases<br/>platform binaries + release zip + signed SHA256SUMS")]
         feedbackRepo[("styrman-harness-feedback<br/>reports/HOST/RUN/")]
     end
     subgraph placeLane["Each place"]
@@ -34,10 +34,11 @@ flowchart LR
     ship -- "git push" --> harnessRepo
     ship --> preflight
     preflight -- "tag marks a version" --> harnessRepo
-    preflight -- "signed binaries" --> releases
+    preflight -- "signed binaries and zip" --> releases
     harnessRepo -- "clone once, update pulls" --> checkoutPlace
     releases -- "update downloads and verifies" --> binaryPlace
     harnessRepo -. "zip, downloaded by hand; update --from-zip repeats it" .-> zipPlace
+    releases -. "release zip + signed SHA256SUMS, by hand; verified" .-> zipPlace
     checkoutPlace --> installer
     binaryPlace --> installer
     zipPlace -.-> installer
@@ -50,10 +51,10 @@ flowchart LR
     configDir -. "same machine only" .-> retroHarness
     readReports -.-> edit
     retroHarness --> edit
-    linkStyle 0,1,5,6,7 stroke:#0B7A74,stroke-width:2px
+    linkStyle 0,1,5,6,7,8 stroke:#0B7A74,stroke-width:2px
     linkStyle 2,3,4 stroke:#8A3A78,stroke-width:2px
-    linkStyle 8,9,10,11,12 stroke:#3B4FB8,stroke-width:2px
-    linkStyle 13,14,15,16,17,18,19 stroke:#A8660F,stroke-width:2px
+    linkStyle 9,10,11,12,13 stroke:#3B4FB8,stroke-width:2px
+    linkStyle 14,15,16,17,18,19,20 stroke:#A8660F,stroke-width:2px
 ```
 
 Teal is **update**, indigo **install**, amber **report back**, plum **release**. A dashed line is a gap: done by hand, or limited to one machine.
@@ -61,7 +62,7 @@ Teal is **update**, indigo **install**, amber **report back**, plum **release**.
 - **Install:** clone `styrman-harness` with your own SSH key or `gh` login and run `go run ./cmd/sh-agent install`, or download a release's `sh-agent` binary with that credential and run `sh-agent install`, which installs the harness built into it (§ Install without cloning). Either way installed files go into `~/.claude` and `~/.gemini/config`, no repository is created, and the next session reads them. A machine that can reach neither downloads the repository zip by hand instead (§ Install from a zip (no SSH, no gh)).
 - **Update:** edit and push `main` in your checkout. At each place, when you decide, `sh-agent update` moves it forward — what that means for a checkout place, a binary-only place and a zip place is `.agents/docs/specs/sh-agent/delivery.md` § The model. Nothing pushes to a machine.
 - **Report back:** sessions log corrections and retros under `~/.config/sh-agent/`. Before each report, read what was added since the last one. `sh-agent report` sends a redacted copy and a metrics record to `styrman-harness-feedback` through a throwaway clone holding only this machine's own reports, removed after the push — no machine keeps a copy of any other's. Back at the harness, `/retro --harness` applies the proposals queued on that machine; other places' reports are read by hand.
-- **Release:** `/preflight vX.Y.Z` in your own turn gates, pushes an SSH-signed tag on `main`, and publishes that tag's binaries with checksums signed by the same key; what each kind of place does with it is `.agents/docs/specs/sh-agent/delivery.md` § The model.
+- **Release:** `/preflight vX.Y.Z` in your own turn gates, pushes an SSH-signed tag on `main`, and publishes that tag's binaries and a zip of its tree with checksums signed by the same key; what each kind of place does with it is `.agents/docs/specs/sh-agent/delivery.md` § The model.
 
 ## Install
 
@@ -158,14 +159,14 @@ To move such a place forward, run `sh-agent update` there: it asks GitHub for th
 
 ## Install from a zip (no SSH, no gh)
 
-A machine that can neither hold your SSH key nor run `gh` — a corporate workstation, say — still reaches the harness: download the repository zip in a browser (GitHub's "Code → Download ZIP" on `main`, or a release's "Source code (zip)"), download a release `sh-agent` binary by hand from the Releases page (§ Install without cloning covers verifying it, since a zip carries no binary), and run:
+A machine that can neither hold your SSH key nor run `gh` — a corporate workstation, say — still reaches the harness: download a release's `styrman-harness-vX.Y.Z.zip`, `SHA256SUMS` and `SHA256SUMS.sig` from the Releases page into one folder, together with its `sh-agent` binary (§ Install without cloning covers verifying the binary), and run the command below. A zip of `main` ("Code → Download ZIP") works too, but it is unsigned:
 
 ```bash
-sh-agent update --from-zip ~/Downloads/styrman-harness-main.zip
+sh-agent update --from-zip ~/Downloads/styrman-harness-vX.Y.Z.zip   # SHA256SUMS and SHA256SUMS.sig beside it: verified
 sh-agent status      # "installed … from zip sha256:<hex>"; reports presence, not content — the zip is not kept
 ```
 
-`--from-zip` unpacks the zip into a temporary directory, installs that tree and the running binary, and deletes the directory. The binary is copied into `~/.local/bin` the way every install copies it, but nothing in the zip replaces it and nothing is fetched. `--dry-run` does the same unpack-and-plan without writing a file, a manifest, or a binary, and still removes the temporary directory. The zip is unsigned, and the command says so with `UNVERIFIED` in its first line: nothing verifies it, so trust rests entirely on your own download, the same as any other file you'd trust from this private repository. `update --dry-run` on the other two kinds of place reports what an update would do and changes nothing. Moving a zip place forward means repeating the download and `--from-zip`; a zip whose harness needs a newer binary means downloading that binary by hand too.
+`--from-zip` unpacks the zip into a temporary directory, installs that tree and the running binary, and deletes the directory. The binary is copied into `~/.local/bin` the way every install copies it, but nothing in the zip replaces it and nothing is fetched. `--dry-run` does the same unpack-and-plan without writing a file, a manifest, or a binary, and still removes the temporary directory. With the release's `SHA256SUMS` and `SHA256SUMS.sig` beside it, the zip is verified before anything is written: the signature against the signer built into the binary, then the zip's own checksum line, which needs the release's own file name. The first line then says `VERIFIED against the signed SHA256SUMS of release vX.Y.Z`, and any failure refuses the zip. Without them — a `main` zip — the first line says `UNVERIFIED`, and trust rests on your own download (ADR-039). `update --dry-run` on the other two kinds of place reports what an update would do and changes nothing. Moving a zip place forward means repeating the download and `--from-zip`; a zip whose harness needs a newer binary means downloading that binary by hand too.
 
 ## Daily commands
 

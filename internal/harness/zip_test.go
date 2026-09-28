@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -92,7 +93,7 @@ func TestUnpackZipGitHubTopFolder(t *testing.T) {
 	writeZip(t, zp, entries)
 	parent := t.TempDir()
 
-	tree, _, err := UnpackZip(zp, parent)
+	tree, _, err := UnpackZip(zp, parent, nil)
 	if err != nil {
 		t.Fatalf("UnpackZip: %v", err)
 	}
@@ -119,7 +120,7 @@ func TestUnpackZipRootLayout(t *testing.T) {
 	dir := t.TempDir()
 	zp := filepath.Join(dir, "flat.zip")
 	writeZip(t, zp, harnessEntries(t, ""))
-	tree, _, err := UnpackZip(zp, t.TempDir())
+	tree, _, err := UnpackZip(zp, t.TempDir(), nil)
 	if err != nil {
 		t.Fatalf("UnpackZip: %v", err)
 	}
@@ -158,7 +159,7 @@ func TestUnpackZipRefuses(t *testing.T) {
 			zr.Close()
 
 			parent := t.TempDir()
-			tree, _, err := UnpackZip(zp, parent)
+			tree, _, err := UnpackZip(zp, parent, nil)
 			if err == nil {
 				t.Fatalf("UnpackZip accepted %s (tree %s)", c.name, tree)
 			}
@@ -188,7 +189,7 @@ func TestUnpackZipLimits(t *testing.T) {
 		zp := filepath.Join(t.TempDir(), "many.zip")
 		writeZip(t, zp, entries)
 		parent := t.TempDir()
-		if _, _, err := UnpackZip(zp, parent); err == nil || !strings.Contains(err.Error(), "entries") {
+		if _, _, err := UnpackZip(zp, parent, nil); err == nil || !strings.Contains(err.Error(), "entries") {
 			t.Errorf("err = %v, want an entry-count refusal", err)
 		}
 		noZipDirs(t, parent)
@@ -201,7 +202,7 @@ func TestUnpackZipLimits(t *testing.T) {
 		zp := filepath.Join(t.TempDir(), "big.zip")
 		writeZip(t, zp, entries)
 		parent := t.TempDir()
-		if _, _, err := UnpackZip(zp, parent); err == nil || !strings.Contains(err.Error(), "big.md") {
+		if _, _, err := UnpackZip(zp, parent, nil); err == nil || !strings.Contains(err.Error(), "big.md") {
 			t.Errorf("err = %v, want a per-file size refusal naming big.md", err)
 		}
 		noZipDirs(t, parent)
@@ -219,7 +220,7 @@ func TestUnpackZipLimits(t *testing.T) {
 		zp := filepath.Join(t.TempDir(), "total.zip")
 		writeZip(t, zp, entries)
 		parent := t.TempDir()
-		if _, _, err := UnpackZip(zp, parent); err == nil || !strings.Contains(err.Error(), "total") {
+		if _, _, err := UnpackZip(zp, parent, nil); err == nil || !strings.Contains(err.Error(), "total") {
 			t.Errorf("err = %v, want a total-size refusal", err)
 		}
 		noZipDirs(t, parent)
@@ -230,7 +231,7 @@ func TestUnpackZipNotHarness(t *testing.T) {
 	zp := filepath.Join(t.TempDir(), "other.zip")
 	writeZip(t, zp, []zipEntry{{name: "proj/README.md", body: "x"}, {name: "proj/main.go", body: "package main"}})
 	parent := t.TempDir()
-	if _, _, err := UnpackZip(zp, parent); err == nil || !strings.Contains(err.Error(), "not a harness zip") {
+	if _, _, err := UnpackZip(zp, parent, nil); err == nil || !strings.Contains(err.Error(), "not a harness zip") {
 		t.Errorf("err = %v, want not a harness zip", err)
 	}
 	noZipDirs(t, parent)
@@ -239,7 +240,7 @@ func TestUnpackZipNotHarness(t *testing.T) {
 	if err := os.WriteFile(notZip, []byte("not a zip"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := UnpackZip(notZip, parent); err == nil || !strings.Contains(err.Error(), "not a readable zip") {
+	if _, _, err := UnpackZip(notZip, parent, nil); err == nil || !strings.Contains(err.Error(), "not a readable zip") {
 		t.Errorf("err = %v, want not a readable zip", err)
 	}
 	noZipDirs(t, parent)
@@ -325,7 +326,7 @@ func TestUnpackZipRefusesDuplicateName(t *testing.T) {
 		t.Fatalf("fixture: %d entries named top/skills/alpha/SKILL.md, want 2", seen)
 	}
 	parent := t.TempDir()
-	if _, _, err := UnpackZip(zp, parent); err == nil || !strings.Contains(err.Error(), "SKILL.md") {
+	if _, _, err := UnpackZip(zp, parent, nil); err == nil || !strings.Contains(err.Error(), "SKILL.md") {
 		t.Errorf("err = %v, want the duplicate entry refused, never overwritten", err)
 	}
 	noZipDirs(t, parent)
@@ -344,7 +345,7 @@ func TestUnpackZipLateRefusalCreatesNoParent(t *testing.T) {
 			writeZip(t, zp, append(harnessEntries(t, "top/"), extra))
 			home := t.TempDir()
 			parent := filepath.Join(home, ".config", "sh-agent")
-			if _, _, err := UnpackZip(zp, parent); err == nil {
+			if _, _, err := UnpackZip(zp, parent, nil); err == nil {
 				t.Fatal("UnpackZip accepted the zip")
 			}
 			if entries, _ := os.ReadDir(home); len(entries) != 0 {
@@ -362,7 +363,7 @@ func TestUnpackZipRefusesDeepOrLongNames(t *testing.T) {
 			zp := filepath.Join(t.TempDir(), "names.zip")
 			writeZip(t, zp, append(harnessEntries(t, "top/"), zipEntry{name: name, body: "x"}))
 			parent := t.TempDir()
-			if _, _, err := UnpackZip(zp, parent); err == nil || !strings.Contains(err.Error(), "too ") {
+			if _, _, err := UnpackZip(zp, parent, nil); err == nil || !strings.Contains(err.Error(), "too ") {
 				t.Errorf("err = %v, want a too-deep or too-long refusal", err)
 			}
 		})
@@ -379,7 +380,7 @@ func TestUnpackZipSumIsOfTheBytesRead(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := fmt.Sprintf("%x", sha256.Sum256(data))
-	_, sum, err := UnpackZip(zp, t.TempDir())
+	_, sum, err := UnpackZip(zp, t.TempDir(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -394,7 +395,7 @@ func TestUnpackZipRefusesOversizedArchive(t *testing.T) {
 	zp := filepath.Join(t.TempDir(), "whole.zip")
 	writeZip(t, zp, harnessEntries(t, "top/"))
 	maxZipArchiveBytes = 100
-	if _, _, err := UnpackZip(zp, t.TempDir()); err == nil || !strings.Contains(err.Error(), "archive") {
+	if _, _, err := UnpackZip(zp, t.TempDir(), nil); err == nil || !strings.Contains(err.Error(), "archive") {
 		t.Errorf("err = %v, want the archive-size refusal", err)
 	}
 }
@@ -427,5 +428,160 @@ func TestSweepInterruptedClonesGlobCharsInHome(t *testing.T) {
 	}
 	if _, err := os.Stat(mine); err == nil {
 		t.Errorf("the home's own stale %s was not swept", mine)
+	}
+}
+
+// signedZipDir builds a release-shaped folder: the zip, its SHA256SUMS naming
+// it under the release marker, and the signature, with the test key as the
+// compiled-in signer.
+func signedZipDir(t *testing.T, tag string) (dir, zipPath string, r release) {
+	t.Helper()
+	r = newRelease(t, tag)
+	old := releaseSigner
+	releaseSigner = r.signer
+	t.Cleanup(func() { releaseSigner = old })
+	dir = t.TempDir()
+	name := "styrman-harness-" + tag + ".zip"
+	zipPath = filepath.Join(dir, name)
+	writeZip(t, zipPath, harnessEntries(t, "styrman-harness-"+tag+"/"))
+	signRelease(t, dir, name, r.key, tag)
+	return dir, zipPath, r
+}
+
+func zipSum(t *testing.T, p string) string {
+	t.Helper()
+	data, err := os.ReadFile(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return fmt.Sprintf("%x", sha256.Sum256(data))
+}
+
+func TestVerifyZipSums(t *testing.T) {
+	t.Run("verified", func(t *testing.T) {
+		_, zp, _ := signedZipDir(t, "v1.2.3")
+		tag, err := VerifyZipSums(zp, zipSum(t, zp))
+		if err != nil || tag != "v1.2.3" {
+			t.Errorf("tag=%q err=%v, want v1.2.3 and no error", tag, err)
+		}
+	})
+	t.Run("no sums: unsigned", func(t *testing.T) {
+		zp := filepath.Join(t.TempDir(), "styrman-harness-main.zip")
+		writeZip(t, zp, harnessEntries(t, "styrman-harness-main/"))
+		if _, err := VerifyZipSums(zp, zipSum(t, zp)); !errors.Is(err, ErrZipUnsigned) {
+			t.Errorf("err = %v, want ErrZipUnsigned", err)
+		}
+	})
+	t.Run("sig missing", func(t *testing.T) {
+		dir, zp, _ := signedZipDir(t, "v1.2.3")
+		os.Remove(filepath.Join(dir, "SHA256SUMS.sig"))
+		if _, err := VerifyZipSums(zp, zipSum(t, zp)); err == nil || errors.Is(err, ErrZipUnsigned) || !strings.Contains(err.Error(), "SHA256SUMS.sig") {
+			t.Errorf("err = %v, want a refusal naming SHA256SUMS.sig", err)
+		}
+		if _, err := VerifyZipSums(zp, zipSum(t, zp)); err != nil && strings.Contains(strings.ToLower(err.Error()), "unverified") {
+			t.Errorf("the refusal suggests removing the checksums (a bypass): %v", err)
+		}
+	})
+	t.Run("foreign key", func(t *testing.T) {
+		_, zp, _ := signedZipDir(t, "v1.2.3")
+		other := newRelease(t, "v1.2.3")
+		releaseSigner = other.signer
+		_, err := VerifyZipSums(zp, zipSum(t, zp))
+		if err == nil || !strings.Contains(err.Error(), "does not verify") {
+			t.Errorf("err = %v, want the signature refusal", err)
+		}
+		if err != nil && strings.Contains(strings.ToLower(err.Error()), "unverified") {
+			t.Errorf("the refusal suggests removing the checksums (a bypass): %v", err)
+		}
+	})
+	t.Run("checksum mismatch", func(t *testing.T) {
+		_, zp, _ := signedZipDir(t, "v1.2.3")
+		if _, err := VerifyZipSums(zp, strings.Repeat("0", 64)); err == nil || !strings.Contains(err.Error(), "checksum mismatch") {
+			t.Errorf("err = %v, want checksum mismatch", err)
+		}
+	})
+	t.Run("stale sums of another release", func(t *testing.T) {
+		dir, _, _ := signedZipDir(t, "v1.2.3")
+		newer := filepath.Join(dir, "styrman-harness-v1.3.0.zip")
+		writeZip(t, newer, harnessEntries(t, "styrman-harness-v1.3.0/"))
+		_, err := VerifyZipSums(newer, zipSum(t, newer))
+		if err == nil || !strings.Contains(err.Error(), "v1.2.3") || !strings.Contains(err.Error(), "its own release") {
+			t.Errorf("err = %v, want it to say the sums are v1.2.3's and to pair the zip with its own release's", err)
+		}
+		if err != nil && strings.Contains(err.Error(), "download that release") {
+			t.Errorf("the refusal points at the stale release: %v", err)
+		}
+	})
+	t.Run("sig present, sums missing", func(t *testing.T) {
+		dir, zp, _ := signedZipDir(t, "v1.2.3")
+		os.Remove(filepath.Join(dir, "SHA256SUMS"))
+		_, err := VerifyZipSums(zp, zipSum(t, zp))
+		if err == nil || errors.Is(err, ErrZipUnsigned) || !strings.Contains(err.Error(), "has no SHA256SUMS") {
+			t.Errorf("err = %v, want a refusal naming SHA256SUMS", err)
+		}
+		if err != nil && strings.Contains(strings.ToLower(err.Error()), "unverified") {
+			t.Errorf("the refusal suggests installing unverified (a bypass): %v", err)
+		}
+	})
+	t.Run("sums unreadable: refused, not unsigned", func(t *testing.T) {
+		if os.Geteuid() == 0 {
+			t.Skip("root reads through permissions")
+		}
+		dir, zp, _ := signedZipDir(t, "v1.2.3")
+		// A folder that cannot be searched: stat fails with a permission
+		// error, which is not "the files are absent".
+		locked := filepath.Join(dir, "locked")
+		if err := os.Mkdir(locked, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		inner := filepath.Join(locked, filepath.Base(zp))
+		if err := os.Rename(zp, inner); err != nil {
+			t.Fatal(err)
+		}
+		for _, f := range []string{"SHA256SUMS", "SHA256SUMS.sig"} {
+			if err := os.Rename(filepath.Join(dir, f), filepath.Join(locked, f)); err != nil {
+				t.Fatal(err)
+			}
+		}
+		sum := zipSum(t, inner)
+		if err := os.Chmod(locked, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { os.Chmod(locked, 0o755) })
+		if _, statErr := os.Stat(filepath.Join(locked, "SHA256SUMS")); statErr == nil || errors.Is(statErr, fs.ErrNotExist) {
+			t.Fatalf("fixture: stat must fail with a non-absence error, got %v", statErr)
+		}
+		if _, err := VerifyZipSums(inner, sum); err == nil || errors.Is(err, ErrZipUnsigned) {
+			t.Errorf("err = %v, want a refusal, never ErrZipUnsigned", err)
+		}
+	})
+	t.Run("renamed zip", func(t *testing.T) {
+		dir, zp, _ := signedZipDir(t, "v1.2.3")
+		renamed := filepath.Join(dir, "styrman-harness-v1.2.3 (1).zip")
+		if err := os.Rename(zp, renamed); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := VerifyZipSums(renamed, zipSum(t, renamed)); err == nil || !strings.Contains(err.Error(), "no line names") {
+			t.Errorf("err = %v, want no line names", err)
+		}
+	})
+}
+
+// A check's error stops UnpackZip before anything is written.
+func TestUnpackZipCheckStopsBeforeWriting(t *testing.T) {
+	zp := filepath.Join(t.TempDir(), "z.zip")
+	writeZip(t, zp, harnessEntries(t, "top/"))
+	parent := t.TempDir()
+	stop := errors.New("refused by the check")
+	var seen string
+	_, _, err := UnpackZip(zp, parent, func(sum string) error { seen = sum; return stop })
+	if !errors.Is(err, stop) {
+		t.Fatalf("err = %v, want the check's error unchanged", err)
+	}
+	if seen != zipSum(t, zp) {
+		t.Errorf("check saw %q, want the sha256 of the file", seen)
+	}
+	if entries, _ := os.ReadDir(parent); len(entries) != 0 {
+		t.Errorf("a refusing check left %d entries", len(entries))
 	}
 }

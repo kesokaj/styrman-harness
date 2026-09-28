@@ -61,7 +61,7 @@
 | BUG-089 | 2026-09-28 | agents/changelog | fixed | changelog agent's date rule said "run `date +%F` yourself" but its `tools:` list has no Bash | check an instruction's named commands against the agent's `tools:` list; a Bash-less agent gets the command's output in its dispatch instead |
 | BUG-092 | 2026-09-28 | process / behavioural runs of agents/*.md | fixed | probe's `demo()` extraction truncated at a heredoc's `}`, empty `$d` left `cd` a no-op, one `claude -p` run wrote a fake change entry into this repo | never extract shared shell code by line-range `sed`; source fixture files whole, assert them, and use `cd <dir> \|\| exit 1` |
 | BUG-093 | 2026-09-28 | cmd/sh-agent updateFromZip, internal/harness UnpackZip | fixed | a refused `--from-zip` (escaping entry) still left an empty `~/.config/sh-agent` on a fresh home | a command that can refuse its input creates nothing before the refusal point; its refused-case test asserts the whole target is unchanged, not just the obvious temp artifact |
-| BUG-094 | 2026-09-28 | tests / cmd/sh-agent report path | open | a red-phase test for a missing `--from-zip` refusal ran the real `sh-agent report` and pushed a real commit to the feedback repo | a test for a command with an outward-facing side effect cuts PATH/credential reach first, above all when written ahead of the guard it checks |
+| BUG-094 | 2026-09-28 | tests / cmd/sh-agent report path | fixed | a red-phase test for a missing `--from-zip` refusal ran the real `sh-agent report` and pushed a real commit to the feedback repo | a test for a command with an outward-facing side effect cuts PATH/credential reach first, above all when written ahead of the guard it checks |
 
 ## Graduated
 

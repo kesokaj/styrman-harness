@@ -351,3 +351,31 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
 - If a zip's harness needs a newer binary, the operator downloads that binary by hand too; the install output says nothing in the zip replaces the binary.
 - After a zip install, a development build with no checkout names the zip install in its not-found error, while a release binary works from its embedded files.
 - The release carrying this is v1.8.0, a MINOR. Plan: `.agents/docs/plans/2026-09-28-update-from-zip.md`.
+
+## ADR-039: Release zips are signed, and `--from-zip` verifies them     (2026-09-28) — Accepted
+
+**Context:** The v1.8.0 gate left one medium open by decision: an unsigned zip becomes the agents' instructions, and `UNVERIFIED` only discloses that (`reviews/2026-09-28-preflight-v1.8.0.md` row 1; ADR-038's Consequences). The operator approved the signed-zip option: "All approved" (2026-09-28).
+
+**Decision:**
+- **The release.** Every release publishes `styrman-harness-vX.Y.Z.zip`, a `git archive` of the tag with the top folder `styrman-harness-vX.Y.Z/`, listed in the signed `SHA256SUMS` (`deploy/remote.md` § Releases, step 1b).
+- **`--from-zip` with sums beside the zip.** When `SHA256SUMS` and `SHA256SUMS.sig` sit beside the zip, it verifies both before a byte is written: the signature against the signer compiled into the binary, then the zip's own line in `SHA256SUMS`, by its file name, against the hash of the bytes it will unpack. It prints `VERIFIED against the signed SHA256SUMS of release vX.Y.Z`. Any failure refuses the zip, including a stale or foreign pair of files. The messages never suggest removing the checksums, which would turn a tamper refusal into a one-step bypass (security review 2026-09-28).
+- **`--from-zip` with nothing beside the zip** (a `main` zip) installs it marked `UNVERIFIED`, as R9 allows.
+- **Where it lives.** `verifyRelease` is split so both paths share `verifySignedSums`. `UnpackZip` takes a check that runs after hashing and before writing. REQUIREMENTS R9 is amended in the same commit.
+
+**Supersedes:** ADR-038's Consequences bullet on the unsigned zip, for release zips.
+
+**Rejected:**
+- a `--sums` flag, one more thing to type wrong;
+- refusing every unsigned zip, which would break R9's `main` zip path;
+- signing a zip of `main`, which has no tag to sign.
+
+**Consequences:**
+- Releases have six assets.
+- On a machine without SSH or `gh`, the operator downloads the binary, the zip, `SHA256SUMS` and `SHA256SUMS.sig` from the Releases page into one folder.
+- A renamed download is refused until it carries the release's own file name.
+- `ssh-keygen` is required to verify, as it already is for `update` on a binary-only place.
+- Release step 3b, before anything is published, has the host's own built binary verify the release zip, so a binary built with a stray test signer never ships.
+- Installing an OLDER release's verified zip (a downgrade) is allowed: the operator chooses the zip. The first line names the release, so the choice is visible.
+- **Open:** a zip handed over WITHOUT its sums still installs, marked `UNVERIFIED`, with exit 0, as R9 allows. The operator is asked whether an unsigned zip should need an explicit `--unverified` (a REQUIREMENTS R9 change; security review 2026-09-28, medium).
+- The release carrying this is v1.9.0, a MINOR. Plan: `.agents/docs/plans/2026-09-28-signed-zip.md`.
+

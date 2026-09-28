@@ -57,7 +57,7 @@ verifier, reviewer, … — or "none" (this is how dispatch cost gets counted)
 
 ## Verification
 How it was tested / how to confirm it works (link the testing/ log when one exists).
-Only what the dispatch names: a log path, or a command with its output. A verification the dispatch does not name is written as "not verified" / "not measured", never inferred — an ADR that says "measurement confirms" without a log path is a claim to strike (BUG-034 in styrman-crew).
+Only what the dispatch names: a log path, or a command with its output. A verification the dispatch does not name is written as "not verified" / "not measured", never inferred — an ADR that says "measurement confirms" without a log path is a claim to strike.
 
 ## Docs
 Which of README, specs, testing guides, deploy guides, and the project AGENTS.md changed in this task (paths), or `no docs changed — <reason>` (an internal-only refactor, or no interface, command, or deploy step changed). The step-3 decision is on the record either way.
@@ -78,7 +78,7 @@ Number sequentially. To reverse an old decision, append a new ADR and mark the o
 
 ## Rules
 
-- Read the actual diff / session context before writing — record reality, not assumptions. Every factual claim traces to the dispatch or the diff: nothing filled in from older ADRs or other repositories, no decision the dispatch did not state, no line-number citations, and in a repository that names no consumer project, none named (BUG-061).
+- Read the actual diff / session context before writing — record reality, not assumptions. Every factual claim traces to the dispatch or the diff: nothing filled in from older ADRs or other repositories, no decision the dispatch did not state, no line-number citations, and in a repository that names no consumer project, none named.
 - Commits: for every SHA you name, run `git show --stat <sha>` and say what it IS (fix / docs / handoff). The range's HEAD is not "the change".
 - Don't duplicate: if a changelog entry already exists for this task, add an ADR if one is due rather than creating a conflicting entry.
 - Keep an entry under ~80 lines: what changed, why, files, verification, requirements. Finding-by-finding narratives and remediation rounds belong in `reviews/` or `testing/` — link them, never inline them. The Resume Protocol reads the three newest entries at every session start, so length here is a per-session tax.

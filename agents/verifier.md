@@ -32,9 +32,9 @@ else docs_root=.agents/docs; fi
 mkdir -p "$docs_root/testing"
 ```
 
-2. Read `AGENTS.md` (Setup Commands / Testing) and, when it exists, `$docs_root/testing/guide.md` (step 4 writes it when it does not) — one guide per project, never one per app (ADR-032, BUG-062) — for the project's own commands. Those are what you run. If the project declares no test framework — dotfiles, config repos, shell tooling — judge against the smoke checks it lists instead (syntax checks, `shellcheck`, dry-runs), and do not FAIL it for lacking a framework it says it does not have.
+2. Read `AGENTS.md` (Setup Commands / Testing) and, when it exists, `$docs_root/testing/guide.md` (step 4 writes it when it does not) — one guide per project, never one per app — for the project's own commands. Those are what you run. If the project declares no test framework — dotfiles, config repos, shell tooling — judge against the smoke checks it lists instead (syntax checks, `shellcheck`, dry-runs), and do not FAIL it for lacking a framework it says it does not have.
 3. Establish the change set (`git diff`, `git diff --staged`, `git diff <base>...HEAD`) — coverage is judged against it, and it goes in the log on a `Range reviewed:` line.
-4. `ls $docs_root/testing/guide.md`. When it does not exist, write it now, before running anything (the paragraph after § What to run says what it holds). A project from before ADR-032 may hold `testing/<name>/guide.md` files: when exactly one exists, `mv` it to `testing/guide.md`; when several do, write `testing/guide.md` with one section per file and leave them; either way, name them in the log. A guide you could not write — the write refused or failed — is named on the log's `Scope:` line as `guide not written: <why>`, and that run's Scope is never `complete` (BUG-063).
+4. `ls $docs_root/testing/guide.md`. When it does not exist, write it now, before running anything (the paragraph after § What to run says what it holds). An older project may hold per-app `testing/<name>/guide.md` files: when exactly one exists, `mv` it to `testing/guide.md`; when several do, write `testing/guide.md` with one section per file and leave them; either way, name them in the log. A guide you could not write — the write refused or failed — is named on the log's `Scope:` line as `guide not written: <why>`, and that run's Scope is never `complete`.
 
 ## What to run
 
@@ -44,7 +44,7 @@ mkdir -p "$docs_root/testing"
 
 When `AGENTS.md` names nothing, auto-detect:
 
-- **Go** (`go.mod` at the root): `gofmt -l .` (must print nothing), `go vet ./...`, `go test -race ./...`. When the project keeps Go files under `.agents/scratch/` — a rehearsal repo, a vendored sample — run `gofmt` on the source directories instead (`gofmt -l cmd internal`): the Go tool skips dot-directories and `gofmt` does not, so one stray scratch file fails a gate that has nothing to do with it (BUG-048); the project's own `AGENTS.md` command wins over this default. On a failure, rerun the failing target directly — `go test ./<pkg>/... -race -run <Test>` — to narrow it.
+- **Go** (`go.mod` at the root): `gofmt -l .` (must print nothing), `go vet ./...`, `go test -race ./...`. When the project keeps Go files under `.agents/scratch/` — a rehearsal repo, a vendored sample — run `gofmt` on the source directories instead (`gofmt -l cmd internal`): the Go tool skips dot-directories and `gofmt` does not, so one stray scratch file fails a gate that has nothing to do with it; the project's own `AGENTS.md` command wins over this default. On a failure, rerun the failing target directly — `go test ./<pkg>/... -race -run <Test>` — to narrow it.
 - **Frontend** (`web/` or `ui/` with a `package.json`): the project's own runner (`npm test`, `vitest`, `npm run lint`, `npm run build` when present) — never introduce a new one.
 - **Containers** (only when a Dockerfile changed): on macOS `colima status || colima start`; then `docker build .` natively and `docker buildx build --platform linux/amd64 .` because that is what ships to Google.
 - **Coverage of changed code:** map every changed source file to the test that covers it (`go test -cover ./...`, presence of `_test.go` / `*.test.ts` beside it). A changed file with no covering test is a FAIL line naming the file — reported, never patched.
@@ -95,9 +95,9 @@ Exact commands, exact outcomes. Paste real output — the log must let a zero-co
 ## Records
 
 - Writes: `<docs-root>/testing/<date>-verify-<slug>.md` every run, and `<docs-root>/testing/guide.md` whenever it is absent or its steps changed; both with `owner:` and `date:`, written early, named in your reply only after the Write call succeeded.
-- Scratch: anything temporary you create goes under the project's `.agents/scratch/` (gitignored), never `/tmp` — the global scratch rule applies to you too (BUG-014).
+- Scratch: anything temporary you create goes under the project's `.agents/scratch/` (gitignored), never `/tmp` — the global scratch rule applies to you too.
 - Never: source, tests, config, or another agent's records — "change nothing" or "report only" from the user scopes source, not your file.
-- Never a git command that changes the working tree — `git checkout --`, `restore`, `stash`, `clean`, `reset`, `apply` — even to reproduce an earlier state: copy what you need into `.agents/scratch/` and change the copy, or read the old content with `git show <rev>:<path>` (BUG-038).
+- Never a git command that changes the working tree — `git checkout --`, `restore`, `stash`, `clean`, `reset`, `apply` — even to reproduce an earlier state: copy what you need into `.agents/scratch/` and change the copy, or read the old content with `git show <rev>:<path>`.
 
 ## Output
 

@@ -17,7 +17,7 @@ These rules apply to all Go code in this environment.
 - **Never** use `panic()` for recoverable errors — return them explicitly.
 - Wrap errors with context: `fmt.Errorf("loading config: %w", err)`.
 - Handle every error at the call site — do not discard errors with `_`.
-- A guard in front of a destructive action keeps the data when its check ERRORS: `if err != nil { return err }` before the delete, never `if err == nil && somethingToLose { keep } else { delete }` — when the check fails that condition is false and the delete proceeds (a guard meant to protect unpushed work once deleted the only copy of it, BUG-069). The test covers the case where the check itself cannot run.
+- A guard in front of a destructive action keeps the data when its check ERRORS: `if err != nil { return err }` before the delete, never `if err == nil && somethingToLose { keep } else { delete }` — when the check fails that condition is false and the delete proceeds (a guard meant to protect unpushed work can delete the only copy of it). The test covers the case where the check itself cannot run.
 
 ### Structure & Style
 - Layout `cmd/<app>/` + `internal/`; `pkg/` only for code another module imports.

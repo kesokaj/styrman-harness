@@ -153,7 +153,7 @@ After installation:
 ```
 
 `scope` is `project` or `harness` (a `--global` skill; `target` is then `skills/<name>/SKILL.md` in the harness checkout); `status` is `installed`, `proposed`, or `rejected`. If `~/.config/sh-agent/` is denied, say so, print the `cat >> ~/.config/sh-agent/retros.jsonl <<'EOF' … EOF` command for the user, and continue.
-3. Append an entry to `~/.config/sh-agent/feedback.jsonl` (create the directory with `mkdir -p ~/.config/sh-agent` if it does not exist). The shape is the `feedback-log` skill's, which owns that log — read it there rather than from a copy, and include **every** field it lists, `project` above all: `/retro` excludes a project's own entries with `grep -vE '"project": ?"<this project>"'`, so an entry without one is never excluded and a local correction is counted as a cross-project hit that can promote a rule to the harness on false evidence (BUG-021).
+3. Append an entry to `~/.config/sh-agent/feedback.jsonl` (create the directory with `mkdir -p ~/.config/sh-agent` if it does not exist). The shape is the `feedback-log` skill's, which owns that log — read it there rather than from a copy, and include **every** field it lists, `project` above all: `/retro` excludes a project's own entries with `grep -vE '"project": ?"<this project>"'`, so an entry without one is never excluded and a local correction is counted as a cross-project hit that can promote a rule to the harness on false evidence.
 
 ```json
 {

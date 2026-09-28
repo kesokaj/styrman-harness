@@ -34,7 +34,7 @@ Registry only when explicitly requested.
    Artifact Registry repo and Cloud Run service should live in the same region.
 5. **Registry auth (once per machine/region):**
    `gcloud auth configure-docker ${REGION}-docker.pkg.dev`
-- The service account the service will run as exists (`gcloud iam service-accounts describe NAME@PROJECT.iam.gserviceaccount.com`) and holds `roles/secretmanager.secretAccessor` on every secret the deploy names — the operator names it with the other defaults (`docs/deploy/gcp.md`); never fall back to the default compute account.
+6. **Service account:** the service account the service will run as exists (`gcloud iam service-accounts describe NAME@PROJECT.iam.gserviceaccount.com`) and holds `roles/secretmanager.secretAccessor` on every secret the deploy names — the operator names it with the other defaults (`docs/deploy/gcp.md`); never fall back to the default compute account.
 
 ## Build — dual architecture
 

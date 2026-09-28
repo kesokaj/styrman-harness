@@ -14,7 +14,6 @@
 | BUG-008 | 2026-09-13 | trail/process | fixed | five retro-applied commits changed context/agents/skills with no changes entry, verification log, sandbox check, or handoff | applying retro proposals to another repo is a task in that repo — its own Definition of Done applies before the push |
 | BUG-009 | 2026-09-13 | cmd/tests | fixed | new uninstall test asserted `~/.claude` itself was removed and failed on first run | read the documented stop/keep list (`pruneEmptyDirs`) before asserting what an operation removes |
 | BUG-010 | 2026-09-13 | tooling/batch-edits | fixed | batch-edit script's assert failed mid-run twice, leaving later files silently unedited | verify every old string across all files before writing any; print per-file written lines; diff-stat after |
-| BUG-011 | 2026-09-13 | git/process | fixed | commit 8a8b276's message described a 60-file change; commit held one deleted file | never chain `git add … ; git commit`; stage by name, read `git diff --cached --stat`, commit as its own call |
 | BUG-012 | 2026-09-13 | agents/explorer | fixed | explorer skipped or fabricated its brief when the dispatch said "change nothing"/"report only" | a user's "change nothing" scopes source, never the trail; dispatch never tells an agent to skip its artifact, and an agent names a file only after the Write call succeeds |
 | BUG-013 | 2026-09-13 | process/verification | fixed | main agent cited a timed-out (`exit 124`) headless review run as complete, missing its own status file | read a run's exit status before its output; budget multi-subagent runs beyond the tool timeout via a detached process with its own status file |
 | BUG-014 | 2026-09-14 | agents/verifier | fixed | verifier installed its scratch home at `/tmp/sh-agent-verify-bug012` instead of `.agents/scratch/` | an agent definition restates the global scratch rule for its own writes; a global rule alone does not reach a subagent reliably |
@@ -65,6 +64,7 @@
 
 | ID | Area | Graduated to |
 |---|---|---|
+| BUG-011 | git/process | `context/AGENTS.md` § Hard rules, "A verification command is never piped into a filter inside a `&&` chain" bullet ("Staging is a verification step too: … never `add … ; commit`") |
 | BUG-019 | skills (hard rules) | `TestNoTmpInHarnessProse` (walks every non-vendored skill's `references/`, `commands/`, `rules/`) and the corrected reference files |
 | BUG-020 | skills/cloud-run-deploy | `skills/cloud-run-deploy/SKILL.md` description (defers to `/preflight`) |
 | BUG-021 | skills/distill | `skills/distill/SKILL.md` (defers to `skills/feedback/SKILL.md` entry shape) |

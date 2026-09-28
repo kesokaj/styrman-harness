@@ -379,3 +379,24 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
 - **Open:** a zip handed over WITHOUT its sums still installs, marked `UNVERIFIED`, with exit 0, as R9 allows. The operator is asked whether an unsigned zip should need an explicit `--unverified` (a REQUIREMENTS R9 change; security review 2026-09-28, medium).
 - The release carrying this is v1.9.0, a MINOR. Plan: `.agents/docs/plans/2026-09-28-signed-zip.md`.
 
+
+## ADR-040: An unsigned zip needs `--unverified`     (2026-09-28) — Accepted
+
+**Context:** ADR-039 left one item open: a zip with neither `SHA256SUMS` nor `SHA256SUMS.sig` beside it still installed, marked `UNVERIFIED`, with exit 0. A marking discloses the risk but does not control it (security reviews 2026-09-28, medium, carried in `reviews/2026-09-28-preflight-v1.9.0.md` row 1). The docs gate also found R9's "a zip without them" imprecise, because a zip with only one of the two files was already refused (row 2). The v1.9.0 handoff proposed the exact R9 text, and the operator approved it: "Go approved all" (2026-09-28).
+
+**Decision:**
+- **Neither file beside the zip:** `update --from-zip` refuses the zip before a byte is written, and the refusal names `--unverified`. With `--unverified` it installs, marked `UNVERIFIED` in the output and `;unverified` in the manifest, as before.
+- **The flag allows a MISSING signature, never a failed one.** One file alone, a bad signature, a stale pair or a checksum mismatch is refused with or without it.
+- **The flag belongs to `update --from-zip` only.** Anywhere else it is refused, not ignored.
+- A dry run refuses exactly as the real run does.
+
+**Supersedes:** ADR-039's "`--from-zip` with nothing beside the zip installs it marked UNVERIFIED" and its Open bullet. R9's zip-place clause is replaced in the same commit.
+
+**Rejected:**
+- keeping the marking alone: it discloses and does not control;
+- refusing every unsigned zip outright: it would remove R9's `main` zip path, which the operator uses on machines with no release to hand.
+
+**Consequences:**
+- A `main` zip now needs one more word on the command line.
+- The refusal names the flag. That is not the bypass ADR-039 forbids, because the flag cannot pass a failed check, only a missing one; the refusals for failed checks still never mention it.
+- The release carrying this is v2.0.0, a MAJOR. `deploy/remote.md`'s version rule names "a new required flag" as something an existing deployment must react to: a zip place that installs a `main` zip must now pass `--unverified`. A place that installs a release zip with its sums, a checkout, or a release-binary place is unaffected.

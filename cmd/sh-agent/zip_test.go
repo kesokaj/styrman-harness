@@ -95,7 +95,7 @@ func TestUpdateFromZip(t *testing.T) {
 	home := t.TempDir()
 
 	var out bytes.Buffer
-	if err := run([]string{"update", "--from-zip", zp, "--home", home}, &out); err != nil {
+	if err := run([]string{"update", "--from-zip", zp, "--unverified", "--home", home}, &out); err != nil {
 		t.Fatalf("update --from-zip: %v\n%s", err, out.String())
 	}
 	if !strings.Contains(out.String(), "UNVERIFIED") || !strings.Contains(out.String(), "nothing in the zip replaces") || !strings.Contains(out.String(), "sha256") {
@@ -143,7 +143,7 @@ func TestUpdateFromZipDryRunWritesNothing(t *testing.T) {
 	zp := markedZip(t)
 	home := t.TempDir()
 	var out bytes.Buffer
-	if err := run([]string{"update", "--from-zip", zp, "--home", home, "--dry-run"}, &out); err != nil {
+	if err := run([]string{"update", "--from-zip", zp, "--unverified", "--home", home, "--dry-run"}, &out); err != nil {
 		t.Fatalf("dry run: %v\n%s", err, out.String())
 	}
 	if !strings.Contains(out.String(), "[dry-run] zip") {
@@ -164,7 +164,7 @@ func TestStatusAfterZip(t *testing.T) {
 	version = "v1.2.3"
 	zp := markedZip(t)
 	home := t.TempDir()
-	if err := run([]string{"update", "--from-zip", zp, "--home", home}, &bytes.Buffer{}); err != nil {
+	if err := run([]string{"update", "--from-zip", zp, "--unverified", "--home", home}, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
@@ -266,7 +266,7 @@ func TestUpdateFromZipRefusedZipWritesNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 	home := t.TempDir()
-	err = run([]string{"update", "--from-zip", slip, "--home", home}, &bytes.Buffer{})
+	err = run([]string{"update", "--from-zip", slip, "--unverified", "--home", home}, &bytes.Buffer{})
 	if err == nil || !strings.Contains(err.Error(), "would escape") {
 		t.Fatalf("err = %v, want the escaping entry refused", err)
 	}
@@ -321,7 +321,7 @@ func TestDiffAfterZip(t *testing.T) {
 	version = "v1.2.3"
 	zp := markedZip(t)
 	home := t.TempDir()
-	if err := run([]string{"update", "--from-zip", zp, "--home", home}, &bytes.Buffer{}); err != nil {
+	if err := run([]string{"update", "--from-zip", zp, "--unverified", "--home", home}, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
@@ -356,13 +356,13 @@ func TestUpdateFromZipSweepsStaleDirs(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := run([]string{"update", "--from-zip", zp, "--home", home, "--dry-run"}, &bytes.Buffer{}); err != nil {
+	if err := run([]string{"update", "--from-zip", zp, "--unverified", "--home", home, "--dry-run"}, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(old); err != nil {
 		t.Errorf("a dry run swept %s", old)
 	}
-	if err := run([]string{"update", "--from-zip", zp, "--home", home}, &bytes.Buffer{}); err != nil {
+	if err := run([]string{"update", "--from-zip", zp, "--unverified", "--home", home}, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(old); err == nil {
@@ -426,7 +426,7 @@ func TestUpdateFromZipRefusedContentWritesNothing(t *testing.T) {
 	}
 	zp := zipOfTree(t, tree)
 	home := t.TempDir()
-	if err := run([]string{"update", "--from-zip", zp, "--home", home}, &bytes.Buffer{}); err == nil {
+	if err := run([]string{"update", "--from-zip", zp, "--unverified", "--home", home}, &bytes.Buffer{}); err == nil {
 		t.Fatal("a zip with a skill that has no description was installed")
 	}
 	if entries, _ := os.ReadDir(home); len(entries) != 0 {
@@ -457,7 +457,7 @@ func TestUpdateFromZipSweepWithGlobCharsInHome(t *testing.T) {
 			theirs = d
 		}
 	}
-	if err := run([]string{"update", "--from-zip", zp, "--home", home}, &bytes.Buffer{}); err != nil {
+	if err := run([]string{"update", "--from-zip", zp, "--unverified", "--home", home}, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(mine); err == nil {
@@ -476,7 +476,7 @@ func TestUpdateFromZipDryRunCleansTempDir(t *testing.T) {
 	t.Setenv("TMPDIR", tmp)
 	zp := markedZip(t)
 	before, _ := os.ReadDir(tmp)
-	if err := run([]string{"update", "--from-zip", zp, "--home", t.TempDir(), "--dry-run"}, &bytes.Buffer{}); err != nil {
+	if err := run([]string{"update", "--from-zip", zp, "--unverified", "--home", t.TempDir(), "--dry-run"}, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
 	after, _ := os.ReadDir(tmp)
@@ -551,7 +551,7 @@ func TestUpdateFromZipRefusedRunSweepsNothing(t *testing.T) {
 	if err := os.WriteFile(notZip, []byte("not a zip"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := run([]string{"update", "--from-zip", notZip, "--home", home}, &bytes.Buffer{}); err == nil {
+	if err := run([]string{"update", "--from-zip", notZip, "--unverified", "--home", home}, &bytes.Buffer{}); err == nil {
 		t.Fatal("a file that is not a zip was accepted")
 	}
 	if _, err := os.Stat(stale); err != nil {
@@ -595,7 +595,7 @@ func TestUpdateFromZipInstallRefusalSweepsNothing(t *testing.T) {
 	if err := os.Chtimes(stale, past, past); err != nil {
 		t.Fatal(err)
 	}
-	if err := run([]string{"update", "--from-zip", zp, "--home", home}, &bytes.Buffer{}); err == nil {
+	if err := run([]string{"update", "--from-zip", zp, "--unverified", "--home", home}, &bytes.Buffer{}); err == nil {
 		t.Fatal("the broken zip was installed")
 	}
 	if _, err := os.Stat(stale); err != nil {
@@ -631,23 +631,64 @@ func TestUpdateFromZipForeignSignatureRefused(t *testing.T) {
 			t.Fatalf("ssh-keygen %v: %v\n%s", args, err, out)
 		}
 	}
-	home := t.TempDir()
-	var out bytes.Buffer
-	err = run([]string{"update", "--from-zip", zp, "--home", home}, &out)
-	if err == nil || !strings.Contains(err.Error(), "does not verify") {
-		t.Fatalf("err = %v, want the signature refusal\n%s", err, out.String())
-	}
-	if entries, _ := os.ReadDir(home); len(entries) != 0 {
-		t.Errorf("a refused zip left %d entries", len(entries))
+	// --unverified allows a MISSING signature, never a failed one (R9, ADR-040).
+	for _, extra := range [][]string{nil, {"--unverified"}} {
+		home := t.TempDir()
+		var out bytes.Buffer
+		err = run(append([]string{"update", "--from-zip", zp, "--home", home}, extra...), &out)
+		if err == nil || !strings.Contains(err.Error(), "does not verify") {
+			t.Fatalf("%v: err = %v, want the signature refusal\n%s", extra, err, out.String())
+		}
+		if entries, _ := os.ReadDir(home); len(entries) != 0 {
+			t.Errorf("%v: a refused zip left %d entries", extra, len(entries))
+		}
 	}
 }
 
-// A zip with nothing beside it installs, marked UNVERIFIED.
+// A zip with neither SHA256SUMS nor its .sig beside it is refused unless
+// --unverified is passed — on a real run and a dry run alike, before anything
+// is written (R9, ADR-040).
+func TestUpdateFromZipUnsignedRefusedWithoutFlag(t *testing.T) {
+	isolate(t)
+	zp := markedZip(t)
+	if _, err := os.Stat(filepath.Join(filepath.Dir(zp), "SHA256SUMS")); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("setup: the zip's folder must hold no SHA256SUMS (stat err = %v)", err)
+	}
+	for _, extra := range [][]string{nil, {"--dry-run"}} {
+		home := t.TempDir()
+		var out bytes.Buffer
+		err := run(append([]string{"update", "--from-zip", zp, "--home", home}, extra...), &out)
+		if err == nil || !strings.Contains(err.Error(), "no signed SHA256SUMS") || !strings.Contains(err.Error(), "--unverified") {
+			t.Fatalf("%v: err = %v, want the unsigned refusal naming --unverified\n%s", extra, err, out.String())
+		}
+		if entries, _ := os.ReadDir(home); len(entries) != 0 {
+			t.Errorf("%v: a refused zip left %d entries", extra, len(entries))
+		}
+	}
+}
+
+// --unverified means nothing outside update --from-zip, and is refused there
+// rather than ignored.
+func TestUnverifiedOnlyWithFromZip(t *testing.T) {
+	isolate(t)
+	for _, args := range [][]string{{"update", "--unverified"}, {"install", "--unverified"}, {"status", "--unverified"}} {
+		home := t.TempDir()
+		err := run(append(args, "--home", home), &bytes.Buffer{})
+		if err == nil || !strings.Contains(err.Error(), "--unverified belongs to update --from-zip") {
+			t.Errorf("%v: err = %v, want the flag refused", args, err)
+		}
+		if entries, _ := os.ReadDir(home); len(entries) != 0 {
+			t.Errorf("%v: a refused run left %d entries", args, len(entries))
+		}
+	}
+}
+
+// A zip with nothing beside it installs with --unverified, marked UNVERIFIED.
 func TestUpdateFromZipUnsignedSaysUnverified(t *testing.T) {
 	isolate(t)
 	zp := markedZip(t)
 	var out bytes.Buffer
-	if err := run([]string{"update", "--from-zip", zp, "--home", t.TempDir()}, &out); err != nil {
+	if err := run([]string{"update", "--from-zip", zp, "--unverified", "--home", t.TempDir()}, &out); err != nil {
 		t.Fatalf("%v\n%s", err, out.String())
 	}
 	if !strings.Contains(out.String(), "UNVERIFIED") || strings.Contains(out.String(), "VERIFIED against") {

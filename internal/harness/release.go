@@ -426,7 +426,8 @@ func SwapReleaseSigner(line string) (restore func()) {
 }
 
 // ErrZipUnsigned: no SHA256SUMS and no SHA256SUMS.sig beside a zip — a zip of
-// a branch, which nothing signs. The caller installs it marked UNVERIFIED.
+// a branch, which nothing signs. The caller refuses it unless the operator
+// passed --unverified, and then installs it marked UNVERIFIED (ADR-040).
 var ErrZipUnsigned = errors.New("no signed SHA256SUMS beside the zip")
 
 // VerifyZipSums verifies a release zip against the SHA256SUMS and

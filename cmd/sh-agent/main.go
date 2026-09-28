@@ -6,7 +6,7 @@
 //	sh-agent status                  show drift between the repo and what is installed
 //	sh-agent diff                    unified diff of every drifted file
 //	sh-agent update [--check|--dry-run]  checkout: git pull and reinstall; release binary: download and verify the newest release
-//	sh-agent update --from-zip FILE  zip place: install the harness in a repository zip with the running binary
+//	sh-agent update --from-zip FILE [--unverified]  zip place: install the harness in a repository zip with the running binary
 //	sh-agent uninstall [--dry-run]   remove exactly what install wrote
 //	sh-agent list                    print the skill and agent inventory
 //	sh-agent render                  print the assembled context file
@@ -41,7 +41,7 @@ Commands:
   status                  show what is installed and whether it drifted from the repo (exit 1 on drift)
   diff                    unified diff of every drifted file
   update [--check|--dry-run]  checkout: git fetch, pull --ff-only and reinstall when behind; release binary: download the newest release, verify its signed checksums, replace the binary and reinstall (--check only reports, exit 2 when behind; --dry-run reports what update would do and changes nothing)
-  update --from-zip FILE [--dry-run]  zip place: unpack a repository zip you downloaded, install its harness and the running binary (nothing in the zip replaces the binary), delete the unpacked copy
+  update --from-zip FILE [--dry-run] [--unverified]  zip place: unpack a repository zip you downloaded, install its harness and the running binary (nothing in the zip replaces the binary), delete the unpacked copy; a release zip is verified against the SHA256SUMS and SHA256SUMS.sig beside it, and a zip with neither is refused unless --unverified is passed
   uninstall [--dry-run]   remove exactly the files install wrote, nothing else
   list                    print the skill and agent inventory
   render                  print the assembled context file
@@ -92,6 +92,7 @@ func run(args []string, out io.Writer) error {
 	force := fs.Bool("force", false, "adopt: replace an existing skill")
 	feedbackFlag := fs.String("feedback-repo", "", "report: feedback checkout (never cloned into)")
 	fromZip := fs.String("from-zip", "", "update: install the harness in this repository zip with the running binary")
+	unverified := fs.Bool("unverified", false, "update --from-zip: install a zip that has no signed SHA256SUMS beside it")
 	if err := fs.Parse(reorder(rest)); err != nil {
 		return err
 	}
@@ -132,7 +133,10 @@ func run(args []string, out io.Writer) error {
 		case *check || *repoFlag != "":
 			return errors.New("--from-zip installs the named zip; --check/--repo do not apply to it")
 		}
-		return updateFromZip(*fromZip, home, *vendorFlag, *dryRun, out)
+		return updateFromZip(*fromZip, home, *vendorFlag, *dryRun, *unverified, out)
+	}
+	if *unverified {
+		return errors.New("--unverified belongs to update --from-zip: sh-agent update --from-zip <file> --unverified")
 	}
 
 	switch cmd {
@@ -1053,7 +1057,7 @@ func versionFromInfo(info *debug.BuildInfo) string {
 // downloaded, with the running binary: unpack, install, delete the unpacked
 // copy (R8, R9's zip place; ADR-038). Nothing is fetched, and nothing in the
 // zip replaces the binary: the running one is installed as in every install.
-func updateFromZip(zipPath, home, vendorFlag string, dryRun bool, out io.Writer) (err error) {
+func updateFromZip(zipPath, home, vendorFlag string, dryRun, allowUnverified bool, out io.Writer) (err error) {
 	vendor, err := resolveVendor(vendorFlag, home)
 	if err != nil {
 		return err
@@ -1083,12 +1087,17 @@ func updateFromZip(zipPath, home, vendorFlag string, dryRun bool, out io.Writer)
 		}()
 	}
 	// A release zip with its signed SHA256SUMS beside it is verified before a
-	// byte is written; without them it is installed marked UNVERIFIED (ADR-039,
-	// plan D3/D4). Any other verification failure refuses the zip.
+	// byte is written. A zip with neither file beside it is refused unless the
+	// operator passed --unverified, and is then installed marked UNVERIFIED
+	// (R9, ADR-040). Any other verification failure refuses the zip, with or
+	// without the flag: it allows a missing signature, never a failed one.
 	verifiedTag := ""
 	check := func(sum string) error {
 		tag, err := harness.VerifyZipSums(zipPath, sum)
 		if errors.Is(err, harness.ErrZipUnsigned) {
+			if !allowUnverified {
+				return fmt.Errorf("%s has no signed SHA256SUMS or SHA256SUMS.sig beside it, so it cannot be verified: put it in one folder with its release's SHA256SUMS and SHA256SUMS.sig, or pass --unverified to install it anyway, with trust resting on your own download", filepath.Base(zipPath))
+			}
 			return nil
 		}
 		if err != nil {

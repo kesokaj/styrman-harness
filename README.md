@@ -37,7 +37,7 @@ flowchart LR
     preflight -- "signed binaries and zip" --> releases
     harnessRepo -- "clone once, update pulls" --> checkoutPlace
     releases -- "update downloads and verifies" --> binaryPlace
-    harnessRepo -. "zip, downloaded by hand; update --from-zip repeats it" .-> zipPlace
+    harnessRepo -. "main zip, by hand; update --from-zip --unverified repeats it" .-> zipPlace
     releases -. "release zip + signed SHA256SUMS, by hand; verified" .-> zipPlace
     checkoutPlace --> installer
     binaryPlace --> installer
@@ -159,14 +159,15 @@ To move such a place forward, run `sh-agent update` there: it asks GitHub for th
 
 ## Install from a zip (no SSH, no gh)
 
-A machine that can neither hold your SSH key nor run `gh` — a corporate workstation, say — still reaches the harness: download a release's `styrman-harness-vX.Y.Z.zip`, `SHA256SUMS` and `SHA256SUMS.sig` from the Releases page into one folder, together with its `sh-agent` binary (§ Install without cloning covers verifying the binary), and run the command below. A zip of `main` ("Code → Download ZIP") works too, but it is unsigned:
+A machine that can neither hold your SSH key nor run `gh` — a corporate workstation, say — still reaches the harness: download a release's `styrman-harness-vX.Y.Z.zip`, `SHA256SUMS` and `SHA256SUMS.sig` from the Releases page into one folder, together with its `sh-agent` binary (§ Install without cloning covers verifying the binary), and run the command below. A zip of `main` ("Code → Download ZIP") works too, but it is unsigned, so it needs `--unverified`:
 
 ```bash
 sh-agent update --from-zip ~/Downloads/styrman-harness-vX.Y.Z.zip   # SHA256SUMS and SHA256SUMS.sig beside it: verified
+sh-agent update --from-zip ~/Downloads/styrman-harness-main.zip --unverified   # a main zip: nothing to verify, so only on request
 sh-agent status      # "installed … from zip sha256:<hex> (verified vX.Y.Z)" or "(unverified)"; reports presence, not content — the zip is not kept
 ```
 
-`--from-zip` unpacks the zip into a temporary directory, installs that tree and the running binary, and deletes the directory. The binary is copied into `~/.local/bin` the way every install copies it, but nothing in the zip replaces it and nothing is fetched. `--dry-run` does the same unpack-and-plan without writing a file, a manifest, or a binary, and still removes the temporary directory. With the release's `SHA256SUMS` and `SHA256SUMS.sig` beside it, the zip is verified before anything is written: the signature against the signer built into the binary, then the zip's own checksum line, which needs the release's own file name. The first line then says `VERIFIED against the signed SHA256SUMS of release vX.Y.Z`, and any failure refuses the zip. Without them — a `main` zip — the first line says `UNVERIFIED`, and trust rests on your own download (ADR-039). `update --dry-run` on the other two kinds of place reports what an update would do and changes nothing. Moving a zip place forward means repeating the download and `--from-zip`; a zip whose harness needs a newer binary means downloading that binary by hand too.
+`--from-zip` unpacks the zip into a temporary directory, installs that tree and the running binary, and deletes the directory. The binary is copied into `~/.local/bin` the way every install copies it, but nothing in the zip replaces it and nothing is fetched. `--dry-run` does the same unpack-and-plan without writing a file, a manifest, or a binary, and still removes the temporary directory. With the release's `SHA256SUMS` and `SHA256SUMS.sig` beside it, the zip is verified before anything is written: the signature against the signer built into the binary, then the zip's own checksum line, which needs the release's own file name. The first line then says `VERIFIED against the signed SHA256SUMS of release vX.Y.Z`, and any failure refuses the zip. With neither file beside it — a `main` zip — the zip is refused unless you pass `--unverified`; then the first line says `UNVERIFIED`, and trust rests on your own download. With only one of the two beside it, the zip is refused. `--unverified` allows a missing signature, never a failed one (ADR-040). `update --dry-run` on the other two kinds of place reports what an update would do and changes nothing. Moving a zip place forward means repeating the download and `--from-zip`; a zip whose harness needs a newer binary means downloading that binary by hand too.
 
 ## Daily commands
 

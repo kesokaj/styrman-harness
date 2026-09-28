@@ -40,7 +40,7 @@ Do NOT duplicate content that already exists elsewhere. Instead, reference these
 
 | Artifact | Location |
 |---|---|
-| Changelog entries | `.agents/docs/changes/YYYY-MM-DD-*.md` |
+| Changelog entries | `.agents/docs/changes/YYYY-MM-DD-HHMM-*.md` (older entries: `YYYY-MM-DD-*.md`) |
 | Architecture decisions | `.agents/docs/architecture/DECISIONS.md` |
 | Specs | `.agents/docs/specs/<app>/` |
 | Implementation plans | `.agents/docs/plans/` |
@@ -142,7 +142,7 @@ Resolve the docs root first: `.agents/docs` if it exists, else `docs/` if it exi
 DOCS_ROOT=.agents/docs
 [ -d "$DOCS_ROOT" ] || { [ -d docs ] && DOCS_ROOT=docs; } || true
 mkdir -p "$DOCS_ROOT/handoffs"
-# Save as: $DOCS_ROOT/handoffs/$(date +%F)-<topic>.md
+# Save as: $DOCS_ROOT/handoffs/$(date +%F-%H%M)-<topic>.md
 ```
 
 Handoffs are dated and **immutable** — never overwrite a previous handoff; a new session gets a new file.

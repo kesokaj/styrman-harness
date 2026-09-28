@@ -6,6 +6,8 @@ Last reviewed: 2026-09-21
 
 ## Now
 
+- Active plan: `.agents/docs/plans/2026-09-28-time-sortable-trail-names.md` (Phase 2)
+
 ## Next
 
 ## Later / Ideas

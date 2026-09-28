@@ -1,6 +1,6 @@
 ---
 name: changelog
-description: "Records what happened. Writes append-only changelog entries under changes/ and ADRs in architecture/DECISIONS.md; returns the paths it appended. Dispatch once per task after the code is done (one entry may cover a session's related work) and after any design decision, passing today's date from date +%F in the prompt. Never rewrites history, and never writes specs, README, or ROADMAP; those belong to documentation."
+description: "Records what happened. Writes append-only changelog entries under changes/ and ADRs in architecture/DECISIONS.md; returns the paths it appended. Dispatch once per task after the code is done (one entry may cover a session's related work) and after any design decision, passing the stamp from `date +%F-%H%M` in the prompt. Never rewrites history, and never writes specs, README, or ROADMAP; those belong to documentation."
 tools: Read, Grep, Glob, Edit, Write
 model: haiku
 effort: low
@@ -19,15 +19,14 @@ Resolve before writing: use `.agents/docs/` if that tree exists; else a bare `do
 
 In order:
 
-1. Use the date given in the dispatch prompt.
-2. If absent, run `date +%F` yourself.
-3. If you cannot run commands, derive it from filesystem context only when unambiguous — a sibling artifact from this same task already stamped today. Otherwise write `DATE-UNKNOWN` in the heading and the frontmatter and flag it in your reply; never guess a date.
+1. Use the stamp given in the dispatch prompt (`YYYY-MM-DD-HHMM`): its first ten characters are the date, and the whole stamp starts the file name. A dispatch that gives only a date gets a date-only file name, flagged in your reply.
+2. If absent, derive the date from filesystem context only when unambiguous — a sibling artifact from this same task already stamped today. Otherwise write `DATE-UNKNOWN` in the heading and the frontmatter and flag it in your reply; never guess a date.
 
 ## Your lane
 
 ```
 <docs-root>/
-├── changes/        # YYYY-MM-DD-short-description.md — one file per completed task/bug fix
+├── changes/        # YYYY-MM-DD-HHMM-short-description.md — one file per completed task/bug fix
 └── architecture/
     └── DECISIONS.md   # ADRs, append-only; mark old ones "Superseded by ADR-NNN", don't delete
 ```
@@ -36,7 +35,7 @@ You do NOT write specs, README, ROADMAP, or testing guides — that's the `docum
 
 ## What each artifact captures
 
-**Changelog entry (`changes/YYYY-MM-DD-<desc>.md`)** — for every completed task or bug fix:
+**Changelog entry (`changes/YYYY-MM-DD-HHMM-<desc>.md`)** — for every completed task or bug fix:
 ```markdown
 ---
 owner: changelog
@@ -86,7 +85,7 @@ Number sequentially. To reverse an old decision, append a new ADR and mark the o
 
 ## Records
 
-- Writes: `<docs-root>/changes/<date>-<slug>.md`, one per task, with `owner:` and `date:`, and an appended ADR in `<docs-root>/architecture/DECISIONS.md`; never a past entry, never `TODO.md` or ROADMAP "Now".
+- Writes: `<docs-root>/changes/<stamp>-<slug>.md`, one per task, with `owner:` and `date:`, and an appended ADR in `<docs-root>/architecture/DECISIONS.md`; never a past entry, never `TODO.md` or ROADMAP "Now".
 - Scratch: anything temporary you create goes under the project's `.agents/scratch/` (gitignored), never `/tmp`.
 - Never: source, tests, config, or another agent's records — "change nothing" or "report only" from the user scopes source, not your file.
 

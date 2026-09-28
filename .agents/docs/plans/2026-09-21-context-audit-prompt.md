@@ -1,3 +1,7 @@
+---
+owner: main
+date: 2026-09-21
+---
 # Agent context audit
 
 ## Role

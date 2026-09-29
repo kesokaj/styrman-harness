@@ -74,6 +74,8 @@ Write to `<docs-root>/reviews/$(date +%F)-preflight-<version>.md` with frontmatt
 - An explicit verdict line: `VERDICT: SHIP` or `VERDICT: NO-SHIP`.
 - A **"What was not checked"** section — name the gaps honestly.
 
+Write the verdict line LAST, when every other section is final: read each item under "What was not checked" against every blocking condition below, the project's own included, and an item a condition names makes the verdict NO-SHIP whatever the rows above say (BUG-105).
+
 Never restate a failure as success. Any blocking finding means NO-SHIP. Blocking means any of: a verifier FAIL or BLOCKED, or a verifier log whose Status is still IN PROGRESS (a run cut off before it finished); a security finding of high severity; a security report that Step 2 owes and that is missing, has no `## Not examined` section, or names a path from the release diff under `## Not examined`; a Step 2 reviewer REQUEST CHANGES verdict or high-severity finding; a `REQUIREMENTS.md` violation; a project agent that shadows a harness review agent. Step 4's docs gaps never block. A project's `AGENTS.md` may add blocking conditions; it cannot remove these.
 
 ## Step 6: Ship or stop

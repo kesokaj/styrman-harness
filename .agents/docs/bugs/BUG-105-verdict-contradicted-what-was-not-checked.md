@@ -2,7 +2,7 @@
 owner: bugs
 date: 2026-09-29
 id: BUG-105
-status: open
+status: fixed
 area: skills/preflight (release gate verdict)
 ---
 # BUG-105: gate report's VERDICT: SHIP contradicted its own "What was not checked" section

@@ -71,8 +71,6 @@
 | BUG-102 | 2026-09-29 | skills/dream (Step 1) | fixed | `/dream` Step 1 read the committed settings file with no trust gate, letting a cloned repo redirect the dream skill and dreamer | restrict settings resolution to untracked/user files and constrain the resolved path to a known-owned directory |
 | BUG-103 | 2026-09-29 | skills/init-project / skills/dream (slug derivation) | fixed | an empty slug from a failed `git rev-parse` collapsed the store to the shared root; migration ran even after a refused settings write | stop on an empty/unset derived result, and gate a dependent step on the prior write's confirmed success |
 | BUG-104 | 2026-09-29 | internal/harness (tests) | fixed | `TestReinstallBuildsAndInstalls` flaked under a concurrent `go test`, seeing another process's build dir via a wildcard glob | a test asserting a shared directory is clean names the exact path its own run created, never a glob over a directory other processes write to |
-| BUG-105 | 2026-09-29 | skills/preflight (release gate verdict) | open | v1.12.1 gate report's `VERDICT: SHIP` contradicted its own "What was not checked" list naming the missing Antigravity run | write the verdict last, after re-checking every "What was not checked" item against every blocking condition |
-
 ## Graduated
 
 | ID | Area | Graduated to |
@@ -116,3 +114,4 @@
 | BUG-088 | process (research / handoff / issue lists) | `skills/research/SKILL.md` § Step 1: Discovery |
 | BUG-106 | testing (behavioural run kits) | `AGENTS.md` § Testing, "A behavioural or sandbox run proves its setup before its output counts" paragraph, "every fixture clone lives outside every git checkout" bullet |
 | BUG-107 | testing (behavioural run kits) | `AGENTS.md` § Testing, "A behavioural or sandbox run proves its setup before its output counts" paragraph, "when the agent under test can call `sh-agent`, a wrapper first on PATH pins --home" bullet |
+| BUG-105 | skills/preflight (release gate verdict) | `skills/preflight/SKILL.md` Step 5 ("Write the verdict line LAST … an item a condition names makes the verdict NO-SHIP whatever the rows above say (BUG-105)") |

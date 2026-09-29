@@ -2,7 +2,7 @@
 owner: bugs
 date: 2026-09-18
 id: BUG-083
-status: open
+status: fixed
 area: agents/verifier
 ---
 # BUG-083: rewritten "write the artifact EARLY" rule in verifier.md followed in only 1 of 3 runs

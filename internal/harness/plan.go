@@ -203,21 +203,25 @@ func IsOurs(data []byte) bool {
 	return strings.HasPrefix(string(data), Marker)
 }
 
-// secretShaped reports whether a filename matches the credential shapes the
-// context's Git rule stops a commit for. install deploys a skill's files to
-// every vendor directory on every machine, so one that slipped past
-// .gitignore into a skill directory would be spread rather than caught.
 // SecretShaped reports whether a file name looks like a secret (.env, a
 // key, a token file). The search index skips such files too.
 func SecretShaped(name string) bool { return secretShaped(name) }
 
+// secretShaped reports whether a filename matches the credential shapes the
+// context's Git rule stops a commit for. install deploys a skill's files to
+// every vendor directory on every machine, so one that slipped past
+// .gitignore into a skill directory would be spread rather than caught. The
+// match ignores case (`.ENV` is `.env`; security review of the search
+// index, round 2).
 func secretShaped(name string) bool {
+	name = strings.ToLower(name)
 	for _, pattern := range []string{
 		".env", ".env.*", "*.env", ".envrc", ".netrc", ".npmrc", ".pypirc",
 		"*.pem", "*.key", "*.p12", "*.pfx", "*.keystore", "*.jks",
 		"*.tfvars", "*.tfstate", "*.tfstate.backup",
 		"*credentials*.json", "*-key.json", "id_rsa", "id_ed25519", "id_ecdsa", "id_dsa",
-		"*oauth-token*", // the Antigravity CLI keeps its login in antigravity-oauth-token
+		"*oauth-token*",                   // the Antigravity CLI keeps its login in antigravity-oauth-token
+		".git-credentials", "credentials", // git's credential store; the AWS CLI's ~/.aws/credentials
 	} {
 		if ok, _ := filepath.Match(pattern, name); ok {
 			return true

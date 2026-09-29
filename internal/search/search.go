@@ -261,7 +261,7 @@ func reconcileGlobal(o Options, out io.Writer) (*store, int, []proj, error) {
 			return nil, 0, nil, fmt.Errorf("search: %w", err)
 		}
 		if dropped > 0 {
-			fmt.Fprintf(out, "note: %d project registrations dropped; each returns on its next search\n", dropped)
+			fmt.Fprintf(out, "note: %d project registrations dropped; each returns on its next search\n", dropped) // numbers only
 		}
 	}
 	st, err := openStore(path, out)
@@ -299,14 +299,22 @@ func reconcileGlobal(o Options, out io.Writer) (*store, int, []proj, error) {
 	projects := []proj{{key: configProject, name: configProject}}
 	names := map[string]int{configProject: 1}
 	for _, r := range regs {
+		reason := ""
 		if got, err := checkoutRoot(r.root); err != nil || got != r.root {
+			reason = "no longer a git checkout"
+		} else if fi, err := os.Stat(filepath.Join(r.root, ".agents", "docs")); err != nil || !fi.IsDir() {
+			// Registered for its .agents/docs; a plain docs/ is never served
+			// in its place (security review, round 2).
+			reason = "no longer has .agents/docs"
+		}
+		if reason != "" {
 			if err := dropProject(st, r.root); err != nil {
 				return fail(err)
 			}
-			fmt.Fprintf(out, "note: dropped %s (no longer a git checkout)\n", r.root)
+			fmt.Fprintln(out, printable(fmt.Sprintf("note: dropped %s (%s)", r.root, reason)))
 			continue
 		}
-		docs := docsRootOf(r.root)
+		docs := ".agents/docs"
 		v, err := gitView(r.root, docs+"/")
 		if err != nil {
 			return fail(fmt.Errorf("search: %w", err))
@@ -711,7 +719,7 @@ func (sc *scope) refs(o Options, out io.Writer) error {
 				return err
 			}
 			for _, h := range hints {
-				fmt.Fprintf(out, "hint: did you mean --refs %s\n", h)
+				fmt.Fprintln(out, printable("hint: did you mean --refs "+h))
 			}
 		}
 	}

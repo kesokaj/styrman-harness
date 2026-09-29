@@ -125,7 +125,7 @@ func openStore(path string, out io.Writer) (*store, error) {
 	if err := removeDB(path); err != nil {
 		return nil, fmt.Errorf("search: removing the unreadable index %s: %w", path, err)
 	}
-	fmt.Fprintf(out, "note: index at %s was unreadable (or an older schema); rebuilt\n", path)
+	fmt.Fprintln(out, printable(fmt.Sprintf("note: index at %s was unreadable (or an older schema); rebuilt", path)))
 	s, err = tryOpen(path)
 	if err != nil {
 		if isBusy(err) {

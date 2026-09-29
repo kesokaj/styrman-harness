@@ -25,6 +25,8 @@
 *.tfstate.backup
 *credentials*.json
 *oauth-token*
+.git-credentials
+credentials
 *-key.json
 id_rsa
 id_ed25519

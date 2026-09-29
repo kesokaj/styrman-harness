@@ -32,10 +32,10 @@ Exit status: 0 with hits or without; 1 on a refusal or an error.
 
 | Index | Path | Covers |
 |---|---|---|
-| Project | `<checkout>/.agents/scratch/search.db` (+ `-wal`, `-shm`) | every tracked, modified and untracked-not-ignored file under 1 MiB with no NUL byte in its first 8 KiB; symlinks, submodules and secret-shaped names (the installer's list: `.env*`, `*.pem`, `*.key`, token files, …) skipped |
+| Project | `<checkout>/.agents/scratch/search.db` (+ `-wal`, `-shm`) | every tracked, modified and untracked-not-ignored file under 1 MiB with no NUL byte in its first 8 KiB; symlinks, submodules and secret-shaped names (the installer's list, matched in any case: `.env*`, `*.pem`, `*.key`, token and credential files, …) skipped; a secret inside an ordinarily named file is indexed |
 | Global search index | `~/.config/sh-agent/search.db` (+ `-wal`, `-shm`), under `--home` when given; the directory is created 0700 | `feedback.jsonl`, `retros.jsonl`, `proposals/*.md`, and the `.agents/docs` trail of every checkout that has one and has run `search` or `index` |
 
-The global file is named "the global search index", never "cross-project index": R7 already gives that name to `retros.jsonl`. A checkout with an `.agents/docs` directory registers itself on any `search` or `index` run inside it, `--global` included, at most once a day (a third-party clone with a plain `docs/` never registers, so it cannot answer `--global` queries or feed `/retro`); `--global` then reconciles `~/.config/sh-agent/` and each registered checkout's docs root (as `<name>:<path>`, `name~2` for a second checkout with the same base name), and drops a registration whose root is no longer a git checkout. Run outside a checkout, `--global` still answers. The registry lives in the database, so `index --global --rebuild` drops it, with a note; each checkout returns on its next search.
+The global file is named "the global search index", never "cross-project index": R7 already gives that name to `retros.jsonl`. A checkout with an `.agents/docs` directory registers itself on any `search` or `index` run inside it, `--global` included, at most once a day (a third-party clone with a plain `docs/` never registers, so it cannot answer `--global` queries or feed `/retro`); `--global` then reconciles `~/.config/sh-agent/` and each registered checkout's docs root (as `<name>:<path>`, `name~2` for a second checkout with the same base name), and drops a registration whose root is no longer a git checkout or no longer has `.agents/docs` (a plain `docs/` is never served in its place). Run outside a checkout, `--global` still answers. The registry lives in the database, so `index --global --rebuild` drops it, with a note; each checkout returns on its next search.
 
 ## Freshness: reconcile before every answer
 
@@ -70,7 +70,7 @@ References are record IDs (`BUG-NNN`, `ADR-NNN`) and path-shaped tokens on every
 | Another process holds the write lock past 10 s | `search: index busy (another sh-agent is indexing); retry, or use grep`; no answer printed | 1 |
 | Unreadable database, or a schema other than 1 | `note: index at <path> was unreadable (or an older schema); rebuilt`, then the answer | 0 |
 | Argument errors (`--limit` out of range, unknown `--kind`, two modes at once, no mode) | `search: <what is wrong>; see sh-agent help` | 1 |
-| Global: a registered checkout is gone | `note: dropped <root> (no longer a git checkout)` | 0 |
+| Global: a registered checkout is gone, or lost its `.agents/docs` | `note: dropped <root> (no longer a git checkout)`, or `(no longer has .agents/docs)` | 0 |
 | Global rebuild | `note: N project registrations dropped; each returns on its next search` | 0 |
 | Network filesystem | not supported: SQLite's WAL needs one host's shared memory; the SQLite error is printed | 1 |
 

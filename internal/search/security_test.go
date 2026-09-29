@@ -107,3 +107,79 @@ func TestSkipsSecretShapedFiles(t *testing.T) {
 		t.Errorf("secret-shaped files indexed:\n%s", out)
 	}
 }
+
+// Round 2 of the security review.
+
+func TestGlobalDropsCheckoutWithoutAgentsDocs(t *testing.T) {
+	home := t.TempDir()
+	root := newRepo(t)
+	writeFile(t, root, ".agents/docs/plans/p.md", "# plan\n")
+	writeFile(t, root, "docs/evil.md", "an ocelot planted in docs\n")
+	commitAll(t, root, "both")
+	mustSearch(t, Options{Dir: root, Home: home, Words: []string{"plan"}})
+	gitT(t, root, "rm", "-q", "-r", ".agents/docs")
+	commitAll(t, root, "drop trail")
+	out := mustSearch(t, Options{Dir: t.TempDir(), Home: home, Global: true, Words: []string{"ocelot"}})
+	if strings.Contains(out, "evil.md") || !strings.Contains(out, "(no longer has .agents/docs)") {
+		t.Errorf("a registration without .agents/docs still answered:\n%s", out)
+	}
+}
+
+func TestHintAndNotesArePrintable(t *testing.T) {
+	root := newRepo(t)
+	home := t.TempDir()
+	writeFile(t, root, "a\x1b[31mb/z.go", "package x\n")
+	commitAll(t, root, "odd dir")
+	out := mustSearch(t, Options{Dir: root, Home: home, Refs: "z.go"})
+	if !strings.Contains(out, "hint: did you mean") || strings.ContainsRune(out, 0x1b) {
+		t.Errorf("hint line:\n%q", out)
+	}
+	parent := t.TempDir()
+	gone := filepath.Join(parent, "gone\x1b[2J")
+	if err := os.Rename(newRepo(t), gone); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, gone, ".agents/docs/plans/p.md", "# plan\n")
+	commitAll(t, gone, "trail")
+	mustSearch(t, Options{Dir: gone, Home: home, Words: []string{"plan"}})
+	os.RemoveAll(gone)
+	out = mustSearch(t, Options{Dir: t.TempDir(), Home: home, Global: true, Words: []string{"plan"}})
+	if !strings.Contains(out, "note: dropped") || strings.ContainsRune(out, 0x1b) {
+		t.Errorf("note line:\n%q", out)
+	}
+}
+
+func TestSkipsMoreSecretNames(t *testing.T) {
+	root := newRepo(t)
+	writeFile(t, root, ".git-credentials", "https://u:caracal@example.invalid\n")
+	writeFile(t, root, ".aws/credentials", "caracal key\n")
+	writeFile(t, root, "config/.ENV", "CARACAL=1\n")
+	writeFile(t, root, "notes.md", "a caracal note\n")
+	out := mustSearch(t, Options{Dir: root, Home: t.TempDir(), Words: []string{"caracal"}})
+	for _, bad := range []string{".git-credentials", ".aws/credentials", ".ENV"} {
+		if strings.Contains(out, bad) {
+			t.Errorf("%s indexed:\n%s", bad, out)
+		}
+	}
+	if !strings.Contains(out, "notes.md") {
+		t.Errorf("control file missing:\n%s", out)
+	}
+}
+
+func TestModifiedFileReadOnce(t *testing.T) {
+	root := newRepo(t)
+	writeFile(t, root, "fresh.md", "a single read of the quoll\n")
+	reads := 0
+	old := readFile
+	readFile = func(p string) ([]byte, error) {
+		if strings.HasSuffix(p, "fresh.md") {
+			reads++
+		}
+		return old(p)
+	}
+	t.Cleanup(func() { readFile = old })
+	out := mustSearch(t, Options{Dir: root, Home: t.TempDir(), Words: []string{"quoll"}})
+	if !strings.Contains(out, "fresh.md") || reads != 1 {
+		t.Errorf("fresh.md read %d times (want 1: the bytes hashed are the bytes indexed):\n%s", reads, out)
+	}
+}

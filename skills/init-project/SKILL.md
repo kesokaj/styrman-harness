@@ -23,6 +23,8 @@ If `.agents/docs/changes/` already has entries, this run is an **update** of a s
 
 In an update, count the files in `<docs-root>/handoffs/` and `<docs-root>/changes/` whose names start with a date not followed by a four-digit time. A directory that does not exist counts zero; for one that exists, run `ls <dir>`, and when that command fails, Step 7's summary says "<dir> could not be listed; date-only names not counted". Otherwise count its output with `grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}-' | grep -vcE '^[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{4}-'`. When the total is above zero, Step 7's summary carries this warning, and nothing is renamed: "N handoff/change files have date-only names. New files are named YYYY-MM-DD-HHMM-<slug>.md; the old names stay, and a date-only name counts as older than every timed name of its day."
 
+Every write this skill makes — a root file, a template copy, a `.gitignore` line, the settings file, the store — first checks that the target path and its directory are not symlinks (`test -L`): a committed link would carry the write outside the project. A linked path is reported and skipped, never written through.
+
 ## Step 2: Locate the templates
 
 The templates live next to this SKILL.md:

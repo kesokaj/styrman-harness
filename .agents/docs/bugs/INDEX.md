@@ -70,6 +70,7 @@
 | BUG-101 | 2026-09-29 | skills/init-project (Step 5b) | fixed | memory migration trusted an `autoMemoryDirectory` value that could come from a tracked settings file, letting a committed file redirect the migration | check whether a setting's source file is tracked before trusting its value as a move destination |
 | BUG-102 | 2026-09-29 | skills/dream (Step 1) | fixed | `/dream` Step 1 read the committed settings file with no trust gate, letting a cloned repo redirect the dream skill and dreamer | restrict settings resolution to untracked/user files and constrain the resolved path to a known-owned directory |
 | BUG-103 | 2026-09-29 | skills/init-project / skills/dream (slug derivation) | fixed | an empty slug from a failed `git rev-parse` collapsed the store to the shared root; migration ran even after a refused settings write | stop on an empty/unset derived result, and gate a dependent step on the prior write's confirmed success |
+| BUG-104 | 2026-09-29 | internal/harness (tests) | fixed | `TestReinstallBuildsAndInstalls` flaked under a concurrent `go test`, seeing another process's build dir via a wildcard glob | a test asserting a shared directory is clean names the exact path its own run created, never a glob over a directory other processes write to |
 
 ## Graduated
 

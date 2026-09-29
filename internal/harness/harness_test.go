@@ -3,6 +3,7 @@ package harness
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -951,9 +952,12 @@ func TestReinstallBuildsAndInstalls(t *testing.T) {
 	if v := strings.TrimSpace(string(ver)); strings.Contains(v, "(devel)") || strings.Contains(v, "unknown") {
 		t.Errorf("installed binary is unstamped: %q", v)
 	}
-	builds, _ := filepath.Glob(filepath.Join(repo, ".agents", "scratch", "sh-agent-build-*"))
-	if len(builds) != 0 {
-		t.Errorf("build directories left behind: %v", builds)
+	// Reinstall names its build directory after this process's pid (repo.go), so
+	// only that path is ours to check: a glob over sh-agent-build-* also sees a
+	// concurrent `go test` process's in-flight build and flakes (v1.12.0 gate).
+	own := filepath.Join(repo, ".agents", "scratch", fmt.Sprintf("sh-agent-build-%d", os.Getpid()))
+	if _, err := os.Stat(own); err == nil {
+		t.Errorf("build directory left behind: %s", own)
 	}
 }
 

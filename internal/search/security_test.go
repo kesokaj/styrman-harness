@@ -224,3 +224,69 @@ func TestDropReasonIgnoresLocale(t *testing.T) {
 		t.Errorf("under a German locale: reason %q, err %v; want the checkout dropped", reason, err)
 	}
 }
+
+// Security review of aae16af..f41e5c0.
+
+func TestRefuseSymlinkedDatabase(t *testing.T) {
+	for _, name := range []string{"search.db", "search.db-wal", "search.db-shm"} {
+		root := newRepo(t)
+		outside := filepath.Join(t.TempDir(), "victim")
+		if err := os.WriteFile(outside, []byte("keep me"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(filepath.Join(root, ".agents", "scratch"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(outside, filepath.Join(root, ".agents", "scratch", name)); err != nil {
+			t.Fatal(err)
+		}
+		out, err := runSearch(t, Options{Dir: root, Words: []string{"demo"}})
+		if err == nil || !strings.Contains(err.Error(), "not a regular file") {
+			t.Errorf("%s a symlink: want a refusal, got %v\n%s", name, err, out)
+		}
+		if data, _ := os.ReadFile(outside); string(data) != "keep me" {
+			t.Errorf("%s: wrote through the symlink: %q", name, data)
+		}
+	}
+	// The global search index file too.
+	home := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "victim")
+	os.WriteFile(outside, []byte("keep me"), 0o644)
+	os.MkdirAll(filepath.Join(home, ".config", "sh-agent"), 0o700)
+	if err := os.Symlink(outside, filepath.Join(home, ".config", "sh-agent", "search.db")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runSearch(t, Options{Dir: t.TempDir(), Home: home, Global: true, Words: []string{"x"}}); err == nil || !strings.Contains(err.Error(), "not a regular file") {
+		t.Errorf("global index a symlink: want a refusal, got %v", err)
+	}
+	if data, _ := os.ReadFile(outside); string(data) != "keep me" {
+		t.Errorf("global: wrote through the symlink: %q", data)
+	}
+}
+
+func TestDatabaseIsPrivate(t *testing.T) {
+	root := newRepo(t)
+	home := t.TempDir()
+	writeFile(t, root, ".agents/docs/plans/p.md", "# plan\n")
+	commitAll(t, root, "trail")
+	mustSearch(t, Options{Dir: root, Home: home, Words: []string{"plan"}})
+	for _, p := range []string{projectDB(root), globalDB(home)} {
+		for _, suffix := range []string{"", "-wal", "-shm"} {
+			fi, err := os.Stat(p + suffix)
+			if err != nil {
+				continue // a companion file need not exist
+			}
+			if fi.Mode().Perm() != 0o600 {
+				t.Errorf("%s is %04o, want 0600: it holds the text of files whatever their own mode", p+suffix, fi.Mode().Perm())
+			}
+		}
+	}
+	// An index created 0644 by an earlier build is tightened on open.
+	if err := os.Chmod(projectDB(root), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mustSearch(t, Options{Dir: root, Home: home, Words: []string{"plan"}})
+	if fi, _ := os.Stat(projectDB(root)); fi.Mode().Perm() != 0o600 {
+		t.Errorf("an existing 0644 index stayed %04o", fi.Mode().Perm())
+	}
+}

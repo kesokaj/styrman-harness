@@ -135,6 +135,39 @@ func openStore(path string, out io.Writer) (*store, error) {
 	return s, nil
 }
 
+// prepareFiles refuses a database file, or one of its two companions, that
+// is anything but a regular file — SQLite writes through a symlink — and
+// keeps all three private: the index holds the text of every file it read,
+// whatever that file's own mode (security review of aae16af..f41e5c0). A new
+// database is created 0600 here, and SQLite gives its companions the
+// database's mode.
+func prepareFiles(path string) error {
+	for _, p := range []string{path, path + "-wal", path + "-shm"} {
+		fi, err := os.Lstat(p)
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+			continue
+		case err != nil:
+			return err
+		case !fi.Mode().IsRegular():
+			return fmt.Errorf("%s is not a regular file; refusing to open or write through it", filepath.Base(p))
+		case fi.Mode().Perm()&0o077 != 0:
+			if err := os.Chmod(p, 0o600); err != nil {
+				return err
+			}
+		}
+	}
+	// O_EXCL never follows a link put there since the check above.
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	switch {
+	case err == nil:
+		return f.Close()
+	case errors.Is(err, os.ErrExist):
+		return nil
+	}
+	return err
+}
+
 type staleSchemaError struct{ found string }
 
 func (e staleSchemaError) Error() string { return "schema " + e.found }
@@ -142,6 +175,9 @@ func (e staleSchemaError) Error() string { return "schema " + e.found }
 func tryOpen(path string) (*store, error) {
 	// 0700: ~/.config/sh-agent holds the feedback log (ConfigDir).
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return nil, err
+	}
+	if err := prepareFiles(path); err != nil {
 		return nil, err
 	}
 	db, err := sql.Open("sqlite", dsn(path))

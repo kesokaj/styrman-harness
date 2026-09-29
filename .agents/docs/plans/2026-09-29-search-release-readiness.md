@@ -65,12 +65,15 @@ E2E criteria:
 - [ ] Re-run of the probe (`search-first`, 3 with, 3 control) and the large-trail lane, search arm, 2 runs — verify: AI — expect: the main agent runs `sh-agent search` in at least 4 of the 6 large-trail sessions; fewer is an `Open:` row put to the operator with the numbers, never a silent pass
 - [ ] Checkpoint — expect: log and change committed; `/review --docs` over the change — evidence: <path>, <date>
 
+### Phase 2b — Optimizations (the operator: "run optimizations")
+- [x] Measure, then keep only what measures better — verify: AI, `index --rebuild` three times each, and an equivalence run of `parseRefs` over every tracked file — expect: faster build, smaller index, identical references — done 2026-09-29: build 2.2 s → 1.7 s and index 24.1 MB → 21.7 MB on this repository; the prefiltered `parseRefs` returned the same 40,842 references on 1,077 files; kept: insert statements prepared once per reconcile, `parseRefs` skipping lines that cannot match, the `refs(oid)` index dropped (it served only garbage collection); rejected: merging the FTS index after a build (the file grew to 25.8 MB from free pages); `TestRefsPrefilterIsEquivalent` added, mutations O1–O3 each fail it; the extension list is one source for the regex and the prefilter (D8)
+
 ### Phase 3 — Antigravity runs the release gate needs
 - [ ] One completed run of each changed agent without one yet (`dreamer`; `security` on the final wording) and each changed skill (`review-standards`, `dream`, `handoff`, `bug`, `feature`, `retro`, `research`, `init-project`), in a sandbox home installed from this tree — verify: AI — expect: artifact or answer on disk, no auto-denied line, up to three attempts each
 - [ ] Checkpoint — expect: `testing/<date>-search-agy-gate.md` committed — evidence: <path>, <date>
 
 ### Phase 4 — Real home and close
-- [ ] `sh-agent update` on this box (D7, on the operator's word), then `hash -r` — verify: AI, `sh-agent status` — expect: binary line without a warning, drift none
+- [ ] `sh-agent update` on this box (D7, on the operator's word), then `hash -r` — verify: AI, `sh-agent status` — expect: binary line without a warning, drift none — first run 2026-09-29 21:32 at 2716d08: 33 written, `binary 2716d0858bc1` without a warning, GANNET last, `sh-agent search --refs ADR-040` answered; repeated after the last change of this plan
 - [ ] Real-home smoke on both CLIs (`testing/2026-09-03-verify-real-home.md`) plus `sh-agent search --refs ADR-040` — verify: AI — expect: PASS, GANNET
 - [ ] Definition of Done: verifier if source changed, reviews for what changed, changes entries, plan closed, `TODO.md`/`ROADMAP.md` empty, handoff naming only `/preflight v1.13.0` — verify: AI — expect: all on disk and pushed
 
@@ -86,4 +89,5 @@ D3 — 2026-09-29 — The adoption bar: the main agent of the search arm runs `s
 D2 — 2026-09-29 — If D3 says `not adopted`: `sh-agent search --open` joins the context's resume reading order, paid for by an equal cut named in a D-row, then measured again; if it still misses the bar, the number is reported and the release goes ahead — by: the operator, "Resume step (Recommended)".
 D5 — 2026-09-29 — Round 3 residue: the third trail session's task is the usage/doc-comment test (the zip-place column documented a place without using `--from-zip`); the prompts carry their own waivers — by: the operator, "Proceed with my fix (Recommended)".
 D6 — 2026-09-29 — The release is v1.13.0, a MINOR: new verbs, nothing an existing install must react to — by: the operator, "v1.13.0 (Recommended)", and "Cut new version update docs. This is dod". Scope's Out line on the release is superseded: `/preflight v1.13.0` runs at the end of this plan.
+D8 — 2026-09-29 — Optimizations kept only where measured (Phase 2b); warm search was already 25–40 ms and is unchanged; the schema version stays 1 because no release carries the old index — a development cache keeps its extra index until `index --rebuild` — by: the operator, "run optimizations"; measured by implementer.
 D7 — 2026-09-29 — The operator asked for the local harness to be updated ("Don't forget to update local harness"): `sh-agent update` runs on this box from this session, once the tree is clean — by: the operator.

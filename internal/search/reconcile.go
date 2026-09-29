@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha1"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -342,6 +343,7 @@ func (s *store) applyLocked(src source, now int64) (int, error) {
 	}
 	// Index every blob the database has not seen, parsed by the first path
 	// it appears at in the view (D14).
+	var in *inserter
 	for _, e := range src.view {
 		if _, known := blobs[e.oid]; known {
 			continue
@@ -354,7 +356,13 @@ func (s *store) applyLocked(src source, now int64) (int, error) {
 		if !ok {
 			continue
 		}
-		if err := s.insertContent(e, text, src.docsRoot); err != nil {
+		if in == nil {
+			if in, err = s.newInserter(); err != nil {
+				return 0, err
+			}
+			defer in.close()
+		}
+		if err := in.content(e, text, src.docsRoot); err != nil {
 			return 0, err
 		}
 	}
@@ -391,20 +399,49 @@ func (s *store) applyLocked(src source, now int64) (int, error) {
 	return n, s.gc(now)
 }
 
-func (s *store) insertContent(e entry, text, docsRoot string) error {
+// inserter holds the three insert statements, prepared once per reconcile:
+// a full build runs some fifty thousand inserts.
+type inserter struct{ chunk, record, ref *sql.Stmt }
+
+func (s *store) newInserter() (*inserter, error) {
+	var in inserter
+	var err error
+	if in.chunk, err = s.db.Prepare(`INSERT INTO chunks(oid, line, heading, body) VALUES (?, ?, ?, ?)`); err != nil {
+		return nil, err
+	}
+	if in.record, err = s.db.Prepare(`INSERT INTO records(oid, id, line, title, status, date) VALUES (?, ?, ?, ?, ?, ?)`); err != nil {
+		in.close()
+		return nil, err
+	}
+	if in.ref, err = s.db.Prepare(`INSERT INTO refs(oid, line, target) VALUES (?, ?, ?)`); err != nil {
+		in.close()
+		return nil, err
+	}
+	return &in, nil
+}
+
+func (in *inserter) close() {
+	for _, st := range []*sql.Stmt{in.chunk, in.record, in.ref} {
+		if st != nil {
+			st.Close()
+		}
+	}
+}
+
+func (in *inserter) content(e entry, text, docsRoot string) error {
 	for _, c := range chunkText(e.path, text) {
-		if _, err := s.db.Exec(`INSERT INTO chunks(oid, line, heading, body) VALUES (?, ?, ?, ?)`, e.oid, c.line, c.heading, c.body); err != nil {
+		if _, err := in.chunk.Exec(e.oid, c.line, c.heading, c.body); err != nil {
 			return err
 		}
 	}
 	rel, _ := docsRelative(e.path, docsRoot)
 	for _, r := range parseRecords(rel, text) {
-		if _, err := s.db.Exec(`INSERT INTO records(oid, id, line, title, status, date) VALUES (?, ?, ?, ?, ?, ?)`, e.oid, r.id, r.line, r.title, r.status, r.date); err != nil {
+		if _, err := in.record.Exec(e.oid, r.id, r.line, r.title, r.status, r.date); err != nil {
 			return err
 		}
 	}
 	for _, r := range parseRefs(text) {
-		if _, err := s.db.Exec(`INSERT INTO refs(oid, line, target) VALUES (?, ?, ?)`, e.oid, r.line, r.target); err != nil {
+		if _, err := in.ref.Exec(e.oid, r.line, r.target); err != nil {
 			return err
 		}
 	}

@@ -56,7 +56,6 @@ CREATE INDEX records_id ON records(id);
 CREATE INDEX records_oid ON records(oid);
 CREATE TABLE refs(oid TEXT, line INTEGER, target TEXT);
 CREATE INDEX refs_target ON refs(target);
-CREATE INDEX refs_oid ON refs(oid);
 `
 
 // store is one open index database.

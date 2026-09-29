@@ -183,9 +183,24 @@ type ref struct {
 }
 
 var (
-	idToken   = regexp.MustCompile(`\b(BUG|ADR)-\d{3}[a-z]?\b`)
-	pathToken = regexp.MustCompile(`[A-Za-z0-9_.@-]+(?:/[A-Za-z0-9_.@-]+)+/?|[A-Za-z0-9_-]+\.(?:go|md|ts|tsx|js|json|yaml|yml|sh|py|toml|mod|sum|sql|tf)\b`)
+	idToken = regexp.MustCompile(`\b(BUG|ADR)-\d{3}[a-z]?\b`)
+	// pathToken: a path with a slash, or a bare name ending in one of
+	// refExtensions (one list, so the prefilter below cannot drift from it).
+	pathToken = regexp.MustCompile(`[A-Za-z0-9_.@-]+(?:/[A-Za-z0-9_.@-]+)+/?|[A-Za-z0-9_-]+\.(?:` + strings.Join(refExtensions, "|") + `)\b`)
 )
+
+// refExtensions are the file extensions a bare name may end in to count as
+// a path reference.
+var refExtensions = []string{"go", "md", "ts", "tsx", "js", "json", "yaml", "yml", "sh", "py", "toml", "mod", "sum", "sql", "tf"}
+
+func hasRefExtension(l string) bool {
+	for _, e := range refExtensions {
+		if strings.Contains(l, "."+e) {
+			return true
+		}
+	}
+	return false
+}
 
 // normalizeRef trims what surrounds a path in prose: trailing punctuation, a
 // leading ./ and a diff's a/ or b/ prefix.
@@ -212,8 +227,15 @@ func parseRefs(text string) []ref {
 				out = append(out, ref{line: i + 1, target: t})
 			}
 		}
-		for _, m := range idToken.FindAllString(l, -1) {
-			add(m)
+		// The regular expressions are the cost of a build (a quarter of it
+		// here): skip the lines that cannot match.
+		if strings.Contains(l, "BUG-") || strings.Contains(l, "ADR-") {
+			for _, m := range idToken.FindAllString(l, -1) {
+				add(m)
+			}
+		}
+		if !strings.Contains(l, "/") && !hasRefExtension(l) {
+			continue
 		}
 		for _, m := range pathToken.FindAllString(l, -1) {
 			if t := normalizeRef(m); strings.ContainsAny(t, "/.") && !idToken.MatchString(t) {

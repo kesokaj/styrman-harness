@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -576,5 +577,50 @@ func TestArgumentErrors(t *testing.T) {
 		if _, err := runSearch(t, o); err == nil || !strings.Contains(err.Error(), "see sh-agent help") {
 			t.Errorf("%+v: got %v", o, err)
 		}
+	}
+}
+
+// parseRefs skips lines that cannot hold a reference before it runs its
+// regular expressions; the result must be what the expressions alone give.
+func TestRefsPrefilterIsEquivalent(t *testing.T) {
+	text := strings.Join([]string{
+		"only an id: ADR-033a",
+		"only a bug: BUG-049.",
+		"a path with a slash: internal/harness/repo.go:12",
+		"a bare name: main.go and notes.md",
+		"prose with a full stop. And another one. No reference here",
+		"a dotted word like e.g. or v1.2.3 but no extension",
+		"mixed BUG-001 in cmd/x/y.ts, and go.mod; also z.tf",
+		"a directory only: skills/feature/",
+		"",
+	}, "\n")
+	// One bare name per accepted extension, no slash on the line.
+	for _, e := range refExtensions {
+		text += "\nsee name_" + e + "." + e + " here"
+	}
+	var want []ref
+	for i, l := range splitLines(text) {
+		seen := map[string]bool{}
+		add := func(x string) {
+			if x != "" && !seen[x] {
+				seen[x] = true
+				want = append(want, ref{line: i + 1, target: x})
+			}
+		}
+		for _, m := range idToken.FindAllString(l, -1) {
+			add(m)
+		}
+		for _, m := range pathToken.FindAllString(l, -1) {
+			if x := normalizeRef(m); strings.ContainsAny(x, "/.") && !idToken.MatchString(x) {
+				add(x)
+			}
+		}
+	}
+	got := parseRefs(text)
+	if len(want) < 10+len(refExtensions) {
+		t.Fatalf("fixture too thin: %d references", len(want))
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("prefiltered parseRefs differs:\n got %v\nwant %v", got, want)
 	}
 }

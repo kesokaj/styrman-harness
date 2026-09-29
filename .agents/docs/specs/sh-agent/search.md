@@ -8,7 +8,7 @@ Status: the project index and the global search index built 2026-09-29 (plan `pl
 
 ## What it is
 
-A derived SQLite index the agent queries instead of reading whole files. Git and the files in `~/.config/sh-agent/` stay the source of truth: the index is a cache, never committed, never sent by `report`, and deleting it loses nothing but the next query's rebuild time (about two seconds for this repository's 1,050 files).
+A derived SQLite index the agent queries instead of reading whole files. Git and the files in `~/.config/sh-agent/` stay the source of truth: the index is a cache, never committed, never sent by `report`, and deleting it loses nothing but the next query's rebuild time (under two seconds for this repository's 1,080 files).
 
 ## Commands
 
@@ -82,9 +82,9 @@ References are record IDs (`BUG-NNN`, `ADR-NNN`) and path-shaped tokens on every
 
 | Measurement | Result |
 |---|---|
-| Full build, 1,050 files | 2.2 s |
+| Full build, 1,080 files | 1.7 s (2.2 s before the inserts were prepared once and reference parsing skipped lines that cannot match) |
 | Warm `search`, nothing changed, end to end | 23–67 ms |
 | Recall@10 on 41 questions from this repository's history (`testing/2026-09-29-search-recall.md`) | 0.653, against 0.379 for one grep pass |
 | Warm `--refs` / `--open`, end to end | 47–60 ms / 20 ms |
-| Database size | 23 MB (10,340 chunks, 913 records, 39,560 references) |
+| Database size | 21.7 MB (10,560 chunks, 40,850 references); 24.1 MB before the unused `refs(oid)` index was dropped |
 | Binary size, linux/amd64 | 13.7 MB |

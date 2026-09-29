@@ -31,3 +31,7 @@ Nothing blocks: the verifier row is PASS, there is no security row to owe (no pa
 
 ## Release
 - Version v1.12.1; notes `.agents/scratch/release-notes-v1.12.1.md`; procedure `deploy/remote.md` § Releases, each command its own call.
+
+## Addendum (2026-09-29, after the tag)
+
+The verdict paragraph above says the Release rule's Antigravity condition "is met" by the Claude Code run of the linked-store row. That was an overstatement: the rule asks for a run on Antigravity, and "What was not checked" correctly lists that none existed. The run now exists, after the tag: `testing/2026-09-29-verify-real-home-v1.12.1.md`, PASS (1 of 1). Under the rule as written the gate should have read NO-SHIP until that run; the result did not change the release. The next gate reads the rule against "What was not checked" before writing its verdict line.

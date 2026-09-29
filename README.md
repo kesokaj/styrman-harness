@@ -207,7 +207,7 @@ And back: `sh-agent report --dry-run` lists every file and every redaction it wo
 | `skills/<name>/` | `~/.claude/skills/<name>/` | `~/.gemini/config/skills/<name>/` |
 | `agents/<name>.md` (Claude format) | `~/.claude/agents/<name>.md` | `~/.gemini/config/agents/<name>/agent.md` (tool and model names translated at install) |
 | the binary | `~/.local/bin/sh-agent` | same |
-| manifest, feedback log, retro proposals, and `retros.jsonl` (cross-project retro, distill and dream index) | `~/.config/sh-agent/` | same |
+| manifest, feedback log, retro proposals, and `retros.jsonl` (cross-project retro/distill index; a dream leaves its record in the project's `retros/` and no line here) | `~/.config/sh-agent/` | same |
 
 The project's auto memory store is `.agents/memory/` (gitignored), set up by `/init-project`, read by both CLIs, never committed and never sent by `sh-agent report` — only `feedback.jsonl`, `retros.jsonl`, `proposals/`, the install manifest and the run's `report.json` leave the machine (`.agents/docs/deploy/local.md` § Report back).
 

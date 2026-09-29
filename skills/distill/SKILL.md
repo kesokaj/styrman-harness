@@ -35,7 +35,7 @@ Do NOT suggest `/distill` for:
 
 ## Step 1: Identify Candidate Patterns
 
-First dispatch the `dreamer` agent — `Store: <the project's auto memory store, resolved as the dream skill's Step 1 does>. Docs root: <docs-root>. Since: <the newest retros/ record's date, or all>. Promoted: none.` plus "Write your artifact with the Write tool; report only means no source edits." and a 30-call budget — and take its skill and procedure candidates (`<docs-root>/retros/<date>-dreamer.md`, the Candidates table) as the first entries of the candidate list, with their evidence and draft paths. Then read the session transcript and add only patterns the artifact does not already name (same name or same steps), so a pattern appears once. Look for:
+First dispatch the `dreamer` agent — `Store: <the project's auto memory store, resolved as the dream skill's Step 1 does>. Docs root: <docs-root>. Since: <the date of the newest `retros/*-retro*.md` record, or all — never a dreamer or dream record>. Promoted: none.` plus "Write your artifact with the Write tool; report only means no source edits." and a 30-call budget — and take its skill and procedure candidates (`<docs-root>/retros/<date>-dreamer.md`, the Candidates table) as the first entries of the candidate list, with their evidence and draft paths. Then read the session transcript and add only patterns the artifact does not already name (same name or same steps), so a pattern appears once. Look for:
 
 ### Pattern Types
 
@@ -172,5 +172,5 @@ After installation:
 ## Cross-References
 
 - Manual skill creation follows the SKILL.md standard by hand on both CLIs (Claude Code may offer a built-in skill-creator; check `/skills` before relying on it)
-- The `/retro` workflow handles corrections and rule gaps (not patterns); both write to `<docs-root>/retros/` and to `~/.config/sh-agent/retros.jsonl`, so one directory and one index hold the project's whole learning-loop history
+- The `/retro` workflow handles corrections and rule gaps (not patterns); both write to `<docs-root>/retros/` and to `~/.config/sh-agent/retros.jsonl`, so one directory holds the project's whole learning-loop history (dream and dreamer records included) and one index its retros and distills (ADR-044)
 - The `feedback-log` skill logs entries that `/distill --from-log` can analyze for cross-session patterns

@@ -422,7 +422,7 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
 - Removing a `.sig` beside a tampered release zip turns a refusal into an `UNVERIFIED` install. That is the same trust as any unsigned zip, and the output says so.
 - The release carrying this is v1.10.0, a MINOR relative to v1.9.0: a half pair now installs rather than refusing, and nothing becomes required.
 
-## ADR-042: Dream records join the project's learning history     (2026-09-29) — Accepted
+## ADR-042: Dream records join the project's learning history     (2026-09-29) — Accepted; superseded in part by ADR-044 (no `retros.jsonl` line)
 
 **Context:** the `dream` skill (`plans/2026-09-29-dream-skill.md`) consolidates Claude Code's auto memory and writes a standalone record, `<docs-root>/retros/<date>-dream.md`, plus a `"kind":"dream"` line in `~/.config/sh-agent/retros.jsonl`. `REQUIREMENTS.md` named only retro and distill records in `retros/`.
 
@@ -441,3 +441,13 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
 **Rejected:** `~/.config/sh-agent/memory/<slug>/` — harness-owned, but the operator wants project state in the project, and it needed an outside-workspace prompt on Claude Code; a committed `.agents/memory/` — personal and unreviewed content in history, merge conflicts between machines.
 
 **Consequences:** a fresh clone starts with an empty store (the memories are per checkout, like scratch); `git clean -fdx` removes it, as it removes scratch; every restatement of the path lives in the spec, the four skills, the dreamer, the context's resume clause, the matrix rows, README and the deploy guides, all moved in one commit; the security rounds' path bounds are the two exact paths.
+
+## ADR-044: A dream record is not indexed in `retros.jsonl`     (2026-09-29) — Accepted, amends ADR-042
+
+**Context:** ADR-042 said `retros.jsonl` indexes retro, distill and dream records. The v1.12.0 gate review found that `sh-agent status` dates the last retro from that file (`internal/harness/state.go`, `cmd/sh-agent/main.go`), so every standalone `/dream` would reset the 14-day `/retro` reminder.
+
+**Decision:** `/dream` writes its record to `<docs-root>/retros/<date>-dream.md` and no line to `~/.config/sh-agent/retros.jsonl`; the index stays a retro and distill index. The one `"kind":"dream"` line written on this machine on 2026-09-29 stays as history. The dreamer's `Since` date is taken from the newest `retros/*-retro*.md` record, never from a dream or dreamer record.
+
+**Rejected:** teaching `sh-agent status` to skip dream lines — a Go change for a line nothing reads.
+
+**Consequences:** the context's Learning loop, `skills/dream`, README's harness-state row and this ADR say so; ADR-042's index sentence is superseded on that point only.

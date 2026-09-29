@@ -21,11 +21,11 @@ Claude Code writes auto memory on its own, one file per fact under a per-project
 
 `<store>` is the project's auto memory directory. Resolve it, never assume it:
 
-1. `autoMemoryDirectory` from the first of `.claude/settings.local.json` (only when git does not track it and neither `.claude` nor the file is a symlink) and `~/.claude/settings.json` that sets it, or from a `--settings` file the user names in the same turn — never the committed `.claude/settings.json`, which anyone with commit access writes. Only two values are used, compared as exact strings after `~/` expansion: `<root>/.agents/memory` (`root` from `git rev-parse --show-toplevel`; only when neither `.agents` nor `.agents/memory` is a symlink and git tracks nothing under it — a committed link or file is the repository's, not the operator's) and `~/.claude/projects/<slug>/memory` (the slug of step 2); anything else — another project's store, a path with `..` — is not used: say so and take step 2's path.
-2. Otherwise `~/.claude/projects/<slug>/memory/`, where `<slug>` is the repository root's absolute path (`git rev-parse --show-toplevel`) with every character other than a letter, a digit or a hyphen turned into `-` (Claude Code's own project name). Worktrees and subdirectories share one store.
+1. `autoMemoryDirectory` from the first of `.claude/settings.local.json` (only when git does not track it and neither `.claude` nor the file is a symlink) and `~/.claude/settings.json` that sets it, or from a `--settings` file the user names in the same turn — never the committed `.claude/settings.json`, which anyone with commit access writes. Only two values are used, compared as exact strings after `~/` expansion and with any trailing `/` dropped: `<root>/.agents/memory` (`root` from `git rev-parse --show-toplevel`, as in step 2; only when neither `.agents` nor `.agents/memory` is a symlink and git tracks nothing under it — a committed link or file is the repository's, not the operator's) and `~/.claude/projects/<slug>/memory` (the slug of step 2); anything else — another project's store, a path with `..` — is not used: say so and take step 2's path.
+2. Otherwise `~/.claude/projects/<slug>/memory/`, where `<slug>` is the repository root's absolute path (`git rev-parse --show-toplevel`, which must succeed and be non-empty, or the run stops: an empty slug would name the shared root) with every character other than a letter, a digit or a hyphen turned into `-` (Claude Code's own project name). Worktrees and subdirectories share one store.
 3. Count both places, always: `n` = the memory files in `<store>` (`ls <store>/*.md | grep -vc MEMORY.md`), `m` = the memory files at the default path of step 2 (`ls ~/.claude/projects/<slug>/memory/*.md 2>/dev/null | grep -vc MEMORY.md`; 0 when the directory is absent; when the count cannot run, `could not be counted` takes its place and the run goes on). Both numbers go on the first line of the reply, so they are never skipped.
 
-The first line of the reply is always `store: <store> (<n> memory files; default path <default>: <m>)`. When `n` is 0, the line is followed by `no auto memory for <repo>` — or, when `m` is above zero, by `the default path holds memory files: run /init-project to move them` — and the run ends with nothing written. When `<store>` came from a setting and both `n` and `m` are above zero, the store is split (a setting Claude Code did not honour — an untrusted workspace — is the usual cause): the line is followed by `split store — merge before running`, and the run ends with nothing written.
+The first line of the reply is always `store: <store> (<n> memory files; default path <default>: <m>)`. When `n` is 0, the line is followed by `no auto memory for <repo>` — or, when `m` is above zero, by `the default path holds memory files: run /init-project to move them` — and the run ends with nothing written. When `<store>` came from a setting, is not the default path itself, and both `n` and `m` are above zero, the store is split (a setting Claude Code did not honour — an untrusted workspace — is the usual cause): the line is followed by `split store — merge before running`, and the run ends with nothing written.
 
 ## Step 2: Orientation
 
@@ -59,13 +59,7 @@ Otherwise ask: go per number, or go all. The table is the undo point, since the 
 
 ## Step 6: The record
 
-- Standalone: `<docs-root>/retros/<date>-dream.md` (a second one the same day gets `-2`, `-3`; records are immutable) with frontmatter `owner: main` and `date:`, the store path, counts per verdict, the table, what was applied and what was left, and the full text of every deleted memory. Then one compact line appended to `~/.config/sh-agent/retros.jsonl`:
-
-```json
-{"ts":"<date -u +%FT%TZ>","project":"<absolute project path>","session":"<id>","kind":"dream","record":"<absolute path of the record>","verdicts":{"keep":0,"graduated":0,"stale":0,"broken":0,"merge":0,"promote":0,"index":0}}
-```
-
-  If `~/.config/sh-agent/` is denied, the record still stands: say so and print the exact `cat >> ~/.config/sh-agent/retros.jsonl <<'EOF' … EOF` command for the user.
+- Standalone: `<docs-root>/retros/<date>-dream.md` (a second one the same day gets `-2`, `-3`; records are immutable) with frontmatter `owner: main` and `date:`, the store path, counts per verdict, the table, what was applied and what was left, and the full text of every deleted memory. No line in `~/.config/sh-agent/retros.jsonl`: `sh-agent status` dates the last retro from that file, and a dream is not a retro.
 - From `/retro`: no separate record. The retro record gets a `## Memory` section with the same content, each `promote` becomes a row under its `## Findings` with `rule_ref null`, and the edits are applied with the retro's proposals at its Step 6.
 
 Report in chat: the store line, counts per verdict, what was applied, and the record's path.
@@ -77,6 +71,5 @@ Report in chat: the store line, counts per verdict, what was applied, and the re
 | No store, or an empty one | one line, nothing written |
 | Run on Antigravity | the same path: it reads Claude Code's store for the project when one exists, otherwise the one line above |
 | A graduation grep hits but the hit is a different rule | `keep`, the why saying what the hit was |
-| `~/.config/sh-agent/` denied | the record stands; the exact `cat >>` command is printed |
 | `MEMORY.md` names a file that is gone, or a file has no line | fixed by the index rewrite; listed as `index` rows |
 | Headless run | verdicts computed and reported, nothing deleted; every verdict stays proposed |

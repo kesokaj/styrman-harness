@@ -1,7 +1,7 @@
 ---
 owner: main
 date: 2026-09-29
-status: proposed — awaiting the operator's decision on the Open rows; not in ROADMAP "Now"
+status: in progress — the operator said "Go all" on the three Open rows on 2026-09-29 (D4–D6); ROADMAP "Now" names this plan
 ---
 # Plan — `dream`: consolidate Claude Code's auto memory   (2026-09-29)
 
@@ -126,6 +126,6 @@ Assumptions:
 - D1 (2026-09-29): dream never writes a rule; `promote` hands the memory to the retro. Why: one place decides where a rule lives (retro Step 2), and a second writer would drift from it.
 - D2 (2026-09-29): named `dream` after Anthropic's term; if Claude Code ships a built-in `/dream` that does this, the skill is deleted rather than renamed. Why: a built-in that does the same job makes the skill redundant, not conflicting.
 - D3 (2026-09-29): doubt resolves to `keep`. Why: the store is not under git; the global guard rule for destructive actions.
-- Open: **O1 — trigger.** Retro only (recommended: no timer, no counter, matches project rule 1) versus a `sh-agent status` line counting sessions since the last dream (a Go change, out of a file drop).
-- Open: **O2 — where the standalone record goes.** `<docs-root>/retros/<date>-dream.md` (recommended: REQUIREMENTS line 31 puts retro and distill records there, and this is the same loop) versus nothing on disk beyond `retros.jsonl`.
-- Open: **O3 — scope of stores.** This project's store only (recommended) versus every store under `~/.claude/projects/` in one pass, which reads other projects' state from here (the 2026-09-28 retro's finding 2 is the reason not to).
+- D4 (2026-09-29): trigger is `/retro` and the operator's hand, no timer and no session counter — by: "Go all on the dream plan" (operator, 2026-09-29), on O1. Rejected: a `sh-agent status` line counting sessions since the last dream — a Go change for a file-drop feature, and project rule 1 keeps timers out of the mechanism.
+- D5 (2026-09-29): a standalone run records to `<docs-root>/retros/<date>-dream.md`, plus one `retros.jsonl` line — by: the same words, on O2. Rejected: nothing on disk beyond `retros.jsonl` — REQUIREMENTS line 31 puts the learning loop's records in `retros/`.
+- D6 (2026-09-29): this project's store only — by: the same words, on O3. Rejected: one pass over every store under `~/.claude/projects/` — it reads other projects' state from here (the 2026-09-28 retro's finding 2).

@@ -24,7 +24,7 @@ Follow-ups noted, not built: none yet.
 
 ## Surfaces touched
 
-- `.agents/scratch/eff-kit/` (kit, gitignored, ADR-010), new files beside the Phase 5 kit, which stays as it is: `clean-session.sh` (one clean-arm session), `lane-clean.sh <arm> <app|trail> <n>` (a fresh project, then sessions s1–s3; results in `results-clean/<arm>-<app|trail>-<n>-s<k>.{json,err}`, projects in `~/sandbox/search/eff/cwork/`), `metrics-clean.py` (per lane type, session and arm; the main agent's and the subagents' `sh-agent search` calls in separate columns; prints the D3 count), `score-trail.py` (s1 drift fixed, s2 answers out of 5, s3 Zip place column with a `version` cell, pushed), prompts `LT1`–`LT3` in `prompts.sh`. Each arm's Claude Code install: `~/sandbox/search/eff/chome-<arm>/` (`sh-agent install --vendor claude` of v1.12.1 and of this tree).
+- `.agents/scratch/eff-kit/` (kit, gitignored, ADR-010), new files beside the Phase 5 kit, which stays as it is: `clean-session.sh` (one clean-arm session), `lane-clean.sh <arm> <app|trail> <n>` (a fresh project, then sessions s1–s3; results in `results-clean/<arm>-<app|trail>-<n>-s<k>.{json,err}`, projects in `~/sandbox/search/eff/cwork/`), `metrics-clean.py` (per lane type, session and arm; the main agent's and the subagents' `sh-agent search` calls in separate columns; prints the D3 count), `score-trail.py` (s1 drift fixed, s2 answers out of 5, s3 `go test ./cmd/sh-agent -run '^TestUsageMatchesDocComment$' -v` shows the test ran and passed, pushed), prompts `LT1`–`LT3` in `prompts.sh`. Each arm's Claude Code install: `~/sandbox/search/eff/chome-<arm>/` (`sh-agent install --vendor claude` of v1.12.1 and of this tree).
 - `context/AGENTS.md` or one skill, only if D2 changes wording.
 - `.agents/docs/testing/` logs; `testing/skill-matrix.md` if a scenario changes.
 
@@ -32,7 +32,7 @@ Follow-ups noted, not built: none yet.
 
 Clean-arm Claude session: `cd <project>; PATH=<arm wrapper dir>:$PATH claude -p --setting-sources project,local --append-system-prompt "$(cat ctx-<arm>.md)" --permission-mode acceptEdits --allowedTools <the Phase 5 list> < prompt`, where `<project>/.claude/` holds a copy of `<arm home>/.claude/{skills,agents,commands}` from `sh-agent install --vendor claude --home <arm home>` of that arm's tree, excluded from git by `<project>/.git/info/exclude`. No `--agents`, no `--add-dir`.
 
-Large-trail lane (per arm, one clone of this repository at v1.12.1 with its `.agents/docs` trail, the drift seed of the search plan's Phase 5, and a bare origin): s1 "resume from the trail, then fix the seeded drift: `sh-agent update --check` exits 2 when behind — make every living file agree, as a Task under the Definition of Done"; s2 "resume from the trail, then answer the five trail questions of the search plan's Phase 5 in ANSWERS.md with file:line, commit"; s3 "resume from the trail, then add a fourth column, Zip place, to the matrix table in `testing/sh-agent-matrix.md`, fill its `version` cell with evidence produced here, and write `not run` in that column for every other row"; the exact prompts are `LT1`–`LT3`. Same waivers text as the sample apps.
+Large-trail lane (per arm, one clone of this repository at v1.12.1 with its `.agents/docs` trail, the drift seed of the search plan's Phase 5, and a bare origin): s1 "resume from the trail, then fix the seeded drift: `sh-agent update --check` exits 2 when behind — make every living file agree, as a Task under the Definition of Done"; s2 "resume from the trail, then answer the five trail questions of the search plan's Phase 5 in ANSWERS.md with file:line, commit"; s3 "resume from the trail, then, as a Task under the Definition of Done, add a Go test `TestUsageMatchesDocComment` to `cmd/sh-agent` that fails when a verb in the usage text is missing from `main.go`'s doc comment, or the other way round"; the exact prompts are `LT1`–`LT3`. Each prompt carries its own "Do not ask me anything" and its push instruction; s2 is a question session that commits and pushes.
 
 ## Failure modes
 
@@ -50,7 +50,7 @@ E2E criteria:
 
 ## Phases
 
-- [ ] Cold-reader check — design ready and implementation ready, or the operator's same-turn override quoted with its date
+- [x] Cold-reader check — round 1 `reviews/2026-09-29-coldread-search-release-readiness-r1.md` (one blocking gap, D3), round 2 `-r2.md` (two, D4), round 3 `-r3.md` (one narrow blocking item, one non-blocking) — cap reached; the operator, 2026-09-29: "Proceed with my fix (Recommended)", resolved as D5
 
 ### Phase 1 — Clean A/B on Claude Code, with the new skills
 - [ ] Kit: the files named in Surfaces touched; a dry run of one `trail` project per arm (setup only, no session) shows its `.claude/skills` holds that arm's skills (the search arm's `feature` skill contains `sh-agent search --refs`, the baseline's does not) and the drift seed in place — verify: AI — expect: `grep -c` 2 and 0, the seed line found
@@ -70,7 +70,7 @@ E2E criteria:
 - [ ] Checkpoint — expect: `testing/<date>-search-agy-gate.md` committed — evidence: <path>, <date>
 
 ### Phase 4 — Real home and close
-- [ ] Operator runs `sh-agent update` on this box — who: user — expect: `sh-agent status` binary line without a warning
+- [ ] `sh-agent update` on this box (D7, on the operator's word), then `hash -r` — verify: AI, `sh-agent status` — expect: binary line without a warning, drift none
 - [ ] Real-home smoke on both CLIs (`testing/2026-09-03-verify-real-home.md`) plus `sh-agent search --refs ADR-040` — verify: AI — expect: PASS, GANNET
 - [ ] Definition of Done: verifier if source changed, reviews for what changed, changes entries, plan closed, `TODO.md`/`ROADMAP.md` empty, handoff naming only `/preflight v1.13.0` — verify: AI — expect: all on disk and pushed
 
@@ -83,4 +83,7 @@ Assumptions: `--setting-sources project,local` excludes the real home's skills a
 D1 — 2026-09-29 — The clean A/B replaces the first comparison's setup for everything in this plan; the first comparison stays as recorded — by: implementer, from the probe.
 D4 — 2026-09-29 — The kit is new files beside the Phase 5 kit (named in Surfaces touched), because the Phase 5 `metrics.py` sums main and subagent searches and runs the larger task as one session; the matrix task adds a Zip place column, since the table has no row shape for a place — by: cold read round 2 (`reviews/2026-09-29-coldread-search-release-readiness-r2.md`).
 D3 — 2026-09-29 — The adoption bar: the main agent of the search arm runs `sh-agent search` in at least 4 of the 6 large-trail sessions (2 runs × 3 sessions); that task is where the trail is large enough for search to matter; sample-app sessions are reported but do not decide — by: cold read round 1 (`reviews/2026-09-29-coldread-search-release-readiness-r1.md`, blocking question 1).
-Open: D2 — the main-agent adoption change, if D3 says `not adopted` — default: propose a step in the context's resume procedure with an equal cut, put to the operator before editing.
+D2 — 2026-09-29 — If D3 says `not adopted`: `sh-agent search --open` joins the context's resume reading order, paid for by an equal cut named in a D-row, then measured again; if it still misses the bar, the number is reported and the release goes ahead — by: the operator, "Resume step (Recommended)".
+D5 — 2026-09-29 — Round 3 residue: the third trail session's task is the usage/doc-comment test (the zip-place column documented a place without using `--from-zip`); the prompts carry their own waivers — by: the operator, "Proceed with my fix (Recommended)".
+D6 — 2026-09-29 — The release is v1.13.0, a MINOR: new verbs, nothing an existing install must react to — by: the operator, "v1.13.0 (Recommended)", and "Cut new version update docs. This is dod". Scope's Out line on the release is superseded: `/preflight v1.13.0` runs at the end of this plan.
+D7 — 2026-09-29 — The operator asked for the local harness to be updated ("Don't forget to update local harness"): `sh-agent update` runs on this box from this session, once the tree is clean — by: the operator.

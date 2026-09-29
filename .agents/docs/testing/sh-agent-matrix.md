@@ -34,6 +34,14 @@ The verb × place-kind matrix of `plans/2026-09-18-sh-agent-works-everywhere.md`
 | `status` (after uninstall) | exercised: `installed nothing — run `sh-agent install``, exit 1 (and `uncommitted changes` on the clone, from the adopted widget) | exercised, exit 1 | exercised, exit 1 |
 | `install --repo <tree>` | n/a (it IS the tree) | n/a | refused: `this is the release binary v9.9.9: it installs the harness built into it and never a tree on disk, so --repo=… is refused — unset it, or build sh-agent from that tree and run that build's install` |
 | `$SH_AGENT_REPO` set | n/a | n/a | refused: the same, naming `$SH_AGENT_REPO=…` |
+| `index` (added 2026-09-29, tree 5a92849) | exercised: `files 1058`, `chunks 10394`, … | refused: `search: not inside a git checkout; use grep`, exit 1 | exercised (run in the checkout clone): same counts |
+| `search <words>` | exercised: `search: 10 hits for "zip verify" (index current: 1058 files, reconciled 0 changed in 20 ms)` | refused: the same message | exercised: same, 19 ms |
+| `search --refs ADR-040` | exercised: `ADR-040  …DECISIONS.md:383  Superseded by ADR-041`, `referenced by 21:` | refused: the same message | exercised: same |
+| `search --open --kind bug` | exercised: `search: 2 open records`, BUG-105 and BUG-083 | refused: the same message | exercised: same |
+| `index --rebuild` | exercised: same counts after a rebuild | refused: the same message | exercised: same |
+| `search --global zip` | exercised: the checkout registered itself; 873 trail files, `checkout:.agents/docs/plans/…` | exercised: answers outside a checkout, `0 hits` from a fresh home (nothing registered) | exercised: same as the checkout |
+
+The `search` and `index` rows ran from `.agents/scratch/matrix-search/` (gitignored) on 2026-09-29: the plain copy with `GIT_CEILING_DIRECTORIES` set to its parent, because a copy inside this checkout's scratch otherwise finds this repository's `.git` and searches it (a first run made exactly that mistake and was discarded).
 
 ## The two orderings
 

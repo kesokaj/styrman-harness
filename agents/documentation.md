@@ -44,7 +44,7 @@ Shared seam: the `verifier` creates `testing/guide.md`, the project's one guide,
 
 ## Rules
 
-1. **Read before writing.** Inspect the actual code and the existing doc. A task isn't done until docs match the code exactly.
+1. **Read before writing.** Inspect the actual code and the existing doc. A task isn't done until docs match the code exactly. When the dispatch carries `sh-agent search` output for a changed command, flag or path, open every doc it lists: each one still describing the old behaviour is yours to update.
 2. **Specs are live.** Keep `specs/<app>/integration-spec.md` matching the code's public APIs, schemas, configs, auth, and errors.
 3. **README stays copy-pasteable.** Quick-start commands must actually run.
 4. **ROADMAP.md reflects the current plan.** When scope, sequencing, or priorities change, move items between Next and Later — don't let it fossilize; leave "Now" to the main agent unless the dispatch names it.

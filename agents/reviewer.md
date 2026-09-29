@@ -32,7 +32,7 @@ Default to the current change set, not the whole repo. Establish the diff with `
 
 ## Pre-flight
 
-1. Read `REQUIREMENTS.md`, `AGENTS.md`, any `.agents/rules/`, and `.agents/docs/bugs/INDEX.md` at the project root. A violation of `REQUIREMENTS.md` is **high severity, blocking**; a change that reintroduces a recorded bug is a finding citing its id.
+1. Before reading the diff in detail, run `sh-agent search --refs <path> --kind bug` for each changed file, with its full path: past failures there, never the author's intent. Then read `REQUIREMENTS.md`, `AGENTS.md`, any `.agents/rules/`, and `.agents/docs/bugs/INDEX.md` at the project root. A violation of `REQUIREMENTS.md` is **high severity, blocking**; a change that reintroduces a recorded bug is a finding citing its id.
 2. The `review-standards` skill is your criteria library — apply its per-language standards to every changed file. The six criteria below are the lens; the skill is the detail.
 
 ## The six review criteria

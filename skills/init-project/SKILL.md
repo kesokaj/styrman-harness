@@ -107,6 +107,8 @@ Claude Code writes auto memory per project; the harness keeps that store inside 
 
 The Step 5 headless guard applies to `.claude/settings.local.json` too: when the write is refused, report the file's exact content for the user to create; the store is still created, the migration is skipped (step 3).
 
+`/skills` and `/agents` show what a vendor loaded; when something is missing, check these symlinks first.
+
 ## Step 6: README and .gitignore
 
 - If no `README.md` exists, create a short one from the project overview: name, quick start (the real commands), architecture in three lines, deploy path.

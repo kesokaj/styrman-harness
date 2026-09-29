@@ -474,10 +474,17 @@ type hit struct {
 	snippet            string
 }
 
-func (sc *scope) find(o Options, q string) ([]hit, error) {
-	if q == "" {
-		return nil, nil
+// find appends to hits the ranked chunks matching q, skipping any already
+// in hits, until o.Limit; perFile carries the per-file cap across calls.
+func (sc *scope) find(o Options, q string, hits []hit, perFile map[string]int) ([]hit, error) {
+	if q == "" || len(hits) >= o.Limit {
+		return hits, nil
 	}
+	have := map[string]bool{}
+	for _, h := range hits {
+		have[fmt.Sprintf("%s\x00%s\x00%d", h.project, h.path, h.line)] = true
+	}
+	first := len(hits)
 	// Snippets are made only for the hits that are printed, below.
 	// The full-text match runs once, first: joined directly, the planner
 	// drove the loop from files and ran the match per row (seconds).
@@ -490,8 +497,6 @@ func (sc *scope) find(o Options, q string) ([]hit, error) {
 	if err != nil {
 		return nil, fmt.Errorf("search: %w", err)
 	}
-	perFile := map[string]int{}
-	var hits []hit
 	var ids []int64
 	for rows.Next() && len(hits) < o.Limit {
 		var h hit
@@ -501,7 +506,7 @@ func (sc *scope) find(o Options, q string) ([]hit, error) {
 			return nil, err
 		}
 		key := h.project + "\x00" + h.path
-		if perFile[key] >= perFileCap || !sc.kindMatches(o, h.project, h.path) {
+		if have[fmt.Sprintf("%s\x00%d", key, h.line)] || perFile[key] >= perFileCap || !sc.kindMatches(o, h.project, h.path) {
 			continue
 		}
 		perFile[key]++
@@ -514,6 +519,7 @@ func (sc *scope) find(o Options, q string) ([]hit, error) {
 	}
 	rows.Close()
 	for i, id := range ids {
+		i += first
 		var body, snip string
 		err := sc.st.db.QueryRow(`SELECT c.body, snippet(chunks_fts, 1, char(1), char(2), '…', 24)
 			FROM chunks_fts JOIN chunks c ON c.id = chunks_fts.rowid WHERE chunks_fts MATCH ? AND chunks_fts.rowid = ?`, q, id).Scan(&body, &snip)
@@ -552,20 +558,23 @@ func cleanSnippet(s string) string {
 	return s
 }
 
+// words ranks chunks holding every word first, then fills the remaining
+// slots with chunks holding any of them: an AND of many words alone often
+// matched two chunks and stopped there (recall test, D27).
 func (sc *scope) words(o Options, out io.Writer) error {
 	phrase := strings.Join(o.Words, " ")
-	hits, err := sc.find(o, ftsQuery(o.Words, " "))
+	perFile := map[string]int{}
+	hits, err := sc.find(o, ftsQuery(o.Words, " "), nil, perFile)
 	if err != nil {
 		return err
 	}
-	header := fmt.Sprintf("search: %d hits for %q (%s)", len(hits), phrase, sc.status())
-	if len(hits) == 0 && len(o.Words) > 1 {
-		hits, err = sc.find(o, ftsQuery(o.Words, " OR "))
-		if err != nil {
+	all := len(hits)
+	if len(o.Words) > 1 {
+		if hits, err = sc.find(o, ftsQuery(o.Words, " OR "), hits, perFile); err != nil {
 			return err
 		}
-		header = fmt.Sprintf("search: no file has all of %q; %d hits for any of them (%s)", phrase, len(hits), sc.status())
 	}
+	header := fmt.Sprintf("search: %d hits for %q, %d with every word (%s)", len(hits), phrase, all, sc.status())
 	fmt.Fprintln(out, header)
 	for _, h := range hits {
 		fmt.Fprintf(out, "%s\n    %s\n", sc.label(h.project, h.path, h.oid, h.line), h.snippet)
@@ -673,6 +682,17 @@ func (sc *scope) refs(o Options, out io.Writer) error {
 			return err
 		}
 		fmt.Fprintf(out, "%s  %s\n", x, state)
+		if state == "absent" && !strings.Contains(x, "/") {
+			// A bare file name matches nothing (no basename matching, D-row in
+			// the plan): name the tracked paths it could mean instead.
+			hints, err := sc.sameName(x)
+			if err != nil {
+				return err
+			}
+			for _, h := range hints {
+				fmt.Fprintf(out, "hint: did you mean --refs %s\n", h)
+			}
+		}
 	}
 	rows, err := sc.st.db.Query(`SELECT f.project, f.path, r.oid, r.line, r.target FROM refs r JOIN files f ON f.oid = r.oid
 		WHERE `+where+` AND f.project IN `+sc.in()+` ORDER BY f.project, f.path, r.line`, append(args, sc.keys()...)...)
@@ -738,6 +758,25 @@ func (sc *scope) refs(o Options, out io.Writer) error {
 		fmt.Fprintf(out, "%s%s\n    %s\n", sc.label(g.project, g.path, g.oid, g.line), times, markTarget(sc.lineText(g.oid, g.line), g.target))
 	}
 	return nil
+}
+
+// sameName lists up to five current paths whose last element is name.
+func (sc *scope) sameName(name string) ([]string, error) {
+	rows, err := sc.st.db.Query(`SELECT DISTINCT path FROM files WHERE path LIKE ? ESCAPE '\' AND project IN `+sc.in()+` ORDER BY path LIMIT 5`,
+		append([]any{"%/" + likeEscape(name)}, sc.keys()...)...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
 }
 
 func likeEscape(s string) string {

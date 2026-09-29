@@ -38,7 +38,7 @@ Every `*.md` in the store except `MEMORY.md` gets exactly one verdict, with a on
 | Verdict | Test | Edit |
 |---|---|---|
 | `keep` | Still true; recorded nowhere the session already loads. | none |
-| `graduated` | Its rule now lives in the global context, the project `AGENTS.md`, `.agents/rules/`, a skill, or a bug record's prevention rule — found by one `grep` over the memory's key words, each hit read in full. | delete the file and its index line |
+| `graduated` | Its rule now lives in the global context, the project `AGENTS.md`, `.agents/rules/`, a skill, or a bug record's prevention rule — found by one `grep` over the memory's key words and one `sh-agent search` over them for other wording, each hit read in full. | delete the file and its index line |
 | `stale` | A `project` memory whose work the newest handoff or a `changes/` entry shows done; a `reference` whose target is gone. | delete |
 | `broken` | Names a file, function, flag or command that no longer exists (`ls`, `grep`); or carries a relative date ("last week", "next month"). | rewrite to the current name and an absolute date, or delete when nothing current matches |
 | `merge` | Two or more files on one fact. | one file; the newer `modified:` wins a contradiction; `[[links]]` repointed; the survivor keeps the older file's name |

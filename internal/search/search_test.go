@@ -372,8 +372,17 @@ func TestSearchRanksAndCaps(t *testing.T) {
 		t.Errorf("--limit 1:\n%s", out)
 	}
 	out = mustSearch(t, Options{Dir: root, Home: home, Words: []string{"lynx", "nonexistentword"}})
-	if !strings.Contains(out, "no file has all of") || !strings.Contains(out, "once.md") {
+	if !strings.Contains(out, ", 0 with every word") || !strings.Contains(out, "once.md") {
 		t.Errorf("OR fallback:\n%s", out)
+	}
+	// Chunks with every word come first; the rest of the slots are filled
+	// with chunks holding any of them.
+	writeFile(t, root, "both.md", "a lynx beside a heron\n")
+	commitAll(t, root, "both")
+	out = mustSearch(t, Options{Dir: root, Home: home, Words: []string{"lynx", "heron"}})
+	lines := strings.Split(out, "\n")
+	if !strings.Contains(lines[0], ", 1 with every word") || !strings.HasPrefix(lines[1], "both.md:1") || !strings.Contains(out, "once.md") {
+		t.Errorf("AND first, then OR:\n%s", out)
 	}
 }
 
@@ -418,6 +427,10 @@ func TestRefs(t *testing.T) {
 	out = mustSearch(t, Options{Dir: root, Home: home, Refs: "internal/"})
 	if !strings.HasPrefix(out, "internal/  directory") || !strings.Contains(out, "plans/p.md:6") {
 		t.Errorf("directory refs:\n%s", out)
+	}
+	out = mustSearch(t, Options{Dir: root, Home: home, Refs: "z.go"})
+	if !strings.HasPrefix(out, "z.go  absent\nhint: did you mean --refs internal/pkg/z.go\n") {
+		t.Errorf("bare file name, want a hint:\n%s", out)
 	}
 	out = mustSearch(t, Options{Dir: root, Home: home, Refs: "ADR-999"})
 	if !strings.HasPrefix(out, "ADR-999  no record") {

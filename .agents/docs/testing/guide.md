@@ -111,6 +111,18 @@ meaning there), or `remainder` (no machine here can run it) — none blank. Pass
 silent cell; every `refused` cell's message names both the cause and the alternative;
 and `status` reports drift none from a fresh home on each of the three place kinds.
 
+## 3d. Search index (change to `internal/search`, or to the `search`/`index` wiring in `cmd/sh-agent`)
+
+```bash
+go test -race ./internal/search ./cmd/sh-agent                 # unit tests: reconcile, parsing, queries, refusals, the global search index
+SH_AGENT_RECALL=1 go test ./internal/search -run 'TestRecall$' -v   # recall measurement over testdata/recall.tsv: prints per-question recall and the means; not a gate
+go build -o .agents/scratch/sh-agent ./cmd/sh-agent
+.agents/scratch/sh-agent index --rebuild --home .agents/scratch/s   # this checkout: under 10 s
+.agents/scratch/sh-agent search --home .agents/scratch/s <words>    # warm, nothing changed: under 100 ms end to end
+```
+
+A new or changed verb also gets its rows in `sh-agent-matrix.md` (section 3c). A test written after its code is checked by the mutation protocol (`review-standards` § 2): the mutated code compiles and a named test fails.
+
 ## 4. Sandbox start of each CLI (change to `context/`, `agents/`, or `skills/`)
 
 One start of Claude Code and one of Antigravity in the sandbox (paths and flags in

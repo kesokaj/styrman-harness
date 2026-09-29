@@ -172,6 +172,15 @@ func gitGrepFiles(t *testing.T, root, needle string) []string {
 // recall is the share of gold paths found in got; a words question looks at
 // the first ten only.
 func recall(q recallQuestion, got []string) float64 {
+	// The questions themselves live in testdata/: a hit there answers
+	// nothing, for either arm.
+	kept := got[:0:0]
+	for _, p := range got {
+		if !strings.HasPrefix(p, "internal/search/testdata/") {
+			kept = append(kept, p)
+		}
+	}
+	got = kept
 	if q.mode == "words" && len(got) > 10 {
 		got = got[:10]
 	}
@@ -193,8 +202,48 @@ type recallArm struct {
 	run  func(t *testing.T, root string, q recallQuestion) []string
 }
 
-// recallArms lists the arms the test compares. Phase 4 adds the index arm.
-var recallArms = []recallArm{{"grep", grepArm}}
+// indexArm asks the search index the same question with the same words:
+// ranked words for an ordinary or drift question, --refs or --open for a
+// structured one. It returns the printed paths in order.
+func indexArm(t *testing.T, root string, q recallQuestion) []string {
+	t.Helper()
+	o := Options{Dir: root, Home: t.TempDir(), Limit: 11} // one slot for the testdata file recall drops
+	switch q.mode {
+	case "refs":
+		o.Refs = q.arg
+	case "open":
+		o.Open, o.Kind = true, q.arg
+	default:
+		o.Words = questionWords(q.text)
+	}
+	var out bytes.Buffer
+	if err := Search(o, &out); err != nil {
+		t.Fatalf("search %q: %v\n%s", q.text, err, out.String())
+	}
+	return printedPaths(out.String())
+}
+
+var hitLine = regexp.MustCompile(`^(?:\S+  )?([^\s:][^\s]*?):\d+  `)
+
+// printedPaths lists, in order and once each, the paths of hit and record
+// lines in search output.
+func printedPaths(out string) []string {
+	var paths []string
+	seen := map[string]bool{}
+	for _, l := range strings.Split(out, "\n") {
+		if strings.HasPrefix(l, " ") {
+			continue
+		}
+		if m := hitLine.FindStringSubmatch(l); m != nil && !seen[m[1]] {
+			seen[m[1]] = true
+			paths = append(paths, m[1])
+		}
+	}
+	return paths
+}
+
+// recallArms lists the arms the test compares.
+var recallArms = []recallArm{{"grep", grepArm}, {"index", indexArm}}
 
 func TestRecall(t *testing.T) {
 	if os.Getenv("SH_AGENT_RECALL") != "1" {

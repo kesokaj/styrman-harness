@@ -17,7 +17,7 @@ Use `.agents/docs/` if it exists; else a bare `docs/` if it exists; else create 
 
 ## Inputs you need
 
-The dispatch prompt should give you: what happened, what was expected, how it was found (test output, review finding, user words), the root cause as understood, the fix (files, commit if any), and today's date from `date +%F`. Read the diff and the failing output yourself before writing — record reality, not the summary you were handed. If the root cause is not known, say so in the record (`status: open`) rather than inventing one.
+The dispatch prompt should give you: what happened, what was expected, how it was found (test output, review finding, user words), the root cause as understood, the fix (files, commit if any), and today's date from `date +%F`. Read the diff and the failing output yourself before writing — record reality, not the summary you were handed. If the root cause is not known, say so in the record (`status: open`) rather than inventing one. When the dispatch carries `sh-agent search` output (records naming the files involved, or the symptom's words with `--kind bug`), check it for a duplicate record or an existing prevention rule before assigning a number.
 
 ## Numbering
 

@@ -42,6 +42,7 @@ Large-trail lane (per arm, one clone of this repository at v1.12.1 with its `.ag
 ## Verification
 
 E2E criteria:
+- The main agent of the search arm runs `sh-agent search` in at least 4 of 6 large-trail sessions (Phase 1, or Phase 2 after the change), or the operator has accepted the measured number in their own turn.
 - The clean A/B's per-session table exists for Claude Code with both arms delivering; the main agent's `sh-agent search` count is reported for each arm.
 - Every changed skill and agent has one completed Antigravity run on disk (artifact or answer) with no auto-denied line.
 - After the operator's install on this box, the three real-home smoke checks pass on both CLIs, and `sh-agent search --refs ADR-040` answers from the installed binary.
@@ -55,12 +56,13 @@ E2E criteria:
 - [ ] Kit: clean-arm mode; dry run shows each arm's project `.claude/skills` holds that arm's skills (the search arm's `feature` skill contains `sh-agent search --refs`, the baseline's does not) — verify: AI — expect: both checks by `grep -c`
 - [ ] Sample apps, both arms, 2 runs each, 3 sessions — verify: AI, `outcomes.py`, `metrics.py` — expect: tables per session, main-agent search count per arm
 - [ ] Large-trail lane, both arms, 2 runs each — verify: AI — expect: drift fixed, answers scored, main-agent search count
+- [ ] Adoption decision (D3): count the large-trail sessions of the search arm in which the MAIN agent (not a subagent) ran `sh-agent search` — verify: AI, the transcript split of `metrics.py` — expect: a D-row stating `n of 6` and `adopted` (n ≥ 4) or `not adopted` (n ≤ 3); `not adopted` opens Phase 2, `adopted` marks Phase 2's boxes `[-]` with that D-row as the reason
 - [ ] Checkpoint — expect: `testing/<date>-search-adoption.md` committed — evidence: <path>, <date>
 
-### Phase 2 — Main-agent adoption (only if Phase 1's main-agent count is low)
+### Phase 2 — Main-agent adoption (runs when D3 says `not adopted`)
 - [ ] D2 decided with the operator: the change and its exact text — who: both
 - [ ] The change, `TestRenderedContextFitsAntigravityBlock` PASS if context — verify: unit — expect: PASS
-- [ ] Re-run of the probe (`search-first`, 3 with, 3 control) and one large-trail lane per arm — verify: AI — expect: n of N reported
+- [ ] Re-run of the probe (`search-first`, 3 with, 3 control) and the large-trail lane, search arm, 2 runs — verify: AI — expect: the main agent runs `sh-agent search` in at least 4 of the 6 large-trail sessions; fewer is an `Open:` row put to the operator with the numbers, never a silent pass
 - [ ] Checkpoint — expect: log and change committed; `/review --docs` over the change — evidence: <path>, <date>
 
 ### Phase 3 — Antigravity runs the release gate needs
@@ -79,4 +81,5 @@ Assumptions: `--setting-sources project,local` excludes the real home's skills a
 ## Decisions
 
 D1 — 2026-09-29 — The clean A/B replaces the first comparison's setup for everything in this plan; the first comparison stays as recorded — by: implementer, from the probe.
-Open: D2 — the main-agent adoption change, if Phase 1 shows it is needed — default: propose a step in the context's resume procedure with an equal cut, put to the operator before editing.
+D3 — 2026-09-29 — The adoption bar: the main agent of the search arm runs `sh-agent search` in at least 4 of the 6 large-trail sessions (2 runs × 3 sessions); that task is where the trail is large enough for search to matter; sample-app sessions are reported but do not decide — by: cold read round 1 (`reviews/2026-09-29-coldread-search-release-readiness-r1.md`, blocking question 1).
+Open: D2 — the main-agent adoption change, if D3 says `not adopted` — default: propose a step in the context's resume procedure with an equal cut, put to the operator before editing.

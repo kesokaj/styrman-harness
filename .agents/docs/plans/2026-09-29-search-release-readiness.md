@@ -20,7 +20,7 @@ In:
 
 Out: the release itself (`/preflight` from the operator's turn); the known limits D25 (`x/sys` advisory, needs Go 1.25) and D35 (the edit-during-lock race), both documented decisions; installs on the other machines (after the release).
 
-Follow-ups noted, not built: none yet.
+Follow-ups noted, not built: none.
 
 ## Surfaces touched
 
@@ -63,7 +63,7 @@ E2E criteria:
 - [x] D2 decided with the operator: the change and its exact text — who: both — done 2026-09-29: pre-decided, D2
 - [x] The change, `TestRenderedContextFitsAntigravityBlock` PASS if context — verify: unit — expect: PASS — done 2026-09-29: PASS at 21,996 of 22,000 bytes, GANNET last; the handoff skill's restatement of the order updated (D9)
 - [x] Re-run of the probe (`search-first`, 3 with, 3 control) and the large-trail lane, search arm, 2 runs — verify: AI — expect: the main agent runs `sh-agent search` in at least 4 of the 6 large-trail sessions; fewer is an `Open:` row put to the operator with the numbers, never a silent pass — done 2026-09-29: large-trail 6 of 6 sessions (bar: 4), quality unchanged; the probe on the 65-file fixture 0 of 3 with the change and 0 of 3 control — the step is followed on a real-sized trail and skipped on a tiny one (D9)
-- [ ] Checkpoint — expect: log and change committed; `/review --docs` over the change — evidence: <path>, <date>
+- [x] Checkpoint — expect: log and change committed; `/review --docs` over the change — evidence: `testing/2026-09-29-search-adoption.md`; commit f41e5c0; `reviews/2026-09-29-review-abbaddc-1634787-docs.md` APPROVE, no findings, 2026-09-29
 
 ### Phase 2b — Optimizations (the operator: "run optimizations")
 - [x] Measure, then keep only what measures better — verify: AI, `index --rebuild` three times each, and an equivalence run of `parseRefs` over every tracked file — expect: faster build, smaller index, identical references — done 2026-09-29: build 2.2 s → 1.7 s and index 24.1 MB → 21.7 MB on this repository; the prefiltered `parseRefs` returned the same 40,842 references on 1,077 files; kept: insert statements prepared once per reconcile, `parseRefs` skipping lines that cannot match, the `refs(oid)` index dropped (it served only garbage collection); rejected: merging the FTS index after a build (the file grew to 25.8 MB from free pages); `TestRefsPrefilterIsEquivalent` added, mutations O1–O3 each fail it; the extension list is one source for the regex and the prefilter (D8)
@@ -75,7 +75,7 @@ E2E criteria:
 ### Phase 4 — Real home and close
 - [x] `sh-agent update` on this box (D7, on the operator's word), then `hash -r` — verify: AI, `sh-agent status` — expect: binary line without a warning, drift none — first run 2026-09-29 21:32 at 2716d08: 33 written, `binary 2716d0858bc1` without a warning, GANNET last, `sh-agent search --refs ADR-040` answered; repeated after the last change of this plan — third run 22:27 at 8e1b7f5 after the security fix: 1 written, `binary 8e1b7f5aee85` without a warning, both existing indexes tightened to 0600
 - [x] Real-home smoke on both CLIs (`testing/2026-09-03-verify-real-home.md`) plus `sh-agent search --refs ADR-040` — verify: AI — expect: PASS, GANNET — done 2026-09-29: PASS on both, `testing/2026-09-29-verify-real-home-search.md` (run at f41e5c0; 8e1b7f5 changed Go code only, and the installed binary answered `search --refs ADR-045`)
-- [ ] Definition of Done: verifier if source changed, reviews for what changed, changes entries, plan closed, `TODO.md`/`ROADMAP.md` empty, handoff naming only `/preflight v1.13.0` — verify: AI — expect: all on disk and pushed
+- [x] Definition of Done: verifier, reviews for what changed, changes entries, plan closed, `TODO.md`/`ROADMAP.md` empty, handoff naming only `/preflight v1.13.0` — done 2026-09-29: `testing/2026-09-29-verify-search-release-readiness.md` PASS over aae16af..1634787 (362 pass, 2 skips with reasons); code review APPROVE; security findings fixed with Outcome (D10); docs lens APPROVE; `changes/2026-09-29-2326-search-release-readiness.md`; BUG-106 and BUG-107 graduated earlier; the release follows in the same session (D6), so the handoff is written after it and names nothing queued
 
 ## Risks
 

@@ -6,8 +6,6 @@ Last reviewed: 2026-09-29
 
 ## Now
 
-- `sh-agent search` release readiness — `.agents/docs/plans/2026-09-29-search-release-readiness.md`
-
 ## Next
 
 ## Later / Ideas

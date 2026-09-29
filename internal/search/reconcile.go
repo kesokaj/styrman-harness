@@ -33,6 +33,9 @@ type entry struct {
 
 func git(dir string, stdin []byte, args ...string) ([]byte, error) {
 	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	// Git's messages in its C locale: dropReason matches "not a git
+	// repository", which a translated catalogue would reword.
+	cmd.Env = append(os.Environ(), "LC_ALL=C", "LANGUAGE=")
 	if stdin != nil {
 		cmd.Stdin = bytes.NewReader(stdin)
 	}

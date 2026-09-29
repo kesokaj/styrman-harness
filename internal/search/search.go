@@ -599,7 +599,8 @@ func matchOffset(body, snip string) int {
 
 // printable replaces control characters (C0, DEL, C1) with '?', so indexed
 // text cannot drive the terminal the answer is printed to (security review,
-// finding 4). Tabs and newlines are folded to spaces by the callers first.
+// finding 4). Tabs and newlines become '?' too, except in snippets, whose
+// callers fold whitespace to single spaces first.
 func printable(s string) string {
 	return strings.Map(func(r rune) rune {
 		if r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f) {

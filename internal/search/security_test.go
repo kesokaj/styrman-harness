@@ -208,3 +208,19 @@ func TestRebuiltNoteIsPrintable(t *testing.T) {
 		t.Errorf("rebuilt note:\n%q", out)
 	}
 }
+
+// Review of the security fixes (reviews/2026-09-29-review-search-index-code-r2.md): git's
+// "not a git repository" is matched in git's C-locale text, whatever the caller's locale.
+func TestDropReasonIgnoresLocale(t *testing.T) {
+	bin := t.TempDir()
+	fake := "#!/bin/sh\nif [ \"$LC_ALL\" = C ]; then echo 'fatal: not a git repository (or any of the parent directories): .git' >&2; else echo 'fatal: kein Git-Repository (oder irgendeines der Elternverzeichnisse): .git' >&2; fi\nexit 128\n"
+	if err := os.WriteFile(filepath.Join(bin, "git"), []byte(fake), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("LC_ALL", "de_DE.UTF-8")
+	reason, err := dropReason(t.TempDir())
+	if err != nil || reason != "no longer a git checkout" {
+		t.Errorf("under a German locale: reason %q, err %v; want the checkout dropped", reason, err)
+	}
+}

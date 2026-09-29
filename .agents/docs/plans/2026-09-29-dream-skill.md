@@ -118,6 +118,7 @@ E2E criteria: (1) in this repository, `/dream` lists `asking-format.md` as `grad
 Assumptions:
 - Claude Code loads a project skill from `.claude/skills/<name>/SKILL.md` in a `claude -p` run — checked by the control run above, first task of Phase 1.
 - `autoMemoryDirectory` accepts a relative path or a path inside the repository — checked by `claude -p` printing the store it read, first task of Phase 1; else the fixture moves to an absolute path under `.agents/scratch/`.
+- Antigravity CLI keeps no memory store (checked 2026-09-29 on agy 1.2.13: no docs page, no help entry, no settings key; the binary links the editor's Knowledge Base code and `~/.gemini/antigravity-cli/knowledge/` exists with only a lock file, never written). Re-check `ls ~/.gemini/antigravity-cli/knowledge/` after each agy update; a populated store is a new Decisions row, not a change to this plan.
 - `originSessionId` is present in every auto-memory file's frontmatter (it is in this project's four) — checked by `grep -L originSessionId <store>/*.md`; a file without it counts as one session.
 
 ## Decisions

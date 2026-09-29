@@ -291,6 +291,13 @@ func Collect(home string) (Collection, error) {
 			}
 		}
 	}
+	// The global search index is a cache of the files above and of project
+	// trails (R4, ADR-045): never sent, and named so a dry run shows it.
+	for _, name := range []string{"search.db", "search.db-wal", "search.db-shm"} {
+		if _, err := os.Lstat(filepath.Join(dir, name)); err == nil {
+			c.Skipped = append(c.Skipped, name+" (the global search index, a cache; never sent)")
+		}
+	}
 	return c, nil
 }
 

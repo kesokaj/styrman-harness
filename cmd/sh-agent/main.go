@@ -12,6 +12,8 @@
 //	sh-agent render                  print the assembled context file
 //	sh-agent adopt <name|path>       copy a skill from elsewhere into the repo
 //	sh-agent report [--dry-run]      send this machine's learning-loop files and metrics to the feedback repo, keeping nothing
+//	sh-agent search <words>          ranked search of this checkout's files and trail, reconciled against git first
+//	sh-agent index [--rebuild]       reconcile (or rebuild) the search index and print its counts
 //	sh-agent version
 package main
 
@@ -32,6 +34,7 @@ import (
 	"time"
 
 	"github.com/kesokaj/styrman-harness/internal/harness"
+	"github.com/kesokaj/styrman-harness/internal/search"
 )
 
 const usage = `sh-agent — lifecycle tool for the sh-agent harness
@@ -47,6 +50,11 @@ Commands:
   render                  print the assembled context file
   adopt <name|path>       copy a skill installed elsewhere into the repo's skills/ (--force to replace)
   report [--feedback-repo DIR] [--dry-run]  send a redacted copy of ~/.config/sh-agent and a metrics record to the feedback repo (through a throwaway clone holding only this machine's reports, removed after the push; --feedback-repo names a checkout to write into instead)
+  search [--limit N] [--kind K] [--global] <words...>  ranked search of every file and trail record in this git checkout: path:line, kind, record status, snippet; the index (.agents/scratch/search.db) is reconciled against git first, so it never answers from another branch
+  search --refs <BUG-NNN|ADR-NNN|path> [--kind K] [--global]  every record naming an ID, a file or a directory (trailing /), with the ID's own status
+  search --open [--kind K] [--global]  open bugs and plans with unticked boxes
+      --global searches the global search index (~/.config/sh-agent/search.db): ~/.config/sh-agent's logs and proposals and the trail of every checkout that has run search; --kind is one of bug adr plan change handoff review testing retro spec deploy trail code doc feedback proposal; --limit 1-50, default 10
+  index [--global] [--rebuild]  reconcile the search index, or delete and rebuild it, and print its counts
   version                 print the build version
 
 Flags accepted by every command:
@@ -92,6 +100,12 @@ func run(args []string, out io.Writer) error {
 	force := fs.Bool("force", false, "adopt: replace an existing skill")
 	feedbackFlag := fs.String("feedback-repo", "", "report: feedback checkout (never cloned into)")
 	fromZip := fs.String("from-zip", "", "update: install the harness in this repository zip with the running binary")
+	limit := fs.Int("limit", 0, "search: hits to print, 1-50 (default 10)")
+	kind := fs.String("kind", "", "search: only hits of this kind")
+	refs := fs.String("refs", "", "search: records naming this ID or path")
+	openRecords := fs.Bool("open", false, "search: open bugs and plans with unticked boxes")
+	global := fs.Bool("global", false, "search, index: the global search index")
+	rebuild := fs.Bool("rebuild", false, "index: delete and rebuild the index")
 	if err := fs.Parse(reorder(rest)); err != nil {
 		return err
 	}
@@ -145,6 +159,19 @@ func run(args []string, out io.Writer) error {
 		// Before ResolveSource, which errors when no harness is found: a
 		// machine with no checkout must still be able to report.
 		return report(*repoFlag, *feedbackFlag, home, *dryRun, out)
+	case "search", "index":
+		// Before ResolveSource too: searching needs no harness tree, and a
+		// release-binary or zip place has none (plan D10).
+		wd, err := os.Getwd()
+		if err != nil {
+			return err
+		}
+		o := search.Options{Dir: wd, Home: home, Words: fs.Args(), Refs: *refs, Open: *openRecords,
+			Kind: *kind, Limit: *limit, Global: *global, Rebuild: *rebuild}
+		if cmd == "index" {
+			return search.Index(o, out)
+		}
+		return search.Search(o, out)
 	}
 
 	src, err := harness.ResolveSource(*repoFlag, home, buildVersion())
@@ -713,6 +740,9 @@ func reorder(args []string) []string {
 		"-vendor": true, "--vendor": true,
 		"-feedback-repo": true, "--feedback-repo": true,
 		"-from-zip": true, "--from-zip": true,
+		"-limit": true, "--limit": true,
+		"-kind": true, "--kind": true,
+		"-refs": true, "--refs": true,
 	}
 	var flags, positional []string
 	for i := 0; i < len(args); i++ {

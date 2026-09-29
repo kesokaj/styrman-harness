@@ -1228,3 +1228,29 @@ func TestRunDirRefusesWhatItCannotRead(t *testing.T) {
 		t.Error("an unreadable reports/<host> must be an error")
 	}
 }
+
+func TestCollectNeverSendsSearchDB(t *testing.T) {
+	home := t.TempDir()
+	dir := filepath.Join(home, ".config", "sh-agent")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range []string{"feedback.jsonl", "search.db", "search.db-wal"} {
+		if err := os.WriteFile(filepath.Join(dir, n), []byte("{}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c, err := Collect(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range c.Files {
+		if strings.HasPrefix(f.Name, "search.db") {
+			t.Errorf("report would send %s", f.Name)
+		}
+	}
+	named := strings.Join(c.Skipped, "\n")
+	if !strings.Contains(named, "search.db (the global search index, a cache; never sent)") || !strings.Contains(named, "search.db-wal") {
+		t.Errorf("skipped list does not name the index:\n%s", named)
+	}
+}

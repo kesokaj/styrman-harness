@@ -6,6 +6,8 @@ Last reviewed: 2026-09-29
 
 ## Now
 
+- `sh-agent search`: project and global SQLite index — `.agents/docs/plans/2026-09-29-search-index.md`
+
 ## Next
 
 ## Later / Ideas

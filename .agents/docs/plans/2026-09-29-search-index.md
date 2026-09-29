@@ -219,8 +219,8 @@ E2E criteria:
 - [x] Checkpoint — expect: `gofmt -l cmd internal` empty, `go vet ./...` and `go test -race ./...` exit 0, verifier log PASS — evidence: `testing/2026-09-29-verify-search-index-phase-1.md` PASS over c04f2d7..7c24503 (198 pass, 2 skips with reasons; rebuild 2.1 s; warm search 25–32 ms, 5 of 5; three cross-builds; `go 1.24.4`), 2026-09-29
 
 ### Phase 2 — Global index
-- [ ] Registry and `~config` sources per Interfaces — verify: unit — expect: PASS for `TestGlobalRegistersProject`, `TestGlobalDropsVanishedProject`, `TestGlobalIndexesFeedbackRetrosProposals`, `TestGlobalNameCollision`, all with `--home` in a temp dir
-- [ ] `--global` for `search` and `--refs` — docs: `.agents/docs/specs/sh-agent/search.md` — verify: integration, two scratch clones under `.agents/scratch/`, a bug record only in the second, searched from the first with `--home .agents/scratch/home-global` — expect: the record found with the second clone's name
+- [x] Registry and `~config` sources per Interfaces — verify: unit — expect: PASS for `TestGlobalRegistersProject`, `TestGlobalDropsVanishedProject`, `TestGlobalIndexesFeedbackRetrosProposals`, `TestGlobalNameCollision`, all with `--home` in a temp dir — done 2026-09-29: the four named tests plus `TestGlobalRunsOutsideACheckout` and `TestGlobalRebuildDropsRegistry` PASS; mutations G1–G5 each compiled and failed a named test
+- [x] `--global` for `search` and `--refs` — docs: `.agents/docs/specs/sh-agent/search.md` — verify: integration, two scratch clones under `.agents/scratch/`, a bug record only in the second, searched from the first with `--home .agents/scratch/home-global` — expect: the record found with the second clone's name — done 2026-09-29: from `.agents/scratch/g1`, `search --global flamingo cache` found `g2:.agents/docs/bugs/BUG-001-flamingo.md:6  bug BUG-001 open`; the fixture was asserted first (g2 holds the word, g1 does not); spec updated
 - [ ] Checkpoint — expect: full test command exit 0, verifier log PASS — evidence: <log path>, <date>
 
 ### Phase 3 — Instructions (context, agents, skills) and docs

@@ -1,0 +1,152 @@
+package search
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// globalHome makes a home whose ~/.config/sh-agent holds a feedback line, a
+// retro line and a proposal.
+func globalHome(t *testing.T) string {
+	t.Helper()
+	home := t.TempDir()
+	dir := filepath.Join(home, ".config", "sh-agent")
+	writeFile(t, dir, "feedback.jsonl", `{"rule_ref":"scratch","note":"the operator corrected a jackalope mistake"}`+"\n")
+	writeFile(t, dir, "retros.jsonl", `{"kind":"retro","summary":"a quetzal pattern recurred"}`+"\n")
+	writeFile(t, dir, "proposals/2026-09-29-x.md", "# Proposal\n\nadd a rule about the ocelot\n")
+	return home
+}
+
+func TestGlobalRegistersProject(t *testing.T) {
+	home := globalHome(t)
+	a := newRepo(t)
+	writeFile(t, a, ".agents/docs/bugs/BUG-001-heron.md", "---\nid: BUG-001\nstatus: open\ndate: 2026-09-10\n---\n# BUG-001: the heron failure\n")
+	writeFile(t, a, "src/heron.go", "package src // heron in code, not trail\n")
+	commitAll(t, a, "add")
+	b := newRepo(t)
+	// b searches globally before a has ever run: nothing of a yet.
+	if out := mustSearch(t, Options{Dir: b, Home: home, Global: true, Words: []string{"heron"}}); strings.Contains(out, "BUG-001") {
+		t.Fatalf("unregistered project answered:\n%s", out)
+	}
+	mustSearch(t, Options{Dir: a, Home: home, Words: []string{"demo"}})
+	out := mustSearch(t, Options{Dir: b, Home: home, Global: true, Words: []string{"heron"}})
+	name := filepath.Base(a)
+	if !strings.Contains(out, name+":.agents/docs/bugs/BUG-001-heron.md:") || !strings.Contains(out, "bug BUG-001 open") {
+		t.Errorf("a's bug not found from b:\n%s", out)
+	}
+	if strings.Contains(out, "src/heron.go") {
+		t.Errorf("the global search index holds only trails, not code:\n%s", out)
+	}
+	// A first run that is --global registers its own checkout too.
+	c := newRepo(t)
+	writeFile(t, c, ".agents/docs/plans/p.md", "# the egret plan\n- [ ] one\n")
+	commitAll(t, c, "add")
+	out = mustSearch(t, Options{Dir: c, Home: home, Global: true, Words: []string{"egret"}})
+	if !strings.Contains(out, filepath.Base(c)+":.agents/docs/plans/p.md") {
+		t.Errorf("a first --global run left its own checkout out:\n%s", out)
+	}
+	out = mustSearch(t, Options{Dir: b, Home: home, Global: true, Open: true})
+	if !strings.Contains(out, "BUG-001") || !strings.Contains(out, "plans/p.md") {
+		t.Errorf("--global --open:\n%s", out)
+	}
+	out = mustSearch(t, Options{Dir: b, Home: home, Global: true, Refs: "BUG-001"})
+	if !strings.HasPrefix(out, "BUG-001  "+name+":.agents/docs/bugs/BUG-001-heron.md:1  open") {
+		t.Errorf("--global --refs:\n%s", out)
+	}
+}
+
+func TestGlobalRunsOutsideACheckout(t *testing.T) {
+	home := globalHome(t)
+	out, err := runSearch(t, Options{Dir: t.TempDir(), Home: home, Global: true, Words: []string{"jackalope"}})
+	if err != nil {
+		t.Fatalf("--global outside a checkout: %v", err)
+	}
+	if !strings.Contains(out, "~config:feedback.jsonl:1  feedback") {
+		t.Errorf("feedback line not found:\n%s", out)
+	}
+}
+
+func TestGlobalIndexesFeedbackRetrosProposals(t *testing.T) {
+	home := globalHome(t)
+	dir := t.TempDir()
+	for word, want := range map[string]string{
+		"jackalope": "~config:feedback.jsonl:1  feedback",
+		"quetzal":   "~config:retros.jsonl:1  retro",
+		"ocelot":    "~config:proposals/2026-09-29-x.md:3  proposal",
+	} {
+		out := mustSearch(t, Options{Dir: dir, Home: home, Global: true, Words: []string{word}})
+		if !strings.Contains(out, want) {
+			t.Errorf("%s: want %q:\n%s", word, want, out)
+		}
+	}
+	out := mustSearch(t, Options{Dir: dir, Home: home, Global: true, Words: []string{"ocelot"}, Kind: "feedback"})
+	if strings.Contains(out, "proposal") {
+		t.Errorf("--kind feedback let a proposal through:\n%s", out)
+	}
+	// An edited log is re-read on the next query.
+	writeFile(t, filepath.Join(home, ".config", "sh-agent"), "feedback.jsonl", `{"note":"now a kinkajou"}`+"\n")
+	out = mustSearch(t, Options{Dir: dir, Home: home, Global: true, Words: []string{"kinkajou"}})
+	if !strings.Contains(out, "feedback.jsonl:1") {
+		t.Errorf("edited feedback log not re-read:\n%s", out)
+	}
+	if out := mustSearch(t, Options{Dir: dir, Home: home, Global: true, Words: []string{"jackalope"}}); strings.Contains(out, "feedback.jsonl") {
+		t.Errorf("old feedback text still answered:\n%s", out)
+	}
+}
+
+func TestGlobalDropsVanishedProject(t *testing.T) {
+	home := globalHome(t)
+	parent := t.TempDir()
+	a := filepath.Join(parent, "gone")
+	if err := os.Rename(newRepo(t), a); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, a, ".agents/docs/bugs/BUG-002-kiwi.md", "---\nid: BUG-002\nstatus: open\n---\n# kiwi\n")
+	commitAll(t, a, "add")
+	mustSearch(t, Options{Dir: a, Home: home, Words: []string{"kiwi"}})
+	if err := os.RemoveAll(a); err != nil {
+		t.Fatal(err)
+	}
+	out := mustSearch(t, Options{Dir: t.TempDir(), Home: home, Global: true, Words: []string{"kiwi"}})
+	if !strings.Contains(out, "note: dropped "+a+" (no longer a git checkout)") || strings.Contains(out, "BUG-002") {
+		t.Errorf("vanished project:\n%s", out)
+	}
+	out = mustSearch(t, Options{Dir: t.TempDir(), Home: home, Global: true, Words: []string{"kiwi"}})
+	if strings.Contains(out, "dropped") {
+		t.Errorf("dropped twice:\n%s", out)
+	}
+}
+
+func TestGlobalNameCollision(t *testing.T) {
+	home := globalHome(t)
+	var roots []string
+	for i := 0; i < 2; i++ {
+		p := filepath.Join(t.TempDir(), "app")
+		if err := os.Rename(newRepo(t), p); err != nil {
+			t.Fatal(err)
+		}
+		writeFile(t, p, ".agents/docs/plans/p.md", "# the stoat plan\n")
+		commitAll(t, p, "add")
+		mustSearch(t, Options{Dir: p, Home: home, Words: []string{"stoat"}})
+		roots = append(roots, p)
+	}
+	out := mustSearch(t, Options{Dir: t.TempDir(), Home: home, Global: true, Words: []string{"stoat"}})
+	if !strings.Contains(out, "app:.agents/docs/plans/p.md") || !strings.Contains(out, "app~2:.agents/docs/plans/p.md") {
+		t.Errorf("two projects named app:\n%s", out)
+	}
+}
+
+func TestGlobalRebuildDropsRegistry(t *testing.T) {
+	home := globalHome(t)
+	a := newRepo(t)
+	mustSearch(t, Options{Dir: a, Home: home, Words: []string{"demo"}})
+	var out strings.Builder
+	if err := Index(Options{Dir: t.TempDir(), Home: home, Global: true, Rebuild: true}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "note: 1 project registrations dropped; each returns on its next search") {
+		t.Errorf("rebuild note:\n%s", out.String())
+	}
+}

@@ -4,7 +4,7 @@ date: 2026-09-29
 ---
 # `sh-agent search` and `sh-agent index`
 
-Status: Phase 1 (project index) built 2026-09-29; Phase 2 (global search index) specified below and built when plan `plans/2026-09-29-search-index.md` ticks it. Requirement: R4 (one dependency, `modernc.org/sqlite`), ADR-045.
+Status: the project index and the global search index built 2026-09-29 (plan `plans/2026-09-29-search-index.md`, Phases 1 and 2). Requirement: R4 (one dependency, `modernc.org/sqlite`), ADR-045.
 
 ## What it is
 
@@ -35,7 +35,7 @@ Exit status: 0 with hits or without; 1 on a refusal or an error.
 | Project | `<checkout>/.agents/scratch/search.db` (+ `-wal`, `-shm`) | every tracked, modified and untracked-not-ignored file under 1 MiB with no NUL byte in its first 8 KiB; symlinks and submodules skipped |
 | Global search index | `~/.config/sh-agent/search.db` (+ `-wal`, `-shm`), under `--home` when given | `feedback.jsonl`, `retros.jsonl`, `proposals/*.md`, and the docs root of every checkout that has run `search` or `index` |
 
-The global file is named "the global search index", never "cross-project index": R7 already gives that name to `retros.jsonl`.
+The global file is named "the global search index", never "cross-project index": R7 already gives that name to `retros.jsonl`. A checkout registers itself on any `search` or `index` run inside it, `--global` included, at most once a day; `--global` then reconciles `~/.config/sh-agent/` and each registered checkout's docs root (as `<name>:<path>`, `name~2` for a second checkout with the same base name), and drops a registration whose root is no longer a git checkout. Run outside a checkout, `--global` still answers. The registry lives in the database, so `index --global --rebuild` drops it, with a note; each checkout returns on its next search.
 
 ## Freshness: reconcile before every answer
 

@@ -41,6 +41,7 @@ Read the conversation transcript, plus the entries in `~/.config/sh-agent/feedba
 4. **Output format friction** — the user asked you to restructure or re-present output
 5. **Architecture/tooling mismatches** — the wrong tool, framework, or pattern
 6. **Trail evidence** — `<docs-root>/bugs/INDEX.md` rows from this session whose prevention rule is not yet written anywhere, and `Diagnosis missed:` lines in bug records dated on or after the newest `<docs-root>/retros/*-retro*.md` record (all records when there is none)
+7. **Memory evidence** — the `dream` skill's `--dry-run` (its Steps 1 to 5: the store, orientation, one verdict per memory, the index rows, the table) over this project's Claude Code auto memory store; each memory flagged `promote` is a finding with `rule_ref null`, and the other verdicts are applied at Step 6 below with the proposals. No store: one line in the record, nothing else.
 
 `--harness` (or the working directory is the harness checkout, `sh-agent status` first line): FIRST, before drafting anything, read `~/.config/sh-agent/retros.jsonl` and every `~/.config/sh-agent/proposals/*.md`, and list in the chat table, oldest first, every proposal whose `**Status:**` line says `queued` or is absent (files older than 2026-09-14 predate the line; absent means queued), plus every `REQUIREMENTS.md` edit the newest handoff names as awaiting approval. Each is a finding; a queued proposal's diff is reused as drafted and re-derived only when its target moved and the diff no longer applies.
 
@@ -110,6 +111,9 @@ Trigger / Current behavior / Expected behavior / diff / Rationale     ← projec
 ## Feedback log entries
 <this session's entries for this project, or "none">
 
+## Memory
+<the `dream` skill's store line, counts per verdict, its table, what was applied and the full text of every deleted memory — or "no auto memory store">
+
 ## Not proposed
 <what was deliberately left alone, and why>
 ```
@@ -131,6 +135,7 @@ Show a numbered table — title, scope, target, one-line why, and for a bug-deri
 
 - **Project scope, approved:** apply now as a task under the Definition of Done — edit the target, run the project's checks, commit in the project (stage by name), status `applied <date> (<commit>)` in the record and the index, written after that commit's review and verification exist — a status names the commit that made it true, so it is never written before the review has run; when the applied rule is a bug's prevention rule, dispatch `bugs` in the same task to move that bug's row to the index's Graduated table.
 - **Harness scope:** status `queued` by default; a later session in the harness checkout runs `/retro --harness` and applies it there. Only when the user asks in the same turn to apply now: locate the checkout (`sh-agent status` first line, confirm `test -f <repo>/context/AGENTS.md`; either failing → stays `queued`), apply there under that repo's own rules (`sh-agent install`, one start of each CLI as its `AGENTS.md` Testing section says, a `changes/` entry, commit, push, handoff; every other place picks the change up with `sh-agent update` — say that, and name no project), then, after that repo's review and verification, update the status in the queue file and in the record when it is on this machine. When the applied target is `context/*.md` or `rules/*.md` (one 24,000-byte block on Antigravity, REQUIREMENTS § Known limits), run `go test ./internal/harness -run TestRenderedContextFitsAntigravityBlock -count=1` bare after the edit and before the commit; red means the same edit deletes or merges the sentence that pays for the addition, or the proposal is retargeted to the skill that owns the topic.
+- **Memory verdicts, approved:** apply the edits the `dream` skill's verdicts imply (its Step 3: delete, rewrite, merge) and its index rewrite (its Step 4), as its Step 5 would on a go, in the same task, and finish the record's `## Memory` section; a `promote` memory stays in the store and its Findings row is decided like any other proposal. The retro record is the dream record here; no separate `<date>-dream.md` is written.
 - **Rejected:** annotate `Status: rejected <date> — <reason>` in the record and the queue; never delete a proposal.
 - **Headless, no user turn:** nothing is applied; every status stays `proposed` or `queued`, and the record says so.
 

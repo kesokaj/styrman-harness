@@ -6,8 +6,6 @@ Last reviewed: 2026-09-29
 
 ## Now
 
-- `.agents/docs/plans/2026-09-29-dream-skill.md` — the `dream` skill: consolidate Claude Code's auto memory into the learning loop (cold-reader check next)
-
 ## Next
 
 ## Later / Ideas

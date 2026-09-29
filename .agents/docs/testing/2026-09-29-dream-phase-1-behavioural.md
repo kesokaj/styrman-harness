@@ -62,3 +62,19 @@ Cost: about $0.55 per skill run, $0.36 to $0.40 per control; twelve runs in all,
 - The `feedback.jsonl` route to `promote` (an entry from another session naming the memory's rule): the fixture proved `promote` through the merged pair's differing session ids only; `~/.config/sh-agent` is blocked for headless reads anyway.
 - `/retro` reading the verdicts (Phase 2).
 - The real home's own store (`asking-format.md` graduation): Phase 2.
+
+## Phase 2 — `/retro --dry-run` reads the dream verdicts (runs r1–r3)
+
+Same fixture, with the working-tree `retro` and `feedback-log` skills linked beside `dream` (fixture commit after a6cd45c), the same reseeded store and `--settings`, prompt `/retro --dry-run` plus "no corrections this session, the evidence is the trail and the memory store", `--add-dir` on the three harness skill directories and the store, read-only tools.
+
+| Run | Turns | `## Memory` section with the store line | `graduated`, `broken` verdicts | merged pair flagged `promote` | pair as a Findings row with `rule_ref null` | says nothing was written | Store unchanged | Clone tree clean |
+|---|---|---|---|---|---|---|---|---|
+| r1 | 24 | yes | yes | yes | yes | yes | yes | yes |
+| r2 | 21 | yes | yes | yes | yes | yes | yes | yes |
+| r3 | 28 | yes | yes | yes | yes | yes | yes | yes |
+
+Cost about $0.62 per run. Each run also reported, correctly, that the fixture trail lacks `changes/`, `DECISIONS.md` and `retros/`, and that `feedback.jsonl` holds nothing for the project. The matrix row `dream` check, run against the Phase 1 clones 4–6 by the main agent: PASS in each.
+
+## Phase 2 — the apply run on this checkout's real store
+
+Run by hand from the working-tree skill text (not yet installed in the real home), table put to the operator, answer "Go all (Recommended)"; two `graduated` memories deleted, two kept, index rewritten and consistent, record `retros/2026-09-29-dream.md`, one `kind: dream` line in `~/.config/sh-agent/retros.jsonl`. E2E criterion 1 met.

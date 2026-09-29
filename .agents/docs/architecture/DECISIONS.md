@@ -421,3 +421,13 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
 - The v1.8.0/v1.9.0 security medium, that an unsigned zip installs, is accepted by the operator, not controlled. `UNVERIFIED` discloses it.
 - Removing a `.sig` beside a tampered release zip turns a refusal into an `UNVERIFIED` install. That is the same trust as any unsigned zip, and the output says so.
 - The release carrying this is v1.10.0, a MINOR relative to v1.9.0: a half pair now installs rather than refusing, and nothing becomes required.
+
+## ADR-042: Dream records join the project's learning history     (2026-09-29) — Accepted
+
+**Context:** the `dream` skill (`plans/2026-09-29-dream-skill.md`) consolidates Claude Code's auto memory and writes a standalone record, `<docs-root>/retros/<date>-dream.md`, plus a `"kind":"dream"` line in `~/.config/sh-agent/retros.jsonl`. `REQUIREMENTS.md` named only retro and distill records in `retros/`.
+
+**Decision:** `retros/` holds retro, distill and dream records; `retros.jsonl` indexes all three kinds. The exact `REQUIREMENTS.md` edit ("its retro and distill records" → "its retro, distill and dream records") was proposed to the operator and approved on 2026-09-29 ("Approve the edit (Recommended)"). Nothing else in R-line 31 changes: harness state stays in `~/.config/sh-agent/`, project records in the project's trail.
+
+**Rejected:** a separate `memory/` directory in the trail — the dream record is a learning-loop record like the other two, and one directory is what the Resume Protocol and `/handoff` already read.
+
+**Consequences:** `/handoff`'s artifact table, `feedback-log`'s pointer and README's `~/.config/sh-agent/` row name the third kind (this commit). `sh-agent report` ships the new lines with the rest of `retros.jsonl`, unchanged.

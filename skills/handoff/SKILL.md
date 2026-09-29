@@ -48,7 +48,7 @@ Do NOT duplicate content that already exists elsewhere. Instead, reference these
 | Deploy guides | `.agents/docs/deploy/{local,remote,gcp}.md` |
 | Deferred work | the active plan's Follow-ups, or the handoff's Next Steps when no plan is active |
 | Requirements | `REQUIREMENTS.md` |
-| Retro and distill records (project scope) | `.agents/docs/retros/` |
+| Retro, distill and dream records (project scope) | `.agents/docs/retros/` |
 | Harness-scope retro proposals (queue) | `~/.config/sh-agent/proposals/` |
 | Commits | Reference by short SHA |
 | PRs / Issues | Reference by `#number` or URL |

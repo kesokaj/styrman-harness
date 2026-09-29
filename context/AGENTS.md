@@ -38,7 +38,7 @@ Global is this harness, deployed by `sh-agent install`; a skill found elsewhere 
 
 ## Learning loop
 
-`feedback-log` logs corrections to `~/.config/sh-agent/feedback.jsonl`. Run `/retro` at the end of a session with two or more corrections, and whenever `sh-agent status` shows more than 14 days since the last one; run `/distill` on the third repeat of a procedure. Recurring bug prevention rules are retro input. When a session gets both, `/retro` runs BEFORE `/handoff`, and one push after both. A proposal targets the project (applied there) or the harness (queued in `~/.config/sh-agent/proposals/` for `/retro --harness` in the harness checkout); every retro and distill leaves a record in `.agents/docs/retros/` and one line in `~/.config/sh-agent/retros.jsonl`; a rule seen in two projects is promoted to the harness.
+`feedback-log` logs corrections to `~/.config/sh-agent/feedback.jsonl`. Run `/retro` at the end of a session with two or more corrections, and whenever `sh-agent status` shows more than 14 days since the last one; run `/distill` on the third repeat of a procedure. `/dream` tidies Claude Code's auto memory for the project, and `/retro` reads it first. Recurring bug prevention rules are retro input. When a session gets both, `/retro` runs BEFORE `/handoff`, and one push after both. A proposal targets the project (applied there) or the harness (queued in `~/.config/sh-agent/proposals/` for `/retro --harness` in the harness checkout); every retro, distill and dream leaves a record in `.agents/docs/retros/` and one line in `~/.config/sh-agent/retros.jsonl`; a rule seen in two projects is promoted to the harness.
 
 ## Git
 

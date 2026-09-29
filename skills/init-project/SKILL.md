@@ -44,6 +44,7 @@ Copy each template only when the file does not already exist, then fill in the o
 
 ```bash
 for f in AGENTS.md REQUIREMENTS.md TODO.md ROADMAP.md; do
+  [ -L "$f" ] && { echo "kept $f: a symlink, not written through"; continue; }
   [ -e "$f" ] || cp "$ASSETS/$f" "$f"
 done
 ```
@@ -57,12 +58,15 @@ done
 ## Step 4: The `.agents/` tree
 
 ```bash
+if [ -L .agents ]; then echo ".agents is a symlink: the tree is not written through it"; else
 (cd "$ASSETS/agents-tree" && find . -type f) | sort | while read -r f; do
   d=".agents/${f#./}"; dir=$(dirname "$d")
+  { [ -L "$d" ] || [ -L "$dir" ]; } && { echo "kept $d: a symlink, not written through"; continue; }
   [ -e "$d" ] && continue                                                         # the project's file wins
   [ "${f##*/}" = .gitkeep ] && [ -n "$(ls -A "$dir" 2>/dev/null)" ] && continue   # a .gitkeep only holds an empty directory
   mkdir -p "$dir" && cp "$ASSETS/agents-tree/$f" "$d" && echo "added $d"
 done
+fi
 find .agents -type d | sort
 ```
 

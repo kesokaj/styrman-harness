@@ -221,7 +221,7 @@ E2E criteria:
 ### Phase 2 — Global index
 - [x] Registry and `~config` sources per Interfaces — verify: unit — expect: PASS for `TestGlobalRegistersProject`, `TestGlobalDropsVanishedProject`, `TestGlobalIndexesFeedbackRetrosProposals`, `TestGlobalNameCollision`, all with `--home` in a temp dir — done 2026-09-29: the four named tests plus `TestGlobalRunsOutsideACheckout` and `TestGlobalRebuildDropsRegistry` PASS; mutations G1–G5 each compiled and failed a named test
 - [x] `--global` for `search` and `--refs` — docs: `.agents/docs/specs/sh-agent/search.md` — verify: integration, two scratch clones under `.agents/scratch/`, a bug record only in the second, searched from the first with `--home .agents/scratch/home-global` — expect: the record found with the second clone's name — done 2026-09-29: from `.agents/scratch/g1`, `search --global flamingo cache` found `g2:.agents/docs/bugs/BUG-001-flamingo.md:6  bug BUG-001 open`; the fixture was asserted first (g2 holds the word, g1 does not); spec updated
-- [ ] Checkpoint — expect: full test command exit 0, verifier log PASS — evidence: <log path>, <date>
+- [x] Checkpoint — expect: full test command exit 0, verifier log PASS — evidence: `testing/2026-09-29-verify-search-index-phase-2.md` PASS over bfcedcc..7fd56d5 (204 pass, 2 skips with reasons; `TestGlobal*` 18 of 18 across three `-race` repeats; hand integration found the other checkout's open bug), 2026-09-29
 
 ### Phase 3 — Instructions (context, agents, skills) and docs
 - [ ] Context entry and the three cuts (Interfaces § Instructions); final text as a D-row — verify: unit, `go test ./internal/harness -run TestRenderedContextFitsAntigravityBlock` and `go run ./cmd/sh-agent render --home .agents/scratch/ctx | tail -c 7` — expect: PASS, `GANNET`

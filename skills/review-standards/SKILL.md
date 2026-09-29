@@ -12,6 +12,10 @@ Language deep-dives (load only for the languages present in the diff):
 - [references/go-review.md](references/go-review.md) — Go checklist
 - [references/typescript-review.md](references/typescript-review.md) — TypeScript checklist
 
+Lens reference (not a language; loaded only when `/review --prompts` names it in the reviewer's brief):
+
+- [references/prompt-audit/prompt-audit.md](references/prompt-audit/prompt-audit.md) — Anthropic's prompt-audit reference (vendored verbatim, Apache-2.0, `skills/VENDORED.md`): dated prompt patterns, brittle instruction files, redundant sub-agents
+
 ## 1. Dead code — flag for REMOVAL, not for a comment
 
 - [ ] Exported functions, types, and constants with zero callers outside their own tests.

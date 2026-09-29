@@ -10,6 +10,7 @@ vendored content in place (fork it into a differently-named skill instead).
 | codebase-design | github.com/mattpocock/skills (`skills/engineering/codebase-design`) | 6654f6b | MIT | 2026-08-31 | `npx skills add mattpocock/skills -s codebase-design` |
 | find-skills | github.com/vercel-labs/skills (`skills/find-skills`) | 435076e | MIT | 2026-08-31 | `npx skills add vercel-labs/skills -s find-skills` |
 | anti-ui-slop | uizze.com `.well-known/skills` (agentskills discovery v0.2.0), v1.2.13 | sha256:c3dc1a03…09bc08 (digest verified) | MIT | 2026-08-31 | re-fetch archive from `https://uizze.com/.well-known/skills/index.json` |
+| prompt-audit reference (one file, not a skill: `review-standards/references/prompt-audit/prompt-audit.md`, with `LICENSE.txt` beside it) | github.com/anthropics/skills (`skills/claude-api/shared/prompt-audit.md`) | 8a1541c (sha256:c33200da…1878f2) | Apache-2.0 | 2026-09-29 | `curl -sL https://raw.githubusercontent.com/anthropics/skills/<sha>/skills/claude-api/shared/prompt-audit.md`, then bump the pin and digest here |
 
 ## Apache-2.0 skills — attribution recorded from their own frontmatter
 

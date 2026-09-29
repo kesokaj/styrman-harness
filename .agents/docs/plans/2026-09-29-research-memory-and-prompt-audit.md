@@ -79,7 +79,9 @@ Nothing to adopt. Every real option needs hooks (project rule 1 and the global n
 | 3. A `/review --prompts` lens dispatching `reviewer` with the reference | reuses the review record and the report-only contract | `reviewer` runs on sonnet with a fixed report template the audit does not fit; the audit is judgment-heavy over the harness's own rules and wants the main model; adds a lens to a 66-line skill | medium | none | — |
 | 4. Install the `claude-api` plugin on agy (`agy plugin import claude`, or a marketplace link) | whole skill, not one file | 1.8 MB, 79 files, most of it SDK code guides the harness never needs; `agy plugin install` takes a local path only per the docs; plugin import is untested here and the harness rules say a skill is deployed by `sh-agent install`, not by a vendor's plugin system | medium | none | untested |
 
-### Recommendation: 2
+### Recommendation: 2 — decided: option 3 (operator, 2026-09-29)
+
+The operator chose option 3, a `/review --prompts` lens; built the same day (`changes/2026-09-29-1251-review-prompts-lens.md`). The reference is vendored under `skills/review-standards/references/prompt-audit/`, not a new skill.
 
 Vendor `prompt-audit.md` verbatim (pin `8a1541c`, Apache-2.0, `LICENSE.txt` beside it) under `skills/prompt-audit/references/`, with a harness `SKILL.md` that says: scope is `context/`, `agents/`, every skill under `skills/` not in `VENDORED.md`, `commands/` and `rules/`, or the paths the user names; provenance comes from `bugs/INDEX.md`, `DECISIONS.md` and `git blame`, and a prohibition with a row is keep-list item 5; the target is both vendors, so a Claude-only rationale is `flag`; Group 4 is `not applicable` here; the report is written to `<docs-root>/reviews/<date>-prompt-audit.md` and nothing is applied. Run it by hand, and from `/retro` when a model release lands (the reference's own re-audit trigger). It is the only option that gives agy the audit at all, and the harness already has the vendoring path for it (`VENDORED.md`, the `anti-ui-slop` precedent for a bundled licence).
 

@@ -16,7 +16,7 @@ In:
 - A per-project index `.agents/scratch/search.db` over every tracked, modified and untracked-not-ignored text file of the git checkout, with a metadata graph of the trail (record IDs, status, date, cross-references, paths named).
 - A global index `~/.config/sh-agent/search.db` over `feedback.jsonl`, `retros.jsonl`, `proposals/*.md` and the trail (docs root only) of every project that has run `sh-agent search` or `sh-agent index`.
 - Two verbs: `sh-agent search` and `sh-agent index`. Both reconcile against git before answering. No service, no watcher, no hook.
-- Instructions: a context entry (the operator's explicit ask) paid for by cuts elsewhere; one line in each agent and skill the audit ranks HIGH.
+- Instructions: a context entry (the operator's explicit ask) paid for by cuts elsewhere; one line in each agent and skill D13 names.
 - A recall test (committed question set, a Go test behind an env var) that measures the index against a grep baseline and gates vectors.
 - Sandboxed efficiency runs building sample apps, with and without the index, on both CLIs.
 - The R4 edit, its ADR, the project `AGENTS.md` "stdlib only" restatement, docs.
@@ -39,7 +39,7 @@ Recon brief: `plans/2026-09-29-recon-project-index.md`. Consumer audit: `plans/2
 - `internal/harness/state.go:71-75` — `ConfigDir` comment names `search.db`.
 - `internal/harness/report.go:235-295` — `Collect` names `search.db` as skipped, never sent.
 - `context/AGENTS.md` — the search entry and the cuts that pay for it; `size_test.go` budget unchanged.
-- `agents/*.md`, `skills/*/SKILL.md` — one line each where the audit ranks HIGH.
+- `agents/*.md`, `skills/*/SKILL.md` — one line each in the consumers D13 names.
 - `REQUIREMENTS.md` R4, `AGENTS.md` (project) "Stdlib only" bullet and Setup/Layout, `.agents/docs/architecture/DECISIONS.md` (ADR), `README.md` verb list, `.agents/docs/deploy/local.md` (first build fetches modules), `.agents/docs/specs/sh-agent/` (a `search.md` spec), `.agents/docs/testing/guide.md`, `.agents/docs/testing/skill-matrix.md` (rows for the changed agents and skills).
 
 ## Interfaces
@@ -48,18 +48,18 @@ Recon brief: `plans/2026-09-29-recon-project-index.md`. Consumer audit: `plans/2
 
 ```
 sh-agent search [--limit N] [--kind K] [--global] <words...>
-sh-agent search --refs <BUG-NNN|ADR-NNN|path> [--global]
+sh-agent search --refs <BUG-NNN|ADR-NNN|path> [--kind K] [--global]
 sh-agent search --open [--kind K] [--global]
 sh-agent index [--global] [--rebuild]
 ```
 
 - `<words...>` are joined with spaces and passed to FTS5 as a query of quoted terms ANDed (each word double-quoted, so `-`, `:` and `.` in `BUG-049` or `release.go` never reach FTS5 syntax). No hits for the AND query → retry once as OR and say so in the header line.
-- `--limit` default 10, maximum 50. At most 2 hits per file.
-- `--kind` one of `bug adr plan change handoff review testing retro spec deploy trail code doc`. `trail` is every file under the docs root.
+- `--limit` default 10; a value below 1 or above 50 is refused. At most 2 hits per file.
+- `--kind` one of `bug adr plan change handoff review testing retro spec deploy trail code doc feedback proposal`. `feedback` and `proposal` exist only in the global index (Storage); `retro` covers both a trail `retros/` file and the global `retros.jsonl`. `trail` is every file under the docs root. It filters the hits of all three modes (`<words>`, `--refs`, `--open`) by the kind of the path each hit is printed at. For `--refs`, the ID's own record line is printed whatever the kind.
 - `--refs X`: X matching `^(BUG|ADR)-\d{3}[a-z]?$` is an ID; anything else is a path, relative to the checkout root (a trailing `/` means a directory and matches every ref under it).
 - `--open`: list records whose status is open — bugs with `status: open`, plans with an unticked box — one line each, `<path>:<line>  <kind> <id> <status> <date> <title>`, newest first, no limit. `--open` and `--refs` exclude each other and `<words>`.
-- `--global`: query the global index instead. Search output prefixes each path with the project's root directory base name, `<name>:<path>:<line>`.
-- `--rebuild` deletes this index's database files (the three names below, at this path only) and builds from scratch.
+- `--global`: query the global index instead. Every mode's output prefixes each path with the project's name, `<name>:<path>:<line>`; the files of `~/.config/sh-agent/` print as `~config:<file>:<line>`. `--refs X` with `--global` matches X in every project.
+- `--rebuild` deletes this index's database files (the three names below, at this path only) and builds from scratch. `--global --rebuild` also drops the project registry, which lives in that file; each project re-registers on its next `search` or `index`, and the command prints how many registrations were dropped.
 - `--limit`, `--kind`, `--refs` take values and join `takesValue` in `reorder`. `--global`, `--rebuild` are booleans. All five sit in the shared FlagSet, as every flag does today; the other verbs ignore them.
 - Exit status: 0 with hits or with none (a "no hits" line is a result); 1 on any refusal or error.
 
@@ -89,7 +89,7 @@ Output of `index`: one line per count — `files`, `chunks`, `records`, `refs`, 
 
 ### Storage
 
-Per project: `<root>/.agents/scratch/search.db` (+ `-wal`, `-shm`). Global: `~/.config/sh-agent/search.db` (+ `-wal`, `-shm`), honouring `--home`. Driver `modernc.org/sqlite`, `journal_mode=WAL`, `busy_timeout=10000`, `foreign_keys=off`.
+Per project: `<root>/.agents/scratch/search.db` (+ `-wal`, `-shm`). Global: `~/.config/sh-agent/search.db` (+ `-wal`, `-shm`), honouring `--home`. Driver `modernc.org/sqlite`, opened as `sql.Open("sqlite", "file:<path>?_pragma=journal_mode(WAL)&_pragma=busy_timeout(10000)&_pragma=foreign_keys(0)")`.
 
 ```sql
 CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT);            -- schema=1, docs_root
@@ -99,13 +99,23 @@ CREATE TABLE blobs(oid TEXT PRIMARY KEY, last_seen INTEGER);
 CREATE TABLE chunks(id INTEGER PRIMARY KEY, oid TEXT, line INTEGER, heading TEXT, body TEXT);
 CREATE INDEX chunks_oid ON chunks(oid);
 CREATE VIRTUAL TABLE chunks_fts USING fts5(heading, body, content='chunks', content_rowid='id', tokenize='porter unicode61');
+CREATE TRIGGER chunks_ai AFTER INSERT ON chunks BEGIN
+  INSERT INTO chunks_fts(rowid, heading, body) VALUES (new.id, new.heading, new.body);
+END;
+CREATE TRIGGER chunks_ad AFTER DELETE ON chunks BEGIN
+  INSERT INTO chunks_fts(chunks_fts, rowid, heading, body) VALUES ('delete', old.id, old.heading, old.body);
+END;
 CREATE TABLE records(oid TEXT, id TEXT, line INTEGER, title TEXT, status TEXT, date TEXT);
 CREATE INDEX records_id ON records(id);
 CREATE TABLE refs(oid TEXT, line INTEGER, target TEXT);
 CREATE INDEX refs_target ON refs(target);
 ```
 
-Everything derived from content is keyed by the git blob ID (`oid`), so a blob seen on any branch is chunked once. `files` is the current view. Kind is derived from the path at query time (under the docs root: its first directory, with `architecture` → `adr`; outside it: `code` for extensions `go ts tsx js jsx mjs py sh rs java kt swift rb c h cc cpp cs sql tf`, else `doc`). The global index stores `feedback.jsonl`, `retros.jsonl` and `proposals/*.md` under project `~config` with their SHA-256 as `oid`, kind `feedback`, `retro`, `proposal`.
+Everything derived from content is keyed by the git blob ID (`oid`), so a blob seen on any branch is chunked once. `files` is the current view. A chunk row is never updated, only inserted and deleted; the two triggers are the only writers of `chunks_fts`, so the full-text index follows `chunks` on insert and on GC delete.
+
+**Every query reads through `files`.** `search` joins `chunks_fts` → `chunks` (on `rowid = id`) → `files` (on `oid`, with `files.project` = the queried project; for `--global`, every registered project and `~config`). `--refs` joins `refs` → `files` on `oid`, and `--open` joins `records` → `files` on `oid`, the same way. A chunk, ref or record whose oid is in no current `files` row is never printed, which is what keeps another branch's content out of the answer. An oid current at two paths yields a hit at each path; the per-file cap applies per path. The printed path is always `files.path`.
+
+Kind is derived from `files.path` at query time. Under the docs root, from its first directory: `bugs` → `bug`, `architecture` → `adr`, `plans` → `plan`, `changes` → `change`, `handoffs` → `handoff`, `reviews` → `review`, `testing` → `testing`, `retros` → `retro`, `specs` → `spec`, `deploy` → `deploy`, any other → `trail`. Outside it: `code` for extensions `go ts tsx js jsx mjs py sh rs java kt swift rb c h cc cpp cs sql tf`, else `doc`. `--kind trail` matches every kind under the docs root. The global index stores `feedback.jsonl`, `retros.jsonl` and `proposals/*.md` under project `~config` with their SHA-256 as `oid`, kind `feedback`, `retro`, `proposal`.
 
 ### Reconcile (before every query and every `index`)
 
@@ -123,6 +133,8 @@ Everything derived from content is keyed by the git blob ID (`oid`), so a blob s
 
 ### Records (trail files only; docs root = `.agents/docs` if it exists, else `docs`)
 
+Records and refs are parsed once per oid, when the oid is first indexed, using the first path at which the oid appears in that reconcile (`git ls-files` order, then `git status` order); the parser is chosen by that path. They are reported at every current path of the oid (D14).
+
 - **Bug:** `<docs>/bugs/BUG-NNN*.md` → id from frontmatter `id:` else the file name's `BUG-NNN`; status from frontmatter `status:`; date from `date:`; title from the first `# ` heading.
 - **ADR:** every line of `<docs>/architecture/DECISIONS.md` matching `^## (ADR-\d{3}[a-z]?): (.+?)\s+\((\d{4}-\d{2}-\d{2})\) — (.+)$` → id, title, date, status (the whole text after the dash, e.g. `Accepted; superseded in part by ADR-044 (…)`).
 - **Plan:** `<docs>/plans/*.md` → id is the docs-relative path; status `open: N unticked` when it has N lines matching `^- \[ \]` outside fenced blocks, else `closed`; `line` is the first such line. Fences follow the handoff skill's scan (`skills/handoff/SKILL.md:154`): a run of three or more backticks opens a block, a line of only a run of the same length closes it.
@@ -136,7 +148,7 @@ Everything derived from content is keyed by the git blob ID (`oid`), so a blob s
 
 ### Global registry
 
-`search` and `index` without `--global` upsert `(root, base name, now)` into the global `projects` table after the project reconcile. `--global` reconciles `~config` from `~/.config/sh-agent/`, then each registered project: a root that no longer exists or is no longer a git checkout loses its registration and its rows (a note line says so); for the others, steps 2-5 limited to paths under the docs root. Two registered roots with the same base name are shown as `name`, `name~2` in registration order.
+Every `search` and `index` run inside a git checkout, with or without `--global`, reconciles that checkout's own index and upserts `(root, base name, now)` into the global `projects` table first, so a project's first run being `--global` still includes itself. Run outside a git checkout, `--global` skips that step and does not refuse; plain `search` and `index` refuse there as Failure modes says. `--global` then reconciles `~config` from `~/.config/sh-agent/`, then each registered project: a root that no longer exists or is no longer a git checkout loses its registration and its rows (a note line says so); for the others, steps 2-5 limited to paths under the docs root. Two registered roots with the same base name are shown as `name`, `name~2` in registration order.
 
 ### Instructions (text, Phase 3)
 
@@ -161,6 +173,8 @@ If these do not free enough, Phase 3 stops and puts further cuts to the operator
 | Database unreadable (`SQLITE_CORRUPT`, `SQLITE_NOTADB`) or `meta.schema` ≠ 1 | `note: index at <path> was unreadable (or an older schema); rebuilt` and the answer | 0 |
 | A file vanishes between `git status` and the read | the file is dropped from this reconcile; the next one picks up its state | 0 |
 | `--refs` names an ID with no record | `<ID>  no record` then any references | 0 |
+| `--limit` below 1 or above 50; `--kind` not in the list; `--refs` or `--open` with words, or with each other; `search` with no words and neither flag | `search: <what is wrong>; see sh-agent help` naming the valid values | 1 |
+| The global index is rebuilt or found unreadable | the registry is gone with it; `note: N project registrations dropped; each returns on its next search` | 0 |
 | Global: a registered root is gone | `note: dropped <root> (no longer a git checkout)` | 0 |
 | The checkout is on a network filesystem | SQLite's own error, prefixed `search:`; documented as unsupported in the spec | 1 |
 | `sh-agent report` | `search.db` is never collected; the dry run lists it under skipped | — |
@@ -181,20 +195,20 @@ E2E criteria:
 
 ## Phases
 
-- [ ] Cold-reader check — design ready and implementation ready (reviews/2026-09-29-coldread-search-index-r1.md …), or the operator's same-turn override quoted with its date
-- [ ] R4 approved by the operator on the exact text in D1 — who: user — expect: the operator's own words quoted in D1
+- [ ] Cold-reader check — design ready and implementation ready (round 1 `reviews/2026-09-29-coldread-search-index-r1.md`: two blocking gaps, fixed as D15 and D16; round 2 `reviews/2026-09-29-coldread-search-index-r2.md`: one blocking gap, fixed as D18; round 3 …), or the operator's same-turn override quoted with its date
+- [x] R4 approved by the operator on the exact text in D1 — who: user — expect: the operator's own words quoted in D1 — approved 2026-09-29: "Approve as written (Recommended)", on the text shown verbatim
 
 ### Phase 0 — Baselines that need no dependency
 - [ ] Recall question set: `internal/search/testdata/recall.tsv`, at least 30 rows `question<TAB>gold path[,gold path…]`, taken from this repository's history, at least 10 of them drift questions (a claim and its restatements in other words, BUG-027/BUG-095/BUG-097 as models), at least 5 structured (`--refs`) questions — verify: AI, `awk -F'\t' 'NF!=2' internal/search/testdata/recall.tsv | wc -l` and every gold path `git ls-files --error-unmatch` — expect: `0`, and every gold path tracked
 - [ ] Grep baseline scorer: the recall test's grep arm — for each question, the words (stop words removed) each run through `git grep -l -i -F`, files ranked by distinct words matched then total hits; recall@10 per question — verify: AI, `SH_AGENT_RECALL=1 go test ./internal/search -run TestRecall -v` prints the grep arm — expect: one line per question and a mean
-- [ ] Token baseline: this project's transcripts classified by tool kind (the probe of 2026-09-29) re-run and saved as `testing/2026-09-29-token-baseline.md` with the script kept at `.agents/docs/testing/tools/token-probe.py` — verify: AI, the file exists with both tables — expect: main and subagent tables matching the 2026-09-29 conversation's numbers within today's new sessions
+- [x] Token baseline: this project's transcripts classified by tool kind (the probe of 2026-09-29) re-run and saved as `testing/2026-09-29-token-baseline.md`, the probe embedded in the log (ADR-010: a procedure is documented, not committed as a script) — verify: AI, the file exists with both tables — expect: main and subagent tables matching the 2026-09-29 conversation's numbers within today's new sessions — done 2026-09-29: 23 main and 365 subagent transcripts; reads 33.8% and 59.2% of tool output
 - [ ] Checkpoint — expect: question set, scorer and baseline committed — evidence: <commit>, <date>
 
 ### Phase 1 — Project index (needs R4 approved)
 - [ ] ADR-045 "The harness has one dependency, a pure-Go SQLite driver, for a derived search index"; `REQUIREMENTS.md` R4 per D1; `ROADMAP.md` Now; project `AGENTS.md` "Stdlib only" bullet and Setup (`go mod download` note) — one commit — verify: AI, `git show --stat` — expect: the four files in one commit
 - [ ] `go get modernc.org/sqlite@v1.60.1`, `go mod tidy`; `go.sum` committed; no vendor directory — verify: AI, `go build ./... && GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -o /dev/null ./cmd/sh-agent && GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o /dev/null ./cmd/sh-agent` — expect: exit 0 for all three
 - [ ] `internal/search`: schema, open with the pragmas, schema check and rebuild — verify: unit, `go test -race ./internal/search -run 'TestOpen'` — expect: PASS, including a corrupt file rebuilt with the note and a schema-2 file rebuilt
-- [ ] Reconcile per Interfaces — verify: unit — expect: PASS for tests `TestReconcileBranchSwitch` (no hit from the other branch; switching back re-chunks nothing, asserted by a chunk-insert counter), `TestReconcileDirtyAndUntracked`, `TestReconcileDeletedFileLeaves`, `TestReconcileSkipsBinaryLargeSymlinkSubmodule`, `TestReconcileGC` (a blob unseen 15 days is gone, one seen 13 days ago stays)
+- [ ] Reconcile per Interfaces — verify: unit — expect: PASS for tests `TestReconcileBranchSwitch` (no hit from the other branch, for `search`, `--refs` and `--open` alike; switching back re-chunks nothing, asserted by a chunk-insert counter), `TestFTSFollowsGC` (after GC deletes a blob, an FTS query for its unique word returns no row and `INSERT INTO chunks_fts(chunks_fts) VALUES('integrity-check')` succeeds), `TestSameContentTwoPaths` (one oid at two paths: one chunk set, hits at both paths), `TestReconcileDirtyAndUntracked`, `TestReconcileDeletedFileLeaves`, `TestReconcileSkipsBinaryLargeSymlinkSubmodule`, `TestReconcileGC` (a blob unseen 15 days is gone, one seen 13 days ago stays)
 - [ ] Chunking, records, refs per Interfaces — verify: unit — expect: PASS for `TestChunkMarkdownHeadingsAndWindows`, `TestRecordsBugADRPlan` (fixtures copied from this repository's real BUG file, `DECISIONS.md` heading shapes including "superseded in part" and "amends", a plan with 2 unticked boxes), `TestRefsIDsAndPaths` (a `file.go:12-30`, a `./x`, a docs-relative `plans/x.md`, a diff `a/` prefix)
 - [ ] Query: search (quoted terms, AND then OR, per-file cap, kind filter, snippet, line), refs (ID, path, directory, docs-relative) and open — verify: unit — expect: PASS for `TestSearchRanksAndCaps`, `TestSearchOperatorCharactersAreLiteral` (`BUG-049`, `a.go`, `NOT`, `"`), `TestRefs`, `TestOpen` (an open bug listed, a fixed one not; a plan whose only `- [ ]` sits in a fenced block is closed, as the handoff skill's awk scan says)
 - [ ] Guards per Failure modes — verify: unit — expect: PASS for `TestRefuseOutsideCheckout`, `TestRefuseNotIgnored` (asserts no file created), `TestRefuseSymlinkedScratch`, `TestBusyRefusesNotStale` (a second connection holding `BEGIN IMMEDIATE`; the search exits 1 and prints no hit)
@@ -221,7 +235,7 @@ E2E criteria:
 
 ### Phase 4 — Recall test and the vector gate
 - [ ] Index arm of `TestRecall`: each question through `search` with `--limit 10` (structured questions through `--refs`) — verify: AI, `SH_AGENT_RECALL=1 go test ./internal/search -run TestRecall -v` — expect: recall@10 per question and the mean for both arms, saved to `testing/<date>-search-recall.md`
-- [ ] Gate decision: vectors proceed only if a probe of BM25 fused with vectors (bge-small, 384 dimensions, via `modernc.org/sqlite/vec`, in `.agents/scratch/` only, not committed) beats the index arm plus the grep arm by at least 10 points of mean recall@10 — verify: AI — expect: the numbers and the decision as a D-row; a pass becomes an `Open:` row for the operator (model delivery), a fail closes vectors
+- [ ] Gate decision: vectors proceed only if a probe of BM25 fused with vectors (all-MiniLM-L6-v2, 384 dimensions, embedded by the pure-Go `github.com/clems4ever/all-minilm-l6-v2-go`, stored with `modernc.org/sqlite/vec`, fused by reciprocal rank fusion with k=60, in a separate module under `.agents/scratch/` only, never committed) beats the index arm plus the grep arm by at least 10 points of mean recall@10 — verify: AI — expect: the numbers and the decision as a D-row; a pass becomes an `Open:` row for the operator (model delivery), a fail closes vectors
 - [ ] Checkpoint — expect: recall log committed, D-row written — evidence: <log path>, <date>
 
 ### Phase 5 — Sandboxed efficiency runs (after Phases 1-4 are committed)
@@ -245,7 +259,7 @@ Assumptions:
 
 ## Decisions
 
-D1 — 2026-09-29 — `REQUIREMENTS.md` R4 changes to the text below, proposed to the operator verbatim; nothing under Phase 1 starts until they approve it in their own turn — by: implementer, from the operator's "Go with your recommendations" (recommendation 8) and the rule that `REQUIREMENTS.md` changes only on the exact text.
+D1 — 2026-09-29 — `REQUIREMENTS.md` R4 changes to the text below — by: the operator, 2026-09-29, in their own turn, choosing "Approve as written (Recommended)" on this exact text, with the no-vendoring trade-off (D9) and the Phase 5 cost stated in the question.
 
 > ## R4 — One binary, one dependency, easy on and off
 >
@@ -262,5 +276,10 @@ D9 — 2026-09-29 — Not vendored: `go mod vendor` measured 137 MB (modernc `li
 D10 — 2026-09-29 — The verbs sit in the first switch, before `ResolveSource`, so a release-binary or zip place with no harness tree can search — by: implementer, from recon.
 D11 — 2026-09-29 — Phase 5 adds a larger-project task (a clone of this repository) beside the two sample apps, because the operator's reason is "a powerhouse in larger projects" and a new sample app has almost no trail — by: implementer, from the operator's words.
 D12 — 2026-09-29 — Snippet text, not whole files: `search` prints at most 200 characters per hit and at most 50 hits, so a search costs a few hundred tokens — by: implementer, from the token baseline.
-D13 — 2026-09-29 — Consumers that get their own line, from the audit (`plans/2026-09-29-audit-search-consumers.md`): `skills/review-standards/SKILL.md:48` and `agents/dreamer.md:36` (restatements: `search <key words>` beside the literal grep), `skills/dream/SKILL.md:41,48` (graduation check), `skills/handoff/SKILL.md:154` (`search --open --kind plan` first, the awk scan when search refuses), `agents/dreamer.md:29`, `skills/bug/SKILL.md:33`, `skills/feature/SKILL.md:19` (`search --refs <path>` and `--open --kind bug` instead of reading all of `bugs/INDEX.md`), `skills/retro/SKILL.md` (`search --global` for "happened in another project"). The context's restatement rule (`context/AGENTS.md:55`) is covered by the new entry. Not to use it, and their lines unchanged: `agents/verifier.md` (live-tree, diff-scoped checks), `skills/preflight/SKILL.md:40` (secret scan), the retro skill's exact `rule_ref` greps, and any grep at a past revision (`/review --docs` at the scope's head) — by: implementer, from the audit.
+D14 — 2026-09-29 — An oid current at several paths is parsed once, by the first path seen; its records and refs are reported at every current path — by: cold read round 1 (`reviews/2026-09-29-coldread-search-index-r1.md`, readiness question 4, its default).
+D15 — 2026-09-29 — `chunks_fts` is kept in sync by two triggers on `chunks` (insert, delete); chunks are never updated — by: cold read round 1, blocking question 1.
+D16 — 2026-09-29 — Every query joins through `files` for the queried project(s); nothing keyed only by oid is printed without that join — by: cold read round 1, blocking question 2.
+D17 — 2026-09-29 — The directory-to-kind table and the driver's DSN are written into Interfaces; the Phase 3 context edit measures the budget first — by: cold read round 1, readiness questions 3, 5 and 6.
+D18 — 2026-09-29 — Round 2 fixes: `feedback` and `proposal` join the `--kind` list; a `--global` run inside a checkout registers and reconciles that checkout first; argument errors and the registry's loss on a global rebuild are Failure modes rows; the vector probe names its library and fusion — by: cold read round 2 (`reviews/2026-09-29-coldread-search-index-r2.md`) and implementer's own read before round 3.
+D13 — 2026-09-29 — Consumers that get their own line, from the audit (`plans/2026-09-29-audit-search-consumers.md`): `skills/review-standards/SKILL.md:48` and `agents/dreamer.md:36` (restatements: `search <key words>` beside the literal grep), `skills/dream/SKILL.md:41,48` (graduation check), `skills/handoff/SKILL.md:154` (`search --open --kind plan` first, the awk scan when search refuses), `agents/dreamer.md:29`, `skills/bug/SKILL.md:33`, `skills/feature/SKILL.md:19` (`search --refs <path>` and `--open --kind bug` instead of reading all of `bugs/INDEX.md`), `skills/retro/SKILL.md` (`search --global` for "happened in another project"). The context's restatement rule (`context/AGENTS.md:55`) is covered by the new entry. Added on the operator's question "why not all places that generate lots of md files?" — the audit ranked steps that already grep, and the writers have none because they write without looking: `agents/documentation.md` (`search <changed command or flag>` for every doc that describes it, before editing), `agents/bugs.md` (`search <symptom words> --kind bug` and `--refs <path>` before assigning a new number, to find a duplicate or an existing prevention rule), `agents/changelog.md` (`--refs <path>` for the bug and ADR IDs a change entry should cite; `search` for the ADR a new decision supersedes), `agents/explorer.md` (`search` and `--refs` as its first recon step), `agents/reviewer.md` and `agents/security.md` (`--refs <path> --kind bug` for the files in the diff: past failures, never the author's intent), `skills/research/SKILL.md` Step 1 (`search <topic> --kind plan` for earlier research). Not to use it, and their lines unchanged: `agents/verifier.md` (live-tree, diff-scoped checks), `skills/preflight/SKILL.md:40` (secret scan), the retro skill's exact `rule_ref` greps, and any grep at a past revision (`/review --docs` at the scope's head) — by: implementer, from the audit.
 Rejected: vendoring (D9); a watcher or service (D3); a trigram tokenizer (23 MB here against 3.4-12 MB for porter; exact substrings stay with grep); basename matching in `--refs` (`main.go` would match every command); a `--json` output (no consumer named); a separate skill (D7); storing records in the database as the source (D2).

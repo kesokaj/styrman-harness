@@ -19,9 +19,9 @@ sh-agent search --open [--kind K] [--global]
 sh-agent index [--global] [--rebuild]
 ```
 
-- **Words** are each quoted for FTS5, so `BUG-049`, `a.go` or `NOT` are searched as text, never as query syntax, and ANDed; with no hit the query is retried once as OR and the header says so. Porter stemming: `verify` finds `verifies`. Hits are ranked by BM25 with a heading weighted twice the body, at most 2 per file, `--limit` (1–50, default 10) in all.
+- **Words** are each quoted for FTS5, so `BUG-049`, `a.go` or `NOT` are searched as text, never as query syntax. Chunks holding every word rank first; the remaining slots are filled with chunks holding any of them, and the header line says how many had every word (`search: 10 hits for "…", 2 with every word (…)`). Porter stemming: `verify` finds `verifies`. Hits are ranked by BM25 with a heading weighted twice the body, at most 2 per file, `--limit` (1–50, default 10) in all.
 - **Each hit** prints `path:line  kind[ ID status][  date]` and a one-line snippet (at most 200 characters, matched terms in `»«`). The line is the first line of the chunk holding a matched term.
-- **`--refs X`** prints the ID's own record (`ADR-040  <path>:<line>  Superseded by ADR-041  <date>  <title>`, or `no record`), or a path's state (`tracked`, `modified`, `untracked`, `absent`, or `directory` for a trailing `/`), then `referenced by N:` and one entry per file and record that names X, newest record date first, with `×N` when it names X more than once. A path matches as written and relative to the docs root (the trail writes `plans/x.md` for `.agents/docs/plans/x.md`); no basename matching.
+- **`--refs X`** prints the ID's own record (`ADR-040  <path>:<line>  Superseded by ADR-041  <date>  <title>`, or `no record`), or a path's state (`tracked`, `modified`, `untracked`, `absent`, or `directory` for a trailing `/`), then `referenced by N:` and one entry per file and record that names X, newest record date first, with `×N` when it names X more than once. A path matches as written and relative to the docs root (the trail writes `plans/x.md` for `.agents/docs/plans/x.md`); no basename matching, but a bare file name that matches no path prints `hint: did you mean --refs <path>` for up to five tracked paths ending in it.
 - **`--open`** lists bugs with `status: open` and plans with an unticked `- [ ]` outside fenced blocks, newest first.
 - **`--kind`** is one of `bug adr plan change handoff review testing retro spec deploy trail code doc feedback proposal` and filters every mode by the kind of the printed path. `trail` is everything under the docs root; `feedback` and `proposal` exist only in the global search index.
 - **`index`** prints `files`, `chunks`, `records`, `refs`, `changed` (by this reconcile), `bytes` (database and WAL) and `ms`. `--rebuild` deletes the database and builds it again.
@@ -82,6 +82,7 @@ References are record IDs (`BUG-NNN`, `ADR-NNN`) and path-shaped tokens on every
 |---|---|
 | Full build, 1,050 files | 2.2 s |
 | Warm `search`, nothing changed, end to end | 23–67 ms |
+| Recall@10 on 41 questions from this repository's history (`testing/2026-09-29-search-recall.md`) | 0.653, against 0.379 for one grep pass |
 | Warm `--refs` / `--open`, end to end | 47–60 ms / 20 ms |
 | Database size | 23 MB (10,340 chunks, 913 records, 39,560 references) |
 | Binary size, linux/amd64 | 13.7 MB |

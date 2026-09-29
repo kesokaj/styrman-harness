@@ -73,6 +73,7 @@
 | BUG-104 | 2026-09-29 | internal/harness (tests) | fixed | `TestReinstallBuildsAndInstalls` flaked under a concurrent `go test`, seeing another process's build dir via a wildcard glob | a test asserting a shared directory is clean names the exact path its own run created, never a glob over a directory other processes write to |
 | BUG-105 | 2026-09-29 | skills/preflight (release gate verdict) | open | v1.12.1 gate report's `VERDICT: SHIP` contradicted its own "What was not checked" list naming the missing Antigravity run | write the verdict last, after re-checking every "What was not checked" item against every blocking condition |
 | BUG-106 | 2026-09-29 | testing (behavioural run kits) | fixed | headless fixture clones placed under `.agents/scratch/` of the harness checkout let a `changelog` run write its entry into the harness's own trail | a fixture clone for a headless run lives outside every git checkout the agent works in; the run script asserts it with `git -C "$(dirname <clone>)" rev-parse` failing |
+| BUG-107 | 2026-09-29 | testing (behavioural run kits) | fixed | headless `sh-agent search` calls made by the agent under test registered 17 fixture clones plus this checkout into the operator's real `~/.config/sh-agent/search.db` | when the agent under test may itself call `sh-agent`, put a PATH-first wrapper that pins `--home` to a scratch home; assert afterward that the real `~/.config/sh-agent/` gained no file |
 
 ## Graduated
 

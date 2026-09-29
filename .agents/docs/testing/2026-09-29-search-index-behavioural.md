@@ -6,7 +6,7 @@ date: 2026-09-29
 
 Plan: `plans/2026-09-29-search-index.md`, Phase 3. Rows `search-first` and `search-agents` in `testing/skill-matrix.md`.
 
-## Status: PASS on Claude Code (round 2); Antigravity round 2 IN PROGRESS
+## Status: PASS on Claude Code (round 2); Antigravity partial — the agents that completed searched, two did not complete (vendor limit)
 
 ## Kit
 
@@ -62,7 +62,19 @@ No run's stderr has an "auto-denied" line.
 | `documentation` | `docs/usage.md` updated |
 | `bugs` / `changelog` | BUG-003 names BUG-001 / the entry cites them |
 
-Round 2 (final wording: context, `explorer`, `dreamer`, `reviewer`, `security`) is running; its results are appended below.
+## Antigravity — round 2, final wording (context, `explorer`, `dreamer`, `reviewer`, `security`)
+
+No run's stderr has an "auto-denied" line.
+
+| Case | Result |
+|---|---|
+| Context question | answered correctly (ADR-003, still in force); no `sh-agent search` output, 0 of 1 |
+| `explorer` | brief written; the subagent's conversation holds 9 lines of search output (round 1: none) |
+| `reviewer` | report written; 3 lines of search output |
+| `security` | void: no findings file, no search output; print mode ended before the subagent returned (round 1 of the same agent completed and searched) |
+| `dreamer` | void again: no artifact in either round |
+
+Summed over both rounds on Antigravity: among the subagent runs that completed, `reviewer` 2 of 2, `security` 1 of 1 and `explorer` 1 of 2 (the one on the final wording) searched. The context question was followed 0 of 2 times on agy. `agy -p` ending before a dispatched subagent returns is the vendor behaviour the context's headless rule is about. It is recorded here, not fixed: the harness cannot make `agy -p` wait.
 
 ## What was not exercised
 

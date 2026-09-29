@@ -24,7 +24,7 @@ Follow-ups noted, not built: none yet.
 
 ## Surfaces touched
 
-- `.agents/scratch/eff-kit/` (kit, gitignored): a clean-arm mode for `claude-session.sh` and `lane.sh`.
+- `.agents/scratch/eff-kit/` (kit, gitignored, ADR-010), new files beside the Phase 5 kit, which stays as it is: `clean-session.sh` (one clean-arm session), `lane-clean.sh <arm> <app|trail> <n>` (a fresh project, then sessions s1–s3; results in `results-clean/<arm>-<app|trail>-<n>-s<k>.{json,err}`, projects in `~/sandbox/search/eff/cwork/`), `metrics-clean.py` (per lane type, session and arm; the main agent's and the subagents' `sh-agent search` calls in separate columns; prints the D3 count), `score-trail.py` (s1 drift fixed, s2 answers out of 5, s3 Zip place column with a `version` cell, pushed), prompts `LT1`–`LT3` in `prompts.sh`. Each arm's Claude Code install: `~/sandbox/search/eff/chome-<arm>/` (`sh-agent install --vendor claude` of v1.12.1 and of this tree).
 - `context/AGENTS.md` or one skill, only if D2 changes wording.
 - `.agents/docs/testing/` logs; `testing/skill-matrix.md` if a scenario changes.
 
@@ -32,7 +32,7 @@ Follow-ups noted, not built: none yet.
 
 Clean-arm Claude session: `cd <project>; PATH=<arm wrapper dir>:$PATH claude -p --setting-sources project,local --append-system-prompt "$(cat ctx-<arm>.md)" --permission-mode acceptEdits --allowedTools <the Phase 5 list> < prompt`, where `<project>/.claude/` holds a copy of `<arm home>/.claude/{skills,agents,commands}` from `sh-agent install --vendor claude --home <arm home>` of that arm's tree, excluded from git by `<project>/.git/info/exclude`. No `--agents`, no `--add-dir`.
 
-Large-trail lane (per arm, one clone of this repository at v1.12.1 with its `.agents/docs` trail, the drift seed of the search plan's Phase 5, and a bare origin): s1 "resume from the trail, then fix the seeded drift: `sh-agent update --check` exits 2 when behind — make every living file agree, as a Task under the Definition of Done"; s2 "resume from the trail, then answer the five trail questions of the search plan's Phase 5 in ANSWERS.md with file:line, commit"; s3 "resume from the trail, then add one row to `testing/sh-agent-matrix.md` for `sh-agent version` on a zip place, with the evidence you can produce, commit". Same waivers text as the sample apps.
+Large-trail lane (per arm, one clone of this repository at v1.12.1 with its `.agents/docs` trail, the drift seed of the search plan's Phase 5, and a bare origin): s1 "resume from the trail, then fix the seeded drift: `sh-agent update --check` exits 2 when behind — make every living file agree, as a Task under the Definition of Done"; s2 "resume from the trail, then answer the five trail questions of the search plan's Phase 5 in ANSWERS.md with file:line, commit"; s3 "resume from the trail, then add a fourth column, Zip place, to the matrix table in `testing/sh-agent-matrix.md`, fill its `version` cell with evidence produced here, and write `not run` in that column for every other row"; the exact prompts are `LT1`–`LT3`. Same waivers text as the sample apps.
 
 ## Failure modes
 
@@ -53,10 +53,10 @@ E2E criteria:
 - [ ] Cold-reader check — design ready and implementation ready, or the operator's same-turn override quoted with its date
 
 ### Phase 1 — Clean A/B on Claude Code, with the new skills
-- [ ] Kit: clean-arm mode; dry run shows each arm's project `.claude/skills` holds that arm's skills (the search arm's `feature` skill contains `sh-agent search --refs`, the baseline's does not) — verify: AI — expect: both checks by `grep -c`
-- [ ] Sample apps, both arms, 2 runs each, 3 sessions — verify: AI, `outcomes.py`, `metrics.py` — expect: tables per session, main-agent search count per arm
-- [ ] Large-trail lane, both arms, 2 runs each — verify: AI — expect: drift fixed, answers scored, main-agent search count
-- [ ] Adoption decision (D3): count the large-trail sessions of the search arm in which the MAIN agent (not a subagent) ran `sh-agent search` — verify: AI, the transcript split of `metrics.py` — expect: a D-row stating `n of 6` and `adopted` (n ≥ 4) or `not adopted` (n ≤ 3); `not adopted` opens Phase 2, `adopted` marks Phase 2's boxes `[-]` with that D-row as the reason
+- [ ] Kit: the files named in Surfaces touched; a dry run of one `trail` project per arm (setup only, no session) shows its `.claude/skills` holds that arm's skills (the search arm's `feature` skill contains `sh-agent search --refs`, the baseline's does not) and the drift seed in place — verify: AI — expect: `grep -c` 2 and 0, the seed line found
+- [ ] Sample apps, both arms, 2 runs each, 3 sessions (`lane-clean.sh <arm> linkshelf|tasklog <n>`) — verify: AI, `outcomes.py` pointed at `cwork/`, `metrics-clean.py` — expect: the app rows of the table, main-agent and subagent searches in separate columns
+- [ ] Large-trail lane, both arms, 2 runs each (`lane-clean.sh <arm> trail <n>`) — verify: AI, `score-trail.py`, `metrics-clean.py` — expect: per session the trail rows of the table and the three scores
+- [ ] Adoption decision (D3): count the large-trail sessions of the search arm in which the MAIN agent (not a subagent) ran `sh-agent search` — verify: AI, the D3 line `metrics-clean.py` prints (main-agent calls only, from the main transcript; subagent transcripts are counted in their own column) — expect: a D-row stating `n of 6` and `adopted` (n ≥ 4) or `not adopted` (n ≤ 3); `not adopted` opens Phase 2, `adopted` marks Phase 2's boxes `[-]` with that D-row as the reason
 - [ ] Checkpoint — expect: `testing/<date>-search-adoption.md` committed — evidence: <path>, <date>
 
 ### Phase 2 — Main-agent adoption (runs when D3 says `not adopted`)
@@ -81,5 +81,6 @@ Assumptions: `--setting-sources project,local` excludes the real home's skills a
 ## Decisions
 
 D1 — 2026-09-29 — The clean A/B replaces the first comparison's setup for everything in this plan; the first comparison stays as recorded — by: implementer, from the probe.
+D4 — 2026-09-29 — The kit is new files beside the Phase 5 kit (named in Surfaces touched), because the Phase 5 `metrics.py` sums main and subagent searches and runs the larger task as one session; the matrix task adds a Zip place column, since the table has no row shape for a place — by: cold read round 2 (`reviews/2026-09-29-coldread-search-release-readiness-r2.md`).
 D3 — 2026-09-29 — The adoption bar: the main agent of the search arm runs `sh-agent search` in at least 4 of the 6 large-trail sessions (2 runs × 3 sessions); that task is where the trail is large enough for search to matter; sample-app sessions are reported but do not decide — by: cold read round 1 (`reviews/2026-09-29-coldread-search-release-readiness-r1.md`, blocking question 1).
 Open: D2 — the main-agent adoption change, if D3 says `not adopted` — default: propose a step in the context's resume procedure with an equal cut, put to the operator before editing.

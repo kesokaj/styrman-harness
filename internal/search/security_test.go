@@ -166,20 +166,45 @@ func TestSkipsMoreSecretNames(t *testing.T) {
 	}
 }
 
-func TestModifiedFileReadOnce(t *testing.T) {
-	root := newRepo(t)
-	writeFile(t, root, "fresh.md", "a single read of the quoll\n")
-	reads := 0
-	old := readFile
-	readFile = func(p string) ([]byte, error) {
-		if strings.HasSuffix(p, "fresh.md") {
-			reads++
-		}
-		return old(p)
+// Round 3 of the security review.
+
+func TestRegistrationKeptWhenCheckErrors(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads a mode-000 directory; the check cannot fail here")
 	}
-	t.Cleanup(func() { readFile = old })
-	out := mustSearch(t, Options{Dir: root, Home: t.TempDir(), Words: []string{"quoll"}})
-	if !strings.Contains(out, "fresh.md") || reads != 1 {
-		t.Errorf("fresh.md read %d times (want 1: the bytes hashed are the bytes indexed):\n%s", reads, out)
+	home := t.TempDir()
+	root := newRepo(t)
+	writeFile(t, root, ".agents/docs/plans/p.md", "# the tamarin plan\n")
+	commitAll(t, root, "trail")
+	mustSearch(t, Options{Dir: root, Home: home, Words: []string{"tamarin"}})
+	agents := filepath.Join(root, ".agents")
+	if err := os.Chmod(agents, 0); err != nil {
+		t.Fatal(err)
+	}
+	// The condition holds: the check cannot read .agents/docs.
+	if _, err := os.Stat(filepath.Join(agents, "docs")); err == nil || os.IsNotExist(err) {
+		t.Fatalf("fixture: want a permission error on .agents/docs, got %v", err)
+	}
+	out := mustSearch(t, Options{Dir: t.TempDir(), Home: home, Global: true, Words: []string{"tamarin"}})
+	os.Chmod(agents, 0o755)
+	if strings.Contains(out, "dropped") || !strings.Contains(out, "note: skipped") {
+		t.Errorf("a registration whose check errored was dropped, or skipped silently:\n%s", out)
+	}
+	out = mustSearch(t, Options{Dir: t.TempDir(), Home: home, Global: true, Words: []string{"tamarin"}})
+	if !strings.Contains(out, "plans/p.md") {
+		t.Errorf("the registration did not survive the error:\n%s", out)
+	}
+}
+
+func TestRebuiltNoteIsPrintable(t *testing.T) {
+	parent := t.TempDir()
+	root := filepath.Join(parent, "esc\x1b[2Jrepo")
+	if err := os.Rename(newRepo(t), root); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, root, ".agents/scratch/search.db", "not a database, and long enough to be read as a header by sqlite")
+	out := mustSearch(t, Options{Dir: root, Home: t.TempDir(), Words: []string{"demo"}})
+	if !strings.Contains(out, "rebuilt") || strings.ContainsRune(out, 0x1b) {
+		t.Errorf("rebuilt note:\n%q", out)
 	}
 }

@@ -32,7 +32,7 @@ Exit status: 0 with hits or without; 1 on a refusal or an error.
 
 | Index | Path | Covers |
 |---|---|---|
-| Project | `<checkout>/.agents/scratch/search.db` (+ `-wal`, `-shm`) | every tracked, modified and untracked-not-ignored file under 1 MiB with no NUL byte in its first 8 KiB; symlinks, submodules and secret-shaped names (the installer's list, matched in any case: `.env*`, `*.pem`, `*.key`, token and credential files, …) skipped; a secret inside an ordinarily named file is indexed |
+| Project | `<checkout>/.agents/scratch/search.db` (+ `-wal`, `-shm`) | every tracked, modified and untracked-not-ignored file under 1 MiB with no NUL byte in its first 8 KiB; symlinks, submodules and secret-shaped names (the installer's list, matched in any case: `.env`, `.env.*`, `*.env`, `*.pem`, `*.key`, token and credential files, …) skipped; a secret inside an ordinarily named file is indexed |
 | Global search index | `~/.config/sh-agent/search.db` (+ `-wal`, `-shm`), under `--home` when given; the directory is created 0700 | `feedback.jsonl`, `retros.jsonl`, `proposals/*.md`, and the `.agents/docs` trail of every checkout that has one and has run `search` or `index` |
 
 The global file is named "the global search index", never "cross-project index": R7 already gives that name to `retros.jsonl`. A checkout with an `.agents/docs` directory registers itself on any `search` or `index` run inside it, `--global` included, at most once a day (a third-party clone with a plain `docs/` never registers, so it cannot answer `--global` queries or feed `/retro`); `--global` then reconciles `~/.config/sh-agent/` and each registered checkout's docs root (as `<name>:<path>`, `name~2` for a second checkout with the same base name), and drops a registration whose root is no longer a git checkout or no longer has `.agents/docs` (a plain `docs/` is never served in its place). Run outside a checkout, `--global` still answers. The registry lives in the database, so `index --global --rebuild` drops it, with a note; each checkout returns on its next search.
@@ -72,6 +72,8 @@ References are record IDs (`BUG-NNN`, `ADR-NNN`) and path-shaped tokens on every
 | Argument errors (`--limit` out of range, unknown `--kind`, two modes at once, no mode) | `search: <what is wrong>; see sh-agent help` | 1 |
 | Global: a registered checkout is gone, or lost its `.agents/docs` | `note: dropped <root> (no longer a git checkout)`, or `(no longer has .agents/docs)` | 0 |
 | Global rebuild | `note: N project registrations dropped; each returns on its next search` | 0 |
+| Global: a registered checkout's check cannot run (for example `.agents` unreadable) | `note: skipped <root> this time (<error>)`; the registration stays | 0 |
+| A file edited and then restored while `search` waits for the write lock | the edit stays indexed for that blob until `index --rebuild` (known limit, plan D35) | 0 |
 | Network filesystem | not supported: SQLite's WAL needs one host's shared memory; the SQLite error is printed | 1 |
 
 `sh-agent report` never collects `search.db`; its dry run lists it as skipped. `sh-agent uninstall` leaves `~/.config/sh-agent/search.db`, which is not in the install manifest; delete it by hand if wanted.

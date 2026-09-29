@@ -299,13 +299,12 @@ func reconcileGlobal(o Options, out io.Writer) (*store, int, []proj, error) {
 	projects := []proj{{key: configProject, name: configProject}}
 	names := map[string]int{configProject: 1}
 	for _, r := range regs {
-		reason := ""
-		if got, err := checkoutRoot(r.root); err != nil || got != r.root {
-			reason = "no longer a git checkout"
-		} else if fi, err := os.Stat(filepath.Join(r.root, ".agents", "docs")); err != nil || !fi.IsDir() {
-			// Registered for its .agents/docs; a plain docs/ is never served
-			// in its place (security review, round 2).
-			reason = "no longer has .agents/docs"
+		reason, err := dropReason(r.root)
+		if err != nil {
+			// A check that errors keeps the registration (context § Hard
+			// rules): skip this checkout for this query and say why.
+			fmt.Fprintln(out, printable(fmt.Sprintf("note: skipped %s this time (%v)", r.root, err)))
+			continue
 		}
 		if reason != "" {
 			if err := dropProject(st, r.root); err != nil {
@@ -332,6 +331,38 @@ func reconcileGlobal(o Options, out io.Writer) (*store, int, []proj, error) {
 		projects = append(projects, proj{key: r.root, name: name, docsRoot: docs})
 	}
 	return st, changed, projects, nil
+}
+
+// dropReason says why a registration should go, or "" when it stays; an
+// error means the check could not run, and the registration stays. It goes
+// only on positive evidence: the root is gone, git says it is not a
+// checkout (or a different one), or .agents/docs is gone or not a directory
+// (a plain docs/ is never served in its place; security review, rounds 2-3).
+func dropReason(root string) (string, error) {
+	if _, err := os.Stat(root); errors.Is(err, os.ErrNotExist) {
+		return "no longer a git checkout", nil
+	} else if err != nil {
+		return "", err
+	}
+	got, err := checkoutRoot(root)
+	switch {
+	case err != nil && strings.Contains(err.Error(), "not a git repository"):
+		return "no longer a git checkout", nil
+	case err != nil:
+		return "", err
+	case got != root:
+		return "no longer a git checkout", nil
+	}
+	fi, err := os.Stat(filepath.Join(root, ".agents", "docs"))
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		return "no longer has .agents/docs", nil
+	case err != nil:
+		return "", err
+	case !fi.IsDir():
+		return "no longer has .agents/docs", nil
+	}
+	return "", nil
 }
 
 func dropProject(st *store, root string) error {

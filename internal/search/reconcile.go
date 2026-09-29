@@ -17,9 +17,6 @@ import (
 	"github.com/kesokaj/styrman-harness/internal/harness"
 )
 
-// readFile is os.ReadFile, replaceable in tests (count the reads).
-var readFile = os.ReadFile
-
 // maxFileBytes is the largest file indexed; larger files, and files with a
 // NUL byte in their first 8 KiB, are skipped.
 const (
@@ -29,12 +26,9 @@ const (
 	touchEvery   = 24 * 60 * 60      // seconds between last_seen refreshes
 )
 
-// entry is one path of the current view. data holds the bytes a modified or
-// untracked file was hashed from, so the content indexed is the content the
-// ID names (security review, round 2); nil for a file read from the index.
+// entry is one path of the current view.
 type entry struct {
 	path, oid, state string
-	data             []byte
 }
 
 func git(dir string, stdin []byte, args ...string) ([]byte, error) {
@@ -77,8 +71,11 @@ func docsRootOf(root string) string {
 
 // gitView lists the checkout's current files: the index entries of
 // `git ls-files -s`, overridden by what `git status` reports modified or
-// untracked (their blob IDs computed from their bytes, which the entry
-// keeps), minus deleted paths, symlinks, submodules and secret-shaped names.
+// untracked (their blob IDs computed from their bytes), minus deleted paths,
+// symlinks, submodules and secret-shaped names. A file's content is read
+// again when its blob is indexed: a file edited and restored between the two
+// reads is indexed with the edit until `index --rebuild` (a known limit; the
+// operator's choice at the security review's cap, plan D35).
 // prefix limits it to one directory.
 func gitView(root, prefix string) ([]entry, error) {
 	under := func(p string) bool { return prefix == "" || strings.HasPrefix(p, prefix) }
@@ -130,7 +127,7 @@ func gitView(root, prefix string) ([]entry, error) {
 		// --stdin-paths` strips a trailing CR and unquotes a leading '"'
 		// in a name, binding an ID to another file (security review,
 		// finding 3).
-		data, err := readFile(full)
+		data, err := os.ReadFile(full)
 		if err != nil {
 			delete(view, p)
 			continue
@@ -142,7 +139,7 @@ func gitView(root, prefix string) ([]entry, error) {
 		if _, known := view[p]; !known {
 			order = append(order, p)
 		}
-		view[p] = entry{path: p, oid: blobID(data), state: state, data: data}
+		view[p] = entry{path: p, oid: blobID(data), state: state}
 	}
 	entries := make([]entry, 0, len(view))
 	for _, p := range order {
@@ -183,7 +180,7 @@ func configView(dir string) ([]entry, error) {
 		if err != nil || !fi.Mode().IsRegular() {
 			continue
 		}
-		data, err := readFile(filepath.Join(dir, n))
+		data, err := os.ReadFile(filepath.Join(dir, n))
 		if err != nil {
 			continue
 		}
@@ -194,19 +191,14 @@ func configView(dir string) ([]entry, error) {
 }
 
 // readIndexable returns a file's text, or ok=false when it is too large,
-// binary, or gone. data, when not nil, is the content already read and
-// hashed; the file is not read again.
-func readIndexable(full string, data []byte) (string, bool) {
-	if data == nil {
-		fi, err := os.Lstat(full)
-		if err != nil || !fi.Mode().IsRegular() || fi.Size() > maxFileBytes {
-			return "", false
-		}
-		if data, err = readFile(full); err != nil {
-			return "", false
-		}
+// binary, or gone.
+func readIndexable(full string) (string, bool) {
+	fi, err := os.Lstat(full)
+	if err != nil || !fi.Mode().IsRegular() || fi.Size() > maxFileBytes {
+		return "", false
 	}
-	if len(data) > maxFileBytes {
+	data, err := os.ReadFile(full)
+	if err != nil {
 		return "", false
 	}
 	sniff := data
@@ -351,7 +343,7 @@ func (s *store) applyLocked(src source, now int64) (int, error) {
 		if _, known := blobs[e.oid]; known {
 			continue
 		}
-		text, ok := readIndexable(filepath.Join(src.dir, filepath.FromSlash(e.path)), e.data)
+		text, ok := readIndexable(filepath.Join(src.dir, filepath.FromSlash(e.path)))
 		if _, err := s.db.Exec(`INSERT INTO blobs(oid, last_seen, skipped) VALUES (?, ?, ?)`, e.oid, now, boolInt(!ok)); err != nil {
 			return 0, err
 		}

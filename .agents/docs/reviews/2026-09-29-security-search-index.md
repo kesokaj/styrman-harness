@@ -2,130 +2,166 @@
 owner: security
 date: 2026-09-29
 ---
-# Security review — search-index   (2026-09-29, round 2)
+# Security review — search-index   (2026-09-29, round 3)
 
-Range reviewed: c04f2d7..254f3f5. Round 2 covers the six round-1 fixes in 254f3f5, every declaration they touched, and every reference to those declarations. Round 1 covered c04f2d7..565bb1e.
+Range reviewed: c04f2d7..5fe69af. Round 3 covers the round-2 fixes in 5fe69af (254f3f5..5fe69af), every declaration they touched, and every reference to those declarations. Round 2 covered c04f2d7..254f3f5; round 1 covered c04f2d7..565bb1e.
 
 ## Status: COMPLETE
 
 ## Verdict: FINDINGS
 
-Three fixes are correct and complete: fix 1 (the DSN), fix 3 for the odd file names, and fix 5 (0700). Probes confirmed each.
+Round-2 finding 4 is only half fixed, and a probe reproduced its worst case on HEAD.
+- A clean tracked file still takes its ID from git's index and its content from a later read.
+- Probe R edited a committed file while `search` waited for the write lock, then restored the file with `git checkout --`. From then on, `search` found the edited word in the clean file and none of its committed words.
+- The Round 2 outcome and 5fe69af's message both call this finding fixed.
 
-Fix 2 closes only accidental registration. Its gate is an `.agents/docs` directory, which any repository can commit. So a crafted clone still reaches every `--global` answer and `/retro`'s cross-project evidence, exactly as round 1 described. The gate is also checked only at registration. `reconcileGlobal` re-derives each registered root's docs root, and that falls back to a plain `docs/`. Probe: a checkout that had `.agents/docs` when first searched served its committed `docs/evil.md` as `trail` once `.agents/docs` was removed. Registrations made before the fix keep answering the same way.
+The half that was fixed introduced a memory regression. Every modified and untracked file's bytes are now held for the whole reconcile, including those whose blob the index already holds. Probe M measured a steady-state `search` at 187 MB resident over 180 MB of untracked files; the round-1 binary took 15 MB.
 
-Fixes 4 and 6 have gaps. The `--refs` hint line prints indexed paths raw. Probe: a committed directory name carrying ESC reached the output unfiltered. The secret list is case-sensitive and misses common credential files. Probe: `.ENV`, `deploy.PEM`, `.git-credentials` and `.aws/credentials` were all indexed and printed.
+Three fixes are correct, and each has a test that fails on the round-1 code:
+- the global view reads only `.agents/docs`;
+- `printable` covers the hint and both notes;
+- the secret list ignores case.
 
-The fixes also left three descriptions untrue: a stale `gitView` comment, a doc comment merged into the wrong function in `plan.go`, and claims in the spec and README.
+Two new gaps:
+- The new `.agents/docs` check drops a registration on any stat error, which the project's hard rule forbids (probe S).
+- README and the spec now claim `.env*`, which the list does not match (probe E).
+
+Nothing here is above low. Secrets, injection, crypto, dependencies and GCP have nothing new.
 
 ## Findings
 
-- **[medium / confidence: medium]** `internal/search/search.go:194` (the registration gate). This is round 1's finding 2, narrowed but not closed for a targeted repository.
-  - The gate is `os.Stat(<root>/.agents/docs)`. That directory layout is public and trivially committed.
-  - A clone that ships `.agents/docs/` registers on the first `sh-agent search` inside it. That search is explorer's first command, and the context tells agents to search before Grep.
-  - From then on the clone answers every `--global` and `--open --global` query from any directory, and feeds `/retro` step 9's cross-project evidence for harness-scope rules.
-  - `README.md:185` calls these checkouts "harness-scaffolded", but nothing checks that.
-  - **Remediation (a design question for the operator, since registration is plan and spec behaviour):**
-    - (a) Register only on an explicit `sh-agent index --global` run inside the checkout, never on `search`. Recommended: the trust decision becomes the operator's, the implicit call leaves `prepare`, and `/init-project` can run it once.
-    - (b) Keep implicit registration and record the residual in `search.md`, with the operator's review of retro proposals as the control.
+- **[low / confidence: high]** `internal/search/reconcile.go:103` (a tracked entry takes the ID from `git ls-files -s`) and `:354` (`readIndexable` with `e.data == nil`). This is the unfixed half of round-2 finding 4, now reproduced.
+  - **How it happens:** the content is read in `applyLocked`, after `diffCount` and `BEGIN IMMEDIATE`, which waits up to the 10 s busy timeout, and after every blob indexed before it. Nothing compares that content with the ID.
+  - **Probe R** (HEAD binary, scratch repository):
+    - `b.md` was committed as "bravo committed text".
+    - A second SQLite connection held `BEGIN IMMEDIATE` on the project's `search.db` for 4 s while `search bravo` ran. At 1.5 s the probe rewrote the file as "bravo poisoned zebra".
+    - After the search finished, `git checkout -- b.md` made the file clean again: its bytes on disk were the committed ones.
+    - `search zebra` then printed `b.md:1  doc … bravo poisoned »zebra«`. `search committed` found 0 hits. Both reported "reconciled 0 changed".
+  - **How long it lasts:** the wrong bytes stay bound to the committed blob's ID until `--rebuild`. They drive snippets, `--refs`, and the record status that `--open` prints.
+  - **Other consequences:**
+    - In the global index the blob row is shared, so another project with the same committed `.agents/docs` blob is served these bytes.
+    - A committed `.gitattributes` with `eol`, `working-tree-encoding` or `ident` makes the working-tree bytes differ from the blob by design.
+    - `configView` has the same shape (the key from one read, the content from a second), but an append-only log never returns to an old key.
+  - **Untrue descriptions:** these claims hold only for modified and untracked files:
+    - the Round 2 outcome ("fixed");
+    - 5fe69af's message ("hashed bytes are indexed bytes");
+    - `entry`'s doc comment.
+  - **Remediation (one mechanism for this finding and the next; it shortens the code):**
+    - Remove `entry.data` and `readIndexable`'s `data` parameter.
+    - In `applyLocked`, read an unknown blob's file once. Index it only when its blob ID, computed in the ID's own format, equals `e.oid`: git's SHA-1 blob format for a 40-hex ID, SHA-256 for a 64-hex ID, and the plain SHA-256 for `configView`'s `sha256:` key.
+    - On a mismatch, insert nothing; the next query retries.
+    - A file under an eol, encoding or ident conversion then stays unindexed. Say so in the spec.
+    - Alternative for tracked entries: read the blob by ID with `git cat-file --batch`. Only IDs go on stdin, so round 1's path-quoting problem cannot arise. It needs `GIT_NO_LAZY_FETCH=1` so that a partial clone never fetches. It also gives `git()`'s unused `stdin` parameter a caller.
+  - **Test:** probe R's arrangement. Hold the lock from a second connection, edit a clean tracked file during the wait, and restore it. Assert that the restored words are found and the edited ones are not. `TestModifiedFileReadOnce` then asserts that the indexed bytes hash to the ID, not a read count.
 
-- **[low / confidence: high]** `internal/search/search.go:309-312` (`reconcileGlobal`: `docs := docsRootOf(r.root)`). The gate is enforced only at registration.
-  - Every `--global` query re-derives each registered root's docs root. `docsRootOf` falls back to a plain `docs/`, and `.agents/docs` is never re-checked.
-  - **Probe B:** a checkout registered with `.agents/docs/plans/p.md`, then `git rm -r .agents/docs` plus a committed `docs/evil.md`. `--global pelican`, run from another checkout, printed `pb:docs/evil.md:1  trail`.
-  - The same code keeps every pre-fix registration of a plain-`docs/` clone answering. A branch switch or pull that drops `.agents/docs` turns an ordinary `docs/` into trail.
-  - So `search.md:38`'s claim does not hold for the running code: "a third-party clone with a plain `docs/` never registers, so it cannot answer `--global` queries or feed `/retro`".
-  - **Remediation (it makes the code shorter):** in `reconcileGlobal`, index `.agents/docs/` only. Drop a registered root that lacks that directory exactly like a vanished one, with the existing note. This also retires pre-fix registrations without a rebuild.
-  - **Test:** register a checkout, remove its `.agents/docs`, add a committed `docs/x.md`, and assert that `--global` does not find it and that the note is printed.
+- **[low / confidence: high]** `internal/search/reconcile.go:145` (`entry{…, data: data}`). The round-2 fix introduced this regression.
+  - `gitView` now keeps the bytes of every modified and untracked file until the reconcile ends. The Lstat gate at `:124-125` caps each file at 1 MiB, but nothing caps how many files there are.
+  - That includes files whose blob the index already holds, where `applyLocked` never reads the bytes. Before the fix, each file was hashed and then released.
+  - **Probe M:** a scratch checkout held 200 untracked files of 900 KB each. They were binary, so none were indexed. Maximum RSS of a steady-state `search memory`:
 
-- **[low / confidence: high]** `internal/search/search.go:714` (`hint: did you mean --refs %s`, with paths from `sameName` at `:785`), `:306` (`note: dropped %s`) and `internal/search/store.go:128` (`note: index at %s … rebuilt`). Fix 4's `printable` is not applied to these three print sites.
-  - The hint prints indexed paths, so a committed directory name is enough to reach it.
-  - **Probe A:** a checkout with `sub<ESC>[7mREV<ESC>[0m/guide.md` committed. `search --refs guide.md` printed the raw ESC sequence in its hint line. The word search over the same file printed `sub?[7mREV?[0m`, so the check can fire, and it fired only on the hint.
-  - **Probe E:** a registered checkout whose directory name carries ESC was moved away. The next `--global` query printed the raw sequence in the dropped note.
-  - The same fix removed the `\n` exclusion from `gitView`. A path can now carry a newline, and the hint would print it as a separate forged line into the agent's context. This follows from the same raw `Fprintf`; the newline case was not probed.
-  - So `search.md:23`'s claim does not hold while the hint is raw: "a file cannot drive the terminal".
-  - **Remediation:** wrap the three `Fprintf` calls in `printable`. Extend `TestOutputStripsControlCharacters` with a `--refs <bare name>` case whose directory name carries ESC and a newline.
-  - Error text on stderr (`cmd/sh-agent/main.go:76`, and paths inside `fmt.Errorf`) is the last raw channel. It is lower priority.
+    | Binary | Run A | Run B |
+    |---|---|---|
+    | 254f3f5 | 15,160 KB | 15,960 KB |
+    | HEAD | 187,428 KB | 187,268 KB |
 
-- **[low / confidence: medium]** `internal/search/reconcile.go:126` versus `:342`. Fix 3 is correct for the odd names (probe and test). The race named in round 1's remediation is still open.
-  - The blob ID comes from `gitView`'s read, or from git's index for a clean tracked file. The content stored under that ID comes from a second read, in `applyLocked` → `readIndexable`, after `BEGIN IMMEDIATE`, which can wait out the busy timeout.
-  - A write between the two reads stores the new bytes under the old ID. Two cases make this likely: an agent editing while another searches, and the first full index of a checkout, which takes seconds.
-  - `blobID` equals git's blob ID. For a clean tracked file, the poisoned ID is therefore the committed blob's own. Once the file returns to that content (checkout, stash, branch switch), the index serves the other bytes for it for as long as the blob stays referenced. Only `--rebuild` cures it.
-  - In the global index, blob rows are shared across projects under that ID. One checkout's working tree therefore also decides another project's identical blob. Example: a committed `.gitattributes` with `working-tree-encoding=UTF-16` makes a copied file read as binary, which marks the shared blob skipped.
-  - Not reproduced: there was no hook to hold the window open.
-  - **Remediation:** index the bytes that were hashed.
-    - For modified and untracked entries, carry the bytes from `gitView` into `applyLocked` instead of re-reading.
-    - For a tracked entry with a SHA-1-shaped ID, compare `blobID(bytes)` with the ID. On a mismatch, insert nothing, so the next query retries.
-    - Files under an eol or encoding conversion then stay unindexed; say so in the spec.
+  - **Who is exposed:**
+    - Memory now grows with the size of the untracked, non-ignored tree, on every `search`.
+    - The context tells every agent to run `search` first, and parallel subagents multiply the cost.
+    - A data or build directory that is not ignored is enough to exhaust a laptop.
+    - A clone's committed files are clean and carry no bytes, so this comes from the local tree, not from a repository an attacker controls.
+  - **Remediation:** the previous finding's. Once the field is gone, the hashing read is one file at a time again.
 
-- **[low / confidence: high]** `internal/harness/plan.go:214-224`, reached from `internal/search/reconcile.go:142`. Fix 6 reuses the installer's list, which matches case-sensitively and by base name.
-  - **Probe D** (untracked files in a scratch checkout): `.ENV`, `deploy.PEM`, `.git-credentials`, `.aws/credentials` and `id_rsa_deploy` were all indexed, and their lines were printed as snippets. `.env` was skipped.
-  - On macOS's default case-insensitive volume, `.ENV` is the file a dotenv loader opens as `.env`.
-  - `README.md:185` says secret-shaped files "are never indexed".
-  - `schemaVersion` is still `"1"`. Secret-shaped content indexed before the fix therefore stays in each existing `.agents/scratch/search.db` until `gc` (14 days), and in free pages after.
-  - **Remediation (operator's one-line choice, because extending the list also extends install's and adopt's refusals):**
-    - (a) Recommended, the simpler option: case-fold the match (`strings.ToLower`), reword README to "names on the installer's secret list", and bump `schemaVersion` so existing indexes rebuild once.
-    - (b) Also add `.git-credentials`, a bare `credentials`, `.pgpass`, `id_rsa*`, `id_ed25519*` and `id_ecdsa*` to the shared list.
+- **[low / confidence: high]** `internal/search/search.go:305-314`. The new check drops a registration on any `os.Stat` error, not only "does not exist".
+  - Causes include EACCES, EIO, ELOOP, and an unmounted or network volume.
+  - The drop deletes the registration's rows from the global index. It prints "no longer has .agents/docs", which is then false.
+  - It breaks the project's hard rule: "A guard in front of a destructive action keeps the data when its check ERRORS".
+  - **Probe S:**
+    - A checkout was registered, then `chmod 000 <root>/.agents`.
+    - `--global wombat`, run from another checkout, printed `note: dropped …/r4 (no longer has .agents/docs)`.
+    - With the mode restored, `--global wombat` still found 0 hits. Only a new search inside the checkout brought it back.
+  - The older `checkoutRoot` branch at `:303` has the same shape. Any git failure drops the registration: `safe.directory` reporting "dubious ownership", `git` missing from PATH, or a corrupt index.
+  - There is no attacker path. The cost is the availability of a registry that heals itself later.
+  - **Remediation:**
+    - Drop only when `errors.Is(err, fs.ErrNotExist)`, or when `err == nil && !fi.IsDir()`.
+    - On any other error, skip the root for this query with a note, and keep the registration.
+    - Treat the git branch the same way: drop only when the root is gone or git reports it is no longer a work tree.
+  - **Test:** probe S's arrangement. The checkout answers again once the mode is restored, with no search inside it. Skip the test when running as root.
 
-- **[low / confidence: high]** Descriptions the fixes left untrue.
-  - `internal/search/reconcile.go:72-75`: `gitView`'s doc comment still says modified and untracked blob IDs come "from one `git hash-object --stdin-paths`". `git()`'s `stdin` parameter (`:34-38`) no longer has a caller that passes one.
-  - `internal/harness/plan.go:206-212`: the new `SecretShaped` comment was inserted directly under `secretShaped`'s comment, with no blank line between them. `go doc ./internal/harness SecretShaped` prints both paragraphs, starting "secretShaped reports whether a filename…", and `secretShaped` is left undocumented. Fix: move that paragraph back above `func secretShaped`.
-  - `search.md:23`, `search.md:38` and `README.md:185` make the claims the probes above disproved. They change together with those fixes.
+- **[low / confidence: high]** `README.md:185` and `.agents/docs/specs/sh-agent/search.md:35` now say the list covers `.env*`. The list at `internal/harness/plan.go:219` matches only `.env`, `.env.*`, `*.env` and `.envrc`.
+  - **Probe E** (untracked files, HEAD binary):
+    - Indexed and printed: `.env-prod`, `.env_local`, `.envprod`, `.pgpass`, `id_rsa_deploy`.
+    - Skipped: `.ENV.LOCAL`, `Credentials`, `deploy.PEM`, `x/.Git-Credentials`. Case folding and the two new names work.
+  - `plan.go:119` makes the same claim ("The names match the context's Git rule"). That rule stops a commit for `.env*`.
+  - Round 2's option (b) was half taken, and no decision is recorded. The list still lacks `.pgpass`, `id_rsa*`, `id_ed25519*` and `id_ecdsa*`, and the Round 2 outcome has no `left: operator` line for them.
+  - The rest of option (a), bumping `schemaVersion`, was not done: `store.go:28` is still `"1"`. So content indexed before the fix stays inside each existing `search.db` until gc (14 days), and in free pages after. That content includes `.ENV`, `.git-credentials` and `credentials` files. It is no longer served, because every answer joins `files` and the next reconcile deletes those rows.
+  - **Remediation:**
+    - Replace `.env`, `.env.*` and `.envrc` with `.env*`. The list gets shorter and matches the context's rule, README and the spec. Install and adopt then refuse `.env-*` names too, which the Git rule already stops.
+    - Put the remaining names and the schema bump to the operator as one-line choices. Recommended: the bump, because it is a one-character change and the only way to purge content indexed before the fix.
+
+- **[low / confidence: high]** `internal/search/store.go:128` (the rebuilt-index note). This is round-2 finding 3's third trigger, and it has no test.
+  - The code is correct: it calls `printable`.
+  - `TestHintAndNotesArePrintable` covers only the hint and the dropped note.
+  - **Test:** a checkout whose path carries ESC, holding a `search.db` that contains garbage bytes. Assert that the rebuilt note is printed and carries no ESC.
 
 ## Checked
 
-- **Fix 1 (DSN):** correct and complete.
-  - `url.URL` escapes `?`, `#` and `%` in the path. It leaves `&`, `=` and `;` literal, and SQLite gives those no meaning in the path. The driver's first `?` is now the real query separator.
-  - **Probe C:** a checkout named `q?a=b&c;d#e%3Ff` got its index inside itself, in WAL mode (header bytes 18–19 = `2 2`, which the unit test does not assert). Nothing appeared beside it.
-  - `dsn` has one caller. `search_test.go:78` still opens `"file:"+projectDB(root)` raw, but only under `t.TempDir()`.
-  - `remote.md` names no Windows release target. The `file://C:/…` form `url.URL` would produce there therefore does not arise.
-- **Fix 2:** the gate works at registration as coded (`TestRegistersOnlyHarnessProjects` passes). `os.Stat` follows a committed `.agents/docs` symlink, but `gitView` lists nothing beyond a symlink, so no outside content enters. The residuals are the first two findings.
-- **Fix 3:**
-  - `hash-object` and the `\n` exclusion are gone.
-  - `blobID` is git's blob format over stdlib `crypto/sha1`: a content key used as designed, not hand-rolled. It is plain SHA-1 where git uses collision-detecting SHA-1DC. That matters only for a chosen-prefix pair whose two halves the attacker authors. Informational.
-  - Round 1's "skip a failing checkout" was not done. `reconcileGlobal` still fails every `--global` query when one registered checkout's `git ls-files` or `git status` fails, for example on a corrupt `.git/index`. A clone's content can no longer trigger it.
-- **Fix 4:**
-  - `printable` covers C0, DEL and C1.
-  - Invalid UTF-8 (a raw 0x9b CSI byte) comes out of `strings.Map` as U+FFFD.
-  - The markers are replaced before `printable` runs, which is the right order.
-  - Bidi format characters (U+202E and similar) are not control characters. They pass through and are not a finding.
-  - The gaps are listed in the findings above.
-- **Fix 5:** on a fresh probe home, `~/.config` and `~/.config/sh-agent` were created 0700, and `search.db` is 0644 inside them. A 0755 directory left by the pre-fix binary stays 0755 until the next `install` runs `TightenConfigDir`, as README says.
-- **Fix 6:**
-  - Tracked and untracked names are skipped alike.
-  - `--global` trail views are covered too, because they also go through `gitView`.
-  - A skipped modified or untracked file is still read once, in memory, to hash it.
-- **Declarations re-read:** `dsn`, `register` and the gate, `gitView`, `blobID`, `git`, `label`/`rawLabel`, `printable`, `tryOpen`, `SecretShaped`/`secretShaped`.
-  - `SecretShaped` has one caller, in search.
-  - `secretShaped` keeps its three: `plan.go:120`, `adopt.go:161` and `zip_test.go`.
-  - `rawLabel` has one caller, `label`.
+- **Global view (`.agents/docs` only):** correct. `docs := ".agents/docs"` is a constant.
+  - `docsRootOf` keeps its one caller (`search.go:171`, the project scope), so the fix orphaned nothing.
+  - `reg.docs` is still scanned at `:292` but never read, and `projects.docs_root` is written by `register` and read nowhere on the global path. This is dead data, and none of it is exported.
+  - Registrations made before the round-1 fix are now dropped on the next `--global`.
+  - A committed `.agents/docs` symlink passes the stat, but `gitView` lists nothing beyond it.
+- **Printable output:** correct at `search.go:722`, `:314` and `store.go:128`.
+  - `printable` maps `\n`, which is below 0x20, so round 2's newline-in-path case is closed.
+  - The remaining raw `Fprint` sites print numbers, the user's own `--refs` argument (`:703`, `:706`, `:713`), or state values the code sets.
+  - Error text on stderr is still raw, as round 2 noted.
+- **Hashed bytes, modified and untracked:** correct.
+  - When `data` is set, `readIndexable` skips its own Lstat. That is safe only because `gitView`'s Lstat regular-file and size gate (`:124-125`) runs first.
+  - The Lstat-then-read race is the same one `readIndexable` had before.
+  - The tracked half and the memory cost are findings 1 and 2.
+- **Secret list:** `strings.ToLower` runs before `filepath.Match`, and every pattern is lower case.
+  - Install (`plan.go:120`) and adopt (`adopt.go:161`) inherit the change.
+  - `go run ./cmd/sh-agent install --home .agents/scratch/secreview3/insthome` exited 0 with 266 files, and no file was refused.
+  - A case-insensitive `git ls-files` grep for the new names finds no tracked path, so the new bare `credentials` line in `.gitignore` hides nothing tracked.
+- **Descriptions:**
+  - `gitView`'s comment is now true.
+  - `go doc` prints `SecretShaped` and `secretShaped` separately.
+  - The spec's reconcile steps (lines 43-46) are accurate.
+- **Declarations re-read:** `entry` (three constructions; one reader of `data`), `readFile` (three uses and the test), `readIndexable` (one caller), `secretShaped`/`SecretShaped`, `reconcileGlobal`, `register`, `printable`, `openStore`.
   - No export was left without a caller.
-- **Secrets:** none in 254f3f5's added lines.
-- **Injection:**
-  - SQL and FTS5 are unchanged since round 1: bound parameters, quoted FTS5 words.
-  - The DSN is fixed (above).
-  - No path reaches git as an argument or on stdin any more.
+  - `git()`'s `stdin` parameter still has no caller that passes one (unexported).
+- **Tests must fail on the old code:** HEAD's `security_test.go` was copied into a `git archive 254f3f5` tree, with a test-only `readFile` variable so it compiled. It compiled, and all four round-2 tests failed:
+  - `TestGlobalDropsCheckoutWithoutAgentsDocs`, `TestHintAndNotesArePrintable` and `TestSkipsMoreSecretNames` failed with their own messages.
+  - `TestModifiedFileReadOnce` counted 0 reads, because the variable was not wired into the old code. That failure is not evidence (see Not examined).
+- **Secrets:** none in 5fe69af. The fixture `https://u:caracal@example.invalid` uses a reserved TLD.
+- **Injection:** unchanged. Queries use bound parameters, and the hint's `LIKE` has an `ESCAPE`.
 - **Authz/authn:** none in scope.
-- **Crypto:** `crypto/sha1` (the blob ID) and `crypto/sha256` (the config-file key) are content keys. Nothing is hand-rolled.
+- **Crypto:** unchanged. `crypto/sha1` (the blob ID) and `crypto/sha256` (the config key) are content keys, used as designed.
 - **Dependencies:**
-  - `go.mod` now requires `modernc.org/sqlite v1.46.1` directly, which fixes round 1's tidy nit. That version bundles SQLite 3.51.2 (2026-01-09).
-  - `go mod verify`: all modules verified.
-  - `govulncheck ./...` (go1.27.1): 0 vulnerabilities in the code, 0 in imported packages, and 1 in a required module that is not called. It is taken to be round 1's Windows-only `golang.org/x/sys` advisory (D25); `-show verbose` was not run.
+  - 5fe69af changes none.
+  - `govulncheck -show verbose ./...` (go1.27.1): 0 vulnerabilities affect the code.
+  - The one advisory in a required module is GO-2026-5024, in `golang.org/x/sys@v0.37.0` (fixed in v0.44.0). It is not called; this is D25's advisory.
   - `npm audit` does not apply.
 - **GCP surface:** none.
-- **Tests:** the six round-1 tests pass (`go test -count=1 -v -run '<the six>' ./internal/search/`).
-- **Probes:** everything is under `.agents/scratch/secreview2/`.
-  - A binary was built from the clean HEAD tree.
-  - The scratch repositories were made with `git init`, with its exit status checked, and addressed with `git -C`.
-  - Every run passed `--home .agents/scratch/secreview2/home`, so the real home was never touched.
+- **Build and tests:**
+  - `gofmt -l cmd internal`: clean.
+  - `go vet ./...`: clean.
+  - `go test -race -count=1 ./...`: all four packages ok. This is the first full run in this review series.
+- **Probes:** everything is under `.agents/scratch/secreview3/`.
+  - The HEAD binary was built from the clean tree. The old binary came from `git archive 254f3f5`.
+  - Each repository was made with `git init`, with its exit status and top level checked.
+  - Every run passed `--home .agents/scratch/secreview3/home`, so the real home was never touched.
+  - Afterwards, `git status` showed only this file.
 
 ## Not examined
 
-- `go test -race ./...` was not run in full. Only the six security tests ran.
-- Three results were reasoned from the code, not reproduced: the read-versus-read race, the `working-tree-encoding` cross-project skip, and the newline-in-path hint line. The ESC hint and the dropped note were probed.
-- macOS (a case-insensitive filesystem) was not tested. All probes ran on Linux.
-- `govulncheck -show verbose` was not run, so the one module-level advisory was not named directly.
-- The Markdown in 254f3f5 beyond the `search.md` and README lines cited: ADR-045a, the code and docs reviews, and the plan. Commit `e848a39` (AGENTS.md § Testing, bug-index rows) was not read.
-- Items left from round 1: the assertions of every test other than the six, and modernc internals beyond DSN parsing and `O_NOFOLLOW`.
+- **macOS:** the case-insensitive filesystem was not tested. All probes ran on Linux.
+- **Race width:** probe R held the lock from a second connection to open the window. The width of that window between two real agents was not measured.
+- **`TestModifiedFileReadOnce` on the old code:** its failing state with the variable wired into the round-1 code, as the Round 2 outcome describes, was not reproduced.
+- **Code not read:** `wanted`, `diffCount` and `insertContent` beyond their use of the view, and modernc internals.
+- **Markdown not read:** everything in 5fe69af beyond `README.md:185`, `search.md:35-46` and `:73`, and plan D34. Commit `e848a39` was not read.
+- **Antigravity:** no runs.
+- **Stderr error text:** not re-probed; carried from round 2.
+- **Round-2 finding 1:** registration, left by the operator as D34. The code still matches that decision (registration needs `.agents/docs` at `search.go:197`), so it is not raised again.
 
 ## Round 1
 
@@ -148,3 +184,21 @@ Each fix below has a test in `internal/search/security_test.go` that failed on t
 - 4. [low] content indexed from a second read — fixed at `internal/search/reconcile.go`: a modified or untracked entry keeps the bytes it was hashed from, and `readIndexable` uses them; `TestModifiedFileReadOnce` (one read).
 - 5. [low] the secret-name list was case-sensitive and missed `.git-credentials` and `.aws/credentials` — fixed at `internal/harness/plan.go` (`secretShaped` lower-cases the name; `.git-credentials` and `credentials` added) and `.gitignore` kept in step; `TestSkipsMoreSecretNames`.
 - 6. [low] stale descriptions — fixed: the `gitView` comment, `SecretShaped`'s doc comment moved off `secretShaped`'s, README's claim narrowed to "files with secret-shaped names … a secret inside an ordinarily named file is [indexed]"; the spec says the same.
+
+## Round 3
+
+The review's three-round cap. The operator chose, 2026-09-29, "Revert and document (Recommended)": undo the round-2 read-once change, record the race as a known limit, fix the check-error drop and the wording, stop reviewing.
+
+- 1. [low] a clean tracked file can be indexed with content from an edit made and undone while `search` waits for the lock — left: operator — known limit in `specs/sh-agent/search.md` § Failure modes and plan D35; `index --rebuild` clears it.
+- 2. [low] round 2's `entry.data` held every modified and untracked file in memory (15 MB to 187 MB) — fixed by reverting it (`internal/search/reconcile.go`: no `data` field, no `readFile` seam, `readIndexable` reads the file as before); `TestModifiedFileReadOnce` removed with it.
+- 3. [low] a registration was dropped on any stat error — fixed at `internal/search/search.go` (`dropReason`): it goes only on positive evidence (root gone, git says not a checkout or another one, `.agents/docs` gone or not a directory); any other error keeps it and prints `note: skipped <root> this time (<error>)`; `TestRegistrationKeptWhenCheckErrors` (`.agents` mode 000: skipped, then served again after the mode is restored; mutation R1 fails it).
+- 4. [low] README and spec claimed `.env*` — fixed: both list `.env`, `.env.*`, `*.env`, the list's own patterns.
+- 5. [low] the rebuilt-index note had no test — fixed: `TestRebuiltNoteIsPrintable` (a checkout named with ESC and a corrupt index; mutation R2, the note without `printable`, fails it).
+
+## Outcome
+
+- Round 1, findings 1–6: fixed (commit 254f3f5), as the Round 1 lines say.
+- Round 2, finding 1 (registration of a crafted clone): left: operator — "Keep automatic (Recommended)", plan D34.
+- Round 2, findings 2, 3, 5, 6: fixed (commit 5fe69af).
+- Round 2, finding 4 (second read): left: operator — reverted at round 3 with the round-3 finding 1 residual; plan D35.
+- Round 3, finding 1: left: operator (plan D35); findings 2–5: fixed in the commit that adds this section.

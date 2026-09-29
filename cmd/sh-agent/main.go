@@ -53,7 +53,7 @@ Commands:
   search [--limit N] [--kind K] [--global] <words...>  ranked search of every file and trail record in this git checkout: path:line, kind, record status, snippet; the index (.agents/scratch/search.db) is reconciled against git first, so it never answers from another branch
   search --refs <BUG-NNN|ADR-NNN|path> [--kind K] [--global]  every record naming an ID, a file or a directory (trailing /), with the ID's own status
   search --open [--kind K] [--global]  open bugs and plans with unticked boxes
-      --global searches the global search index (~/.config/sh-agent/search.db): ~/.config/sh-agent's logs and proposals and the trail of every checkout that has run search; --kind is one of bug adr plan change handoff review testing retro spec deploy trail code doc feedback proposal; --limit 1-50, default 10
+      --global searches the global search index (~/.config/sh-agent/search.db): ~/.config/sh-agent's logs and proposals and the .agents/docs trail of every harness-scaffolded checkout that has run search; --kind is one of bug adr plan change handoff review testing retro spec deploy trail code doc feedback proposal; --limit 1-50, default 10
   index [--global] [--rebuild]  reconcile the search index, or delete and rebuild it, and print its counts
   version                 print the build version
 

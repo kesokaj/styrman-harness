@@ -20,7 +20,7 @@ sh-agent index [--global] [--rebuild]
 ```
 
 - **Words** are each quoted for FTS5, so `BUG-049`, `a.go` or `NOT` are searched as text, never as query syntax. Chunks holding every word rank first; the remaining slots are filled with chunks holding any of them, and the header line says how many had every word (`search: 10 hits for "…", 2 with every word (…)`). Porter stemming: `verify` finds `verifies`. Hits are ranked by BM25 with a heading weighted twice the body, at most 2 per file, `--limit` (1–50, default 10) in all.
-- **Each hit** prints `path:line  kind[ ID status][  date]` and a one-line snippet (at most 200 characters, matched terms in `»«`). The line is the first line of the chunk holding a matched term.
+- **Each hit** prints `path:line  kind[ ID status][  date]` and a one-line snippet (at most 200 characters, matched terms in `»«`). Control characters in indexed text print as `?`, so a file cannot drive the terminal. The line is the first line of the chunk holding a matched term.
 - **`--refs X`** prints the ID's own record (`ADR-040  <path>:<line>  Superseded by ADR-041  <date>  <title>`, or `no record`), or a path's state (`tracked`, `modified`, `untracked`, `absent`, or `directory` for a trailing `/`), then `referenced by N:` and one entry per file and record that names X, newest record date first, with `×N` when it names X more than once. A path matches as written and relative to the docs root (the trail writes `plans/x.md` for `.agents/docs/plans/x.md`); no basename matching, but a bare file name that matches no path prints `hint: did you mean --refs <path>` for up to five tracked paths ending in it.
 - **`--open`** lists bugs with `status: open` and plans with an unticked `- [ ]` outside fenced blocks, newest first.
 - **`--kind`** is one of `bug adr plan change handoff review testing retro spec deploy trail code doc feedback proposal` and filters every mode by the kind of the printed path. `trail` is everything under the docs root; `feedback` and `proposal` exist only in the global search index.
@@ -32,16 +32,16 @@ Exit status: 0 with hits or without; 1 on a refusal or an error.
 
 | Index | Path | Covers |
 |---|---|---|
-| Project | `<checkout>/.agents/scratch/search.db` (+ `-wal`, `-shm`) | every tracked, modified and untracked-not-ignored file under 1 MiB with no NUL byte in its first 8 KiB; symlinks and submodules skipped |
-| Global search index | `~/.config/sh-agent/search.db` (+ `-wal`, `-shm`), under `--home` when given | `feedback.jsonl`, `retros.jsonl`, `proposals/*.md`, and the docs root of every checkout that has run `search` or `index` |
+| Project | `<checkout>/.agents/scratch/search.db` (+ `-wal`, `-shm`) | every tracked, modified and untracked-not-ignored file under 1 MiB with no NUL byte in its first 8 KiB; symlinks, submodules and secret-shaped names (the installer's list: `.env*`, `*.pem`, `*.key`, token files, …) skipped |
+| Global search index | `~/.config/sh-agent/search.db` (+ `-wal`, `-shm`), under `--home` when given; the directory is created 0700 | `feedback.jsonl`, `retros.jsonl`, `proposals/*.md`, and the `.agents/docs` trail of every checkout that has one and has run `search` or `index` |
 
-The global file is named "the global search index", never "cross-project index": R7 already gives that name to `retros.jsonl`. A checkout registers itself on any `search` or `index` run inside it, `--global` included, at most once a day; `--global` then reconciles `~/.config/sh-agent/` and each registered checkout's docs root (as `<name>:<path>`, `name~2` for a second checkout with the same base name), and drops a registration whose root is no longer a git checkout. Run outside a checkout, `--global` still answers. The registry lives in the database, so `index --global --rebuild` drops it, with a note; each checkout returns on its next search.
+The global file is named "the global search index", never "cross-project index": R7 already gives that name to `retros.jsonl`. A checkout with an `.agents/docs` directory registers itself on any `search` or `index` run inside it, `--global` included, at most once a day (a third-party clone with a plain `docs/` never registers, so it cannot answer `--global` queries or feed `/retro`); `--global` then reconciles `~/.config/sh-agent/` and each registered checkout's docs root (as `<name>:<path>`, `name~2` for a second checkout with the same base name), and drops a registration whose root is no longer a git checkout. Run outside a checkout, `--global` still answers. The registry lives in the database, so `index --global --rebuild` drops it, with a note; each checkout returns on its next search.
 
 ## Freshness: reconcile before every answer
 
 1. `git rev-parse --show-toplevel` from the working directory.
 2. `git ls-files -s -z`: path and blob ID of every index entry.
-3. `git status --porcelain=v1 -z --untracked-files=all`: modified and untracked paths, their IDs from one `git hash-object --stdin-paths`; deleted paths leave.
+3. `git status --porcelain=v1 -z --untracked-files=all`: modified and untracked paths, each ID computed from the file's own bytes as a git blob ID (`git hash-object --stdin-paths` misreads names with a trailing CR or a leading quote); deleted paths leave.
 4. Everything derived from content (chunks, records, references) is stored once per blob ID, so a branch switch re-reads only content the index has never seen. Every query joins through the current path-to-blob view, which is what keeps another branch's content out of an answer.
 5. When nothing changed, no write lock is taken; the reconcile costs about 15 ms here. A blob no view references is deleted after 14 days unseen.
 

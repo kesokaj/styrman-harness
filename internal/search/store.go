@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"time"
@@ -64,8 +65,17 @@ type store struct {
 	path string
 }
 
+// dsn escapes the path: the driver splits the string at its first '?' and
+// runs every _pragma value as SQL, and SQLite decodes %XX in a file: URI, so
+// a raw '?', '#' or '%' in a checkout's path opened another file and could
+// inject a pragma (security review 2026-09-29, finding 1).
 func dsn(path string) string {
-	return fmt.Sprintf("file:%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(%d)&_pragma=foreign_keys(0)", path, busyTimeoutMS)
+	if abs, err := filepath.Abs(path); err == nil {
+		path = abs
+	}
+	u := url.URL{Scheme: "file", Path: filepath.ToSlash(path),
+		RawQuery: fmt.Sprintf("_pragma=journal_mode(WAL)&_pragma=busy_timeout(%d)&_pragma=foreign_keys(0)", busyTimeoutMS)}
+	return u.String()
 }
 
 // sqliteCode returns the primary SQLite result code of err, or 0.
@@ -131,7 +141,8 @@ type staleSchemaError struct{ found string }
 func (e staleSchemaError) Error() string { return "schema " + e.found }
 
 func tryOpen(path string) (*store, error) {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	// 0700: ~/.config/sh-agent holds the feedback log (ConfigDir).
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, err
 	}
 	db, err := sql.Open("sqlite", dsn(path))

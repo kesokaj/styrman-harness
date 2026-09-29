@@ -461,3 +461,11 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
 **Rejected:** vendoring (137 MB in every clone and every release zip); a cgo driver (`mattn/go-sqlite3`, breaks the `CGO_ENABLED=0` release build); LanceDB (cgo over a Rust library, a thin Go SDK); shelling out to a system `sqlite3` (not installed on every machine, and a second binary to trust); no index at all (the research record's first recommendation, reversed by the operator's goal of understanding and memory rather than latency).
 
 **Consequences:** a checkout's first build of a version needs the Go module proxy or a filled module cache. That reopens, for this one module, the offline-build failure ADR-029 removed for the toolchain: `go run ./cmd/sh-agent install` in a plain copy with an empty `GOMODCACHE` and `GOPROXY=off` fails with Go's "cannot find module" error. Release-binary and zip places are unaffected, since they never build. `govulncheck ./...` now covers the dependency. ADR-002's "stdlib only" is superseded on this point only.
+
+## ADR-045a: Addendum to ADR-045 — the pinned version, the module count, and the known advisory     (2026-09-29) — Accepted
+
+**Context:** the docs review of 8ee5d70..HEAD (`reviews/2026-09-29-review-8ee5d70-HEAD-docs.md`) found ADR-045 wrong on two facts, written before Phase 1 measured them.
+
+**Decision:** ADR-045 stands, with three corrections. The pinned driver is `modernc.org/sqlite` **v1.46.1** (2026-02-18), not v1.60.1: v1.46.2 and later declare `go 1.25` or newer, and `go get` of v1.60.1 raised this module's `go` directive to 1.26.0, which ADR-029 rules out (plan D21). The driver pulls in **ten** indirect modules, not nine. `govulncheck ./...` reports **GO-2026-5024** in `golang.org/x/sys` v0.37.0, required through the driver and not reachable from this code; its fix, v0.44.0, declares `go 1.25.0`, so it stays until the module's `go` directive moves (plan D25).
+
+**Consequences:** the project `AGENTS.md` setup line for `govulncheck` names the advisory; a new advisory is still the thing to watch for.

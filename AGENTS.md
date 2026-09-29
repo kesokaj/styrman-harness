@@ -26,7 +26,7 @@ gofmt -l cmd internal && go vet ./... && go test -race ./...   # before any comp
 go run ./cmd/sh-agent install --home .agents/scratch/home  # exercise the installer against a scratch home (gitignored)
 go run ./cmd/sh-agent list                              # sanity-check skills and agents parse
 go mod download                                         # once per version, while online: the one module (modernc.org/sqlite, R4) for an offline build later
-govulncheck ./...                                       # clean on go1.25.8+ (see below); on an older Go it reports two stdlib advisories — watch for NEW ones
+govulncheck ./...                                       # one known module advisory (GO-2026-5024, golang.org/x/sys via the SQLite driver, not reachable; ADR-045a); on a Go older than go1.25.8 also two stdlib advisories (see below) — watch for NEW ones
 ```
 
 `go.mod` carries NO `toolchain` directive, deliberately (ADR-029: a pin makes the module unbuildable offline). On a Go older than go1.24.6 or go1.25.8, `govulncheck` reports two standard-library advisories (`os`, `os/exec`); the fix is upgrading the machine's Go, never pinning it here. The Linux box runs a user-level go1.27.1 SDK ahead of `/usr/bin/go` (`.agents/docs/deploy/local.md` § Operator steps).

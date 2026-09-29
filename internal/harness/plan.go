@@ -207,6 +207,10 @@ func IsOurs(data []byte) bool {
 // context's Git rule stops a commit for. install deploys a skill's files to
 // every vendor directory on every machine, so one that slipped past
 // .gitignore into a skill directory would be spread rather than caught.
+// SecretShaped reports whether a file name looks like a secret (.env, a
+// key, a token file). The search index skips such files too.
+func SecretShaped(name string) bool { return secretShaped(name) }
+
 func secretShaped(name string) bool {
 	for _, pattern := range []string{
 		".env", ".env.*", "*.env", ".envrc", ".netrc", ".npmrc", ".pypirc",

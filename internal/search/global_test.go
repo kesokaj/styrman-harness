@@ -141,6 +141,8 @@ func TestGlobalNameCollision(t *testing.T) {
 func TestGlobalRebuildDropsRegistry(t *testing.T) {
 	home := globalHome(t)
 	a := newRepo(t)
+	writeFile(t, a, ".agents/docs/plans/p.md", "# plan\n") // only a harness project registers
+	commitAll(t, a, "trail")
 	mustSearch(t, Options{Dir: a, Home: home, Words: []string{"demo"}})
 	var out strings.Builder
 	if err := Index(Options{Dir: t.TempDir(), Home: home, Global: true, Rebuild: true}, &out); err != nil {

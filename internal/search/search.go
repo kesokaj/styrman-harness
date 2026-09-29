@@ -191,9 +191,14 @@ func prepare(o Options, out io.Writer) (*scope, error) {
 		} else {
 			st.close()
 		}
-		if err := register(o.Home, root, docs, out); err != nil {
-			sc.close()
-			return nil, err
+		// Only a checkout the harness scaffolded registers: a third-party
+		// clone's docs/ would otherwise answer every --global query and
+		// feed /retro's cross-project evidence (security review, finding 2).
+		if fi, err := os.Stat(filepath.Join(root, ".agents", "docs")); err == nil && fi.IsDir() {
+			if err := register(o.Home, root, docs, out); err != nil {
+				sc.close()
+				return nil, err
+			}
 		}
 	}
 	if o.Global {
@@ -435,6 +440,10 @@ func (sc *scope) recordAt(oid string, line int) *record {
 }
 
 func (sc *scope) label(project, path, oid string, line int) string {
+	return printable(sc.rawLabel(project, path, oid, line))
+}
+
+func (sc *scope) rawLabel(project, path, oid string, line int) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s:%d  %s", sc.display(project, path), line, sc.kind(project, path))
 	if r := sc.recordAt(oid, line); r != nil {
@@ -549,9 +558,21 @@ func matchOffset(body, snip string) int {
 	return 0
 }
 
+// printable replaces control characters (C0, DEL, C1) with '?', so indexed
+// text cannot drive the terminal the answer is printed to (security review,
+// finding 4). Tabs and newlines are folded to spaces by the callers first.
+func printable(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f) {
+			return '?'
+		}
+		return r
+	}, s)
+}
+
 func cleanSnippet(s string) string {
 	s = strings.Join(strings.Fields(s), " ")
-	s = strings.NewReplacer("\x01", "»", "\x02", "«").Replace(s)
+	s = printable(strings.NewReplacer("\x01", "»", "\x02", "«").Replace(s))
 	if r := []rune(s); len(r) > snippetMax {
 		s = string(r[:snippetMax-1]) + "…"
 	}
@@ -600,7 +621,7 @@ func (sc *scope) lineText(oid string, n int) string {
 // markTarget wraps the first occurrence of target in »« and cuts the line
 // to snippetMax runes around it, so a long line keeps what it was listed for.
 func markTarget(line, target string) string {
-	r := []rune(strings.Join(strings.Fields(line), " "))
+	r := []rune(printable(strings.Join(strings.Fields(line), " ")))
 	i := strings.Index(string(r), target)
 	if i < 0 {
 		if len(r) > snippetMax {
@@ -667,7 +688,7 @@ func (sc *scope) refs(o Options, out io.Writer) error {
 				return err
 			}
 			found = true
-			fmt.Fprintf(out, "%s  %s:%d  %s  %s  %s\n", x, sc.display(project, path), line, status, date, title)
+			fmt.Fprintln(out, printable(fmt.Sprintf("%s  %s:%d  %s  %s  %s", x, sc.display(project, path), line, status, date, title)))
 		}
 		rows.Close()
 		if !found {
@@ -803,7 +824,7 @@ func (sc *scope) open(o Options, out io.Writer) error {
 			continue
 		}
 		n++
-		lines = append(lines, fmt.Sprintf("%s:%d  %s %s %s %s %s", sc.display(project, path), line, sc.kind(project, path), id, status, date, title))
+		lines = append(lines, printable(fmt.Sprintf("%s:%d  %s %s %s %s %s", sc.display(project, path), line, sc.kind(project, path), id, status, date, title)))
 	}
 	if err := rows.Err(); err != nil {
 		return err

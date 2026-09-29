@@ -2,15 +2,19 @@ package search
 
 import (
 	"bytes"
+	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/kesokaj/styrman-harness/internal/harness"
 )
 
 // maxFileBytes is the largest file indexed; larger files, and files with a
@@ -97,8 +101,6 @@ func gitView(root, prefix string) ([]entry, error) {
 		return nil, err
 	}
 	recs := strings.Split(string(out), "\x00")
-	var hashPaths []string
-	var hashStates []string
 	for i := 0; i < len(recs); i++ {
 		rec := recs[i]
 		if len(rec) < 4 {
@@ -108,11 +110,21 @@ func gitView(root, prefix string) ([]entry, error) {
 		if x == 'R' || x == 'C' {
 			i++ // the original path follows; the new one is p
 		}
-		if !under(p) || strings.ContainsAny(p, "\n") {
+		if !under(p) {
 			continue
 		}
-		fi, err := os.Lstat(filepath.Join(root, p))
-		if y == 'D' || err != nil || !fi.Mode().IsRegular() {
+		full := filepath.Join(root, p)
+		fi, err := os.Lstat(full)
+		if y == 'D' || err != nil || !fi.Mode().IsRegular() || fi.Size() > maxFileBytes {
+			delete(view, p)
+			continue
+		}
+		// The blob ID comes from the file's own bytes: `git hash-object
+		// --stdin-paths` strips a trailing CR and unquotes a leading '"'
+		// in a name, binding an ID to another file (security review,
+		// finding 3).
+		data, err := os.ReadFile(full)
+		if err != nil {
 			delete(view, p)
 			continue
 		}
@@ -120,33 +132,33 @@ func gitView(root, prefix string) ([]entry, error) {
 		if x == '?' {
 			state = "untracked"
 		}
-		hashPaths = append(hashPaths, p)
-		hashStates = append(hashStates, state)
-	}
-	if len(hashPaths) > 0 {
-		out, err := git(root, []byte(strings.Join(hashPaths, "\n")+"\n"), "hash-object", "--stdin-paths")
-		if err != nil {
-			return nil, err
+		if _, known := view[p]; !known {
+			order = append(order, p)
 		}
-		oids := strings.Fields(string(out))
-		if len(oids) != len(hashPaths) {
-			return nil, fmt.Errorf("git hash-object returned %d IDs for %d paths", len(oids), len(hashPaths))
-		}
-		for i, p := range hashPaths {
-			if _, known := view[p]; !known {
-				order = append(order, p)
-			}
-			view[p] = entry{path: p, oid: oids[i], state: hashStates[i]}
-		}
+		view[p] = entry{path: p, oid: blobID(data), state: state}
 	}
 	entries := make([]entry, 0, len(view))
 	for _, p := range order {
+		if harness.SecretShaped(path.Base(p)) {
+			continue // never indexed, even untracked (security review, finding 6)
+		}
 		if e, ok := view[p]; ok {
 			entries = append(entries, e)
 			delete(view, p) // an unmerged path appears once
 		}
 	}
 	return entries, nil
+}
+
+// blobID is the git blob ID of data under SHA-1 ("blob <len>\x00" + data).
+// It only has to name content consistently inside this index; a checkout in
+// SHA-256 object format gets SHA-1 IDs for its modified files, which never
+// collide with its index's IDs.
+func blobID(data []byte) string {
+	h := sha1.New()
+	fmt.Fprintf(h, "blob %d\x00", len(data))
+	h.Write(data)
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 // configView lists the global index's own sources in ~/.config/sh-agent/,

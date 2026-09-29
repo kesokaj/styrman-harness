@@ -22,9 +22,10 @@ Claude Code writes auto memory on its own, one file per fact under a per-project
 `<store>` is the project's auto memory directory. Resolve it, never assume it:
 
 1. `autoMemoryDirectory` from the first of `.claude/settings.local.json`, `.claude/settings.json`, `~/.claude/settings.json` that sets it (the value is absolute or starts with `~/`), or from a `--settings` file the user names in the same turn.
-2. Otherwise `~/.claude/projects/<slug>/memory/`, where `<slug>` is the repository root's absolute path (`git rev-parse --show-toplevel`) with every `/` turned into `-`. Worktrees and subdirectories share one store.
+2. Otherwise `~/.claude/projects/<slug>/memory/`, where `<slug>` is the repository root's absolute path (`git rev-parse --show-toplevel`) with every character other than a letter, a digit or a hyphen turned into `-` (Claude Code's own project name). Worktrees and subdirectories share one store.
+3. Count both places, always: `n` = the memory files in `<store>` (`ls <store>/*.md | grep -vc MEMORY.md`), `m` = the memory files at the default path of step 2 (`ls ~/.claude/projects/<slug>/memory/*.md 2>/dev/null | grep -vc MEMORY.md`; 0 when the directory is absent; when the count cannot run, `could not be counted` takes its place and the run goes on). Both numbers go on the first line of the reply, so they are never skipped.
 
-`ls <store>`. A missing or empty store ends the run with one line, `no auto memory for <repo> (<store>)`, and nothing is written. Otherwise the first line of the reply is `store: <store> (<n> memory files)`.
+The first line of the reply is always `store: <store> (<n> memory files; default path <default>: <m>)`. When `n` is 0, the line is followed by `no auto memory for <repo>` and the run ends with nothing written. When `<store>` came from a setting and both `n` and `m` are above zero, the store is split (a setting Claude Code did not honour — an untrusted workspace — is the usual cause): the line is followed by `split store — merge before running`, and the run ends with nothing written.
 
 ## Step 2: Orientation
 

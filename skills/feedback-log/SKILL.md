@@ -85,6 +85,7 @@ Append one JSON object per line to `~/.config/sh-agent/feedback.jsonl`. If the d
 4. **Keep `user_quote` short.** Extract the key phrase, not the full paragraph.
 5. **Set `rule_ref` accurately, in the vocabulary above.** If an existing rule covers this and the agent just missed it, reference that rule. If no rule exists, set to `null`.
 6. **One entry per correction.** If the user makes three corrections in one message, write three entries.
+7. **On Antigravity, also write the memory.** Claude Code saves a correction or a stated preference to its auto memory by itself; Antigravity has no such writer. So when this skill logs a correction or a re-stated preference on Antigravity, also write one memory file into the project's store — `~/.config/sh-agent/memory/<slug>/` (the harness's `specs/sh-agent/memory-loop.md`; skip when the directory does not exist) — in Claude Code's shape: frontmatter `name`, `description` (quoted), `metadata:` with `node_type: memory`, `type: feedback` or `user`, `originSessionId`, `modified` from `date -u +%FT%TZ`; a body with `**Why:**` and `**How to apply:**`; plus its line in `MEMORY.md` (`- [Title](file.md) — hook`). On Claude Code nothing extra: its auto memory writes the file.
 
 ## Where the loop's outputs land
 

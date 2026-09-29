@@ -91,6 +91,16 @@ ls -la .claude
 
 Claude Code guards writes under `.claude/` and may refuse the `mkdir` and `ln` calls in a headless or restricted session. If it does, report the missing links for the user to create instead of skipping the step silently, and report every path the loop kept; without the symlinks Claude Code sees no project-level skills, agents, commands, or rules.
 
+## Step 5b: The memory store — one per project, for both CLIs
+
+Claude Code writes auto memory per project; the harness keeps that store where both CLIs read it (the harness's `specs/sh-agent/memory-loop.md`). New and update paths alike:
+
+1. `slug=$(git rev-parse --show-toplevel | sed 's#[^A-Za-z0-9-]#-#g')`; `store="$HOME/.config/sh-agent/memory/$slug"`; `mkdir -p "$store"`. The slug is Claude Code's own project name under `~/.claude/projects/`: every character other than a letter, a digit or a hyphen becomes a hyphen.
+2. `.claude/settings.local.json` (gitignored in Step 6; never `settings.json`, which is shared): absent → write `{"autoMemoryDirectory": "~/.config/sh-agent/memory/<slug>"}`; present with the key → keep it, report its value, and use that value as `store` below; present without the key → copy it to `.agents/scratch/settings.local.json.before`, then, when it is an empty object, overwrite it with the one-key object, otherwise insert one line after the opening `{` with the Edit tool — `"autoMemoryDirectory": "~/.config/sh-agent/memory/<slug>",` — touching no other line (never `jq` or a re-serialisation, which reformat the file), and run `python3 -c 'import json,sys; json.load(open(sys.argv[1]))' .claude/settings.local.json`; a failed parse restores the copy, reports the intended content for the user, and makes no second attempt. When git already tracks the file (`git ls-files --error-unmatch .claude/settings.local.json`), say so and name `git rm --cached .claude/settings.local.json` for the user: the Step 6 line does not untrack it. Claude Code honours the key in a trusted workspace only; `/dream` detects a split store.
+3. Migration, move never copy: `old="$HOME/.claude/projects/$slug/memory"`. When `old` holds memory files (`ls "$old"/*.md`) and `store` holds none: `mv "$old"/*.md "$store"/` and report each file. When both hold files: move nothing, report both paths for the user to merge. When `old` holds none (absent or empty): print `no memory files at <old>` and, as a hint, the `~/.claude/projects/*/memory` directories whose name ends with the repository's last path component; move nothing.
+
+The Step 5 headless guard applies to `.claude/settings.local.json` too: when the write is refused, report the file's exact content for the user to create; the store and the migration still run.
+
 ## Step 6: README and .gitignore
 
 - If no `README.md` exists, create a short one from the project overview: name, quick start (the real commands), architecture in three lines, deploy path.
@@ -99,10 +109,11 @@ Claude Code guards writes under `.claude/` and may refuse the `mkdir` and `ln` c
 ```
 .DS_Store
 .claude/worktrees/
+.claude/settings.local.json
 .agents/scratch/*
 !.agents/scratch/.gitkeep
 ```
 
 ## Step 7: Summary, commit, push
 
-Report what was created, or for an update what it added and what it kept as the project's, including each template `##` heading a kept deploy guide lacks, and remind the user to fill a `REQUIREMENTS.md` or `ROADMAP.md` this run created, and the date-only-names warning when Step 1 counted any. Then, per the global git workflow, stage the created or changed paths by name, read `git diff --cached --stat`, and commit in its own call (`init: scaffold agent tree and project docs`, or `init: update scaffold to current templates`); an update that changed nothing makes no commit. Push only when `git remote` names a remote, and ask first when a deploy guide says a push deploys.
+Report what was created, or for an update what it added and what it kept as the project's, the memory store's path and what Step 5b moved, including each template `##` heading a kept deploy guide lacks, and remind the user to fill a `REQUIREMENTS.md` or `ROADMAP.md` this run created, and the date-only-names warning when Step 1 counted any. Then, per the global git workflow, stage the created or changed paths by name, read `git diff --cached --stat`, and commit in its own call (`init: scaffold agent tree and project docs`, or `init: update scaffold to current templates`); an update that changed nothing makes no commit. Push only when `git remote` names a remote, and ask first when a deploy guide says a push deploys.

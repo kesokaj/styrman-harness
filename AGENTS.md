@@ -25,6 +25,7 @@ gofmt -l cmd internal && go vet ./... && go test -race ./...   # before any comp
 # part of `go test ./...` above), which pins the rendered context under 22,000 bytes inside Antigravity's 24,000-byte block (ADR-035)
 go run ./cmd/sh-agent install --home .agents/scratch/home  # exercise the installer against a scratch home (gitignored)
 go run ./cmd/sh-agent list                              # sanity-check skills and agents parse
+go mod download                                         # once per version, while online: the one module (modernc.org/sqlite, R4) for an offline build later
 govulncheck ./...                                       # clean on go1.25.8+ (see below); on an older Go it reports two stdlib advisories — watch for NEW ones
 ```
 
@@ -54,7 +55,7 @@ Nothing generated is committed. The deployed files are assembled by `sh-agent in
 - Every skill directory needs a `SKILL.md` with a `description`; the installer refuses one without it. It also refuses any frontmatter value that a strict YAML parser reads as a comment — an unquoted `#` at the start or after a space or tab — because Antigravity silently drops such a skill (BUG-004); quote the value.
 - Adding a skill, agent, command, or rule is a file drop — never a code change. If a new kind of customization needs code, that is a design question, not a quick patch.
 - Third-party skills are vendored verbatim and listed in `skills/VENDORED.md`; never edit them in place — fork into a differently named skill.
-- Stdlib only in the Go code. The binary is a file copier with a manifest; it does not need a dependency.
+- Stdlib only in the Go code, with one exception: `modernc.org/sqlite`, used only by `internal/search` (R4, ADR-045). The installer (`internal/harness`) never imports it. Any other dependency is a requirements change.
 - Commit and push after each task, per the global git workflow. This repo is on `main`.
 
 ## Testing

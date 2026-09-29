@@ -10,7 +10,7 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
 
 **Consequences:** Rules are followed because they are read, not because they are enforced. A rule that is not followed is fixed by rewriting the rule (`/retro`), not by adding a gate. Both vendors are served by identical mechanisms, since neither needs hook support.
 
-## ADR-002: One Go binary, `styrman`, with a git resync loop     (2026-09-03) — Accepted
+## ADR-002: One Go binary, `styrman`, with a git resync loop     (2026-09-03) — Accepted; "stdlib only" superseded in part by ADR-045
 
 **Context:** The operator works on several machines and wanted to push a harness change from one and pick it up on another without thinking. A bash script was considered first; it was replaced by Go so that `styrman update` (fetch, pull, rebuild, reinstall) and a manifest could be tested against a scratch home rather than by hand.
 
@@ -230,7 +230,7 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
 
 **Superseded by ADR-029 the same day, before v1.0.0 shipped.** The amendment above was still wrong about the blast radius; see ADR-029.
 
-## ADR-029: The toolchain pin is withdrawn — a build that cannot run offline is worse than the advisories it cleared     (2026-09-16) — Accepted
+## ADR-029: The toolchain pin is withdrawn — a build that cannot run offline is worse than the advisories it cleared     (2026-09-16) — Accepted; superseded in part by ADR-045 (one module is fetched on a first build)
 
 **Context:** ADR-028 added `toolchain go1.25.8` to clear two reachable standard-library advisories, and was amended the same day when the v1.0.0 release review reproduced a build failure it had asserted was impossible. That amendment's fix — `GOTOOLCHAIN=local` on the `go build` inside `internal/harness/Reinstall` — was then measured on the actual consumer shape and did not hold either: with an empty `GOMODCACHE`, `GOTOOLCHAIN=auto` and `GOPROXY=off`, `go run ./cmd/sh-agent install` exits 1 with `toolchain not available` before any of this repository's code runs, because the OUTER `go` invocation is itself subject to the pin. Only an already-built binary survived that environment. The round-2 verifier reproduced this independently and reported the same two exit statuses. So the pin's reach was never limited to builds made here: it applied to every `go` invocation any consumer makes in this module, including a setup script that runs `go build ./cmd/sh-agent` on a VM.
 
@@ -451,3 +451,13 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
 **Rejected:** teaching `sh-agent status` to skip dream lines — a Go change for a line nothing reads.
 
 **Consequences:** the context's Learning loop, `skills/dream`, README's harness-state row and this ADR say so; ADR-042's index sentence is superseded on that point only.
+
+## ADR-045: The harness has one dependency, a pure-Go SQLite driver, for a derived search index     (2026-09-29) — Accepted, supersedes in part ADR-002 and ADR-029
+
+**Context:** The operator asked on 2026-09-29 for a local database that gives the agent "a better understanding and more memory what it is doing", covering drift and search across many files (research `plans/2026-09-29-research-sqlite-index.md`, plan `plans/2026-09-29-search-index.md`). R4 said `sh-agent` has no dependencies. SQLite with FTS5 needs a driver. The pure-Go `modernc.org/sqlite` v1.60.1 was measured here: FTS5 works, and it cross-compiles to darwin/arm64 and linux/arm64 with `CGO_ENABLED=0`, which the release build requires. It adds 7.6 MB to the binary and nine indirect modules. `go mod vendor` would commit 137 MB.
+
+**Decision:** R4 is replaced, on the operator's approval of the exact text ("Approve as written"): one dependency, `modernc.org/sqlite`, used only by the search index, pinned in `go.mod` and `go.sum`, not vendored. Any other dependency, and any cgo driver, is a requirements change. The indexes (`.agents/scratch/search.db`, `~/.config/sh-agent/search.db`) are caches: never committed, never sent by `report`, rebuilt when deleted.
+
+**Rejected:** vendoring (137 MB in every clone and every release zip); a cgo driver (`mattn/go-sqlite3`, breaks the `CGO_ENABLED=0` release build); LanceDB (cgo over a Rust library, a thin Go SDK); shelling out to a system `sqlite3` (not installed on every machine, and a second binary to trust); no index at all (the research record's first recommendation, reversed by the operator's goal of understanding and memory rather than latency).
+
+**Consequences:** a checkout's first build of a version needs the Go module proxy or a filled module cache. That reopens, for this one module, the offline-build failure ADR-029 removed for the toolchain: `go run ./cmd/sh-agent install` in a plain copy with an empty `GOMODCACHE` and `GOPROXY=off` fails with Go's "cannot find module" error. Release-binary and zip places are unaffected, since they never build. `govulncheck ./...` now covers the dependency. ADR-002's "stdlib only" is superseded on this point only.

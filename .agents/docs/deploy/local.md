@@ -44,7 +44,7 @@ What it does, in order: asks `gh` for the newest release's tag; refuses anything
 
 ## From a plain copy (no `.git`)
 
-A copy of the repository with no `.git` — for a major remodel, or a machine that cannot authenticate to GitHub. It needs Go, and nothing else:
+A copy of the repository with no `.git` — for a major remodel, or a machine that cannot authenticate to GitHub. It needs Go, and the Go module proxy or a filled module cache for the one dependency, `modernc.org/sqlite` (ADR-045):
 
 ```bash
 cd <unpacked directory>

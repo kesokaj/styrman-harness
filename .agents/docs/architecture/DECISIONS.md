@@ -431,3 +431,13 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
 **Rejected:** a separate `memory/` directory in the trail — the dream record is a learning-loop record like the other two, and one directory is what the Resume Protocol and `/handoff` already read.
 
 **Consequences:** `/handoff`'s artifact table, `feedback-log`'s pointer and README's `~/.config/sh-agent/` row name the third kind (this commit). `sh-agent report` ships the new lines with the rest of `retros.jsonl`, unchanged.
+
+## ADR-043: The project's auto memory store lives in the project     (2026-09-29) — Accepted
+
+**Context:** Claude Code writes auto memory per project under `~/.claude/projects/<slug>/memory/`, which Antigravity never reads. The memory-loop plan (`plans/2026-09-29-dreamer-memory-loop.md`, spec `specs/sh-agent/memory-loop.md`) moves that store to a path both CLIs read; the research (`plans/2026-09-29-research-memory-subagents.md`) proposed a harness-owned directory under `~/.config/sh-agent/`. The operator asked "Why cant we keep these inside the project?" and chose option 2.
+
+**Decision:** the store is `<repository root>/.agents/memory/`, gitignored, one per checkout; `/init-project` writes its absolute path into the per-machine, gitignored `.claude/settings.local.json` as `autoMemoryDirectory` (Claude Code accepts no relative path), creates the directory (mode 700) and moves an existing default store's files in, only when the settings file is the operator's own (untracked, no symlink) and the setting is in place. `/dream` and the `dreamer` agent read only two exact paths, that store and the default one. `sh-agent report` never sends it. `REQUIREMENTS.md` line 31 names it, with the operator's approval ("Approve the edit (Recommended)", 2026-09-29).
+
+**Rejected:** `~/.config/sh-agent/memory/<slug>/` — harness-owned, but the operator wants project state in the project, and it needed an outside-workspace prompt on Claude Code; a committed `.agents/memory/` — personal and unreviewed content in history, merge conflicts between machines.
+
+**Consequences:** a fresh clone starts with an empty store (the memories are per checkout, like scratch); `git clean -fdx` removes it, as it removes scratch; every restatement of the path lives in the spec, the four skills, the dreamer, the context's resume clause, the matrix rows, README and the deploy guides, all moved in one commit; the security rounds' path bounds are the two exact paths.

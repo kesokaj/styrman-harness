@@ -209,6 +209,8 @@ And back: `sh-agent report --dry-run` lists every file and every redaction it wo
 | the binary | `~/.local/bin/sh-agent` | same |
 | manifest, feedback log, retro proposals, and `retros.jsonl` (cross-project retro, distill and dream index) | `~/.config/sh-agent/` | same |
 
+The project's auto memory store is `.agents/memory/` (gitignored), set up by `/init-project`, read by both CLIs, never committed and never sent by `sh-agent report` — only `feedback.jsonl`, `retros.jsonl`, `proposals/`, the install manifest and the run's `report.json` leave the machine (`.agents/docs/deploy/local.md` § Report back).
+
 An existing `~/.claude/CLAUDE.md` that sh-agent did not write is left alone. Move only rules meant for every machine into a rule file under `rules/` in this repository — `rules/` is deployed to every install on every machine, so credentials and personal or host-specific notes never go there — then remove `~/.claude/CLAUDE.md` and run `sh-agent install`, which writes the one-line import (`@AGENTS.md`).
 
 ## Adding things by hand — no code

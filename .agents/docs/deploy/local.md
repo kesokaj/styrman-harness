@@ -90,7 +90,7 @@ Nothing to configure. `--vendor VENDOR` selects the target CLI: `antigravity` (o
 
 ## First session after install
 
-Claude Code asks once per session before the first read or write under `~/.config/sh-agent/` (feedback log, proposals, the retro index), because it is outside the project. Approve it, or add the directory to `permissions.additionalDirectories` in `~/.claude/settings.json` yourself — the installer touches no vendor setting except the attribution key (ADR-025). Antigravity prompts the same way for paths outside the workspace.
+Claude Code asks once per session before the first read or write under `~/.config/sh-agent/` (feedback log, proposals, the retro index), because it is outside the project. Approve it, or add the directory to `permissions.additionalDirectories` in `~/.claude/settings.json` yourself — the installer touches no vendor setting except the attribution key (ADR-025). Antigravity prompts the same way for paths outside the workspace. The project's own auto memory store (`.agents/memory/`, set up by `/init-project`) is inside the project, so it needs no such prompt.
 
 ## Operator steps
 

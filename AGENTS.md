@@ -65,6 +65,7 @@ A behavioural or sandbox run proves its setup before its output counts (BUG-087,
 - the run script asserts every fact the dispatch states about the fixture (a `grep` for the line, a `git log` for the commit) before the CLI starts;
 - a sandbox home for headless agy gets its own `~/.gemini/antigravity-cli/settings.json`, written for the run with the fewest grants the run needs (a `command(<name>)` grant allows every argument of that command) and the scratch clone as its only trusted workspace, and deleted by name with the copied token — never a copy of the real home's file, which approves every tool and trusts real checkouts; a run counts only when its stderr has no "auto-denied" line and its `cli.log` no "invalid allow entry" line;
 - the must-fail control for a change to `context/` runs in a project that does not contain the harness source, never in a clone of this repository, whose own `context/` carries the new text.
+- a headless probe of a working-tree skill passes `--setting-sources project,local`, or first shows the real home has no installed skill of that name: a user-level skill shadows the project link, and nine `/dream` probes on 2026-09-29 measured the installed copy after the real home was updated mid-session (plan `2026-09-29-dreamer-memory-loop.md` D15).
 
 ## Release
 

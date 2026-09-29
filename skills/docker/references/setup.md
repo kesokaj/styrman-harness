@@ -8,6 +8,7 @@ in `SKILL.md`.
 ```
 .git
 .agents/scratch
+.agents/memory
 web/node_modules
 web/.output
 *.env*

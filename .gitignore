@@ -39,3 +39,5 @@ id_dsa
 # Agent scratch space: generated and temporary files, never committed.
 .agents/scratch/*
 !.agents/scratch/.gitkeep
+.claude/settings.local.json
+.agents/memory

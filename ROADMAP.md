@@ -6,8 +6,6 @@ Last reviewed: 2026-09-29
 
 ## Now
 
-- `.agents/docs/plans/2026-09-29-dreamer-memory-loop.md` — one memory store for both CLIs and the `dreamer` agent (cold-reader check next)
-
 ## Next
 
 ## Later / Ideas

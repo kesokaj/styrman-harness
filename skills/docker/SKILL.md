@@ -76,7 +76,7 @@ CMD ["/app"]
 2. `CGO_ENABLED=0` so the binary is static and runs on `distroless/static`; if cgo is
    unavoidable, switch to `distroless/base-debian12` and say why.
 3. Copy `go.mod`/`go.sum` and `go mod download` before the source, so the module layer caches.
-4. `.dockerignore` at minimum: `.git`, `.agents/scratch`, `web/node_modules`, `*.env*`, `*.pem`, `*.key`.
+4. `.dockerignore` at minimum: `.git`, `.agents/scratch`, `.agents/memory`, `web/node_modules`, `*.env*`, `*.pem`, `*.key`.
 5. No secrets in any layer: no `COPY .env`, no build args carrying tokens. Secrets arrive at
    runtime (Secret Manager on Cloud Run, `env_file` locally).
 6. Health check through the app's `/healthz`. Distroless has no shell or curl, so the

@@ -1,0 +1,326 @@
+package memory
+
+import (
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+)
+
+var now = time.Date(2026, 9, 30, 18, 0, 0, 0, time.UTC)
+
+// repo makes a git checkout whose .gitignore ignores the store, as
+// /init-project leaves it.
+func repo(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	git(t, dir, "init", "-q")
+	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte(".agents/memory\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func git(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@e.invalid", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@e.invalid")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func add(dir, name, desc, body string) (string, error) {
+	return Add(dir, Entry{Type: "feedback", Name: name, Description: desc}, strings.NewReader(body), now)
+}
+
+func read(t *testing.T, path string) string {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func TestAddWritesFileAndIndex(t *testing.T) {
+	dir := repo(t)
+	path, err := add(dir, "deploy-fridays", "we deploy on Fridays", "We deploy on Fridays.\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := filepath.Join(dir, ".agents", "memory")
+	if path != filepath.Join(store, "deploy-fridays.md") {
+		t.Errorf("path = %s", path)
+	}
+	want := "---\nname: deploy-fridays\ndescription: \"we deploy on Fridays\"\nmetadata:\n  node_type: memory\n  type: feedback\n  modified: 2026-09-30T18:00:00Z\n---\n\nWe deploy on Fridays.\n"
+	if got := read(t, path); got != want {
+		t.Errorf("file:\n%s\nwant:\n%s", got, want)
+	}
+	if got := read(t, filepath.Join(store, "MEMORY.md")); got != "- [deploy-fridays](deploy-fridays.md) — we deploy on Fridays\n" {
+		t.Errorf("index = %q", got)
+	}
+	for p, mode := range map[string]os.FileMode{store: 0o700, path: 0o600} {
+		info, err := os.Stat(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode().Perm() != mode {
+			t.Errorf("%s mode %o, want %o", p, info.Mode().Perm(), mode)
+		}
+	}
+}
+
+func TestAddReplacesInPlace(t *testing.T) {
+	dir := repo(t)
+	store := filepath.Join(dir, ".agents", "memory")
+	if err := os.MkdirAll(store, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// A native line (title, not slug) above ours must survive untouched.
+	native := "- [Prefer tables](prefer-tables.md) — status as a table\n"
+	if err := os.WriteFile(filepath.Join(store, "MEMORY.md"), []byte(native), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := add(dir, "deploy-day", "fridays", "a\n"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := add(dir, "deploy-day", "thursdays now", "b\n"); err != nil {
+		t.Fatal(err)
+	}
+	want := native + "- [deploy-day](deploy-day.md) — thursdays now\n"
+	if got := read(t, filepath.Join(store, "MEMORY.md")); got != want {
+		t.Errorf("index:\n%s\nwant:\n%s", got, want)
+	}
+	if !strings.HasSuffix(read(t, filepath.Join(store, "deploy-day.md")), "\nb\n") {
+		t.Error("body not replaced")
+	}
+}
+
+func TestAddRefusals(t *testing.T) {
+	cases := map[string]struct {
+		setup func(t *testing.T, dir string)
+		entry Entry
+		body  string
+	}{
+		"not a checkout": {
+			setup: func(t *testing.T, dir string) { os.RemoveAll(filepath.Join(dir, ".git")) },
+		},
+		"agents is a symlink": {
+			setup: func(t *testing.T, dir string) {
+				elsewhere := t.TempDir()
+				if err := os.Symlink(elsewhere, filepath.Join(dir, ".agents")); err != nil {
+					t.Fatal(err)
+				}
+			},
+		},
+		"store is a symlink": {
+			setup: func(t *testing.T, dir string) {
+				os.MkdirAll(filepath.Join(dir, ".agents"), 0o755)
+				if err := os.Symlink(t.TempDir(), filepath.Join(dir, ".agents", "memory")); err != nil {
+					t.Fatal(err)
+				}
+			},
+		},
+		"git tracks the store": {
+			setup: func(t *testing.T, dir string) {
+				store := filepath.Join(dir, ".agents", "memory")
+				os.MkdirAll(store, 0o700)
+				os.WriteFile(filepath.Join(store, "planted.md"), []byte("x"), 0o600)
+				git(t, dir, "add", "-f", ".agents/memory/planted.md")
+			},
+		},
+		"store not ignored": {
+			setup: func(t *testing.T, dir string) { os.WriteFile(filepath.Join(dir, ".gitignore"), nil, 0o644) },
+		},
+		"index full": {
+			setup: func(t *testing.T, dir string) {
+				store := filepath.Join(dir, ".agents", "memory")
+				os.MkdirAll(store, 0o700)
+				var b strings.Builder
+				for i := 0; i < 200; i++ {
+					fmt.Fprintf(&b, "- [m%d](m%d.md) — x\n", i, i)
+				}
+				os.WriteFile(filepath.Join(store, "MEMORY.md"), []byte(b.String()), 0o600)
+			},
+		},
+		"bad slug":            {entry: Entry{Type: "user", Name: "../escape", Description: "d"}},
+		"bad type":            {entry: Entry{Type: "secret", Name: "ok", Description: "d"}},
+		"newline description": {entry: Entry{Type: "user", Name: "ok", Description: "a\nb"}},
+		"empty body":          {body: " \n"},
+		"empty description":   {entry: Entry{Type: "user", Name: "ok"}},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			dir := repo(t)
+			if c.setup != nil {
+				c.setup(t, dir)
+			}
+			e := c.entry
+			if e == (Entry{}) {
+				e = Entry{Type: "user", Name: "ok", Description: "d"}
+			}
+			body := c.body
+			if body == "" {
+				body = "fact\n"
+			}
+			before := snapshot(t, dir)
+			_, err := Add(dir, e, strings.NewReader(body), now)
+			if !IsRefusal(err) {
+				t.Fatalf("err = %v, want a refusal", err)
+			}
+			if after := snapshot(t, dir); after != before {
+				t.Errorf("a refusal wrote:\nbefore %s\nafter  %s", before, after)
+			}
+		})
+	}
+}
+
+// snapshot lists every path under the store with its size, so a refusal that
+// writes anything shows up.
+func snapshot(t *testing.T, dir string) string {
+	t.Helper()
+	var b strings.Builder
+	filepath.Walk(filepath.Join(dir, ".agents"), func(p string, info os.FileInfo, err error) error {
+		if err == nil {
+			fmt.Fprintf(&b, "%s:%d ", p, info.Size())
+		}
+		return nil
+	})
+	return b.String()
+}
+
+func TestWorktreeSharesTheMainStore(t *testing.T) {
+	dir := repo(t)
+	git(t, dir, "add", ".gitignore")
+	git(t, dir, "commit", "-q", "-m", "init")
+	wt := filepath.Join(t.TempDir(), "wt")
+	git(t, dir, "worktree", "add", "-q", wt)
+	path, err := add(wt, "shared", "d", "x\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(dir, ".agents", "memory", "shared.md"); !samePath(path, want) {
+		t.Errorf("worktree wrote %s, want the main store %s", path, want)
+	}
+}
+
+func samePath(a, b string) bool {
+	ra, _ := filepath.EvalSymlinks(filepath.Dir(a))
+	rb, _ := filepath.EvalSymlinks(filepath.Dir(b))
+	return ra == rb && filepath.Base(a) == filepath.Base(b)
+}
+
+func TestStaleLockIsReplaced(t *testing.T) {
+	dir := repo(t)
+	store := filepath.Join(dir, ".agents", "memory")
+	os.MkdirAll(store, 0o700)
+	// Pid 0 is never a live process.
+	os.WriteFile(filepath.Join(store, ".lock"), []byte("0"), 0o600)
+	if _, err := add(dir, "after-stale", "d", "x\n"); err != nil {
+		t.Fatalf("stale lock blocked the write: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(store, ".lock")); !os.IsNotExist(err) {
+		t.Error("lock left behind")
+	}
+}
+
+func TestLiveLockRefusesAfterRetry(t *testing.T) {
+	old := lockWait
+	lockWait = 50 * time.Millisecond
+	defer func() { lockWait = old }()
+	dir := repo(t)
+	store := filepath.Join(dir, ".agents", "memory")
+	os.MkdirAll(store, 0o700)
+	os.WriteFile(filepath.Join(store, ".lock"), []byte(strconv.Itoa(os.Getpid())), 0o600)
+	if _, err := add(dir, "busy", "d", "x\n"); !IsRefusal(err) || !strings.Contains(err.Error(), "busy") {
+		t.Fatalf("err = %v, want a store-busy refusal", err)
+	}
+}
+
+func TestShow(t *testing.T) {
+	dir := repo(t)
+	got, err := Show(dir, false)
+	if err != nil || got != "" {
+		t.Fatalf("empty store: %q, %v", got, err)
+	}
+	if _, err := add(dir, "one", "first", "x\n"); err != nil {
+		t.Fatal(err)
+	}
+	got, err = Show(dir, false)
+	if err != nil || got != "- [one](one.md) — first\n" {
+		t.Errorf("show = %q, %v", got, err)
+	}
+}
+
+func TestShowCaps(t *testing.T) {
+	dir := repo(t)
+	store := filepath.Join(dir, ".agents", "memory")
+	os.MkdirAll(store, 0o700)
+	var b strings.Builder
+	for i := 0; i < 230; i++ {
+		fmt.Fprintf(&b, "- [m%d](m%d.md) — x\n", i, i)
+	}
+	os.WriteFile(filepath.Join(store, "MEMORY.md"), []byte(b.String()), 0o600)
+	got, _ := Show(dir, false)
+	lines := strings.Split(strings.TrimSuffix(got, "\n"), "\n")
+	if len(lines) != 201 || !strings.Contains(lines[200], "30 more lines") {
+		t.Errorf("got %d lines, last %q", len(lines), lines[len(lines)-1])
+	}
+}
+
+func TestShowRefusesTrackedStore(t *testing.T) {
+	dir := repo(t)
+	store := filepath.Join(dir, ".agents", "memory")
+	os.MkdirAll(store, 0o700)
+	os.WriteFile(filepath.Join(store, "MEMORY.md"), []byte("- [x](x.md) — planted\n"), 0o600)
+	git(t, dir, "add", "-f", ".agents/memory/MEMORY.md")
+	if _, err := Show(dir, false); !IsRefusal(err) {
+		t.Fatalf("err = %v, want a refusal", err)
+	}
+}
+
+func TestShowRolloutHint(t *testing.T) {
+	const hint = "Claude Code's native memory is still on here"
+	cases := map[string]struct {
+		settings        string // "" = no file
+		claudeInstalled bool
+		wantHint        bool
+	}{
+		"agy only, no file":        {"", false, false},
+		"claude, no file":          {"", true, true},
+		"claude, directory only":   {`{"autoMemoryDirectory": "/x"}`, true, true},
+		"claude, enabled true":     {`{"autoMemoryEnabled": true}`, true, true},
+		"claude, switched off":     {`{"autoMemoryDirectory": "/x", "autoMemoryEnabled": false}`, true, false},
+		"agy only, stray file":     {`{"autoMemoryDirectory": "/x"}`, false, true},
+		"claude, unparseable file": {`{not json`, true, true},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			dir := repo(t)
+			if c.settings != "" {
+				os.MkdirAll(filepath.Join(dir, ".claude"), 0o755)
+				os.WriteFile(filepath.Join(dir, ".claude", "settings.local.json"), []byte(c.settings), 0o600)
+			}
+			got, err := Show(dir, c.claudeInstalled)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(got, hint) != c.wantHint {
+				t.Errorf("hint = %v, want %v: %q", !c.wantHint, c.wantHint, got)
+			}
+		})
+	}
+}
+
+func TestShowOutsideACheckoutRefuses(t *testing.T) {
+	if _, err := Show(t.TempDir(), false); !IsRefusal(err) {
+		t.Fatalf("err = %v, want a refusal", err)
+	}
+}

@@ -418,7 +418,7 @@ func TestSecretShapedCLITokenFiles(t *testing.T) {
 func TestSweepInterruptedClonesGlobCharsInHome(t *testing.T) {
 	base := t.TempDir()
 	home, other := filepath.Join(base, "h[1]"), filepath.Join(base, "h1")
-	// Pid 0 is never a running process (alive(0) is false), so the sweep removes
+	// Pid 0 is never a running process (Alive(0) is false), so the sweep removes
 	// such a directory; a high pid could be live on a box with a large pid_max.
 	mine, theirs := filepath.Join(home, ".config", "sh-agent", "report-0"), filepath.Join(other, ".config", "sh-agent", "report-0")
 	for _, d := range []string{mine, theirs} {

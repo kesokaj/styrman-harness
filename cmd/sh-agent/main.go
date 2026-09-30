@@ -14,6 +14,7 @@
 //	sh-agent report [--dry-run]      send this machine's learning-loop files and metrics to the feedback repo, keeping nothing
 //	sh-agent search <words>          ranked search of this checkout's files and trail, reconciled against git first
 //	sh-agent index [--rebuild]       reconcile (or rebuild) the search index and print its counts
+//	sh-agent memory add|show         write one memory (body on stdin) or print the index of this project's .agents/memory/
 //	sh-agent version
 package main
 
@@ -33,6 +34,7 @@ import (
 	"time"
 
 	"github.com/kesokaj/styrman-harness/internal/harness"
+	"github.com/kesokaj/styrman-harness/internal/memory"
 	"github.com/kesokaj/styrman-harness/internal/search"
 )
 
@@ -54,6 +56,8 @@ Commands:
   search --open [--kind K] [--global]  open bugs and plans with unticked boxes
       --global searches the global search index (~/.config/sh-agent/search.db): ~/.config/sh-agent's logs and proposals and the .agents/docs trail of every harness-scaffolded checkout that has run search; --kind is one of bug adr plan change handoff review testing retro spec deploy trail code doc feedback proposal; --limit 1-50, default 10
   index [--global] [--rebuild]  reconcile the search index, or delete and rebuild it, and print its counts
+  memory add --type T --name SLUG --description TEXT  save one memory, its body on stdin, into this project's .agents/memory/ and its MEMORY.md line (T: user, feedback, project or reference); every CLI writes memory this way (R10)
+  memory show             print this project's memory index, capped at what a session loads, plus a hint when Claude Code's native memory is still on here
   version                 print the build version
 
 Flags accepted by every command:
@@ -105,6 +109,9 @@ func run(args []string, out io.Writer) error {
 	openRecords := fs.Bool("open", false, "search: open bugs and plans with unticked boxes")
 	global := fs.Bool("global", false, "search, index: the global search index")
 	rebuild := fs.Bool("rebuild", false, "index: delete and rebuild the index")
+	memType := fs.String("type", "", "memory add: user, feedback, project or reference")
+	memName := fs.String("name", "", "memory add: the memory's slug")
+	memDesc := fs.String("description", "", "memory add: one line")
 	if err := fs.Parse(reorder(rest)); err != nil {
 		return err
 	}
@@ -158,6 +165,9 @@ func run(args []string, out io.Writer) error {
 		// Before ResolveSource, which errors when no harness is found: a
 		// machine with no checkout must still be able to report.
 		return report(*repoFlag, *feedbackFlag, home, *dryRun, out)
+	case "memory":
+		// Before ResolveSource: memory needs no harness tree (R10).
+		return memoryCmd(fs.Args(), memory.Entry{Type: *memType, Name: *memName, Description: *memDesc}, home, *vendorFlag, out)
 	case "search", "index":
 		// Before ResolveSource too: searching needs no harness tree, and a
 		// release-binary or zip place has none (plan D10).
@@ -406,6 +416,43 @@ func report(repoFlag, feedbackFlag, home string, dryRun bool, out io.Writer) err
 	}, out); err != nil {
 		return fmt.Errorf("report: %w", err)
 	}
+	return nil
+}
+
+// stdin is where `memory add` reads the body; a test replaces it.
+var stdin io.Reader = os.Stdin
+
+// memoryCmd runs `memory add` and `memory show` in the checkout holding the
+// working directory. A refusal prints its reason and exits 2.
+func memoryCmd(args []string, e memory.Entry, home, vendorFlag string, out io.Writer) error {
+	if len(args) != 1 || (args[0] != "add" && args[0] != "show") {
+		return errors.New("usage: sh-agent memory add --type T --name SLUG --description TEXT (body on stdin) | sh-agent memory show")
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	var text string
+	if args[0] == "add" {
+		text, err = memory.Add(wd, e, stdin, time.Now())
+		if err == nil {
+			text = "saved " + text + "\n"
+		}
+	} else {
+		vendor, verr := resolveVendor(vendorFlag, home)
+		if verr != nil {
+			return verr
+		}
+		text, err = memory.Show(wd, vendor != harness.VendorAntigravity)
+	}
+	if memory.IsRefusal(err) {
+		fmt.Fprintln(os.Stderr, "sh-agent memory:", err)
+		return exitCode(2)
+	}
+	if err != nil {
+		return err
+	}
+	fmt.Fprint(out, text)
 	return nil
 }
 
@@ -742,6 +789,9 @@ func reorder(args []string) []string {
 		"-limit": true, "--limit": true,
 		"-kind": true, "--kind": true,
 		"-refs": true, "--refs": true,
+		"-type": true, "--type": true,
+		"-name": true, "--name": true,
+		"-description": true, "--description": true,
 	}
 	var flags, positional []string
 	for i := 0; i < len(args); i++ {

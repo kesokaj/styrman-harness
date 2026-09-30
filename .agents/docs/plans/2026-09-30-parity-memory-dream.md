@@ -234,9 +234,9 @@ E2E criteria:
 - [x] Checkpoint — expect: requirements committed and pushed — evidence: the Phase 0 commit (this one), 2026-09-30
 
 ### Phase 1 — `sh-agent memory`
-- [ ] `internal/memory` `Add` and `Show` — verify: unit, `go test -race ./internal/memory` — expect: a test per refusal (1–5), update in place, the index cap, the stale lock, the `show` cap and the empty store; one refusal's check mutated makes its named test fail (review-standards § 2)
-- [ ] `memory add|show` in main.go and usage — verify: unit (main_test) plus `add` then `show` in a scratch fixture checkout outside this repo — expect: the file, the line, and the printed index — docs: README.md verbs table
-- [ ] Checkpoint — expect: bare `go test -race ./...` exit 0; verifier log — evidence: <log>, date
+- [x] `internal/memory` `Add` and `Show` — evidence: `go test -race ./internal/memory` ok; mutation of the tracked-store check (`if false &&`) compiled and failed `TestAddRefusals/git_tracks_the_store` and `TestShowRefusesTrackedStore`, restored byte-identical, 2026-09-30 — verify: unit, `go test -race ./internal/memory` — expect: a test per refusal (1–5), update in place, the index cap, the stale lock, the `show` cap and the empty store; one refusal's check mutated makes its named test fail (review-standards § 2)
+- [x] `memory add|show` in main.go and usage — evidence: `TestMemoryVerb`, `TestMemoryRefusalExitsTwo` (red first on `takesValue`, BUG-002's shape); a fixture at `~/sandbox/p1fixture` wrote the file and line 0600 in a 0700 store, `show` printed it with the rollout hint, `/tmp` exited 2, 2026-09-30 — verify: unit (main_test) plus `add` then `show` in a scratch fixture checkout outside this repo — expect: the file, the line, and the printed index — docs: README.md verbs table
+- [x] Checkpoint — expect: bare `go test -race ./...` exit 0; verifier log — evidence: `testing/2026-09-30-verify-parity-memory-dream-phase-1.md` PASS (404 pass, 0 fail; the verifier's own mutation of the check-ignore refusal failed `TestAddRefusals/store_not_ignored`); two tests added after it for branches it named (`TestShowOutsideACheckoutRefuses`, the unparseable-settings hint case), package re-run ok, 2026-09-30
 
 ### Phase 2 — Memory on both CLIs
 - [ ] `skills/project-memory/SKILL.md`: when to write (the four types and their triggers), the verb, one fact per file, never a secret; the name checked against both CLIs' built-in commands (BUG-065) — verify: scratch install lints; listed on both vendors — expect: installed at both paths — docs: README.md skills list

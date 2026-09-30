@@ -483,7 +483,7 @@ func sweepInterruptedClones(home string, out io.Writer) {
 		if err != nil {
 			continue // not a name this tool wrote
 		}
-		if alive(pid) {
+		if Alive(pid) {
 			continue
 		}
 		if err := os.RemoveAll(dir); err != nil {
@@ -494,10 +494,10 @@ func sweepInterruptedClones(home string, out io.Writer) {
 	}
 }
 
-// alive reports whether a process with this pid exists. Signal 0 is the
+// Alive reports whether a process with this pid exists. Signal 0 is the
 // portable existence check; a process owned by another user answers
 // EPERM, which is still "alive".
-func alive(pid int) bool {
+func Alive(pid int) bool {
 	if pid <= 0 {
 		return false
 	}

@@ -266,11 +266,11 @@ E2E criteria:
 - [x] `--install-timer`/`--remove-timer`, `uninstall` removal and its dry run — evidence: `timer_test.go` against fake `systemctl`/`launchctl` (rendered text, calls, identical rerun, differing unit kept and named, no binary, no manager, failing manager leaves files named, remove absent/present, macOS); `TestUninstallDryRunLeavesTheTimer` (no manager call in a dry run; removed without a manifest); `systemd-analyze verify` exit 0 on units rendered into a scratch home through a fake `systemctl`, 2026-09-30 — verify: unit on the rendered text and on `uninstall --dry-run` (no command run); `systemd-analyze verify` on scratch files — expect: pass — docs: deploy/local.md, README.md uninstall row
 - [x] README map gains the job (D13), `TestHarnessMap` updated in the same commit (`dream` now required on the map), AGENTS.md rule 1 says the timer is neither a delivery nor a report path — verify: `go test -run TestHarnessMap ./cmd/sh-agent` — expect: pass
 - [x] Checkpoint — evidence: the Phase 4–5 verifier log `testing/2026-09-30-verify-parity-memory-dream-phase-4-5.md`, 2026-09-30
-- [ ] E2E 5, the real timer on this box — who: user — expect: `list-timers` shows it, then it is gone after `--remove-timer`
+- [-] E2E 5, the real timer on this box — moved to the handoff's Next Steps (2026-09-30; who: user, R6) — expect: `list-timers` shows it, then it is gone after `--remove-timer`
 
 ### Phase 6 — close
 - [x] `testing/guide.md` § 3b (report tier) for Phase 1's change — evidence: § 3b's report dry run in `testing/2026-09-30-verify-parity-memory-dream-phase-4-5.md` (only the harness dream file listed to send); § 3c rows added to `sh-agent-matrix.md` for `memory`, `dream`, the timer and `uninstall`, 2026-09-30 — to `reorder`'s `takesValue` map, and § 3c rows for the `memory`/`dream` verbs — found in: Phase 2 (the guide names the map as a 3b trigger)
-- [ ] Docs pass (`documentation`), `/review --docs`, AGENTS.md Layout, :59, and rule 1 (:13: the dream timer is neither a delivery path nor a report path, stated in the same commit), matrix rows; `deploy/local.md` states the timer's limits (no user manager without linger, `Persistent=true` catches up at login; a rerun from a shell with another PATH renders different text, so `--remove-timer` first)
+- [x] Docs pass (`documentation`), `/review --docs` — evidence: `reviews/2026-09-30-review-cb799ff-f1ca525-docs.md` (APPROVE WITH NITS, Outcome), the documentation passes after rounds 1 and 2, 2026-09-30 — AGENTS.md Layout, :59, and rule 1 (:13: the dream timer is neither a delivery path nor a report path, stated in the same commit), matrix rows; `deploy/local.md` states the timer's limits (no user manager without linger, `Persistent=true` catches up at login; a rerun from a shell with another PATH renders different text, so `--remove-timer` first)
 - [ ] Antigravity run of each changed skill and agent (`project-memory`, `feedback-log`, `init-project`, `dream`, `retro`, `distill`, `dreamer`) before the tag (AGENTS.md:77), plus the three-setup parity rows
 - [ ] Release through `/preflight` ("Include this in the next version")
 
@@ -339,6 +339,7 @@ Assumptions:
   - only the user's and the model's Antigravity steps are read;
   - symlinked trail directories are not followed.
   — supersedes D7b's invocation — by: code review and security review, 2026-09-30
+- D29 — 2026-09-30 — After two review rounds found leaks in the Antigravity transcript reader (tool output, then tool-call arguments), the operator chose to keep both CLIs' transcripts, filtered, over dropping them or keeping Claude Code's alone: "Keep both, filtered (Recommended)". The residual risk is an unknown field type in the undocumented format; the text is redacted and goes only to the operator's own CLI's model — by: the operator, 2026-09-30
 - Open: redaction beyond credential shapes and `~` — default: none (the same set as `report`)
 - Rejected: the timer in the manifest — the next `install` deletes listed files as stale (apply.go:88-109)
 - Rejected: `ExecStart` from `os.Executable()` — under `go run` it is a temp build; BinPath is what `update` keeps current

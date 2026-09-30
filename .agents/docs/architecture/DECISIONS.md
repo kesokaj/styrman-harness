@@ -505,3 +505,20 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
 **Decision:** `REQUIREMENTS.md` gains R10 on the exact text the operator approved ("Sounds great. Include this in the next version. Go all approved go work."). A feature one CLI has natively and the other lacks is provided once, in `sh-agent` or a skill that calls it, and both CLIs use that version; a native feature stays only where it gives the same result on both; what only a CLI's runtime controls is a listed known difference.
 
 **Consequences:** Memory becomes `sh-agent memory add|show` on both CLIs, with Claude Code's native auto memory switched off per project. The background dreamer is `sh-agent dream`, which runs any CLI tool-free. Both are in plan `plans/2026-09-30-parity-memory-dream.md`. Every feature and gate run is checked on three setups: Claude Code only, Antigravity only, and both. The R3 exception the dream timer needs is a separate approval (the plan's D3) and is added to this ADR as an addendum when given.
+
+## ADR-047a: Addendum to ADR-047 — the background dreamer's requirement edits, the map, and the departures     (2026-09-30) — Accepted
+
+**Context:** Plan `plans/2026-09-30-parity-memory-dream.md` needed four requirement changes and one map change for `sh-agent dream`. Three cold reads (`reviews/2026-09-30-cold-read-parity-memory-dream-r{1,2,3}.md`) found where the first wording and the design broke R3, R4, Non-goals and R9. The exact texts and departures were put to the operator in `.agents/scratch/2026-09-30-parity-operator-items.md` and in chat. The revised R3 sentence was shown verbatim in chat; the plan's D3, D12 and D13 carry every text.
+
+**Decision:** Approved by the operator in their own turn, "Go all" (2026-09-30):
+- **R3** gains the named exception for `sh-agent dream --all` run by an OS user timer: it reads every indexed project's trail and memory, the feedback log and both CLIs' transcripts, runs a CLI with no tools, writes only under `~/.config/sh-agent/` (proposals to `proposals/dream/`), and takes effect only through `/retro`.
+- **R4** gains two clauses: `sh-agent dream` also opens Antigravity's conversation databases with the SQLite driver, read-only (the reader stays in `internal/search`); and `uninstall` also removes the dream timer when one is installed.
+- **Non-goals**' vendor-settings exception gains the two memory keys `/init-project` writes into a project's gitignored `.claude/settings.local.json` (`autoMemoryDirectory`, `autoMemoryEnabled: false`), for R10.
+- **The README map** (§ How it works) gains the dream job, as a producer into `~/.config/sh-agent/` and an edge to `/retro`. It lands in one commit with its code, docs and `TestHarnessMap` (AGENTS.md rule 3, R9).
+- **Departures from the first dreamer table**, accepted:
+  - the CLI runs with no tools;
+  - proposals go to `proposals/dream/` with queue Status lines, and harness targets to `proposals/dream/harness/`, which `report` sends (R8);
+  - drafts go to `proposals/dream/drafts/`;
+  - the timer is kept out of the install manifest (the next `install` would delete it as stale), and `uninstall` removes it by the R4 clause.
+
+**Consequences:** The dream timer is neither a delivery path nor a report path; AGENTS.md rule 1's "no timer as the mechanism" keeps meaning delivery and report, and the implementing commit says so there. The cold-read residue the operator took as defaults is the plan's D21–D27.

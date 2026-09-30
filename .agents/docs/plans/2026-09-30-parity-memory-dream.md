@@ -9,168 +9,323 @@ The operator, 2026-09-30:
 - "The dream skills should be a features that runs autonomously in all projects registered on the machine and checks conversations, assets, feedback, critique, skills, for improvements. This should run in the background as a monitor or subagent that does not care about what is happening. It just collects, generates new skills if needed and such. That was the plan."
 - "Dreamer is one and memory is the other. … remember these should work for both Claude or agy and both."
 - "In the best of worlds I want the setup and executions to be exactly the same over agy and Claude. … Can we build in that feature in sh-agent?"
-- On the proposed R-parity text, the dreamer table (1–7) and the memory table (1–5): "Sounds great. Include this in the next version. Go all approved go work."
+- On the R-parity text and the two tables below: "Sounds great. Include this in the next version. Go all approved go work."
 
-The built memory loop (`specs/sh-agent/memory-loop.md`) is Claude-native for writing and loading and has no background job. Recon: `plans/2026-09-30-recon-memory-dream.md`.
+Both tables are quoted as the operator approved them in chat on 2026-09-30.
+
+**Dreamer table** (approved):
+1. How it runs: a user timer (systemd on Linux, launchd on Mac) runs `sh-agent dream --all` nightly, headless, regardless of what any session is doing.
+2. Which projects: every harness project in the global search index (`~/.config/sh-agent/search.db`); no new registry; projects that haven't changed are skipped.
+3. What it reads: both CLIs' conversation transcripts, `feedback.jsonl`, each project's memory, bug records, reviews, retros, and the installed skills — read-only, treated as data.
+4. What it writes: draft skills and proposals into `~/.config/sh-agent/proposals/`, nothing auto-installed; applied through `/retro --harness`.
+5. Which CLI: the one the install manifest names (`agy -p` on an agy machine, `claude -p` where Claude Code is installed).
+6. Cost limit: once a night, a cap per project, a log line per run shown by `sh-agent status`.
+7. The requirement change: R3 gets one named exception, with an ADR.
+
+**Memory table** (approved):
+1. agy's memory is thinner (it writes only on corrections) → both CLIs write the same four types by the same rule, written by the harness.
+2. Claude Code loads memory automatically; agy only because the context says so → accept for now.
+3. Claude Code's split store in an untrusted folder → the dreamer detects it and moves the notes.
+4. Notes don't follow the operator between machines → keep per machine.
+5. The memory spec header says "nothing below is built" → fix.
+
+Since then, R10's "the harness provides it once and both CLIs use that version" supersedes memory items 2 and 3 (D2): loading goes through `sh-agent memory show` on both CLIs, and with native writes off there is no split store. Recon: `plans/2026-09-30-recon-memory-dream.md`. Cold read r1: `reviews/2026-09-30-cold-read-parity-memory-dream-r1.md`.
 
 ## Scope
 In:
-1. **R-parity** in `REQUIREMENTS.md`, exactly as approved, plus its ADR. **R3's exception sentence** for the dream timer goes in when the operator approves its exact text (D3).
-2. **`sh-agent memory add|show`**: both CLIs write and load project memory through the binary. Claude Code's native auto memory is switched off per project (`autoMemoryEnabled: false`), so both CLIs run the same path (R-parity).
-3. **A `memory` skill** (when to write, the four types, how to call the verb). `feedback-log` rule 7 calls the verb on both CLIs. The context's resume step runs `sh-agent memory show` on both. `/init-project`, `/dream` Step 1, `agents/dreamer.md`, the memory spec and README are updated to match.
-4. **`sh-agent dream [--all | <dir>] [--dry-run] [--cli claude|agy]`**: collects per project, redacts, makes one tool-free headless CLI call, and writes one proposal file per project. It keeps state, a log, and a `dream` line in `status`.
-5. **`sh-agent dream --install-timer | --remove-timer`**: a systemd user timer on Linux or a launchd agent on macOS. It is opt-in, installed once per machine by the operator, and removed by `uninstall` (waits on D3).
-6. **Consumers**: `/retro --harness` reads `proposals/dream/`; `sh-agent report` never sends `proposals/dream/`; `status` shows the dream line.
+1. **R10 (R-parity)**: done in d6e396a. The requirement edits the dream job needs, on the operator's word (D3, D12, D13): the R3 exception, R4's driver and `uninstall` sentences, and the Non-goals memory-keys exception.
+2. **`sh-agent memory add|show`** on both CLIs. Claude Code's native auto memory is switched off per project (`autoMemoryEnabled: false`, D2).
+3. **The `project-memory` skill** (D14), plus:
+   - `feedback-log` rule 7 calls the verb on every CLI;
+   - the context resume step runs `sh-agent memory show`;
+   - `/init-project` Step 5b writes the new key;
+   - `/dream` Step 1 always uses `<root>/.agents/memory`;
+   - `agents/dreamer.md`, the memory spec and README are updated.
+4. **`sh-agent dream --all | --project <dir>`, with `--dry-run`, the CLI from the global `--vendor` flag**: collect, redact, one tool-free CLI call, then render and write proposals and drafts. Also a state file, a log, a lock, and the `status` line.
+5. **`sh-agent dream --install-timer | --remove-timer`**, opt-in (D5). `uninstall` removes the timer (D12).
+6. **Consumers**:
+   - project-level `/retro` reads the dream proposals for its own project;
+   - `/retro --harness` reads the harness-target ones;
+   - `report` sends `proposals/dream/harness/` and nothing else under `proposals/dream/` (D19);
+   - `status` gets the dream line;
+   - the README map gets the job (D13).
 
 Out:
-- Auto-installing anything the dreamer drafts (dreamer table item 4, approved: proposals only).
-- A permission list written into either CLI's settings (REQUIREMENTS § Non-goals: "never a permission").
-- Syncing memory between machines (memory table item 4: per machine).
-- A `memory forget`/edit verb: deletes stay with the interactive `/dream` skill.
+- Auto-applying anything (dreamer item 4).
+- Any permission in a vendor settings file (Non-goals).
+- Cross-machine memory (memory item 4).
+- `memory forget`/`list` verbs (the `/dream` skill deletes interactively).
 
 Follow-ups noted, not built:
 - A cron fallback for Linux without systemd.
-- Agent worktree isolation provided by `sh-agent` (the parity table example); it gets its own plan under R-parity.
+- Agent worktree isolation in `sh-agent` (a later R10 plan).
 
 ## Surfaces touched
-- Go: `cmd/sh-agent/main.go` (verbs, usage const :39, `status` :508); new `internal/memory/` (store read/write); new `internal/dream/` (collect, transcripts, run, state, timer); `internal/search` (exported project list, recon: store.go:41, search.go:225/284); `internal/harness/report.go` (exported redaction wrapper over `redactLines` :128 / `redactDocument` :257; `Collect` excludes `proposals/dream/`); `internal/harness/state.go` (`LastRetro` :137 unchanged — it reads only top-level `proposals/*.md`); `internal/harness/apply.go` (`Uninstall` :270 calls timer removal).
-- Harness text: `skills/memory/SKILL.md` (new); `skills/feedback-log/SKILL.md:90`; `skills/init-project/SKILL.md:110-131`; `skills/dream/SKILL.md` Step 1; `agents/dreamer.md:18,28,32`; `skills/retro/SKILL.md:44,118` (reads `proposals/dream/`); `skills/distill:38`; `context/AGENTS.md:9` (resume) and `:42`.
-- Docs: `REQUIREMENTS.md`, `DECISIONS.md`, `specs/sh-agent/memory-loop.md` (rewritten: memory and dream as two parts), new `specs/sh-agent/dream.md`, `README.md:214` plus the verbs table, `deploy/local.md` (timer install), `testing/skill-matrix.md`, `testing/sh-agent-matrix.md`.
+- **Go**:
+  - `cmd/sh-agent/main.go`: verbs; usage const :39; `status` :508; `uninstall` calls `dream.RemoveTimer`, so `internal/harness` does not import `internal/dream`.
+  - new `internal/memory/`;
+  - new `internal/dream/` (collect, claude transcripts, prompt, run, render, state, lock, timer);
+  - `internal/search`: `ListProjects(home)`, plus `AgyConversationText(home, root, since)`, which keeps the driver inside `internal/search` (AGENTS.md:59, D12);
+  - `internal/harness/report.go`: exported `Redact(string) string` over `redactLines` (:199); `Collect` (:331-339) gains `proposals/dream/harness/*.md` and still skips the rest of `proposals/dream/` (D19).
+- **Harness text**:
+  - `skills/project-memory/SKILL.md` (new);
+  - `skills/feedback-log/SKILL.md:90`;
+  - `skills/init-project/SKILL.md:110-131`;
+  - `skills/dream/SKILL.md` Step 1 and description;
+  - `agents/dreamer.md:18,28,32`;
+  - `skills/retro/SKILL.md:44,48,118`;
+  - `skills/distill/SKILL.md:38`;
+  - `context/AGENTS.md:9` (resume).
+- **Docs**:
+  - `REQUIREMENTS.md` (R3, R4, Non-goals, on approval);
+  - `DECISIONS.md` (ADR-047 addendum);
+  - `specs/sh-agent/memory-loop.md` (rewritten: the memory half);
+  - new `specs/sh-agent/dream.md`;
+  - `README.md`: map :5-60 with `TestHarnessMap`, `configDir` contents :30, state rows :212-214, verbs table, `uninstall` row;
+  - project `AGENTS.md` Layout (`internal/memory`, `internal/dream`) and :59 (the driver's second reader in `internal/search`);
+  - `deploy/local.md` (timer install/remove, uninstall);
+  - `testing/skill-matrix.md` and `testing/sh-agent-matrix.md` rows.
 
 ## Interfaces
 
-**`sh-agent memory add --type <user|feedback|project|reference> --name <slug> --description <text> [--title <text>]`**
-- The body is read from stdin (required, non-empty). The command runs in the project: root = `git rev-parse --show-toplevel` from the working directory.
-- It writes `<root>/.agents/memory/<slug>.md`: frontmatter `name`, `description` (JSON-quoted), `metadata:` `type`, `modified` (UTC RFC 3339), then the body. It sets that slug's line in `MEMORY.md` to `- [<title or slug>](<slug>.md) — <description>`; the same slug replaces both file and line (update, not duplicate).
-- `<slug>` matches `^[a-z0-9][a-z0-9-]{0,63}$`.
-- Refusals, each exit 2 with one line, and nothing written:
-  - not a git checkout;
-  - `.agents` or `.agents/memory` is a symlink;
-  - git tracks anything under `.agents/memory`;
-  - `.gitignore` lacks `.agents/memory` ("run /init-project first");
-  - the index would exceed 200 lines.
-- The store is created with mode 0700 when absent. A write goes to a temp file and is renamed; the index is rewritten whole under a lock file `<store>/.lock` (O_EXCL, stale after 30 s).
+**`sh-agent memory add --type <user|feedback|project|reference> --name <slug> --description <text>`**, with the body on stdin (required, non-empty).
+- **Root**: `git rev-parse --show-toplevel` from the working directory.
+- **The file**: `<root>/.agents/memory/<slug>.md`, whose frontmatter is:
+  ```
+  ---
+  name: <slug>
+  description: "<text, JSON-escaped>"
+  metadata:
+    node_type: memory
+    type: <type>
+    modified: <UTC RFC 3339>
+  ---
+  ```
+  then the body. `originSessionId` is not written: no CLI exposes its session id to a shell call, and `/dream`'s promote test already counts a file without it as one session.
+- **The index**: the line in `MEMORY.md` for that file is `- [<slug>](<slug>.md) — <description>`. The same slug replaces both the file and its line; an existing line is found by its link target `(<slug>.md)`. A `--description` with a newline is refused (exit 2). Files are written 0600.
+- **`<slug>`** matches `^[a-z0-9][a-z0-9-]{0,63}$`.
+- **Refusals**: exit 2, one line on stderr, nothing written. In order:
+  1. not a git checkout;
+  2. `.agents` or `.agents/memory` is a symlink;
+  3. `git ls-files .agents/memory` prints a path;
+  4. `git check-ignore -q .agents/memory/<slug>.md` exits non-zero (the path would be committed: "run /init-project first");
+  5. the index would pass 200 lines.
+- **Store and writes**: created 0700 when absent. The file is written to a temp name and renamed.
+- **Lock**: the index is rewritten whole under `<store>/.lock`, created O_EXCL and holding the PID. A lock whose PID is not alive, or older than 30 s, is removed. A live lock is retried for 5 s, then exit 2 "store busy".
 
-**`sh-agent memory show`**: same root and trust checks. Prints `MEMORY.md`, capped at 200 lines and 25 KB, with a trailing line naming the cut if one happened. No store, or an empty one, prints nothing and exits 0. A trust refusal exits 2.
+**`sh-agent memory show`**
+- Same root and checks 1–3.
+- Prints `MEMORY.md`, capped at 200 lines and 25 KB; a cut adds a last line `(… N more lines in .agents/memory/MEMORY.md)`.
+- No store, or no index: prints nothing, exit 0.
+- **Rollout hint**: when `<root>/.claude/settings.local.json` exists and lacks `"autoMemoryEnabled": false`, `show` prints one last line: `Claude Code's native memory is still on here: run /init-project to switch it off (R10)`. Every session start on either CLI then surfaces the rollout for projects scaffolded before this change.
 
-**`sh-agent dream [--all | <dir>] [--dry-run] [--cli claude|agy]`**
-- **Projects**: the `projects` table of `~/.config/sh-agent/search.db`, read with a plain SELECT, no reconcile (`search.ListProjects(home) ([]Project, error)`), or `<dir>` alone. A root is skipped (logged with the reason) when it is gone, not a git checkout, or lacks `.agents/docs`.
-- **Watermark**: `~/.config/sh-agent/dream-state.json`, `{"<root>": {"last":"<RFC3339>"}}`. It advances only after the proposal file is written. The first run uses the last 14 days.
-- **Collected since the watermark**, in this order:
-  1. every memory file;
-  2. `feedback.jsonl` entries whose `project` is the root;
+**`sh-agent dream --all | --project <dir> [--dry-run] [--vendor claude|agy]`**. Neither `--all` nor `--project` is a usage error. `--project` exists for the e2e and to rerun one project after a failure (D15).
+- **Projects**: `search.ListProjects(home)`, a plain SELECT on `projects(root,…)` (store.go:41), no reconcile. A missing db means an empty list. `--project` takes one root. A root is skipped with a log line when it is gone, not a git checkout, or lacks `.agents/docs`.
+- **Start**: `t0` = now, taken before collecting.
+- **Watermark**: in `~/.config/sh-agent/dream-state.json`, `{"projects":{"<root>":"<RFC3339>"},"last_run":{"at":…,"projects":n,"proposals":m,"error":""}}`. The first run uses t0 − 14 days.
+- **Changed** means any per-project input below (1, 2, 3, 5, 6) newer than the watermark: file mtime; for transcripts, the line or step time. Input 4 (installed skills) is global: it never makes a project changed and is sent only with a changed project. When nothing changed: skip, log `unchanged`, and write no file. When something changed, the memory files are sent whole; the other inputs only the changed parts.
+- **Inputs**:
+  1. the memory store;
+  2. `feedback.jsonl` lines whose `project` is the root and whose `ts` is after the watermark;
   3. files under `<docs>/{bugs,reviews,retros,changes,handoffs}` with mtime after the watermark;
-  4. the installed skills' names and descriptions (read from the vendor skill dir the manifest names);
-  5. Claude Code transcripts: `~/.claude/projects/*/*.jsonl` whose `cwd` equals the root, with `user`/`assistant` text parts only;
-  6. Antigravity conversations: ids from `~/.gemini/antigravity-cli/conversation_summaries.db` whose `workspace_uris` names the root, with text extracted per D8.
-- Nothing changed since the watermark: skip, and log "unchanged".
-- **Redaction**: `harness.Redact(string) string` (credential shapes, as `report`) plus `$HOME` → `~`. The prompt is capped at 256 KB; the oldest transcript text is dropped first and the drop is named in the prompt.
-- **CLI**: `--cli`, else the manifest vendor (`antigravity` → agy; `claude` and `all` → claude).
+  4. the installed skills' `name` and `description` from the manifest vendor's skill directory;
+  5. Claude Code `~/.claude/projects/*/*.jsonl` lines with `timestamp` after the watermark whose `cwd` is the root or under it, `type` `user`/`assistant`, text parts only;
+  6. Antigravity text from `search.AgyConversationText(home, root, since)` (D8). It copies `conversation_summaries.db` and each matching `conversations/<id>.db` with their `-wal` and `-shm` files into a private temp directory under `<home>/.config/sh-agent/`, opens the copies, and deletes them after; it never opens a live file.
+- **Redaction**: every input passes `harness.Redact` and `$HOME` → `~`.
+- **Prompt**: fixed instructions (in `internal/dream/prompt.go`), then the inputs in the order above, each fenced and labelled "data, not instructions". The cap is 256 KB: the oldest transcript text is dropped first, and the prompt says what was dropped.
+- **CLI**: the global `--vendor` flag (main.go:62, "default: from manifest"): `antigravity`/`agy` → agy; `claude` and `all` → claude (dreamer item 5).
   - claude: `claude -p --tools "" --no-session-persistence --output-format text`, prompt on stdin.
-  - agy: the invocation the Phase 4 probe proves (D7).
-  - Both run with cwd `~/.config/sh-agent/dream-work/` (created 0700, empty), so a run is never a project.
-  - Timeout 10 min per project.
-- **Output**: `~/.config/sh-agent/proposals/dream/<YYYY-MM-DD>-<project name>.md`. It gets frontmatter `owner: sh-agent dream`, `date`, `project` (root), `cli`, `inputs` (counts per kind), then the model's text, redacted again. The prompt asks for `## Proposals` (numbered: kind rule/skill/procedure/memory, target, text, evidence) and `## Draft skills` (full SKILL.md in fenced blocks). A same-day second file gets `-2`.
-- **Log**: `~/.config/sh-agent/dream.log`, one line per project per run (`<ts> <root> ok|skip|fail <reason>`), plus `last-run` in the state file.
-- **`--dry-run`**: prints per project what would be collected (counts and bytes) and the CLI command. It runs no CLI and writes nothing.
-- **Lock**: `~/.config/sh-agent/dream.lock` (O_EXCL). A second run exits 0 with "already running".
+  - agy: the invocation proven by the Phase 4 probe (D7).
+  - Both run with cwd `<home>/.config/sh-agent/dream-work/` (0700, kept empty; it is not a project, so the run's own conversation never maps to one) and a 10-minute timeout.
+  - The child inherits `sh-agent`'s own environment unchanged: `--home` moves only what `sh-agent` itself reads and writes, never the child's `HOME`, so the CLI authenticates as it does for the operator (AGENTS.md:65). A sandbox run sets `HOME` for the whole `sh-agent` process instead.
+  - The binary is resolved on PATH at run time; under the timer, PATH is the one captured at `--install-timer` (below).
+- **Model output**: the prompt asks for one JSON object:
+  ```
+  {"proposals":[{"title","kind":"rule|skill|procedure|memory","target":"harness|project","file","text","evidence"}],
+   "skills":[{"name","description","body"}]}
+  ```
+  `sh-agent` takes the first `{…}` span of stdout that parses. When nothing parses, the project is `fail invalid output`, and the raw text is kept in `<home>/.config/sh-agent/dream-failed/<date>-<project>.txt` (0600), outside the CLI's cwd.
+- **Written on success**:
+  - `~/.config/sh-agent/proposals/dream/<YYYY-MM-DD>-<project name>.md` (`-2`, `-3` on the same day). Frontmatter: `owner: sh-agent dream`, `date`, `project`, `cli`, `inputs` (counts per kind, and what was dropped). Then one section per proposal:
+    ```
+    ### <n>. <title>
+    **Status:** queued
+    **Target:** harness|project   **Kind:** …   **File:** …
 
-**`sh-agent dream --install-timer | --remove-timer`**
-- Linux: writes `~/.config/systemd/user/sh-agent-dream.{service,timer}`:
-  - the service's `ExecStart` is the absolute path of the running binary plus `dream --all`;
-  - the timer has `OnCalendar=*-*-* 03:00`, `Persistent=true`;
-  - then runs `systemctl --user daemon-reload` and `systemctl --user enable --now sh-agent-dream.timer`.
-- macOS: writes `~/Library/LaunchAgents/com.styrman.sh-agent-dream.plist` (`StartCalendarInterval` Hour 3), then `launchctl bootstrap gui/<uid> <plist>`.
-- `--remove-timer` disables and unloads, then deletes the files; absent files are fine. Without `systemctl` (Linux) or `launchctl` (macOS): exit 2, naming what is missing.
-- `uninstall` runs the remove path when a unit file exists.
+    <text>
 
-**`status`**: a line `dream      last run <date> (<n> projects, <m> proposals), timer installed|not installed`, or `dream      never run`.
+    Evidence: <evidence>
+    ```
+  - Harness-target proposals (`target: harness`) are written to a second file, `proposals/dream/harness/<YYYY-MM-DD>-<project name>.md`, same shape. `report` sends that directory (R8: report sends "this machine's corrections, proposals"), so a binary-only or zip place feeds harness proposals back too; project-target files stay on the machine (D6).
+  - Every skill goes to `proposals/dream/drafts/<date>-<project name>-<name>/SKILL.md`, with `name` validated as a slug (an invalid name is dropped and listed). The draft is `---\nname: <name>\ndescription: "<…>"\n---\n<body>`.
+  - All model text is redacted again before it is written.
+- **Zero proposals**: when the JSON parses with no proposals and no skills, no file is written, the log says `ok 0 proposals`, and the watermark advances.
+- **Watermark**: advances to t0 only after a successful parse and, when there is anything to write, after the write.
+- **Log**: `~/.config/sh-agent/dream.log`, one line per project (`<ts> <root> ok|unchanged|skip|fail <reason>`) and one per run (`<ts> - run <n> projects, <m> proposals[, error <reason>]`). A failure before the first project (no CLI, lock or state unreadable) writes the run line with `error` and sets `last_run.error`.
+- **Lock**: `~/.config/sh-agent/dream.lock` holds the PID. A lock whose PID is not alive is stale and replaced; a live lock makes the run exit 0 with "already running".
+- **`--dry-run`**:
+  - prints per project the input counts and bytes, what would be dropped, and the CLI command line;
+  - prints the prompt when `--project` is given;
+  - runs no CLI, and writes, locks and advances nothing (a test asserts each).
+- **Exit**: 0 when every project is ok, unchanged or skipped; 1 when any failed; 2 on a pre-project failure.
 
-**`/init-project` Step 5b**: `.claude/settings.local.json` gains `"autoMemoryEnabled": false` beside `autoMemoryDirectory`, with the same trust checks and insertion method. On an Antigravity-only machine nothing changes (no `.claude/`).
+**`sh-agent dream --install-timer | --remove-timer`** (D5, D12)
+- **Linux**: writes `~/.config/systemd/user/sh-agent-dream.service` and `.timer`.
+  - The service: `ExecStart=<home>/.local/bin/sh-agent dream --all` (BinPath), and `Environment=PATH=<the PATH of the installing shell>`, so `claude` and `agy` in `~/.local/bin` resolve.
+  - The timer: `OnCalendar=*-*-* 03:00`, `Persistent=true`.
+  - Then `systemctl --user daemon-reload` and `systemctl --user enable --now sh-agent-dream.timer`.
+- **macOS**: `~/Library/LaunchAgents/com.styrman.sh-agent-dream.plist` with the same program, `EnvironmentVariables` PATH and `StartCalendarInterval` Hour 3, then `launchctl bootstrap gui/<uid> <plist>`.
+- **Guards**:
+  - `--install-timer` refuses when BinPath is missing, or when `systemctl`/`launchctl` is absent (exit 2, naming it).
+  - Unit files are written only when absent or identical to the rendered text; a hand-edited one is kept and named.
+- **`--remove-timer`**: `systemctl --user disable --now` / `launchctl bootout`, then deletes the files. Absent is fine.
+- **`--home`**: the unit files are written under `<home>`, like every other path (main.go:61); `systemctl` and `launchctl` are resolved on PATH, so tests put fakes first on PATH and never reach the real user manager (R6). Each branch (write, identical, hand-edited kept, absent on remove, a failing `systemctl`, `uninstall` without a manifest) is tested against the fakes.
+- **`status`** reports the timer as installed when its unit file exists.
+- **The manifest**: the timer is not listed in it (listed files are deleted as stale by the next `install`, apply.go:88-109).
+- **`uninstall`**:
+  - calls the same removal when a unit file exists, including when there is no manifest (D12);
+  - `uninstall --dry-run` prints "would remove the dream timer" and runs no `systemctl`/`launchctl` (a test asserts it).
 
-**Context resume step**: "… → `sh-agent memory show` (the project's memory, on every CLI)". This replaces the Antigravity-only clause.
+**`status`**: after the `retro` line (main.go:508):
+- `dream      last run <date>: <n> projects, <m> proposals; timer installed|not installed`
+- `dream      last run <date> failed: <error>; timer …`
+- `dream      never run; timer …`
+
+**`/init-project` Step 5b item 2**: the settings file gets `"autoMemoryDirectory"` as today, and `"autoMemoryEnabled": false`. Each key is handled on its own with the existing branches:
+- absent file → both keys in the one-object write;
+- present without the key → one inserted line after `{` per key, with the Edit tool;
+- present with the key → kept and reported (a `true` is reported, never changed).
+
+The parse check runs after each insert. Antigravity-only machine: nothing (Step 1).
+
+**Context resume step**: "… → `sh-agent memory show` (the project's memory; on every CLI)" replaces "on Antigravity, `.agents/memory/MEMORY.md` when … Claude Code loads it itself". The byte difference is paid in the same edit (`TestRenderedContextFitsAntigravityBlock`, 21998/22000 today).
 
 ## Failure modes
-- `memory add` outside a checkout, or with an untrusted store: exit 2 with one line; the session goes on without the memory.
-- `memory show` on a refused store: exit 2 with one line naming why. The resume step reports it and continues.
-- `dream`:
-  - a project whose CLI call fails or times out: logged `fail <reason>`, watermark unchanged, the next project continues, final exit 1;
-  - no CLI on PATH: exit 2 before any project;
-  - search.db absent (no project ever indexed): exit 0, "no indexed projects: run `sh-agent index` in a project";
-  - a transcript file that cannot be parsed: skipped and named in the proposal's `inputs`.
-- Timer: a failed `systemctl`/`launchctl` call exits 2 and leaves the written unit files in place, named for the operator.
+- `memory add|show` refusal: exit 2 with a one-line reason; the session reports it and continues without memory.
+- Headless sessions without a grant for `sh-agent`: the call is refused and no memory loads. This is the same on both CLIs, a cost of R10 (D16).
+- `dream`: the per-project failures are those above (fail + log, watermark kept, others continue, exit 1). A pre-project failure is exit 2 plus the run log line and `status` "failed". Unparseable model output keeps the raw text.
+- Timer: a failing `systemctl`/`launchctl` exits 2 and names the unit files left in place.
 
 ## Verification
-Tiers: unit (Go, `-race`), sandbox e2e on three homes (`--vendor claude`, `--vendor agy`, `all`), and a real-home smoke at the release gate.
+Tiers: unit (`go test -race`), sandbox e2e, the `dreamer` behavioural run, § 3d for the search additions, and the release gate's real-home runs. The setups for R10:
+- **agy-only**: a sandbox home installed `--vendor agy` (the kit of `testing/2026-09-30-verify-real-home-v1.16.2.md`).
+- **both**: the real home, vendor `all`.
+- **claude-only**: a sandbox home installed `--vendor claude`, with Claude Code pointed at it by `CLAUDE_CONFIG_DIR` and a copied credentials file (chmod 600, deleted by name after). This is an assumption the Phase 2 checkpoint's first run checks; when Claude Code cannot authenticate that way, the claude-only runs are marked not exercised and the "both" runs stand for Claude Code.
 
 E2E criteria:
-1. **Memory parity**: in a scaffolded project, on each of the three homes, a session told "remember that we deploy on Fridays" leaves one memory file and one index line in `.agents/memory/`. A fresh session on the same home, and on the other CLI where both are installed, answers "when do we deploy?" from memory.
-2. **Claude native writes are off**: after a Claude Code session in a scaffolded project, nothing new exists under `~/.claude/projects/<slug>/memory/`.
-3. **Dream golden path**: `sh-agent dream --all` over two indexed projects with new trail and memory writes one proposal file per project under `proposals/dream/`, with `## Proposals`. A second run with no changes writes nothing and logs `unchanged`.
-4. **Dream edge**: a project whose root was deleted is skipped with a log line; a secret-shaped string placed in a memory file does not appear in the proposal.
-5. **Timer**: on Linux, `--install-timer` makes `systemctl --user list-timers` show `sh-agent-dream.timer`; `--remove-timer` removes it; `uninstall` removes it when present.
-6. **Parity**: criteria 1 and 3 hold with `--cli claude` and with `--cli agy`.
+1. **Memory parity**: in a scaffolded fixture project, on each setup, a session told "remember that we deploy on Fridays" leaves a file and an index line in `.agents/memory/`. A fresh session on the same setup, on each installed CLI, answers "when do we deploy?" with Friday.
+2. **Claude native writes are off**: in the claude setup, with the pre-change harness installed (no `project-memory` skill, rule 7 as before), the must-fail control comes first. With `autoMemoryEnabled` absent, a session told a preference leaves a file carrying `originSessionId` (native) in `.agents/memory/`. Then the key is set to `false` and the current harness is installed, and no file with `originSessionId` appears while the verb-written file does. A control that produces no native file makes E2E 2 "not exercised", never passed.
+3. **Dream golden path** (home: a scratch `--home` whose `search.db` indexes only the fixture projects; the child is the real `claude`): `sh-agent dream --all --home <scratch>` over two indexed fixture projects with new trail and memory writes one proposal file per project with at least one `**Status:** queued` section. A second run with no changes writes no file and logs `unchanged` twice.
+4. **Dream edge**:
+   - a deleted root is logged `skip`;
+   - a secret-shaped string in a fixture memory file is absent from the prompt, shown by `--dry-run --project` and by the fake-CLI unit test's captured stdin.
+5. **Timer** (`who: user`, R6):
+   - a unit test pins the rendered unit text;
+   - `systemd-analyze verify` passes on the rendered files in scratch;
+   - the operator runs `sh-agent dream --install-timer` on this box, and `systemctl --user list-timers` shows it; `--remove-timer` removes it.
+6. **Parity**: criterion 1 on the claude and agy setups. Criterion 3 with `--vendor claude` (scratch `--home`, as above) and on the agy-only sandbox (the whole process under the sandbox `HOME`, with its settings file leaving `dream-work/` untrusted, as the real home does).
 
 ## Phases
-- [ ] Cold-reader check — design ready and implementation ready (<reviews/ paths>)
+- [x] Cold-reader check — three rounds (`reviews/2026-09-30-cold-read-parity-memory-dream-r1.md`, `-r2.md`, `-r3.md`), none both-ready; at the cap the operator took the residue as decided defaults: "Go all" (2026-09-30), on the six answers now D21–D26 and the non-blocking defaults D27
 
 ### Phase 0 — Requirements
-- [ ] R-parity added to `REQUIREMENTS.md` verbatim as approved; ADR-047; `ROADMAP.md` "Now" names this plan — verify: AI, `grep -c "R-parity" REQUIREMENTS.md` — expect: 1 — docs: REQUIREMENTS.md
-- [ ] R3 exception sentence added verbatim once the operator approves D3's text; ADR-047 extended — verify: AI, grep — expect: the approved sentence present — docs: REQUIREMENTS.md
-- [ ] Checkpoint — expect: requirements committed — evidence: commit, date
+- [x] R10 added verbatim; ADR-047; `ROADMAP.md` "Now" names this plan — verify: AI, `grep -c "R-parity" REQUIREMENTS.md` — expect: 1 — evidence: d6e396a — docs: REQUIREMENTS.md
+- [x] R3 exception, R4 driver and uninstall clauses, and the Non-goals memory-keys exception, verbatim as approved (D3, D12, D13), plus ADR-047a — verify: AI, grep each approved sentence — expect: each present once — evidence: `grep -c` 1 each, 2026-09-30 — docs: REQUIREMENTS.md
+- [x] Checkpoint — expect: requirements committed and pushed — evidence: the Phase 0 commit (this one), 2026-09-30
 
 ### Phase 1 — `sh-agent memory`
-- [ ] `internal/memory`: `Add(root, Entry, body)` and `Show(root) (string, error)` with the trust checks, lock and atomic write — verify: unit, `go test -race ./internal/memory` — expect: tests for each refusal, update-in-place, index cap, `show` cap and empty store pass; each fails without its check (mutation of one refusal)
-- [ ] `memory add|show` wired in main.go and the usage text — verify: unit + a scratch checkout run of `add` then `show` — expect: the file, the index line, and the printed index — docs: README.md verbs table
-- [ ] Checkpoint — expect: full `go test -race ./...` green, verifier log — evidence: <log>, date
+- [ ] `internal/memory` `Add` and `Show` — verify: unit, `go test -race ./internal/memory` — expect: a test per refusal (1–5), update in place, the index cap, the stale lock, the `show` cap and the empty store; one refusal's check mutated makes its named test fail (review-standards § 2)
+- [ ] `memory add|show` in main.go and usage — verify: unit (main_test) plus `add` then `show` in a scratch fixture checkout outside this repo — expect: the file, the line, and the printed index — docs: README.md verbs table
+- [ ] Checkpoint — expect: bare `go test -race ./...` exit 0; verifier log — evidence: <log>, date
 
-### Phase 2 — Memory on both CLIs (text)
-- [ ] `skills/memory/SKILL.md`: when to write (the four types, Claude Code's own triggers restated), `sh-agent memory add` usage, never a secret, one fact per file — verify: `sh-agent install --home <scratch>` lint passes; skill listed on both vendors — expect: installed at both paths — docs: README.md skills list
-- [ ] `feedback-log` rule 7 calls `sh-agent memory add` on every CLI; `context/AGENTS.md` resume → `sh-agent memory show`, bytes paid by cuts in the same edit — verify: `TestRenderedContextFitsAntigravityBlock` — expect: pass, byte count ≤ 22000 read from `-v`
-- [ ] `/init-project` Step 5b writes `autoMemoryEnabled: false`; `/dream` Step 1: the store is `<root>/.agents/memory` on every machine; `agents/dreamer.md` and the memory spec match — verify: `/review --docs` grep for `autoMemoryDirectory` resolution in living text — expect: no copy saying the old thing — docs: specs/sh-agent/memory-loop.md
-- [ ] Checkpoint — expect: E2E criteria 1 and 2 on the three sandbox homes (sandbox rules: `AGENTS.md` § Testing, BUG-115) — evidence: <log>, date
+### Phase 2 — Memory on both CLIs
+- [ ] `skills/project-memory/SKILL.md`: when to write (the four types and their triggers), the verb, one fact per file, never a secret; the name checked against both CLIs' built-in commands (BUG-065) — verify: scratch install lints; listed on both vendors — expect: installed at both paths — docs: README.md skills list
+- [ ] `feedback-log` rule 7 → the verb on every CLI; the context resume → `sh-agent memory show`, bytes paid in the same edit — verify: `go test -run TestRenderedContext -v ./internal/harness` — expect: pass, count ≤ 22000
+- [ ] `/init-project` Step 5b second key; `/dream` Step 1 → `<root>/.agents/memory`; `agents/dreamer.md`; `specs/sh-agent/memory-loop.md` rewritten (header fixed, memory item 5) — verify: `git grep` for the old resolution text in living files — expect: none left — docs: specs/sh-agent/memory-loop.md
+- [ ] Behavioural run of the changed `agents/dreamer.md`: `claude -p --agents <json>` with the matrix `dreamer` row, several runs, reported as n of N (AGENTS.md:65) — expect: the artifact reads the store at `<root>/.agents/memory`
+- [ ] `testing/guide.md` gains the claude-only kit (`CLAUDE_CONFIG_DIR`, a copied credential, chmod 600, deleted by name after) — docs: testing/guide.md
+- [ ] Checkpoint — expect: E2E 1 on the three setups, E2E 2 on the claude setup (both states), sandbox rules per `AGENTS.md` § Testing — evidence: <log>, date
 
 ### Phase 3 — `sh-agent dream` collection
-- [ ] `search.ListProjects(home)` — verify: unit — expect: lists the rows of a fixture db; missing db → empty, no error
-- [ ] `harness.Redact` exported wrapper plus the `$HOME` rewrite — verify: unit — expect: the report tests' needles redact through it
-- [ ] Claude transcript reader (cwd match, text parts only) — verify: unit on a fixture jsonl — expect: only the matching session's user/assistant text
-- [ ] Antigravity reader per D8 — first task: the probe of D8 — verify: unit on a fixture made from a real conversation db copied to scratch, fields reduced — expect: the text of a known prompt is extracted; an unmapped conversation is ignored
-- [ ] Collect, watermark, 256 KB cap, `--dry-run` — verify: unit + `sh-agent dream --dry-run --all --home <scratch>` — expect: per-project counts; nothing written (asserted) — docs: specs/sh-agent/dream.md
+- [ ] `search.ListProjects` — verify: unit — expect: rows of a fixture db; missing db → empty, no error
+- [ ] `search.AgyConversationText` (D8) — first: the probe on a copy of one real conversation db in scratch, showing text runs map to the user's and the model's words — verify: unit on a reduced fixture db — expect: a known prompt's text returned; a conversation of another workspace ignored
+- [ ] `harness.Redact` — verify: unit — expect: every needle of `TestRedact*` redacted through it; `$HOME` → `~`
+- [ ] Claude transcript reader — verify: unit on a fixture jsonl — expect: only lines after the watermark, with cwd at or under the root, text parts only
+- [ ] Collect, watermark rule, the cap, `--dry-run` — verify: unit plus `sh-agent dream --dry-run --all --home <scratch>` — expect: counts; nothing written, locked or advanced (asserted) — docs: specs/sh-agent/dream.md, README.md verbs table, main.go usage
+- [ ] `testing/guide.md` § 3d for the `internal/search` additions (recall, rebuild under 10 s, warm search under 100 ms) and the `sh-agent-matrix.md` rows (AGENTS.md:65)
 - [ ] Checkpoint — evidence: <log>, date
 
-### Phase 4 — the headless run and its outputs
-- [ ] Probe (D7): `agy -p` in an empty cwd with the dream prompt and the flags under test returns text without a tool call and without "no output produced"; record the flags — verify: sandbox run on an agy-only home — expect: text on stdout, exit 0
-- [ ] Run, write proposal, state, log, lock, `status` line — verify: unit with a fake CLI binary on PATH (a Go test helper) — expect: the proposal file shape; watermark advances only after the write; a failing CLI leaves it — docs: README.md, specs/sh-agent/dream.md
-- [ ] `report` never sends `proposals/dream/`; `/retro --harness` reads it — verify: unit on `Collect` — expect: the path absent from a report bundle — docs: skills/retro/SKILL.md
-- [ ] Checkpoint — expect: E2E criteria 3, 4 and 6 on the sandbox homes — evidence: <log>, date
+### Phase 4 — the run and its outputs
+- [ ] Probe D7: `agy -p` with the prompt, in the empty `dream-work`, in an agy-only sandbox home whose settings file does NOT list `dream-work` as trusted (as in the real home) — expect: text on stdout, exit 0, no "no output produced"; the flags recorded in D7, or D7's refusal branch taken
+- [ ] Run, parse, render, drafts, state, log, lock, `status` — verify: unit with a fake CLI (a test binary on PATH that records stdin and prints canned output) — expect: the file shape above; the watermark advances only after the write; invalid output → fail with the raw text kept; a stale lock is replaced — docs: README.md (state rows :212-214, `configDir` :30), specs/sh-agent/dream.md
+- [ ] `Collect` sends `proposals/dream/harness/*.md` and no other `proposals/dream/` path (D19) — verify: unit, written first — expect: fails before the change (the harness file absent from the bundle), passes after; a project-target file and a draft never in the bundle — docs: README.md report row :214
+- [ ] `/retro` reads its project's dream proposals, `/retro --harness` the harness targets; Status set to applied/rejected as the queue does — docs: skills/retro/SKILL.md
+- [ ] Checkpoint — expect: E2E 3, 4 and 6 — evidence: <log>, date
 
-### Phase 5 — the timer (waits on D3)
-- [ ] `--install-timer`/`--remove-timer`, `uninstall` removal — verify: unit on the unit-file text; Linux run in a scratch home (`XDG_CONFIG_HOME`/`--home`) with `systemctl --user` on this box — expect: E2E criterion 5 — docs: deploy/local.md, README.md
+### Phase 5 — the timer (after D3/D12 approval)
+- [ ] `--install-timer`/`--remove-timer`, `uninstall` removal and its dry run — verify: unit on the rendered text and on `uninstall --dry-run` (no command run); `systemd-analyze verify` on scratch files — expect: pass — docs: deploy/local.md, README.md uninstall row
+- [ ] README map gains the job (D13), `TestHarnessMap` updated in the same commit — verify: `go test -run TestHarnessMap ./cmd/sh-agent` — expect: pass
 - [ ] Checkpoint — evidence: <log>, date
+- [ ] E2E 5, the real timer on this box — who: user — expect: `list-timers` shows it, then it is gone after `--remove-timer`
 
 ### Phase 6 — close
-- [ ] Docs pass (`documentation`), `/review --docs`, skill-matrix and sh-agent-matrix rows — verify: reviewer docs lens — expect: no stale text
-- [ ] Release through `/preflight` (the operator: "Include this in the next version")
+- [ ] Docs pass (`documentation`), `/review --docs`, AGENTS.md Layout, :59, and rule 1 (:13: the dream timer is neither a delivery path nor a report path, stated in the same commit), matrix rows; `deploy/local.md` states the timer's limits (no user manager without linger, `Persistent=true` catches up at login; a rerun from a shell with another PATH renders different text, so `--remove-timer` first)
+- [ ] Antigravity run of each changed skill and agent (`project-memory`, `feedback-log`, `init-project`, `dream`, `retro`, `distill`, `dreamer`) before the tag (AGENTS.md:77), plus the three-setup parity rows
+- [ ] Release through `/preflight` ("Include this in the next version")
 
 ## Risks
 Assumptions:
-- `autoMemoryEnabled: false` in `.claude/settings.local.json` stops Claude Code's native writes — checked by E2E criterion 2, the first task of Phase 2's checkpoint.
-- `claude -p --tools ""` accepts the prompt on stdin and returns plain text — checked by the Phase 4 unit fake and one real run in Phase 4.
-- agy conversation text is extractable (D8) — the first task of the Antigravity reader.
-- agy can answer tool-free (D7) — the Phase 4 probe.
+- `autoMemoryEnabled: false` stops native writes — E2E 2's must-fail control.
+- `claude -p --tools "" --no-session-persistence` takes stdin and prints only the answer — the first real run in Phase 4.
+- agy text is extractable from step blobs (D8) — the Phase 3 probe.
+- agy answers tool-free (D7) — the Phase 4 probe.
+- Claude Code authenticates from a sandbox `CLAUDE_CONFIG_DIR` — the first Phase 2 checkpoint run.
 
 ## Decisions
-- D1 — 2026-09-30 — R-parity text as approved — by: "Sounds great. … Go all approved go work."
-- D2 — 2026-09-30 — Memory is written and loaded through `sh-agent` on both CLIs; Claude Code's native auto memory is switched off per project, because R-parity says "a native feature is used only where it gives the same result on both" — by: memory table item 1 ("written by the harness on both CLIs"), approved "Go all approved"
-- D3 — 2026-09-30 — R3 exception, exact text shown to the operator 2026-09-30: "One exception: `sh-agent dream --all`, run by an OS user timer that `sh-agent dream --install-timer` installs and `--remove-timer` removes, reads every indexed project's trail, memory, the feedback log and both CLIs' transcripts, and writes proposals and draft skills to `~/.config/sh-agent/proposals/` only; it never edits a project, a skill, a rule or the context, and a proposal takes effect only through `/retro --harness`." — by: awaiting the operator's yes on this exact text
-- D4 — 2026-09-30 — The dream job's CLI call has no tools; `sh-agent` does all reading and writing. This closes the injection path and needs no permission in any vendor setting (REQUIREMENTS § Non-goals) — by: implementer, from recon risks 1 and 3
-- D5 — 2026-09-30 — The timer is opt-in (`--install-timer`, once per machine), never part of `install` — by: implementer; dreamer table item 1 names the command
-- D6 — 2026-09-30 — Proposals go to `proposals/dream/`, a subdirectory, so `LastRetro` (top-level `*.md` only, state.go:137) does not count a dream as a retro, and `report` excludes the subdirectory (transcript-derived content never leaves the machine) — by: implementer, from recon open question 7
-- D7 — 2026-09-30 — agy invocation for a tool-free answer is decided by the Phase 4 probe; candidates `--mode plan --disable-slash-commands --output-format text` in an empty cwd. If no invocation answers without a tool call, dream uses claude for text and says so in `status`; on an Antigravity-only machine the job then stops with that reason, an R-parity known difference to be put to the operator — by: implementer
-- D8 — 2026-09-30 — Antigravity transcripts: map by `conversation_summaries.db` `workspace_uris`, then extract UTF-8 text runs of 20+ characters from the `steps` blobs (protobuf, no schema), deduplicated in order. If the probe shows this cannot isolate the user and model text, transcripts are left out on BOTH CLIs (R-parity) and the job reads memory, feedback and trail only; this is put to the operator — by: implementer, from recon
-- D9 — 2026-09-30 — The watermark lives in `~/.config/sh-agent/dream-state.json`, not in `search.db`, which is a cache (R4) — by: implementer, from recon
-- D10 — 2026-09-30 — The `/dream` skill stays: it is the interactive consolidation with deletes and a gate. The `sh-agent dream` verb is the background proposal job. The names are kept because the operator calls both "dream"; the skill's description names the verb — by: implementer
-- D11 — 2026-09-30 — Existing Claude default stores keep migrating through `/init-project` Step 5b as today; no new migration — by: implementer
-- Open: redaction beyond credential shapes and the home path (emails, names) — default: none beyond `report`'s deny-list and `~`, since nothing leaves the machine except to the CLI the operator already uses for that project
-- Rejected: auto-applying memory merges from the background job — the operator approved proposals only (dreamer table item 4)
-- Rejected: `memory list`/`forget` verbs — `show` and the `/dream` skill cover them
+- D1 — 2026-09-30 — R10 as approved — by: "Sounds great. … Go all approved go work."
+- D2 — 2026-09-30 — Memory is written and loaded through `sh-agent` on both CLIs, with native auto memory off per project; this supersedes memory items 2 and 3 under R10 — by: memory item 1, approved; R10
+- D3 — 2026-09-30 — R3 exception, revised exact text: "One exception: `sh-agent dream --all`, run nightly by an OS user timer that `sh-agent dream --install-timer` installs and `sh-agent dream --remove-timer` or `uninstall` removes, reads every indexed project's trail and memory, the feedback log and both CLIs' transcripts, runs a CLI with no tools over what it read, and writes only under `~/.config/sh-agent/`, its proposals to `proposals/dream/`; it never edits a project, a skill, a rule or the context, and a proposal takes effect only through `/retro`." — by: the operator, "Go all" (2026-09-30), on this text shown in chat
+- D4 — 2026-09-30 — The CLI call has no tools; `sh-agent` reads and writes everything. This departs from the option notes behind dreamer item 5 (`.agents/scratch/2026-09-30-dream-background-options.md` § 5, "the job needs Read/Grep/Write … a dedicated settings file"), not from the approved table line — by: implementer; put to the operator (item 5)
+- D5 — 2026-09-30 — The timer is opt-in, installed once per machine with `--install-timer` — by: dreamer item 1 names the command
+- D6 — 2026-09-30 — Proposals go to `proposals/dream/` with queue-shaped Status lines, and drafts are files under `proposals/dream/drafts/`. This departs from dreamer item 4's top-level path, because `LastRetro` counts top-level `*.md`. `report` already skips subdirectories (report.go:331-339) — by: implementer; departure put to the operator (item 5)
+- D7 — 2026-09-30 — agy's tool-free invocation comes from the Phase 4 probe, in a home where `dream-work` is untrusted; the candidates are `--mode plan --disable-slash-commands --output-format text`. When agy refuses (no answer without a tool, or an untrusted-workspace refusal), the job on an agy vendor stops before any project, with `status` "failed: agy cannot run the dream job here (<reason>)". That is put to the operator with two options: a Non-goals exception letting `sh-agent dream --install-timer` add `dream-work` to agy's `trustedWorkspaces`, or an R10 known difference. Nothing is written into agy's settings without that approval — by: implementer, cold read r2
+- D8 — 2026-09-30 — Antigravity transcripts: map by `conversation_summaries.db` `workspace_uris`, then extract UTF-8 runs of 20+ characters from the `steps` blobs, deduplicated in order, inside `internal/search`. If the probe cannot isolate the user's and model's text, transcripts are dropped on BOTH CLIs (R10) and that is put to the operator — by: implementer, from recon
+- D9 — 2026-09-30 — The watermark lives in `dream-state.json`, not in `search.db`, which is a cache (R4) — by: implementer
+- D10 — 2026-09-30 — The `/dream` skill stays (interactive, deletes, gated); `sh-agent dream` is the background proposal job, and the skill's description names the verb. The verb's output is a proposal queue under `~/.config/sh-agent/`, not an R7 record in the project; `context/AGENTS.md:42` ("every retro, distill and dream leaves a record") keeps meaning the skill — by: implementer
+- D11 — 2026-09-30 — Existing Claude default stores keep migrating through `/init-project` Step 5b — by: implementer
+- D12 — 2026-09-30 — R4 gains two sentences, pending approval (item 1 and item 2):
+  - "`sh-agent dream` also opens Antigravity's conversation databases with it, read-only." The reader lives in `internal/search`, so AGENTS.md:59's one-package rule holds.
+  - "`uninstall` removes exactly what its manifest lists, and the dream timer when one is installed (R3)."
+  The timer stays out of the manifest — by: the operator, "Go all" (2026-09-30), items 1, 2 and 5 of `.agents/scratch/2026-09-30-parity-operator-items.md`
+- D13 — 2026-09-30 — Pending approval:
+  - the Non-goals exception gains "and the two memory keys `/init-project` writes into a project's gitignored `.claude/settings.local.json` (`autoMemoryDirectory`, `autoMemoryEnabled: false`; R10)" (item 3);
+  - the README map gains the dream job (item 4, AGENTS.md rule 3, R9) in the implementing commit with an ADR
+  — by: the operator, "Go all" (2026-09-30), items 3 and 4
+- D14 — 2026-09-30 — The skill is named `project-memory`, because `memory` shadows Claude Code's built-in `/memory` (BUG-065) — by: cold read r1
+- D15 — 2026-09-30 — `--project <dir>` exists for the e2e and for rerunning one project; the CLI is chosen by the existing global `--vendor` flag, not a new `--cli`; `--dry-run` is required by the global rule that a command with side effects has a read-only mode — by: implementer
+- D16 — 2026-09-30 — Loading memory costs one `sh-agent memory show` call per session start on both CLIs. A headless run without a grant loads none, and an interactive Claude Code session asks for permission unless the operator allowed `sh-agent`, while agy on this box approves by its own `toolPermission`. Accepted: the harness behaves the same; the difference is each machine's own CLI permission setting, which the harness never writes (Non-goals) — by: implementer, from cold reads r1 and r2
+- D17 — 2026-09-30 — With vendor `all`, Antigravity transcripts go to Claude Code's model on the same machine. Accepted: both are the operator's own accounts, and nothing is sent anywhere else — by: implementer, from cold read r1
+- D18 — 2026-09-30 — The `.gitignore` check is `git check-ignore -q` on the target path, not a literal line — by: cold read r1 blocking question 6
+- D19 — 2026-09-30 — Harness-target dream proposals go to `proposals/dream/harness/` and `report` sends that directory (R8); project-target proposals and drafts stay local. This supersedes D6's "report never sends" for the harness subset — by: implementer, cold read r2
+- D20 — 2026-09-30 — Existing projects keep Claude Code's native memory until `/init-project` reruns there; `sh-agent memory show` prints the rollout hint in each such project — by: implementer, cold read r2
+- D21 — 2026-09-30 — Over the 256 KB cap after all transcript text is dropped: trail files are dropped next, oldest mtime first, whole files; memory is always sent whole; a project whose memory alone passes the cap fails with `fail memory over cap` — by: the operator, "Go all" (cold read r3 question 1)
+- D22 — 2026-09-30 — Phase order under the approvals: all of D3, D12 and D13 are approved, so no phase waits; the README map, the `report` change and the timer land in ONE commit with the code and docs (R9, AGENTS.md rule 3) — Phase 4's `Collect` change and Phase 5's map and timer go in the Phase 5 commit — by: the operator, "Go all" (r3 question 2)
+- D23 — 2026-09-30 — A harness-target proposal is written only to `proposals/dream/harness/…`, never also to the project file; one Status line each — by: the operator, "Go all" (r3 question 3)
+- D24 — 2026-09-30 — Antigravity's "since": per conversation, by `conversation_summaries.db` `last_modified_time`; a conversation modified after the watermark is sent whole (steps carry no time) — by: the operator, "Go all" (r3 question 4)
+- D25 — 2026-09-30 — `/dream`'s promote test counts a memory without `originSessionId` as one session (its existing rule, `skills/dream/SKILL.md:47`); the second session comes from `feedback.jsonl`. `skills/dream/SKILL.md:47` is added to the touched text to say so — by: the operator, "Go all" (r3 question 5)
+- D26 — 2026-09-30 — `memory add|show` root: the main worktree's toplevel (the parent of `git rev-parse --path-format=absolute --git-common-dir`), so every worktree shares one store — by: the operator, "Go all" (r3 question 6)
+- D27 — 2026-09-30 — The r3 non-blocking defaults, as the review recommends:
+  - the rollout hint also fires when `settings.local.json` is absent on a machine whose manifest vendor is not `antigravity`;
+  - Step 5b's empty-object branch writes the two-key object;
+  - `--project` takes the absolute git toplevel of its argument and needs no registration;
+  - the child's stderr is kept beside its failure file and redacted;
+  - `dream-failed/` text is redacted, and files older than 30 days are pruned at the start of a run;
+  - drafts get `-2` on a same-day rerun;
+  - the Claude transcript reader honours `CLAUDE_CONFIG_DIR`;
+  - `ListProjects` opens read-only, never creating the db;
+  - the proposal frontmatter `project` carries the root.
+  — by: the operator, "Go all" (r3 non-blocking 7–15)
+- Open: redaction beyond credential shapes and `~` — default: none (the same set as `report`)
+- Rejected: the timer in the manifest — the next `install` deletes listed files as stale (apply.go:88-109)
+- Rejected: `ExecStart` from `os.Executable()` — under `go run` it is a temp build; BinPath is what `update` keeps current
+- Rejected: `memory add --title` — the slug is the title; one less value to keep in step

@@ -94,3 +94,4 @@ Round-3 agent findings: reviewer APPROVE, none; verifier PASS, "close-before-ren
 - 6 fixed — `internal/harness/report.go` `pushError`.
 - 7 left: operator — `main.go` layout, deferred; both lenses non-blocking.
 - Docs: `deploy/local.md:66` and `specs/sh-agent/delivery.md:56` describe the redaction shapes — in flight: `documentation`.
+- Operator's choices (2026-09-30, "Go with your recommendations"): finding 4's remainder fixed by one rule per kind (`changes/2026-09-30-0910-redaction-per-kind-rules.md`, `reviews/2026-09-30-security-worktree-redaction.md` § Outcome); finding 5's fork names kept.

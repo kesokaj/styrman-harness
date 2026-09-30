@@ -40,13 +40,12 @@ var prefixNeedles = []string{
 	"-----BEGIN", "PRIVATE KEY", "AKIA", "ASIA", "AIza", "ya29.", "GOCSPX-",
 	"ghp_", "gho_", "ghs_", "ghu_", "github_pat_", "glpat-",
 	"sk-ant-", "sk-proj-", "xoxb-", "xoxp-", "xoxa-", "xoxs-",
-	// Security review 2026-09-30, finding 3: Stripe, PyPI (every token opens
-	// with the base64 of its macaroon location) and a Slack webhook URL.
+	// Security review 2026-09-30, finding 3: Stripe and PyPI (every token
+	// opens with the base64 of its macaroon location).
 	"sk_live_", "rk_live_", "whsec_", "pypi-AgEIcHlwaS5vcmc", "pypi-AgENdGVzdC5weXBpLm9yZw",
-	"hooks.slack.com/services/",
-	// Security check of the fix, round 2: the test-mode and the service and
-	// admin key shapes, and a Slack workflow webhook.
-	"sk_test_", "rk_test_", "sk-svcacct-", "sk-admin-", "hooks.slack.com/workflows/",
+	// Security check of the fix, rounds 2 and 3: the test-mode and the
+	// service, admin and None key shapes.
+	"sk_test_", "rk_test_", "sk-svcacct-", "sk-admin-", "sk-None-",
 }
 
 // keywordNeedles are assignment and header shapes, matched without regard to
@@ -74,10 +73,18 @@ var keywordNeedles = []struct {
 	{"openai key", regexp.MustCompile(`sk-[A-Za-z0-9]{32,}`)},
 	{"npm token", regexp.MustCompile(`npm_[A-Za-z0-9]{36}`)},
 	{"hugging face token", regexp.MustCompile(`hf_[A-Za-z0-9]{30,}`)},
-	// A token as the whole userinfo, with no password and so no colon;
-	// twenty characters or more, percent-escapes included, so a username
-	// (`ssh://git@`) stays.
-	{"url token", regexp.MustCompile(`://[A-Za-z0-9_.%-]{20,}@`)},
+	// A token as the whole userinfo, with an empty or no password: sixteen
+	// characters or more of anything up to the `@`, so a short username
+	// (`ssh://git@`) stays while an escaped or padded token goes. A long
+	// username goes too, and a pathless URL followed by an unrelated `@` on
+	// the same line takes the line with it: over-redaction in the safe
+	// direction, accepted like `ASIAN` and pinned in the test. One rule per
+	// kind, not one per instance: the security rounds of 2026-09-30 found a
+	// shape past every instance listed, five times.
+	{"url token", regexp.MustCompile(`://[^/\s:@]{16,}:?@`)},
+	// Every Slack webhook host and path (services, workflows, triggers, a
+	// port, a gov domain), any case.
+	{"slack webhook", regexp.MustCompile(`(?i)hooks\.slack`)},
 }
 
 // A key block opens at a PEM header, or at a header whose dashes a chat UI

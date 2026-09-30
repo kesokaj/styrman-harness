@@ -95,6 +95,15 @@ func TestReportRedactShapes(t *testing.T) {
 		// workflow webhook, a percent-escaped userinfo token.
 		"sk_test_FAKEVALUE", "rk_test_FAKEVALUE", "sk-svcacct-FAKEVALUE", "sk-admin-FAKEVALUE",
 		"https://hooks.slack.com/workflows/T0/A0/FAKEVALUE", "https://FAKEVALUE%2FFAKEVALUE%3DFAKE@host/r",
+		// Round 3, one rule per kind: any Slack webhook path in any case, a
+		// userinfo token of sixteen characters, a padded one, an sk-None key.
+		"https://HOOKS.SLACK.COM/services/T0/B0/FAKEVALUE", "https://hooks.slack.com/triggers/T0/FAKEVALUE",
+		"https://FAKEVALUE1234567@host/r", "https://FAKEVALUEFAKEVAL==@host/r", "sk-None-FAKEVALUE",
+		// The security check of that rule: a webhook host with a port, a
+		// trailing dot or a gov domain, an encoded path, an empty password.
+		"https://hooks.slack.com:443/services/T0/B0/FAKEVALUE", "https://hooks.slack.com./services/FAKEVALUE",
+		"https://hooks.slack-gov.com/services/FAKEVALUE", "https://hooks.slack.com%2Fservices%2FFAKEVALUE",
+		"https://FAKEVALUEFAKEVALUE:@host/r",
 	}
 	for _, sec := range secrets {
 		quoted, _ := json.Marshal(map[string]string{"user_quote": "they said " + sec})
@@ -108,11 +117,20 @@ func TestReportRedactShapes(t *testing.T) {
 			}
 		}
 	}
+	// Accepted over-redaction of the url-token rule, pinned so a change to
+	// it is deliberate: a username of sixteen or more characters, and a
+	// pathless URL whose line holds an unrelated `@` later on.
+	for _, over := range []string{"ssh://first.lastname.long@bitbucket.org/x", `["https://app.example.com","ops@example.com"]`} {
+		if _, recs := redactLines("f", []byte(over+"\n"), false); len(recs) != 1 {
+			t.Errorf("%q: over-redaction is the pinned behaviour, got %+v", over, recs)
+		}
+	}
 	for _, benign := range []string{
 		"the task-list grew", "the token expired", "passwords are hard", "max_tokens 5", "ASIAN food",
 		// The shapes above, too short or too plain to be a token.
 		"npm_config_registry=https://r.example", "ssh://git@github.com/o/r.git", "sk-1234 is a short id",
 		"the eyJ prefix marks base64 JSON", "hf_hub is the client library", "a whsec is a webhook secret",
+		"https://deploy-bot@host/r", "see slack.com/apps for hooks",
 	} {
 		// "ASIAN" contains the ASIA prefix: accepted over-redaction, pinned
 		// here so a change to it is deliberate.

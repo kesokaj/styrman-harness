@@ -497,3 +497,11 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
 
 **Consequences:** the corrections do not change the decision or its consequences; only the record. ADR-046 stands as written; this addendum makes the record accurate for future reference to the reasoning.
 
+
+## ADR-047: R10 — one behaviour on every CLI (R-parity)     (2026-09-30) — Accepted
+
+**Context:** The harness serves Claude Code and Antigravity, and the operator runs machines with one or both (`bugs/BUG-113` came from an Antigravity-only machine). Features had drifted apart where one CLI had something native: Claude Code writes and loads auto memory itself, while Antigravity writes memory only when `feedback-log` fires and loads it only because the context says so. Nothing ran in the background on either CLI. The operator (2026-09-30): "In the best of worlds I want the setup and executions to be exactly the same over agy and Claude. Example, if Claude has a feature and agy don't. Can we build in that feature in sh-agent?"
+
+**Decision:** `REQUIREMENTS.md` gains R10 on the exact text the operator approved ("Sounds great. Include this in the next version. Go all approved go work."). A feature one CLI has natively and the other lacks is provided once, in `sh-agent` or a skill that calls it, and both CLIs use that version; a native feature stays only where it gives the same result on both; what only a CLI's runtime controls is a listed known difference.
+
+**Consequences:** Memory becomes `sh-agent memory add|show` on both CLIs, with Claude Code's native auto memory switched off per project. The background dreamer is `sh-agent dream`, which runs any CLI tool-free. Both are in plan `plans/2026-09-30-parity-memory-dream.md`. Every feature and gate run is checked on three setups: Claude Code only, Antigravity only, and both. The R3 exception the dream timer needs is a separate approval (the plan's D3) and is added to this ADR as an addendum when given.

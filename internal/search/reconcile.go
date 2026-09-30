@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path"
@@ -83,6 +84,14 @@ func docsRootOf(root string) string {
 // prefix limits it to one directory.
 func gitView(root, prefix string) ([]entry, error) {
 	under := func(p string) bool { return prefix == "" || strings.HasPrefix(p, prefix) }
+	// Every read goes through an os.Root: a path that leaves the checkout
+	// through `..` or a symlinked directory is refused by the standard
+	// library, whatever git lists (security check of the v1.13.0 gate fixes).
+	fsRoot, err := os.OpenRoot(root)
+	if err != nil {
+		return nil, err
+	}
+	defer fsRoot.Close()
 	out, err := git(root, nil, "ls-files", "-s", "-z")
 	if err != nil {
 		return nil, err
@@ -122,8 +131,7 @@ func gitView(root, prefix string) ([]entry, error) {
 		if !under(p) {
 			continue
 		}
-		full := filepath.Join(root, p)
-		fi, err := os.Lstat(full)
+		fi, err := fsRoot.Lstat(filepath.FromSlash(p))
 		if y == 'D' || err != nil || !fi.Mode().IsRegular() || fi.Size() > maxFileBytes {
 			delete(view, p)
 			continue
@@ -132,7 +140,7 @@ func gitView(root, prefix string) ([]entry, error) {
 		// --stdin-paths` strips a trailing CR and unquotes a leading '"'
 		// in a name, binding an ID to another file (security review,
 		// finding 3).
-		data, err := os.ReadFile(full)
+		data, err := readAll(fsRoot, filepath.FromSlash(p))
 		if err != nil {
 			delete(view, p)
 			continue
@@ -179,13 +187,18 @@ func configView(dir string) ([]entry, error) {
 	for _, p := range props {
 		names = append(names, filepath.ToSlash(strings.TrimPrefix(p, dir+string(filepath.Separator))))
 	}
+	cfgRoot, err := os.OpenRoot(dir)
+	if err != nil {
+		return nil, err
+	}
+	defer cfgRoot.Close()
 	var out []entry
 	for _, n := range names {
-		fi, err := os.Lstat(filepath.Join(dir, n))
+		fi, err := cfgRoot.Lstat(filepath.FromSlash(n))
 		if err != nil || !fi.Mode().IsRegular() {
 			continue
 		}
-		data, err := os.ReadFile(filepath.Join(dir, n))
+		data, err := readAll(cfgRoot, filepath.FromSlash(n))
 		if err != nil {
 			continue
 		}
@@ -195,14 +208,24 @@ func configView(dir string) ([]entry, error) {
 	return out, nil
 }
 
+// readAll reads one file through the root, so the read cannot leave it.
+func readAll(fsRoot *os.Root, rel string) ([]byte, error) {
+	f, err := fsRoot.Open(rel)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return io.ReadAll(f)
+}
+
 // readIndexable returns a file's text, or ok=false when it is too large,
-// binary, or gone.
-func readIndexable(full string) (string, bool) {
-	fi, err := os.Lstat(full)
+// binary, gone, or outside the root.
+func readIndexable(fsRoot *os.Root, rel string) (string, bool) {
+	fi, err := fsRoot.Lstat(rel)
 	if err != nil || !fi.Mode().IsRegular() || fi.Size() > maxFileBytes {
 		return "", false
 	}
-	data, err := os.ReadFile(full)
+	data, err := readAll(fsRoot, rel)
 	if err != nil {
 		return "", false
 	}
@@ -343,13 +366,18 @@ func (s *store) applyLocked(src source, now int64) (int, error) {
 		return 0, err
 	}
 	// Index every blob the database has not seen, parsed by the first path
-	// it appears at in the view (D14).
+	// it appears at in the view (D14). Reads go through an os.Root.
+	fsRoot, err := os.OpenRoot(src.dir)
+	if err != nil {
+		return 0, err
+	}
+	defer fsRoot.Close()
 	var in *inserter
 	for _, e := range src.view {
 		if _, known := blobs[e.oid]; known {
 			continue
 		}
-		text, ok := readIndexable(filepath.Join(src.dir, filepath.FromSlash(e.path)))
+		text, ok := readIndexable(fsRoot, filepath.FromSlash(e.path))
 		if _, err := s.db.Exec(`INSERT INTO blobs(oid, last_seen, skipped) VALUES (?, ?, ?)`, e.oid, now, boolInt(!ok)); err != nil {
 			return 0, err
 		}

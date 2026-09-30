@@ -325,3 +325,35 @@ func TestWorktreeRenameStaysInsideCheckout(t *testing.T) {
 		t.Errorf("the moved file is not found at its new path:\n%s", out)
 	}
 }
+
+// Security check of the v1.13.0 gate fixes, finding 2: a tracked file marked
+// skip-worktree whose parent directory becomes a symlink was read through
+// the link, outside the checkout.
+func TestReadsNeverLeaveCheckout(t *testing.T) {
+	root := newRepo(t)
+	home := t.TempDir()
+	writeFile(t, root, "dir/a.md", "inside the checkout\n")
+	commitAll(t, root, "add")
+	gitT(t, root, "update-index", "--skip-worktree", "dir/a.md")
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, "a.md"), []byte("canary beside the checkout: pangolin\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(filepath.Join(root, "dir")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, "dir")); err != nil {
+		t.Fatal(err)
+	}
+	// The condition holds: git still lists the path, and it now resolves outside.
+	if !strings.Contains(gitT(t, root, "ls-files", "-s"), "dir/a.md") {
+		t.Fatal("fixture: dir/a.md not listed")
+	}
+	if data, _ := os.ReadFile(filepath.Join(root, "dir", "a.md")); !strings.Contains(string(data), "pangolin") {
+		t.Fatal("fixture: the path does not resolve to the canary")
+	}
+	out := mustSearch(t, Options{Dir: root, Home: home, Words: []string{"pangolin"}})
+	if !strings.HasPrefix(out, "search: 0 hits") || strings.Contains(out, "canary") {
+		t.Errorf("a file outside the checkout was read:\n%s", out)
+	}
+}

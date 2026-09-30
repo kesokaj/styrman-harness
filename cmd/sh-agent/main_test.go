@@ -927,37 +927,6 @@ func TestUpdateNeverInstallsDirtyTree(t *testing.T) {
 	})
 }
 
-// TestAbandonTempReportsRemoveFailure forces the error path the verifier
-// reported as uncovered: the settings write failed AND its temp file could
-// not be removed. Both lines must reach the operator; neither may panic.
-func TestAbandonTempReportsRemoveFailure(t *testing.T) {
-	if os.Geteuid() == 0 {
-		t.Skip("root ignores the directory permissions this test relies on")
-	}
-	dir := t.TempDir()
-	tmp := filepath.Join(dir, ".settings-tmp.json")
-	if err := os.WriteFile(tmp, []byte("{}"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Chmod(dir, 0o500); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { os.Chmod(dir, 0o700) })
-
-	var out bytes.Buffer
-	abandonTemp(tmp, filepath.Join(dir, "settings.json"), errors.New("disk full"), &out)
-	got := out.String()
-	if !strings.Contains(got, "disk full") {
-		t.Errorf("the cause should be reported, got %q", got)
-	}
-	if !strings.Contains(got, "left behind") {
-		t.Errorf("a temp file that could not be removed should be named, got %q", got)
-	}
-	if !strings.Contains(got, tmp) {
-		t.Errorf("the temp path should be named so the operator can remove it, got %q", got)
-	}
-}
-
 // TestReadSettingsProblems covers the reader's refusals, including the open
 // failure the verifier reported as untested. A problem is named without a
 // byte of the file's contents.
@@ -1820,5 +1789,22 @@ func TestStatusWarnsOnOversizedSettings(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "larger than 1 MiB") {
 		t.Errorf("status did not warn about an oversized settings file:\n%s", out.String())
+	}
+}
+
+// TestSettingsWriteUsesHarnessWriteAtomic pins the settings editor to the one
+// atomic-write helper: the temp-write-sync-rename sequence lived here and in
+// internal/harness, and a fix made in one had to be ported to the other by
+// hand once already (project review 2026-09-30, simplify finding 1).
+func TestSettingsWriteUsesHarnessWriteAtomic(t *testing.T) {
+	src, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(src), "os.CreateTemp(") {
+		t.Error("main.go writes through its own temp file; use harness.WriteAtomic")
+	}
+	if !strings.Contains(string(src), "harness.WriteAtomic(") {
+		t.Error("main.go does not call harness.WriteAtomic")
 	}
 }

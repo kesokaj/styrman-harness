@@ -15,6 +15,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // ReleaseRepo is the repository a release binary updates from.
@@ -136,16 +137,14 @@ func UpdateFromRelease(home, version string, checkOnly bool, installArgs []strin
 
 	// A random directory, and one whose siblings from an interrupted earlier
 	// update are cleared first: a predictable name is one another local
-	// account can pre-create as a symlink for these writes to follow.
+	// account can pre-create as a symlink for these writes to follow. An
+	// hour is the zip sweep's threshold too; a younger sibling may be a
+	// second update still running in this home.
 	base, err := ConfigDir(home)
 	if err != nil {
 		return err
 	}
-	for _, stale := range globOrNil(filepath.Join(base, "release-*")) {
-		if err := os.RemoveAll(stale); err == nil {
-			fmt.Fprintf(out, "removed %s, left by an interrupted update\n", stale)
-		}
-	}
+	SweepStaleDirs(base, "release-", time.Hour, out)
 	dir, err := os.MkdirTemp(base, "release-")
 	if err != nil {
 		return err
@@ -168,7 +167,7 @@ func UpdateFromRelease(home, version string, checkOnly bool, installArgs []strin
 	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 		return err
 	}
-	if err := writeAtomic(dest, data, 0o755); err != nil {
+	if err := WriteAtomic(dest, data, 0o755); err != nil {
 		return fmt.Errorf("replacing %s: %w", dest, err)
 	}
 	fmt.Fprintf(out, "verified and installed %s %s\n", asset, tag)
@@ -366,11 +365,6 @@ func readCapped(path string, max int64) ([]byte, error) {
 		return nil, fmt.Errorf("%d bytes is larger than the %d this reads", info.Size(), max)
 	}
 	return io.ReadAll(io.LimitReader(f, max))
-}
-
-func globOrNil(pattern string) []string {
-	matches, _ := filepath.Glob(pattern)
-	return matches
 }
 
 // compareRelease orders two vX.Y.Z tags. Both are known to match

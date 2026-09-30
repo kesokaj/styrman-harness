@@ -55,7 +55,7 @@ Nothing generated is committed. The deployed files are assembled by `sh-agent in
 - Agent `description:` values are one line, double-quoted if they contain a colon, and free of the words "dispatch prompt" or "harness binary" — there is no binary behind them anymore.
 - Every skill directory needs a `SKILL.md` with a `description`; the installer refuses one without it. It also refuses any frontmatter value that a strict YAML parser reads as a comment — an unquoted `#` at the start or after a space or tab — because Antigravity silently drops such a skill (BUG-004); quote the value.
 - Adding a skill, agent, command, or rule is a file drop — never a code change. If a new kind of customization needs code, that is a design question, not a quick patch.
-- Third-party skills are vendored verbatim and listed in `skills/VENDORED.md`; never edit them in place — fork into a differently named skill.
+- Third-party skills are vendored verbatim and listed in `skills/VENDORED.md`; never edit them in place — fork into a differently named skill. Its second table names the two forks that predate this rule (`gke-basics`, `terraform`) and keep their upstream names: pinned to the base they were rewritten from, never overwritten by a re-fetch.
 - Stdlib only in the Go code, with one exception: `modernc.org/sqlite`, used only by `internal/search` (R4, ADR-045). The installer (`internal/harness`) never imports it. Any other dependency is a requirements change.
 - Commit and push after each task, per the global git workflow. This repo is on `main`.
 

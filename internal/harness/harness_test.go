@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -1144,7 +1145,7 @@ func TestWriteAtomicIsAtomicAndDurable(t *testing.T) {
 	dir := t.TempDir()
 	dest := filepath.Join(dir, "nested", "context.md")
 	data := []byte("# AGENTS.md\n\nwhole file\n")
-	if err := writeAtomic(dest, data, 0o644); err != nil {
+	if err := WriteAtomic(dest, data, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	got, err := os.ReadFile(dest)
@@ -1171,7 +1172,7 @@ func TestWriteAtomicIsAtomicAndDurable(t *testing.T) {
 		}
 	}
 	// Overwriting an existing file keeps the same guarantee.
-	if err := writeAtomic(dest, []byte("second\n"), 0o600); err != nil {
+	if err := WriteAtomic(dest, []byte("second\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if got, _ := os.ReadFile(dest); string(got) != "second\n" {
@@ -1817,5 +1818,99 @@ func TestInstallNamesEveryChange(t *testing.T) {
 		if strings.Contains(l, "skills/alpha/SKILL.md") {
 			t.Errorf("a line claimed a write that failed: %q (err %v)", l, err)
 		}
+	}
+}
+
+// TestVendoredRowsCarryAPin: every skill VENDORED.md lists names the
+// repository it came from and a pin (a commit or a digest), so the copy can
+// be checked against upstream and a local edit told from upstream content.
+// Two rows read "not recorded when vendored" for a year (project review
+// 2026-09-30, security finding 4).
+func TestVendoredRowsCarryAPin(t *testing.T) {
+	repo, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(repo, "skills", "VENDORED.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pin := regexp.MustCompile(`\b[0-9a-f]{7,40}\b|sha256:[0-9a-f]{6,}`)
+	vendored := vendoredSkills(t, repo)
+	seen := map[string]bool{}
+	for _, line := range strings.Split(string(data), "\n") {
+		if !strings.HasPrefix(strings.TrimSpace(line), "|") {
+			continue
+		}
+		cell := strings.TrimSpace(strings.Trim(strings.SplitN(strings.TrimSpace(line), "|", 3)[1], " `"))
+		if !vendored[cell] {
+			continue
+		}
+		seen[cell] = true
+		if strings.Contains(line, "not recorded") || !strings.Contains(line, "github.com/") && !strings.Contains(line, "https://") {
+			t.Errorf("%s: the row names no source repository: %s", cell, line)
+		}
+		if !pin.MatchString(line) {
+			t.Errorf("%s: the row carries no commit or digest pin: %s", cell, line)
+		}
+	}
+	for name := range vendored {
+		if !seen[name] {
+			t.Errorf("%s: listed by vendoredSkills but not seen in a row", name)
+		}
+	}
+}
+
+// TestAbandonNamesATempFileItCouldNotRemove: a failed write removes its temp
+// file, and when even that fails the returned error names the file, so
+// nothing is left behind unseen (the settings writer's own diagnostic, kept
+// when it moved onto WriteAtomic; code review 2026-09-30).
+func TestAbandonNamesATempFileItCouldNotRemove(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores the directory permissions this test relies on")
+	}
+	dir := t.TempDir()
+	tmp, err := os.CreateTemp(dir, ".sh-agent-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o700) })
+	got := abandon(tmp, errors.New("disk full"))
+	if got == nil || !strings.Contains(got.Error(), "disk full") || !strings.Contains(got.Error(), "left behind") || !strings.Contains(got.Error(), tmp.Name()) {
+		t.Errorf("the cause and the leftover temp file should both be named, got %v", got)
+	}
+	if err := os.Chmod(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	tmp2, err := os.CreateTemp(dir, ".sh-agent-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := abandon(tmp2, errors.New("disk full")); got == nil || got.Error() != "disk full" {
+		t.Errorf("a removed temp file adds nothing to the cause, got %v", got)
+	}
+	if _, err := os.Lstat(tmp2.Name()); !os.IsNotExist(err) {
+		t.Errorf("the temp file should be removed, got %v", err)
+	}
+}
+
+// TestWriteAtomicClosesBeforeRename pins the order no behavioural test can
+// observe: the temp file is closed before it is renamed into place, so an
+// error from WriteAtomic always means dest is unchanged, and a binary
+// renamed into place is never still open (ETXTBSY on Linux). Round 2 of the
+// 2026-09-30 review swapped the two lines and every test stayed green.
+func TestWriteAtomicClosesBeforeRename(t *testing.T) {
+	src, err := os.ReadFile("apply.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(src)[strings.Index(string(src), "func WriteAtomic("):]
+	body = body[:strings.Index(body, "\n}\n")]
+	closeAt, renameAt := strings.Index(body, "tmp.Close()"), strings.Index(body, "os.Rename(")
+	if closeAt < 0 || renameAt < 0 || closeAt > renameAt {
+		t.Errorf("WriteAtomic must close the temp file before renaming it: close at %d, rename at %d", closeAt, renameAt)
 	}
 }

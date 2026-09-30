@@ -40,6 +40,13 @@ var prefixNeedles = []string{
 	"-----BEGIN", "PRIVATE KEY", "AKIA", "ASIA", "AIza", "ya29.", "GOCSPX-",
 	"ghp_", "gho_", "ghs_", "ghu_", "github_pat_", "glpat-",
 	"sk-ant-", "sk-proj-", "xoxb-", "xoxp-", "xoxa-", "xoxs-",
+	// Security review 2026-09-30, finding 3: Stripe, PyPI (every token opens
+	// with the base64 of its macaroon location) and a Slack webhook URL.
+	"sk_live_", "rk_live_", "whsec_", "pypi-AgEIcHlwaS5vcmc", "pypi-AgENdGVzdC5weXBpLm9yZw",
+	"hooks.slack.com/services/",
+	// Security check of the fix, round 2: the test-mode and the service and
+	// admin key shapes, and a Slack workflow webhook.
+	"sk_test_", "rk_test_", "sk-svcacct-", "sk-admin-", "hooks.slack.com/workflows/",
 }
 
 // keywordNeedles are assignment and header shapes, matched without regard to
@@ -55,6 +62,22 @@ var keywordNeedles = []struct {
 	{"authorization", regexp.MustCompile(`(?i)authorization["']?\s*:\s*\S`)},
 	// The user may be empty: redis://:pass@host.
 	{"url credentials", regexp.MustCompile(`://[^/\s:@]*:[^/\s@]+@`)},
+	// Token shapes whose prefix alone is too short to list above (a bare
+	// `sk-` or `hf_` sits inside ordinary words), pinned by the length and
+	// alphabet the vendor uses instead (security review 2026-09-30, finding
+	// 3). No word boundary in front: a token after a literal `\n` or an
+	// underscore, as a line that failed to decode carries it, would sit
+	// inside a word and be missed (security check of the fix, finding 2);
+	// a word that happens to end in `sk-` before 32 alphanumerics is the
+	// accepted over-redaction.
+	{"jwt", regexp.MustCompile(`eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.`)},
+	{"openai key", regexp.MustCompile(`sk-[A-Za-z0-9]{32,}`)},
+	{"npm token", regexp.MustCompile(`npm_[A-Za-z0-9]{36}`)},
+	{"hugging face token", regexp.MustCompile(`hf_[A-Za-z0-9]{30,}`)},
+	// A token as the whole userinfo, with no password and so no colon;
+	// twenty characters or more, percent-escapes included, so a username
+	// (`ssh://git@`) stays.
+	{"url token", regexp.MustCompile(`://[A-Za-z0-9_.%-]{20,}@`)},
 }
 
 // A key block opens at a PEM header, or at a header whose dashes a chat UI
@@ -899,19 +922,26 @@ func commitAndPush(dir, url string, paths []string, msg string, out io.Writer) e
 	// LC_ALL=C so the rejection below is recognised on a machine whose git
 	// speaks another language (security review 2026-09-17).
 	if _, err := gitOutC(dir, "push", "--quiet", "-u", url, "HEAD:main"); err != nil {
-		// Only a NON-FAST-FORWARD is the race this retries: another place
-		// pushed between this run's clone and its push. `! [remote rejected]`
-		// is something else entirely — a pre-receive hook, a protected branch,
-		// a read-only credential — and retrying it tells the operator to
-		// re-run forever over a refusal that will never go away (code review
-		// 2026-09-17). Matching "rejected" alone caught both.
-		msg := err.Error()
-		if strings.Contains(msg, "non-fast-forward") || strings.Contains(msg, "fetch first") || strings.Contains(msg, "! [rejected]") {
-			// The caller words it: a named checkout keeps the commit, a
-			// throwaway clone re-clones and re-applies once (D8).
-			return fmt.Errorf("%w: %v", errPushRejected, err)
-		}
-		return fmt.Errorf("push failed, the commit stays local: %w", err)
+		return pushError(err)
 	}
 	return nil
+}
+
+// pushError classifies a failed push. Only a NON-FAST-FORWARD is the race the
+// caller retries: another place pushed between this run's clone and its push.
+// `! [remote rejected]` is something else entirely — a pre-receive hook, a
+// protected branch, a read-only credential — and retrying it tells the
+// operator to re-run forever over a refusal that will never go away (code
+// review 2026-09-17); matching "rejected" alone caught both. The message is
+// scrubbed of URL credentials as the clone failure's is: git anonymises the
+// URL in its own push messages today, so this guards against a git that does
+// not, rather than fixing one seen (security review 2026-09-30, finding 5).
+func pushError(err error) error {
+	msg := scrubCredentials(err.Error())
+	if strings.Contains(msg, "non-fast-forward") || strings.Contains(msg, "fetch first") || strings.Contains(msg, "! [rejected]") {
+		// The caller words it: a named checkout keeps the commit, a
+		// throwaway clone re-clones and re-applies once (D8).
+		return fmt.Errorf("%w: %s", errPushRejected, msg)
+	}
+	return fmt.Errorf("push failed, the commit stays local: %s", msg)
 }

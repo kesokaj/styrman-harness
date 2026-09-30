@@ -76,7 +76,7 @@ func Install(src Source, home string, files []File, vendor string, dryRun bool, 
 				line = fmt.Sprintf("update  ~/%s (previous file unreadable: %v)", f.Rel, readErr)
 			}
 			if !dryRun {
-				if err := writeAtomic(dest, f.Data, f.Mode); err != nil {
+				if err := WriteAtomic(dest, f.Data, f.Mode); err != nil {
 					return fmt.Errorf("writing %s: %w", dest, err)
 				}
 			}
@@ -303,10 +303,10 @@ func Uninstall(home string, dryRun bool, out io.Writer) error {
 	return nil
 }
 
-// writeAtomic writes through a temp file and rename, so a half-written
+// WriteAtomic writes through a temp file and rename, so a half-written
 // context file is never visible and a running sh-agent binary can be
 // replaced on Linux, where opening it for writing would fail with ETXTBSY.
-func writeAtomic(dest string, data []byte, mode fs.FileMode) error {
+func WriteAtomic(dest string, data []byte, mode fs.FileMode) error {
 	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 		return err
 	}
@@ -314,16 +314,11 @@ func writeAtomic(dest string, data []byte, mode fs.FileMode) error {
 	if err != nil {
 		return err
 	}
-	name := tmp.Name()
 	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		os.Remove(name)
-		return err
+		return abandon(tmp, err)
 	}
 	if err := tmp.Chmod(mode); err != nil {
-		tmp.Close()
-		os.Remove(name)
-		return err
+		return abandon(tmp, err)
 	}
 	// Sync before the rename: without it a crash between the two can leave
 	// the rename durable and the bytes not, so the deployed file is a
@@ -331,19 +326,32 @@ func writeAtomic(dest string, data []byte, mode fs.FileMode) error {
 	// one (security review of the settings write, 2026-09-16, finding 2 —
 	// the same pattern was fixed there first).
 	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		os.Remove(name)
-		return err
+		return abandon(tmp, err)
 	}
+	// Close before the rename, as the settings writer always did: a close
+	// failure then leaves dest untouched, so an error from this function
+	// always means dest is unchanged; and on Linux a binary renamed into
+	// place while still open cannot be executed until the close (ETXTBSY).
+	// Round 2 of the 2026-09-30 review had these two lines the other way.
 	if err := tmp.Close(); err != nil {
-		os.Remove(name)
-		return err
+		return abandon(tmp, err)
 	}
-	if err := os.Rename(name, dest); err != nil {
-		os.Remove(name)
-		return err
+	if err := os.Rename(tmp.Name(), dest); err != nil {
+		return abandon(tmp, err)
 	}
 	return nil
+}
+
+// abandon closes and removes the temp file of a failed write and returns the
+// failure, naming the temp file when even its removal fails so nothing is
+// left behind unseen (the settings writer said so before it shared this
+// helper; code review 2026-09-30).
+func abandon(tmp *os.File, err error) error {
+	tmp.Close() // already closed on the rename branch, which is harmless; the file is discarded next
+	if rm := os.Remove(tmp.Name()); rm != nil {
+		return fmt.Errorf("%w; temp file %s left behind: %v", err, tmp.Name(), rm)
+	}
+	return err
 }
 
 // pruneEmptyDirs removes now-empty directories from dir upward, stopping at

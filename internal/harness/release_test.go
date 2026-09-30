@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 // The fake gh: enough of the two calls UpdateFromRelease makes, driven by the
@@ -642,5 +643,47 @@ func TestVerifierMessageCarriesWhatTheToolSaid(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "does not verify") {
 		t.Errorf("err = %v, want the verdict kept", err)
+	}
+}
+
+// TestUpdateFromReleaseSweepStaysInHome runs the update's own sweep of
+// leftover download directories from a home whose path holds a glob
+// metacharacter: the leftover in this home goes, the sibling home's stays
+// (security review 2026-09-30, finding 1; the helper's test is
+// TestSweepStaleDirsStaysInParent, this one proves the update calls it).
+func TestUpdateFromReleaseSweepStaysInHome(t *testing.T) {
+	r := newRelease(t, "v9.9.9")
+	r.env(t, true, true)
+	root := t.TempDir()
+	home := filepath.Join(root, "u[1]")
+	own := filepath.Join(home, ".config", "sh-agent", "release-old")
+	sibling := filepath.Join(root, "u1", ".config", "sh-agent", "release-keep")
+	// Younger than the hour the sweep waits: a second update may own it.
+	young := filepath.Join(home, ".config", "sh-agent", "release-young")
+	for _, d := range []string{own, sibling, young} {
+		if err := os.MkdirAll(d, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if d == young {
+			continue
+		}
+		old := time.Now().Add(-2 * time.Hour)
+		if err := os.Chtimes(d, old, old); err != nil {
+			t.Fatal(err)
+		}
+	}
+	installedBinary(t, home)
+	t.Setenv("SH_AGENT_FAKE_MARKER", filepath.Join(home, "installed.txt"))
+	var out bytes.Buffer
+	if err := UpdateFromRelease(home, "v1.0.0", false, []string{"--home", home}, &out); err != nil {
+		t.Fatalf("update: %v\n%s", err, out.String())
+	}
+	if _, err := os.Stat(own); !os.IsNotExist(err) {
+		t.Errorf("the leftover in this home should be removed, got %v", err)
+	}
+	for _, keep := range []string{sibling, young} {
+		if _, err := os.Stat(keep); err != nil {
+			t.Errorf("%s should survive the sweep: %v", keep, err)
+		}
 	}
 }

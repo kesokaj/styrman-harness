@@ -48,3 +48,49 @@ Observations that are not findings, recorded once:
 - Prompts lens: 19 of the 22 non-vendored SKILL.md files were covered by a signal grep, not a sentence-by-sentence read (full reads: `bug`, `feature`, `preflight`, the context, the root AGENTS.md, all eight agents).
 - Tests lens: the sandbox and real-home CLI smoke tiers, `owned_other.go` (`!unix` build tag, not compilable on this box), the search recall and performance tier (no search change in scope), the report dry-run tier, the repo-wide suppression grep (no diff to compare against).
 - Explorer: no staticcheck/deadcode-grade sweep of unexported functions; individual plan files not checked for orphan status against changes, handoffs and bug records; `.agents/docs/{changes,reviews,testing,bugs}` not inventoried.
+
+## Round 1
+
+Acted on by the task "fix all issues in the recommended way" (2026-09-30). Round-1 agents over the working tree: [review-worktree-code](2026-09-30-review-worktree-code.md), [security-worktree](2026-09-30-security-worktree.md), [verify-review-fixes](../testing/2026-09-30-verify-review-fixes.md) (PASS).
+
+- 1 "atomic write implemented twice" — fixed at `internal/harness/apply.go` (`WriteAtomic`, exported) and `cmd/sh-agent/main.go` (`attributionSet` calls it; `abandonTemp` removed); `TestSettingsWriteUsesHarnessWriteAtomic`.
+- 2 "release sweep by glob on the home path" — fixed at `internal/harness/sweep.go` (`SweepStaleDirs`: ReadDir, prefix, no symlink, one-hour age) called from `release.go` and, replacing `sweepStaleZipDirs`, from `main.go`; `TestSweepStaleDirsStaysInParent`.
+- 3 "checkout place runs main's tip unsigned" — left: operator — accepted risk, recorded as an ADR line by `changelog` (R9; a change is a path change under AGENTS.md rule 3).
+- 4 "redaction misses token shapes" — fixed at `internal/harness/report.go` (prefixes and regexp needles); rows in `TestReportRedactShapes`.
+- 5 "two vendored skills without source or pin" — fixed at `skills/VENDORED.md` (both recorded as forks with the upstream base and pin) and `AGENTS.md` (the vendoring rule names them); `TestVendoredRowsCarryAPin`. Not re-vendored verbatim: both were rewritten locally, and a verbatim copy would change what agents read (an operator choice, below).
+- 6 "push errors unscrubbed" — fixed at `internal/harness/report.go` (`pushError`); `TestPushErrorScrubsCredentials`.
+- 7 "main.go layout" — left: deferred; both lenses non-blocking.
+
+Round-1 agent findings: reviewer medium "WriteAtomic drops the temp-file-left-behind diagnostic"; security low "gke-basics pin eff85cf is wrong", low "`\b` misses a token after a literal `\n` or `_`; test.pypi.org", low "the release sweep is not tested end to end", low "two read-only globs remain".
+
+## Round 2
+
+- "diagnostic dropped" — fixed at `internal/harness/apply.go` (`abandon`); `TestAbandonNamesATempFileItCouldNotRemove`.
+- "gke-basics pin wrong" — fixed at `skills/VENDORED.md:30` (google/skills 6f0b877, SKILL.md the only local change; verified by the verifier with `git archive` + `diff -r`).
+- "`\b` misses escaped and underscored tokens; test.pypi.org" — fixed at `internal/harness/report.go` (no leading `\b`; second PyPI prefix); rows in `TestReportRedactShapes`.
+- "release sweep untested end to end" — fixed at `internal/harness/release_test.go` (`TestUpdateFromReleaseSweepStaysInHome`).
+- "read-only globs at `state.go:137` and `internal/search/reconcile.go:185`" — left: operator — outside this task; the security agent's round 3 confirms neither can do more than read.
+
+Round-2 agent findings: reviewer medium and security low "WriteAtomic now renames before closing and returns a close error for a file already in place" (introduced by the round-1 fix); security low "sk_test_, rk_test_, sk-svcacct-, sk-admin-, workflows webhook, percent-escaped userinfo", low "the sweep's age limit is untested", low "split date wrong".
+
+## Round 3
+
+A round-1 fix caused the round-2 defect (WriteAtomic's ordering). The mechanism's purpose is not in doubt: the original order, close before rename, is the one every caller and the settings writer relied on, so it was restored rather than redesigned, and the two-attempt fix is recorded by `bugs`.
+
+- "rename before close" — fixed at `internal/harness/apply.go` (close, then rename; nil after); `TestWriteAtomicClosesBeforeRename` (a source-level pin, added after the round-3 agents ran, test-only, diff read by the main agent).
+- "more token shapes" — fixed at `internal/harness/report.go` (five prefixes, `%` in the url-token class); rows in `TestReportRedactShapes`.
+- "age limit untested" — fixed at `internal/harness/release_test.go` (a fresh `release-young` must survive; age zero fails it).
+- "split date" — fixed at `skills/VENDORED.md:30` (5d9d054, 2026-06-23).
+
+Round-3 agent findings: reviewer APPROVE, none; verifier PASS, "close-before-rename has no covering test" (closed by the pin test above); security low "upper-case host, 16–19-character userinfo, `hooks.slack.com/triggers/`, `=`-padded token, `sk-None-`" (fourth pass over the deny-list; put to the operator as one choice), low "ordering untested" (closed), low "`deploy/local.md:66` enumerates the old shapes" (to `documentation`).
+
+## Outcome
+
+- 1 fixed — `internal/harness/apply.go` `WriteAtomic`, `cmd/sh-agent/main.go`.
+- 2 fixed — `internal/harness/sweep.go`, `release.go`, `main.go`.
+- 3 left: operator — accepted risk, ADR by `changelog` (R9; checkout places follow `main` by design).
+- 4 fixed — `internal/harness/report.go`; remaining shapes after three rounds left: operator — one choice: (a) generalise to one rule per kind (`(?i)hooks\.slack\.com/`, `://[^/\s:@]{16,}@`, an `sk-None-` prefix), recommended, or (b) accept and record; the redaction is documented as a safety net, not a guarantee (`delivery.md` § report).
+- 5 fixed — `skills/VENDORED.md`, `AGENTS.md`; left: operator — whether the two forks should be renamed to satisfy the "differently named skill" rule (recommended: keep the names; the rule's purpose, that a re-fetch never overwrites local text, is now stated in the manifest).
+- 6 fixed — `internal/harness/report.go` `pushError`.
+- 7 left: operator — `main.go` layout, deferred; both lenses non-blocking.
+- Docs: `deploy/local.md:66` and `specs/sh-agent/delivery.md:56` describe the redaction shapes — in flight: `documentation`.

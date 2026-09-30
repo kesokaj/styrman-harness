@@ -65,7 +65,7 @@ func SaveState(home string, s State) error {
 	if _, err := ConfigDir(home); err != nil {
 		return err
 	}
-	return writeAtomic(statePath(home), append(data, '\n'), 0o644)
+	return WriteAtomic(statePath(home), append(data, '\n'), 0o644)
 }
 
 // ConfigDir returns ~/.config/sh-agent, created 0700 when absent: the

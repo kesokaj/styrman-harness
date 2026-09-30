@@ -3,6 +3,7 @@ package harness
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -71,6 +72,29 @@ func TestReportRedactShapes(t *testing.T) {
 		"redis://:FAKEVALUE@localhost:6379/0", "Authorization: Basic FAKEVALUE",
 		// Round 3, finding 3: the header name quoted, as code and JSON write it.
 		`headers: {"Authorization": "Basic FAKEVALUE"}`, `requests.get(u, headers={'Authorization': 'Basic FAKEVALUE'})`,
+		// Project review 2026-09-30, security finding 3: token shapes with no
+		// keyword on the line — Stripe, PyPI (every token opens with the same
+		// macaroon location), a Slack webhook, a JWT, an OpenAI key, an npm
+		// token, a Hugging Face token, and a URL whose userinfo is a bare
+		// token with no password.
+		"sk_live_FAKEVALUE", "rk_live_FAKEVALUE", "whsec_FAKEVALUE",
+		"pypi-AgEIcHlwaS5vcmcFAKEVALUE",
+		"https://hooks.slack.com/services/T0/B0/FAKEVALUE",
+		"eyJhbGciOiJIUzI1NiJ9.eyJFAKEVALUEx.FAKEVALUE",
+		"sk-FAKEVALUEFAKEVALUEFAKEVALUEFAKEVALUE",
+		"npm_FAKEVALUEFAKEVALUEFAKEVALUEFAKEVALUE",
+		"hf_FAKEVALUEFAKEVALUEFAKEVALUEFAKEVALUE",
+		"https://FAKEVALUEFAKEVALUEFAKEVALUE@github.com/o/r.git",
+		// Security check of the fix, finding 2: the same tokens after a
+		// literal `\n` (a JSONL line that failed to decode keeps its
+		// escapes) and after an underscore, and a test.pypi.org token.
+		`log:\neyJhbGciOiJIUzI1NiJ9.eyJFAKEVALUEx.FAKEVALUE`, `key_sk-FAKEVALUEFAKEVALUEFAKEVALUEFAKEVALUE`,
+		`x\tnpm_FAKEVALUEFAKEVALUEFAKEVALUEFAKEVALUE`, `_hf_FAKEVALUEFAKEVALUEFAKEVALUEFAKEVALUE`,
+		"pypi-AgENdGVzdC5weXBpLm9yZwFAKEVALUE",
+		// Round 2 of the check: test-mode keys, service and admin keys, a
+		// workflow webhook, a percent-escaped userinfo token.
+		"sk_test_FAKEVALUE", "rk_test_FAKEVALUE", "sk-svcacct-FAKEVALUE", "sk-admin-FAKEVALUE",
+		"https://hooks.slack.com/workflows/T0/A0/FAKEVALUE", "https://FAKEVALUE%2FFAKEVALUE%3DFAKE@host/r",
 	}
 	for _, sec := range secrets {
 		quoted, _ := json.Marshal(map[string]string{"user_quote": "they said " + sec})
@@ -84,7 +108,12 @@ func TestReportRedactShapes(t *testing.T) {
 			}
 		}
 	}
-	for _, benign := range []string{"the task-list grew", "the token expired", "passwords are hard", "max_tokens 5", "ASIAN food"} {
+	for _, benign := range []string{
+		"the task-list grew", "the token expired", "passwords are hard", "max_tokens 5", "ASIAN food",
+		// The shapes above, too short or too plain to be a token.
+		"npm_config_registry=https://r.example", "ssh://git@github.com/o/r.git", "sk-1234 is a short id",
+		"the eyJ prefix marks base64 JSON", "hf_hub is the client library", "a whsec is a webhook secret",
+	} {
 		// "ASIAN" contains the ASIA prefix: accepted over-redaction, pinned
 		// here so a change to it is deliberate.
 		_, recs := redactLines("f", []byte(benign+"\n"), false)
@@ -1252,5 +1281,27 @@ func TestCollectNeverSendsSearchDB(t *testing.T) {
 	named := strings.Join(c.Skipped, "\n")
 	if !strings.Contains(named, "search.db (the global search index, a cache; never sent)") || !strings.Contains(named, "search.db-wal") {
 		t.Errorf("skipped list does not name the index:\n%s", named)
+	}
+}
+
+// TestPushErrorScrubsCredentials: a failed push is reported without the
+// credentials a URL rewrite can put into git's message, as the clone failure
+// already is, and only a non-fast-forward is classed as the retryable race
+// (project review 2026-09-30, security finding 5).
+func TestPushErrorScrubsCredentials(t *testing.T) {
+	msg := "fatal: unable to access 'https://user:FAKEPW@host/x.git/': could not resolve host"
+	err := pushError(errors.New(msg))
+	if errors.Is(err, errPushRejected) {
+		t.Errorf("an unreachable host is not a rejected push: %v", err)
+	}
+	if strings.Contains(err.Error(), "FAKEPW") || !strings.Contains(err.Error(), "[redacted]@") {
+		t.Errorf("credentials reached the message: %v", err)
+	}
+	rej := pushError(errors.New("To https://user:FAKEPW@host/x.git\n ! [rejected] HEAD -> main (non-fast-forward)"))
+	if !errors.Is(rej, errPushRejected) {
+		t.Errorf("a non-fast-forward is the retryable race: %v", rej)
+	}
+	if strings.Contains(rej.Error(), "FAKEPW") {
+		t.Errorf("credentials reached the rejection: %v", rej)
 	}
 }

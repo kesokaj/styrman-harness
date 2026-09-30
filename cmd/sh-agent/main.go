@@ -25,7 +25,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -905,44 +904,11 @@ func attributionSet(home string, dryRun bool, out io.Writer) {
 		fmt.Fprintf(out, "[dry-run] would add %s to %s\n", fragment, path)
 		return
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".settings-*.json")
-	if err != nil {
-		fmt.Fprintf(out, "settings: %s could not be written (%v); add the key by hand\n", path, err)
-		return
-	}
-	tmpName := tmp.Name()
-	if _, err := tmp.Write(result); err != nil {
-		tmp.Close() // the file is discarded on the next line; its close result changes nothing
-		abandonTemp(tmpName, path, err, out)
-		return
-	}
-	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		abandonTemp(tmpName, path, err, out)
-		return
-	}
-	if err := tmp.Close(); err != nil {
-		abandonTemp(tmpName, path, err, out)
-		return
-	}
-	if err := os.Chmod(tmpName, info.Mode().Perm()); err != nil {
-		abandonTemp(tmpName, path, err, out)
-		return
-	}
-	if err := os.Rename(tmpName, path); err != nil {
-		abandonTemp(tmpName, path, err, out)
+	if err := harness.WriteAtomic(path, result, info.Mode().Perm()); err != nil {
+		settingsUnwritable(out, path, err)
 		return
 	}
 	fmt.Fprintf(out, "settings: %s — %s added; other keys untouched\n", path, fragment)
-}
-
-// abandonTemp reports a failed settings write and removes its temp file,
-// naming the temp file when even that fails so nothing is left behind unseen.
-func abandonTemp(tmpName, path string, cause error, out io.Writer) {
-	fmt.Fprintf(out, "settings: %s could not be written (%v); add the key by hand\n", path, cause)
-	if err := os.Remove(tmpName); err != nil {
-		fmt.Fprintf(out, "settings: temp file %s left behind (%v)\n", tmpName, err)
-	}
 }
 
 // settingsUnwritable is the one sentence for every way the settings file
@@ -1160,34 +1126,9 @@ func updateFromZip(zipPath, home, vendorFlag string, dryRun bool, out io.Writer)
 	// Only after a successful install: a refused or dry run changes nothing,
 	// not even a stale leftover from an interrupted run.
 	if !dryRun {
-		sweepStaleZipDirs(parent, time.Hour, out)
+		harness.SweepStaleDirs(parent, "zip-", time.Hour, out)
 	}
 	return nil
-}
-
-// sweepStaleZipDirs removes zip-* directories under parent older than age:
-// what an interrupted --from-zip left behind. A younger one may belong to a
-// run in progress and is kept; a symlink is never followed or removed. Names
-// are matched, never globbed, so a home path holding glob metacharacters
-// cannot reach another directory.
-func sweepStaleZipDirs(parent string, age time.Duration, out io.Writer) {
-	entries, err := os.ReadDir(parent)
-	if err != nil {
-		return
-	}
-	for _, e := range entries {
-		if !strings.HasPrefix(e.Name(), "zip-") || e.Type()&fs.ModeSymlink != 0 || !e.IsDir() {
-			continue
-		}
-		d := filepath.Join(parent, e.Name())
-		info, err := os.Lstat(d)
-		if err != nil || time.Since(info.ModTime()) <= age {
-			continue
-		}
-		if err := os.RemoveAll(d); err != nil {
-			fmt.Fprintf(out, "warning: could not remove the leftover %s: %v\n", d, err)
-		}
-	}
 }
 
 // short is the first 12 hex digits of a sha256, enough to tell zips apart.

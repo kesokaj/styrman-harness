@@ -469,3 +469,19 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
 **Decision:** ADR-045 stands, with three corrections. The pinned driver is `modernc.org/sqlite` **v1.46.1** (2026-02-18), not v1.60.1: v1.46.2 and later declare `go 1.25` or newer, and `go get` of v1.60.1 raised this module's `go` directive to 1.26.0, which ADR-029 rules out (plan D21). The driver pulls in **ten** indirect modules, not nine. `govulncheck ./...` reports **GO-2026-5024** in `golang.org/x/sys` v0.37.0, required through the driver and not reachable from this code; its fix, v0.44.0, declares `go 1.25.0`, so it stays until the module's `go` directive moves (plan D25).
 
 **Consequences:** the project `AGENTS.md` setup line for `govulncheck` names the advisory; a new advisory is still the thing to watch for.
+
+## ADR-046: A checkout place trusts the tip of `main` without a signature check — accepted risk     (2026-09-30) — Accepted
+
+**Context:** The project security review of 2026-09-30 (`.agents/docs/reviews/2026-09-30-security-project.md`, finding 2) noted that `sh-agent update` on a checkout place runs `git pull --ff-only`, builds and runs the result with no `git verify-commit`, while release-binary places verify SSHSIG-signed checksums against a compiled-in public key. The review confirmed that a compromise of the GitHub account or the SSH transport reaches a checkout place at the next `update`. Release places are unaffected because they use a separate update path (`gh` + signed checksums) and the embedded files in the binary.
+
+**Decision:** Accepted as is. The risk is understood and accepted by the operator.
+
+**Reasons:**
+- **R9:** Checkout places follow `main` by design (REQUIREMENTS.md R9, the four procedures: Install, Update, Report back, Release). Every checkout is the operator's own; the trust model for a checkout is the same as the trust model for `git clone` from this repository.
+- **Operator authentication:** The operator owns every checkout place and the GitHub account and SSH transport they connect through. Those credentials are the trust root already; no commit signature check adds a new trust root without them also being compromised.
+- **Path change rule:** Verifying commit signatures after the pull would be a change to a path on the map (AGENTS.md rule 3, ADR-031 D3–D5). It would require every commit on `main` to be signed, which the project git rules do not mandate (the rule is about releases, ADR-026, not steady-state development). A path change needs the operator's explicit approval, an ADR, and one commit with the code, the docs and the map.
+
+**Consequences:** A compromise of the GitHub account or the SSH transport on a network path between a checkout place and GitHub reaches that place at the next `sh-agent update`. Release-binary places (`sh-agent install --from-zip` + signed release assets, `sh-agent update` with `gh` + signed checksums) are unaffected because they do not follow `main`. Zip places from `main` without `SHA256SUMS` beside them are installed marked `UNVERIFIED`, disclosing the same trust shape.
+
+**Revisit:** if a checkout place ever belongs to someone other than the operator, or if a second operator joins and carries a different key, a commit-signature check becomes a tool for that separation and should be reconsidered.
+

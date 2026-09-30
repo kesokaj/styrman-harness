@@ -152,3 +152,31 @@ func TestGlobalRebuildDropsRegistry(t *testing.T) {
 		t.Errorf("rebuild note:\n%s", out.String())
 	}
 }
+
+// TestConfigViewListsProposalsByName: the proposals directory is listed
+// with ReadDir and matched by suffix, never through a glob pattern built
+// from the config path, which a `[` in the path would turn into a class
+// (BUG-109's class; the golang skill's rule).
+func TestConfigViewListsProposalsByName(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "c[1]", ".config", "sh-agent")
+	if err := os.MkdirAll(filepath.Join(dir, "proposals"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{"feedback.jsonl", "retros.jsonl", "proposals/2026-09-30-retro.md", "proposals/notes.txt"} {
+		if err := os.WriteFile(filepath.Join(dir, f), []byte("x\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	entries, err := configView(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, e := range entries {
+		names = append(names, e.path)
+	}
+	got := strings.Join(names, " ")
+	if !strings.Contains(got, "proposals/2026-09-30-retro.md") || strings.Contains(got, "notes.txt") {
+		t.Errorf("proposals should be listed by name, .md only, got %q", got)
+	}
+}

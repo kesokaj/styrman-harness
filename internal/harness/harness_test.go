@@ -826,6 +826,20 @@ func TestLastRetro(t *testing.T) {
 	if got, ok := LastRetro(home); !ok || !got.Equal(later) {
 		t.Fatalf("LastRetro = %v, %v; want %v", got, ok, later)
 	}
+	// A home path holding a glob metacharacter: the proposals are listed by
+	// name, never through a pattern built from the home (BUG-109's class;
+	// the golang skill's rule).
+	odd := filepath.Join(t.TempDir(), "u[1]")
+	oddDir := filepath.Join(odd, ".config", "sh-agent", "proposals")
+	if err := os.MkdirAll(oddDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(oddDir, "2026-09-30-retro.md"), []byte("# retro\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := LastRetro(odd); !ok {
+		t.Fatal("a proposal under a home with [ in its path should be found")
+	}
 }
 
 func TestSlashNoteOnlyWhenSomeSkillIsSlashOnly(t *testing.T) {

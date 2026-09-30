@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -134,7 +135,17 @@ func RemoveState(home string) error {
 // cross-project index ~/.config/sh-agent/retros.jsonl, which a project-level
 // /retro or /distill appends to even when it proposes nothing for the harness.
 func LastRetro(home string) (time.Time, bool) {
-	paths, _ := filepath.Glob(filepath.Join(home, ".config", "sh-agent", "proposals", "*.md"))
+	// Listed by name, never through a pattern built from the home path: a
+	// `[` in it would be read as a character class (the golang rule).
+	dir := filepath.Join(home, ".config", "sh-agent", "proposals")
+	var paths []string
+	if entries, err := os.ReadDir(dir); err == nil {
+		for _, e := range entries {
+			if strings.HasSuffix(e.Name(), ".md") {
+				paths = append(paths, filepath.Join(dir, e.Name()))
+			}
+		}
+	}
 	paths = append(paths, filepath.Join(home, ".config", "sh-agent", "retros.jsonl"))
 	var newest time.Time
 	for _, p := range paths {

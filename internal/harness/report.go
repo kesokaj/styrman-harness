@@ -47,6 +47,8 @@ var prefixNeedles = []string{
 	// admin and None key shapes.
 	"whsec_", "pypi-AgEIcHlwaS5vcmc", "pypi-AgENdGVzdC5weXBpLm9yZw",
 	"sk-svcacct-", "sk-admin-", "sk-None-",
+	// v1.14.0 gate, security finding 1: an age key and DigitalOcean tokens.
+	"AGE-SECRET-KEY-", "dop_v1_", "doo_v1_", "dor_v1_",
 }
 
 // keywordNeedles are assignment and header shapes, matched without regard to
@@ -89,6 +91,19 @@ var keywordNeedles = []struct {
 	// Every Slack webhook host and path (services, workflows, triggers, a
 	// port, a gov domain), any case.
 	{"slack webhook", regexp.MustCompile(`(?i)hooks\.slack`)},
+	// The families the v1.14.0 gate named as not covered, one rule per kind
+	// (a JWT's payload may be as short as `e30`, an empty object).
+	{"jwt short", regexp.MustCompile(`eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*\.[A-Za-z0-9_-]{8,}`)},
+	{"google refresh token", regexp.MustCompile(`1//0[A-Za-z0-9_-]{20,}`)},
+	{"discord webhook", regexp.MustCompile(`(?i)discord(app)?\.com[:.]?[0-9]*/api(/v[0-9]+)?/webhooks/`)},
+	{"teams webhook", regexp.MustCompile(`(?i)webhook\.office\.com/|/webhookb2/|[?&]sig=[A-Za-z0-9%_-]{16,}`)},
+	{"sendgrid key", regexp.MustCompile(`SG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}`)},
+	{"azure account key", regexp.MustCompile(`(?i)(accountkey|sharedaccesskey|storage_key|access_key)=\S`)},
+	{"cookie header", regexp.MustCompile(`(?i)(set-)?cookie["']?\s*:\s*\S|(^|\s)(-b|--cookie)[ =]\S|document\.cookie\s*=`)},
+	{"vault token", regexp.MustCompile(`hv[sbr]\.[A-Za-z0-9_-]{20,}`)},
+	// The seventh pass over this list (security check 2026-09-30) widened
+	// the rules above; a shape past them is a design question for the
+	// operator, never an eighth batch: the list is a safety net (delivery.md).
 }
 
 // A key block opens at a PEM header, or at a header whose dashes a chat UI

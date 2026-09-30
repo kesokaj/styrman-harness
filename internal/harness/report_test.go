@@ -97,6 +97,23 @@ func TestReportRedactShapes(t *testing.T) {
 		// v1.13.1 gate: the GitHub refresh token and GitLab deploy, runner
 		// and pipeline-trigger tokens the guide's vendor list implied.
 		"ghr_FAKEVALUE", "gldt-FAKEVALUE", "glrt-FAKEVALUE", "glptt-FAKEVALUE",
+		// The families the v1.14.0 gate's security review named as not
+		// covered, one rule per kind: a Google refresh token, Discord and
+		// Teams webhooks, SendGrid, an Azure storage connection string, a
+		// cookie header, Vault tokens, an age key, DigitalOcean tokens, a
+		// JWT with a short payload.
+		"1//0FAKEVALUEFAKEVALUE-FAKEVALUE", "https://discord.com/api/webhooks/1/FAKEVALUE",
+		"https://discordapp.com/api/webhooks/1/FAKEVALUE", "https://x.webhook.office.com/webhookb2/FAKEVALUE",
+		"SG.FAKEVALUEFAKEVALUE.FAKEVALUEFAKEVALUE", "AccountKey=FAKEVALUE", "Cookie: session=FAKEVALUE",
+		"Set-Cookie: sid=FAKEVALUE", "hvs.FAKEVALUEFAKEVALUEFAKE", "hvb.FAKEVALUEFAKEVALUEFAKE",
+		"AGE-SECRET-KEY-1FAKEVALUE", "dop_v1_FAKEVALUE", "doo_v1_FAKEVALUE", "dor_v1_FAKEVALUE",
+		"eyJhbGciOiJIUzI1NiJ9.e30.FAKEVALUE",
+		// The seventh pass: a versioned Discord path, a Workflows signature,
+		// the other Azure key names, cookies on a curl line and in a script,
+		// a JWE with an empty key segment, a post-quantum age key.
+		"https://discord.com/api/v10/webhooks/1/FAKEVALUE", "https://x.logic.azure.com/w?api-version=1&sig=FAKEVALUEFAKEVALUE",
+		"SharedAccessKey=FAKEVALUE", "AZURE_STORAGE_KEY=FAKEVALUE", "curl -b sid=FAKEVALUE h", "curl --cookie sid=FAKEVALUE h",
+		"document.cookie = 'sid=FAKEVALUE'", "eyJhbGciOiJIUzI1NiJ9..FAKEVALUEFAKEVALUE", "AGE-SECRET-KEY-PQ-1FAKEVALUE",
 		"https://hooks.slack.com/workflows/T0/A0/FAKEVALUE", "https://FAKEVALUE%2FFAKEVALUE%3DFAKE@host/r",
 		// Round 3, one rule per kind: any Slack webhook path in any case, a
 		// userinfo token of sixteen characters, a padded one, an sk-None key.
@@ -135,6 +152,10 @@ func TestReportRedactShapes(t *testing.T) {
 		"the eyJ prefix marks base64 JSON", "hf_hub is the client library", "a whsec is a webhook secret",
 		"https://deploy-bot@host/r", "see slack.com/apps for hooks",
 		"task_test_helper ran", "network_test_case 3 passed",
+		"the SG. prefix marks SendGrid keys", "see discord.com/channels/1/2", "the age tool encrypts files",
+		"cookies are set per host", "1/2 of the users", "hvs is the Vault token prefix",
+		"see webhook.office.com for the docs", "the AccountKey field is required",
+		"a signature is 7 chars", "the access key is rotated", "discord.com/api/v10/users/1",
 	} {
 		// "ASIAN" contains the ASIA prefix: accepted over-redaction, pinned
 		// here so a change to it is deliberate.

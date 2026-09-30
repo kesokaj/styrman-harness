@@ -182,10 +182,17 @@ func blobID(data []byte) string {
 // keyed by their SHA-256 since git does not hold them.
 func configView(dir string) ([]entry, error) {
 	names := []string{"feedback.jsonl", "retros.jsonl"}
-	props, _ := filepath.Glob(filepath.Join(dir, "proposals", "*.md"))
-	sort.Strings(props)
-	for _, p := range props {
-		names = append(names, filepath.ToSlash(strings.TrimPrefix(p, dir+string(filepath.Separator))))
+	// Listed by name, never through a pattern built from the config path: a
+	// `[` in it would be read as a character class (the golang rule).
+	if entries, err := os.ReadDir(filepath.Join(dir, "proposals")); err == nil {
+		var props []string
+		for _, e := range entries {
+			if strings.HasSuffix(e.Name(), ".md") {
+				props = append(props, "proposals/"+e.Name())
+			}
+		}
+		sort.Strings(props)
+		names = append(names, props...)
 	}
 	// Plain reads: ~/.config/sh-agent is the operator's own state, and a
 	// dotfiles arrangement may symlink its proposals directory.

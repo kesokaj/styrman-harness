@@ -74,6 +74,7 @@
 | BUG-108 | 2026-09-30 | internal/search (git status parsing) | fixed | work-tree rename (`git add -N` after a move) misparsed by `gitView`, indexing a file outside the checkout as `../x` | parse a tool's output only in a shape a flag pins (`--no-renames`), never one the tool may vary by heuristic; re-examine an "equivalent" mutation for the input shape that makes it live |
 | BUG-113 | 2026-09-30 | skills/init-project, skills/dream | fixed | `/init-project` wrote `.claude/` (links, settings.local.json, .gitignore lines) on an Antigravity-only machine | a step writing a vendor's own path runs only when that vendor is installed (read the manifest's vendor); a reader of that path has a fallback |
 | BUG-114 | 2026-09-30 | context/AGENTS.md (size budget) | fixed | a clause added for BUG-113 pushed the Antigravity rules block to 22050 bytes, over the 22000 budget | after editing `context/AGENTS.md`, run `go test ./internal/harness -run TestRenderedContext -v` and read the byte count before any dispatch |
+| BUG-115 | 2026-09-30 | testing (agy sandbox home) | fixed | first agy-only sandbox runs for BUG-113 used a copy of the real home's Antigravity settings (toolPermission always-proceed), so they were not gate evidence | before building a sandbox home, read AGENTS.md § Testing and the skill-matrix agy settings line, never copy the real home's file; compound-script agy scenarios (/init-project, /dream) decide `--dangerously-skip-permissions` in a throwaway clone before the run |
 
 ## Graduated
 

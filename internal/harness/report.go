@@ -230,6 +230,14 @@ func redactLines(name string, data []byte, jsonl bool) ([]byte, []Redaction) {
 	return []byte(out.String()), recs
 }
 
+// Redact removes from text every line report would redact (the same
+// needles and key blocks), for `sh-agent dream`, which sends project text to a
+// CLI; clean text comes back byte-identical.
+func Redact(text string) string {
+	out, _ := redactLines("", []byte(text), false)
+	return string(out)
+}
+
 // decoded is a JSON line's text with its escapes undone, for matching only: a
 // secret behind \" or \u0041 does not match the raw line. fmt prints each key
 // followed by a colon, so a secret-named key still reads as an assignment.

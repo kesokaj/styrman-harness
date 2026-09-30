@@ -93,6 +93,10 @@ func trusted(root string) (string, error) {
 	return store, nil
 }
 
+// Store returns root's store path after the trust checks every reader
+// makes; `sh-agent dream` reads a project's memory through it.
+func Store(root string) (string, error) { return trusted(root) }
+
 // Add writes or replaces the memory e.Name with body, and its index line.
 func Add(dir string, e Entry, body io.Reader, now time.Time) (string, error) {
 	switch {

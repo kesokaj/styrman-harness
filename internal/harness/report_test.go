@@ -61,71 +61,74 @@ func TestReportRedactJSONL(t *testing.T) {
 // TestReportRedactShapes: the common credential forms, in any case, are
 // caught inside a JSONL value and on a text line; ordinary prose that only
 // resembles them is not (security review 2026-09-17, finding 1).
+// shapeSecrets is every secret shape report redacts, one per rule; `Redact`
+// is held to the same list.
+var shapeSecrets = []string{
+	"export GITHUB_TOKEN=FAKEVALUE", "DB_PASSWORD=FAKEVALUE", "password: FAKEVALUE",
+	`config was {"password": "FAKEVALUE"}`, "Authorization: Bearer FAKEVALUE",
+	"github_pat_FAKEVALUE", "ghp_FAKEVALUE", "sk-ant-FAKEVALUE", "aws_secret_access_key = FAKEVALUE",
+	"ASIAFAKEVALUE", "postgres://app:FAKEVALUE@db/x", "token = FAKEVALUE", "xoxb-FAKEVALUE",
+	"GOCSPX-FAKEVALUE", "api_key=FAKEVALUE", "API-KEY: FAKEVALUE",
+	// Round 2, finding 8: an empty URL user, and a non-Bearer scheme.
+	"redis://:FAKEVALUE@localhost:6379/0", "Authorization: Basic FAKEVALUE",
+	// Round 3, finding 3: the header name quoted, as code and JSON write it.
+	`headers: {"Authorization": "Basic FAKEVALUE"}`, `requests.get(u, headers={'Authorization': 'Basic FAKEVALUE'})`,
+	// Project review 2026-09-30, security finding 3: token shapes with no
+	// keyword on the line — Stripe, PyPI (every token opens with the same
+	// macaroon location), a Slack webhook, a JWT, an OpenAI key, an npm
+	// token, a Hugging Face token, and a URL whose userinfo is a bare
+	// token with no password.
+	"sk_live_FAKEVALUEFAKEVALUE", "rk_live_FAKEVALUEFAKEVALUE", "whsec_FAKEVALUE",
+	"pypi-AgEIcHlwaS5vcmcFAKEVALUE",
+	"https://hooks.slack.com/services/T0/B0/FAKEVALUE",
+	"eyJhbGciOiJIUzI1NiJ9.eyJFAKEVALUEx.FAKEVALUE",
+	"sk-FAKEVALUEFAKEVALUEFAKEVALUEFAKEVALUE",
+	"npm_FAKEVALUEFAKEVALUEFAKEVALUEFAKEVALUE",
+	"hf_FAKEVALUEFAKEVALUEFAKEVALUEFAKEVALUE",
+	"https://FAKEVALUEFAKEVALUEFAKEVALUE@github.com/o/r.git",
+	// Security check of the fix, finding 2: the same tokens after a
+	// literal `\n` (a JSONL line that failed to decode keeps its
+	// escapes) and after an underscore, and a test.pypi.org token.
+	`log:\neyJhbGciOiJIUzI1NiJ9.eyJFAKEVALUEx.FAKEVALUE`, `key_sk-FAKEVALUEFAKEVALUEFAKEVALUEFAKEVALUE`,
+	`x\tnpm_FAKEVALUEFAKEVALUEFAKEVALUEFAKEVALUE`, `_hf_FAKEVALUEFAKEVALUEFAKEVALUEFAKEVALUE`,
+	"pypi-AgENdGVzdC5weXBpLm9yZwFAKEVALUE",
+	// Round 2 of the check: test-mode keys, service and admin keys, a
+	// workflow webhook, a percent-escaped userinfo token.
+	"sk_test_FAKEVALUEFAKEVALUE", "rk_test_FAKEVALUEFAKEVALUE", "sk-svcacct-FAKEVALUE", "sk-admin-FAKEVALUE",
+	// v1.13.1 gate: the GitHub refresh token and GitLab deploy, runner
+	// and pipeline-trigger tokens the guide's vendor list implied.
+	"ghr_FAKEVALUE", "gldt-FAKEVALUE", "glrt-FAKEVALUE", "glptt-FAKEVALUE",
+	// The families the v1.14.0 gate's security review named as not
+	// covered, one rule per kind: a Google refresh token, Discord and
+	// Teams webhooks, SendGrid, an Azure storage connection string, a
+	// cookie header, Vault tokens, an age key, DigitalOcean tokens, a
+	// JWT with a short payload.
+	"1//0FAKEVALUEFAKEVALUE-FAKEVALUE", "https://discord.com/api/webhooks/1/FAKEVALUE",
+	"https://discordapp.com/api/webhooks/1/FAKEVALUE", "https://x.webhook.office.com/webhookb2/FAKEVALUE",
+	"SG.FAKEVALUEFAKEVALUE.FAKEVALUEFAKEVALUE", "AccountKey=FAKEVALUE", "Cookie: session=FAKEVALUE",
+	"Set-Cookie: sid=FAKEVALUE", "hvs.FAKEVALUEFAKEVALUEFAKE", "hvb.FAKEVALUEFAKEVALUEFAKE",
+	"AGE-SECRET-KEY-1FAKEVALUE", "dop_v1_FAKEVALUE", "doo_v1_FAKEVALUE", "dor_v1_FAKEVALUE",
+	"eyJhbGciOiJIUzI1NiJ9.e30.FAKEVALUE",
+	// The seventh pass: a versioned Discord path, a Workflows signature,
+	// the other Azure key names, cookies on a curl line and in a script,
+	// a JWE with an empty key segment, a post-quantum age key.
+	"https://discord.com/api/v10/webhooks/1/FAKEVALUE", "https://x.logic.azure.com/w?api-version=1&sig=FAKEVALUEFAKEVALUE",
+	"SharedAccessKey=FAKEVALUE", "AZURE_STORAGE_KEY=FAKEVALUE", "curl -b sid=FAKEVALUE h", "curl --cookie sid=FAKEVALUE h",
+	"document.cookie = 'sid=FAKEVALUE'", "eyJhbGciOiJIUzI1NiJ9..FAKEVALUEFAKEVALUE", "AGE-SECRET-KEY-PQ-1FAKEVALUE",
+	"https://hooks.slack.com/workflows/T0/A0/FAKEVALUE", "https://FAKEVALUE%2FFAKEVALUE%3DFAKE@host/r",
+	// Round 3, one rule per kind: any Slack webhook path in any case, a
+	// userinfo token of sixteen characters, a padded one, an sk-None key.
+	"https://HOOKS.SLACK.COM/services/T0/B0/FAKEVALUE", "https://hooks.slack.com/triggers/T0/FAKEVALUE",
+	"https://FAKEVALUE1234567@host/r", "https://FAKEVALUEFAKEVAL==@host/r", "sk-None-FAKEVALUE",
+	// The security check of that rule: a webhook host with a port, a
+	// trailing dot or a gov domain, an encoded path, an empty password.
+	"https://hooks.slack.com:443/services/T0/B0/FAKEVALUE", "https://hooks.slack.com./services/FAKEVALUE",
+	"https://hooks.slack-gov.com/services/FAKEVALUE", "https://hooks.slack.com%2Fservices%2FFAKEVALUE",
+	"https://FAKEVALUEFAKEVALUE:@host/r",
+}
+
 func TestReportRedactShapes(t *testing.T) {
-	secrets := []string{
-		"export GITHUB_TOKEN=FAKEVALUE", "DB_PASSWORD=FAKEVALUE", "password: FAKEVALUE",
-		`config was {"password": "FAKEVALUE"}`, "Authorization: Bearer FAKEVALUE",
-		"github_pat_FAKEVALUE", "ghp_FAKEVALUE", "sk-ant-FAKEVALUE", "aws_secret_access_key = FAKEVALUE",
-		"ASIAFAKEVALUE", "postgres://app:FAKEVALUE@db/x", "token = FAKEVALUE", "xoxb-FAKEVALUE",
-		"GOCSPX-FAKEVALUE", "api_key=FAKEVALUE", "API-KEY: FAKEVALUE",
-		// Round 2, finding 8: an empty URL user, and a non-Bearer scheme.
-		"redis://:FAKEVALUE@localhost:6379/0", "Authorization: Basic FAKEVALUE",
-		// Round 3, finding 3: the header name quoted, as code and JSON write it.
-		`headers: {"Authorization": "Basic FAKEVALUE"}`, `requests.get(u, headers={'Authorization': 'Basic FAKEVALUE'})`,
-		// Project review 2026-09-30, security finding 3: token shapes with no
-		// keyword on the line — Stripe, PyPI (every token opens with the same
-		// macaroon location), a Slack webhook, a JWT, an OpenAI key, an npm
-		// token, a Hugging Face token, and a URL whose userinfo is a bare
-		// token with no password.
-		"sk_live_FAKEVALUEFAKEVALUE", "rk_live_FAKEVALUEFAKEVALUE", "whsec_FAKEVALUE",
-		"pypi-AgEIcHlwaS5vcmcFAKEVALUE",
-		"https://hooks.slack.com/services/T0/B0/FAKEVALUE",
-		"eyJhbGciOiJIUzI1NiJ9.eyJFAKEVALUEx.FAKEVALUE",
-		"sk-FAKEVALUEFAKEVALUEFAKEVALUEFAKEVALUE",
-		"npm_FAKEVALUEFAKEVALUEFAKEVALUEFAKEVALUE",
-		"hf_FAKEVALUEFAKEVALUEFAKEVALUEFAKEVALUE",
-		"https://FAKEVALUEFAKEVALUEFAKEVALUE@github.com/o/r.git",
-		// Security check of the fix, finding 2: the same tokens after a
-		// literal `\n` (a JSONL line that failed to decode keeps its
-		// escapes) and after an underscore, and a test.pypi.org token.
-		`log:\neyJhbGciOiJIUzI1NiJ9.eyJFAKEVALUEx.FAKEVALUE`, `key_sk-FAKEVALUEFAKEVALUEFAKEVALUEFAKEVALUE`,
-		`x\tnpm_FAKEVALUEFAKEVALUEFAKEVALUEFAKEVALUE`, `_hf_FAKEVALUEFAKEVALUEFAKEVALUEFAKEVALUE`,
-		"pypi-AgENdGVzdC5weXBpLm9yZwFAKEVALUE",
-		// Round 2 of the check: test-mode keys, service and admin keys, a
-		// workflow webhook, a percent-escaped userinfo token.
-		"sk_test_FAKEVALUEFAKEVALUE", "rk_test_FAKEVALUEFAKEVALUE", "sk-svcacct-FAKEVALUE", "sk-admin-FAKEVALUE",
-		// v1.13.1 gate: the GitHub refresh token and GitLab deploy, runner
-		// and pipeline-trigger tokens the guide's vendor list implied.
-		"ghr_FAKEVALUE", "gldt-FAKEVALUE", "glrt-FAKEVALUE", "glptt-FAKEVALUE",
-		// The families the v1.14.0 gate's security review named as not
-		// covered, one rule per kind: a Google refresh token, Discord and
-		// Teams webhooks, SendGrid, an Azure storage connection string, a
-		// cookie header, Vault tokens, an age key, DigitalOcean tokens, a
-		// JWT with a short payload.
-		"1//0FAKEVALUEFAKEVALUE-FAKEVALUE", "https://discord.com/api/webhooks/1/FAKEVALUE",
-		"https://discordapp.com/api/webhooks/1/FAKEVALUE", "https://x.webhook.office.com/webhookb2/FAKEVALUE",
-		"SG.FAKEVALUEFAKEVALUE.FAKEVALUEFAKEVALUE", "AccountKey=FAKEVALUE", "Cookie: session=FAKEVALUE",
-		"Set-Cookie: sid=FAKEVALUE", "hvs.FAKEVALUEFAKEVALUEFAKE", "hvb.FAKEVALUEFAKEVALUEFAKE",
-		"AGE-SECRET-KEY-1FAKEVALUE", "dop_v1_FAKEVALUE", "doo_v1_FAKEVALUE", "dor_v1_FAKEVALUE",
-		"eyJhbGciOiJIUzI1NiJ9.e30.FAKEVALUE",
-		// The seventh pass: a versioned Discord path, a Workflows signature,
-		// the other Azure key names, cookies on a curl line and in a script,
-		// a JWE with an empty key segment, a post-quantum age key.
-		"https://discord.com/api/v10/webhooks/1/FAKEVALUE", "https://x.logic.azure.com/w?api-version=1&sig=FAKEVALUEFAKEVALUE",
-		"SharedAccessKey=FAKEVALUE", "AZURE_STORAGE_KEY=FAKEVALUE", "curl -b sid=FAKEVALUE h", "curl --cookie sid=FAKEVALUE h",
-		"document.cookie = 'sid=FAKEVALUE'", "eyJhbGciOiJIUzI1NiJ9..FAKEVALUEFAKEVALUE", "AGE-SECRET-KEY-PQ-1FAKEVALUE",
-		"https://hooks.slack.com/workflows/T0/A0/FAKEVALUE", "https://FAKEVALUE%2FFAKEVALUE%3DFAKE@host/r",
-		// Round 3, one rule per kind: any Slack webhook path in any case, a
-		// userinfo token of sixteen characters, a padded one, an sk-None key.
-		"https://HOOKS.SLACK.COM/services/T0/B0/FAKEVALUE", "https://hooks.slack.com/triggers/T0/FAKEVALUE",
-		"https://FAKEVALUE1234567@host/r", "https://FAKEVALUEFAKEVAL==@host/r", "sk-None-FAKEVALUE",
-		// The security check of that rule: a webhook host with a port, a
-		// trailing dot or a gov domain, an encoded path, an empty password.
-		"https://hooks.slack.com:443/services/T0/B0/FAKEVALUE", "https://hooks.slack.com./services/FAKEVALUE",
-		"https://hooks.slack-gov.com/services/FAKEVALUE", "https://hooks.slack.com%2Fservices%2FFAKEVALUE",
-		"https://FAKEVALUEFAKEVALUE:@host/r",
-	}
-	for _, sec := range secrets {
+	for _, sec := range shapeSecrets {
 		quoted, _ := json.Marshal(map[string]string{"user_quote": "they said " + sec})
 		for name, in := range map[string]struct {
 			data  string
@@ -1346,5 +1349,24 @@ func TestPushErrorScrubsCredentials(t *testing.T) {
 	}
 	if strings.Contains(rej.Error(), "FAKEPW") {
 		t.Errorf("credentials reached the rejection: %v", rej)
+	}
+}
+
+// TestRedactText: the exported Redact (sh-agent dream) removes every shape
+// report does, and leaves clean text byte-identical.
+func TestRedactText(t *testing.T) {
+	for _, sec := range shapeSecrets {
+		in := "before\nthe user pasted " + sec + " here\nafter\n"
+		got := Redact(in)
+		if strings.Contains(got, "FAKEVALUE") {
+			t.Errorf("Redact kept %q:\n%s", sec, got)
+		}
+		if !strings.Contains(got, "before\n") || !strings.Contains(got, "after\n") {
+			t.Errorf("Redact dropped a clean line around %q:\n%s", sec, got)
+		}
+	}
+	clean := "no secret here\nsecond line\n"
+	if got := Redact(clean); got != clean {
+		t.Errorf("clean text changed: %q", got)
 	}
 }

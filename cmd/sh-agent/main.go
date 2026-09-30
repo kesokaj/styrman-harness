@@ -14,6 +14,7 @@
 //	sh-agent report [--dry-run]      send this machine's learning-loop files and metrics to the feedback repo, keeping nothing
 //	sh-agent search <words>          ranked search of this checkout's files and trail, reconciled against git first
 //	sh-agent index [--rebuild]       reconcile (or rebuild) the search index and print its counts
+//	sh-agent dream --all|--project DIR  propose rules and skills from every project's memory, trail, feedback and transcripts
 //	sh-agent memory add|show         write one memory (body on stdin) or print the index of this project's .agents/memory/
 //	sh-agent version
 package main
@@ -33,6 +34,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kesokaj/styrman-harness/internal/dream"
 	"github.com/kesokaj/styrman-harness/internal/harness"
 	"github.com/kesokaj/styrman-harness/internal/memory"
 	"github.com/kesokaj/styrman-harness/internal/search"
@@ -57,6 +59,7 @@ Commands:
       --global searches the global search index (~/.config/sh-agent/search.db): ~/.config/sh-agent's logs and proposals and the .agents/docs trail of every harness-scaffolded checkout that has run search; --kind is one of bug adr plan change handoff review testing retro spec deploy trail code doc feedback proposal; --limit 1-50, default 10
   index [--global] [--rebuild]  reconcile the search index, or delete and rebuild it, and print its counts
   memory add --type T --name SLUG --description TEXT  save one memory, its body on stdin, into this project's .agents/memory/ and its MEMORY.md line (T: user, feedback, project or reference); every CLI writes memory this way (R10)
+  dream --all | --project DIR [--dry-run]  the background dreamer: for every indexed project (or one) that changed since its last dream, send its memory, new trail, feedback and both CLIs' transcripts, redacted, to a CLI with no tools, and write the proposals and draft skills it returns under ~/.config/sh-agent/proposals/dream/ (R3's exception; --vendor picks the CLI, default from the manifest)
   memory show             print this project's memory index, capped at what a session loads, plus a hint when Claude Code's native memory is still on here
   version                 print the build version
 
@@ -112,6 +115,8 @@ func run(args []string, out io.Writer) error {
 	memType := fs.String("type", "", "memory add: user, feedback, project or reference")
 	memName := fs.String("name", "", "memory add: the memory's slug")
 	memDesc := fs.String("description", "", "memory add: one line")
+	dreamAll := fs.Bool("all", false, "dream: every project in the global search index")
+	dreamProject := fs.String("project", "", "dream: one checkout")
 	if err := fs.Parse(reorder(rest)); err != nil {
 		return err
 	}
@@ -168,6 +173,13 @@ func run(args []string, out io.Writer) error {
 	case "memory":
 		// Before ResolveSource: memory needs no harness tree (R10).
 		return memoryCmd(fs.Args(), memory.Entry{Type: *memType, Name: *memName, Description: *memDesc}, home, *vendorFlag, out)
+	case "dream":
+		// Before ResolveSource: the dream job needs no harness tree (R3's exception).
+		vendor, err := resolveVendor(*vendorFlag, home)
+		if err != nil {
+			return err
+		}
+		return dream.Run(dream.Options{Home: home, Vendor: vendor, All: *dreamAll, Project: *dreamProject, DryRun: *dryRun, Out: out})
 	case "search", "index":
 		// Before ResolveSource too: searching needs no harness tree, and a
 		// release-binary or zip place has none (plan D10).
@@ -792,6 +804,7 @@ func reorder(args []string) []string {
 		"-type": true, "--type": true,
 		"-name": true, "--name": true,
 		"-description": true, "--description": true,
+		"-project": true, "--project": true,
 	}
 	var flags, positional []string
 	for i := 0; i < len(args); i++ {

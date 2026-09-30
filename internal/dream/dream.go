@@ -1,0 +1,163 @@
+// Package dream is `sh-agent dream`: the background job that reads every
+// indexed project's memory, trail, feedback and both CLIs' transcripts, asks
+// a CLI with no tools what should become a rule, a skill or a memory, and
+// writes the answer as proposals under ~/.config/sh-agent/proposals/dream/
+// (R3's exception, R10, plan 2026-09-30-parity-memory-dream).
+package dream
+
+import (
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/kesokaj/styrman-harness/internal/harness"
+	"github.com/kesokaj/styrman-harness/internal/memory"
+	"github.com/kesokaj/styrman-harness/internal/search"
+)
+
+// maxPrompt caps what one project sends to the CLI (the plan's Interfaces).
+const maxPrompt = 256 * 1024
+
+// Options is one run.
+type Options struct {
+	Home     string // sh-agent's home (--home); the child CLI keeps the real environment
+	Vendor   string // the resolved --vendor: claude, antigravity or all
+	All      bool
+	Project  string // --project <dir>
+	DryRun   bool
+	Out      io.Writer
+	Now      func() time.Time
+	Projects func(home string) ([]search.Project, error) // search.ListProjects; a test replaces it
+}
+
+// Input is one piece of what a project sends.
+type Input struct {
+	Kind, Label, Text string
+	Time              time.Time
+}
+
+// Collected is what one project would send.
+type Collected struct {
+	Root, Name string
+	Changed    bool
+	Inputs     []Input
+	Dropped    []string
+	Prompt     string
+}
+
+// firstLook is how far back a project's first dream reads.
+const firstLook = 14 * 24 * time.Hour
+
+// Run is `sh-agent dream`.
+func Run(o Options) error {
+	if o.Now == nil {
+		o.Now = time.Now
+	}
+	if o.Projects == nil {
+		o.Projects = search.ListProjects
+	}
+	projects, err := o.targets()
+	if err != nil {
+		return err
+	}
+	st := readState(o.Home)
+	if o.DryRun {
+		return o.dryRun(projects, st)
+	}
+	return errors.New("sh-agent dream: the run path is not built yet (plan Phase 4)")
+}
+
+// targets is --project's one checkout, or every indexed project for --all.
+func (o Options) targets() ([]search.Project, error) {
+	switch {
+	case o.Project != "" && o.All:
+		return nil, errors.New("sh-agent dream: --all or --project <dir>, not both")
+	case o.Project != "":
+		abs, err := filepath.Abs(o.Project)
+		if err != nil {
+			return nil, err
+		}
+		root, err := memory.Root(abs)
+		if err != nil {
+			return nil, err
+		}
+		return []search.Project{{Root: root, Name: filepath.Base(root), DocsRoot: ".agents/docs"}}, nil
+	case o.All:
+		return o.Projects(o.Home)
+	}
+	return nil, errors.New("usage: sh-agent dream --all | --project <dir> [--dry-run]")
+}
+
+// skipReason says why a project is not dreamt over, or "" when it is.
+func skipReason(p search.Project) string {
+	if info, err := os.Stat(p.Root); err != nil || !info.IsDir() {
+		return "gone"
+	}
+	if _, err := memory.Root(p.Root); err != nil {
+		return "not a git checkout"
+	}
+	docs := p.DocsRoot
+	if docs == "" {
+		docs = ".agents/docs"
+	}
+	if info, err := os.Stat(filepath.Join(p.Root, docs)); err != nil || !info.IsDir() {
+		return "no " + docs
+	}
+	return ""
+}
+
+func (o Options) since(st state, root string) time.Time {
+	if t, ok := st.Projects[root]; ok {
+		return t
+	}
+	return o.Now().Add(-firstLook)
+}
+
+// dryRun prints what a run would collect and run, and writes, locks and
+// advances nothing.
+func (o Options) dryRun(projects []search.Project, st state) error {
+	cli := command(o.Vendor)
+	for _, p := range projects {
+		if why := skipReason(p); why != "" {
+			fmt.Fprintf(o.Out, "[dry-run] %s: skip (%s)\n", p.Root, why)
+			continue
+		}
+		c, err := collect(o.Home, o.Vendor, p, o.since(st, p.Root), maxPrompt)
+		if err != nil {
+			fmt.Fprintf(o.Out, "[dry-run] %s: would fail (%v)\n", p.Root, err)
+			continue
+		}
+		if !c.Changed {
+			fmt.Fprintf(o.Out, "[dry-run] %s: unchanged since %s\n", p.Root, o.since(st, p.Root).Format(time.RFC3339))
+			continue
+		}
+		counts := map[string]int{}
+		for _, in := range c.Inputs {
+			counts[in.Kind]++
+		}
+		var parts []string
+		for _, k := range promptOrder {
+			parts = append(parts, fmt.Sprintf("%s %d", k, counts[k]))
+		}
+		fmt.Fprintf(o.Out, "[dry-run] %s: %s; %d bytes; would run: %s\n", p.Root, strings.Join(parts, ", "), len(c.Prompt), strings.Join(cli, " "))
+		for _, d := range c.Dropped {
+			fmt.Fprintf(o.Out, "[dry-run]   left out: %s\n", d)
+		}
+		if o.Project != "" {
+			fmt.Fprintf(o.Out, "[dry-run] prompt:\n%s\n", c.Prompt)
+		}
+	}
+	return nil
+}
+
+// command is the tool-free headless call for the vendor (D4, D7).
+func command(vendor string) []string {
+	if vendor == harness.VendorAntigravity {
+		return []string{"agy", "-p", "<prompt>", "--mode", "plan", "--disable-slash-commands", "--output-format", "text"}
+	}
+	return []string{"claude", "-p", "--tools", "", "--no-session-persistence", "--output-format", "text"}
+}

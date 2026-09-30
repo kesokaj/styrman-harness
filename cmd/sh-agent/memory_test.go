@@ -59,3 +59,22 @@ func TestMemoryRefusalExitsTwo(t *testing.T) {
 		t.Fatalf("err = %v, want exit 2", err)
 	}
 }
+
+// TestDreamVerb: the verb reaches the package with its flags, --project taking
+// a value (takesValue), and refuses neither-nor with the usage line.
+func TestDreamVerb(t *testing.T) {
+	home := t.TempDir()
+	if err := run([]string{"dream", "--home", home}, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "usage") {
+		t.Fatalf("bare dream: %v", err)
+	}
+	var out bytes.Buffer
+	if err := run([]string{"dream", "--all", "--dry-run", "--home", home, "--vendor", "claude"}, &out); err != nil {
+		t.Fatalf("--all --dry-run on an empty home: %v", err)
+	}
+	if entries, _ := os.ReadDir(home); len(entries) != 0 {
+		t.Errorf("a dry run on an empty home wrote %v", entries)
+	}
+	if err := run([]string{"dream", "--project", t.TempDir(), "--dry-run", "--home", home}, &out); err == nil || !strings.Contains(err.Error(), "not a git checkout") {
+		t.Errorf("--project outside a checkout: %v", err)
+	}
+}

@@ -348,6 +348,26 @@ func Collect(home string) (Collection, error) {
 			}
 		}
 	}
+	// The dream job's harness-target proposals travel like the retro queue (R8);
+	// its project proposals, drafts, state, log and failures never do (plan
+	// 2026-09-30-parity-memory-dream D19). Listed by name, never globbed.
+	harnessDir := filepath.Join(propDir, "dream", "harness")
+	linked := false
+	for _, d := range []string{filepath.Join(propDir, "dream"), harnessDir} {
+		if info, err := os.Lstat(d); err == nil && info.Mode()&os.ModeSymlink != 0 {
+			linked = true
+			c.Skipped = append(c.Skipped, "proposals/dream/ (a symlink on the way, not followed)")
+		}
+	}
+	if entries, err := os.ReadDir(harnessDir); err == nil && !linked {
+		for _, e := range entries {
+			if strings.HasSuffix(e.Name(), ".md") {
+				if err := add("proposals/dream/harness/"+e.Name(), text); err != nil {
+					return Collection{}, err
+				}
+			}
+		}
+	}
 	// The global search index is a cache of the files above and of project
 	// trails (R4, ADR-045): never sent, and named so a dry run shows it.
 	for _, name := range []string{"search.db", "search.db-wal", "search.db-shm"} {

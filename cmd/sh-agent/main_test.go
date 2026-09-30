@@ -1338,7 +1338,7 @@ func TestHarnessMap(t *testing.T) {
 			t.Errorf("the map names `sh-agent %s`, which the binary does not have", m[1])
 		}
 	}
-	for _, verb := range []string{"install", "update", "report"} {
+	for _, verb := range []string{"install", "update", "report", "dream"} {
 		if !seen[verb] {
 			t.Errorf("the map does not show `sh-agent %s`", verb)
 		}

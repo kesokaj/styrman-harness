@@ -68,7 +68,7 @@ func Run(o Options) error {
 	if o.DryRun {
 		return o.dryRun(projects, st)
 	}
-	return errors.New("sh-agent dream: the run path is not built yet (plan Phase 4)")
+	return o.realRun(projects, st)
 }
 
 // targets is --project's one checkout, or every indexed project for --all.
@@ -154,10 +154,57 @@ func (o Options) dryRun(projects []search.Project, st state) error {
 	return nil
 }
 
-// command is the tool-free headless call for the vendor (D4, D7).
+// command is the tool-free headless call for the vendor (D4, D7b): agy has no
+// no-tools flag, so plan mode and the prompt's opening warning keep it from
+// calling one (a refused call ends its run with no answer); the prompt never
+// starts with a slash, so no command expansion is needed off.
 func command(vendor string) []string {
 	if vendor == harness.VendorAntigravity {
-		return []string{"agy", "-p", "<prompt>", "--mode", "plan", "--disable-slash-commands", "--output-format", "text"}
+		return []string{"agy", "-p", "<prompt>", "--mode", "plan", "--output-format", "text"}
 	}
 	return []string{"claude", "-p", "--tools", "", "--no-session-persistence", "--output-format", "text"}
+}
+
+// ExitError is a run's exit status: 1 when a project failed, 2 when the run
+// failed before its first project.
+type ExitError struct {
+	Code int
+	Msg  string
+}
+
+func (e *ExitError) Error() string { return e.Msg }
+
+// StatusLine is `sh-agent status`'s dream line.
+func StatusLine(home string) string {
+	timer := "timer not installed"
+	if TimerInstalled(home) {
+		timer = "timer installed"
+	}
+	st := readState(home)
+	r := st.LastRun
+	switch {
+	case r.At.IsZero():
+		return "never run; " + timer
+	case r.Error != "":
+		return fmt.Sprintf("last run %s failed: %s; %s", r.At.Format("2006-01-02"), r.Error, timer)
+	}
+	return fmt.Sprintf("last run %s: %d projects, %d proposals; %s", r.At.Format("2006-01-02"), r.Projects, r.Proposals, timer)
+}
+
+// TimerInstalled reports whether a dream timer unit is on disk in home.
+func TimerInstalled(home string) bool {
+	for _, p := range []string{linuxTimerPath(home), macPlistPath(home)} {
+		if _, err := os.Lstat(p); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+func linuxTimerPath(home string) string {
+	return filepath.Join(home, ".config", "systemd", "user", "sh-agent-dream.timer")
+}
+
+func macPlistPath(home string) string {
+	return filepath.Join(home, "Library", "LaunchAgents", "com.styrman.sh-agent-dream.plist")
 }

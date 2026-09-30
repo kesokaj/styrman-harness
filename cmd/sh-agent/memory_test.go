@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -76,5 +77,37 @@ func TestDreamVerb(t *testing.T) {
 	}
 	if err := run([]string{"dream", "--project", t.TempDir(), "--dry-run", "--home", home}, &out); err == nil || !strings.Contains(err.Error(), "not a git checkout") {
 		t.Errorf("--project outside a checkout: %v", err)
+	}
+}
+
+// TestUninstallDryRunLeavesTheTimer: a dry run names the timer and runs no
+// systemctl; the real uninstall removes it, with no manifest left.
+func TestUninstallDryRunLeavesTheTimer(t *testing.T) {
+	home := t.TempDir()
+	unit := filepath.Join(home, ".config", "systemd", "user", "sh-agent-dream.timer")
+	os.MkdirAll(filepath.Dir(unit), 0o755)
+	os.WriteFile(unit, []byte("x"), 0o644)
+	bin := t.TempDir()
+	calls := filepath.Join(t.TempDir(), "calls")
+	os.WriteFile(filepath.Join(bin, "systemctl"), []byte("#!/bin/sh\necho \"$*\" >> \""+calls+"\"\n"), 0o755)
+	os.WriteFile(filepath.Join(bin, "launchctl"), []byte("#!/bin/sh\necho \"$*\" >> \""+calls+"\"\n"), 0o755)
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	var out bytes.Buffer
+	run([]string{"uninstall", "--dry-run", "--home", home}, &out)
+	if !strings.Contains(out.String(), "would remove the dream timer") {
+		t.Errorf("dry run output:\n%s", out.String())
+	}
+	if _, err := os.Stat(calls); !os.IsNotExist(err) {
+		t.Error("a dry run called the service manager")
+	}
+	if _, err := os.Stat(unit); err != nil {
+		t.Error("a dry run removed the unit")
+	}
+	out.Reset()
+	run([]string{"uninstall", "--home", home}, &out)
+	if runtime.GOOS == "linux" {
+		if _, err := os.Stat(unit); !os.IsNotExist(err) {
+			t.Errorf("uninstall left the timer (no manifest):\n%s", out.String())
+		}
 	}
 }

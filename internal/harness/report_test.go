@@ -1370,3 +1370,65 @@ func TestRedactText(t *testing.T) {
 		t.Errorf("clean text changed: %q", got)
 	}
 }
+
+// TestCollectSendsHarnessDreamProposals: of the dream job's output only the
+// harness-target proposals travel (R8, the plan's D19); a project's own
+// proposals, draft skills, state, log and failures stay on the machine.
+func TestCollectSendsHarnessDreamProposals(t *testing.T) {
+	home := t.TempDir()
+	conf := filepath.Join(home, ".config", "sh-agent")
+	for path, body := range map[string]string{
+		"proposals/dream/harness/2026-09-30-app.md":        "harness proposal, token = FAKEVALUE\nkeep this line\n",
+		"proposals/dream/2026-09-30-app.md":                "project proposal\n",
+		"proposals/dream/drafts/2026-09-30-app-x/SKILL.md": "draft\n",
+		"dream-state.json":                                 "{}",
+		"dream.log":                                        "log\n",
+		"dream-failed/2026-09-30-app.txt":                  "failed\n",
+	} {
+		p := filepath.Join(conf, filepath.FromSlash(path))
+		os.MkdirAll(filepath.Dir(p), 0o700)
+		if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c, err := Collect(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, f := range c.Files {
+		names = append(names, f.Name)
+		if f.Name == "proposals/dream/harness/2026-09-30-app.md" && (strings.Contains(string(f.Data), "FAKEVALUE") || !strings.Contains(string(f.Data), "keep this line")) {
+			t.Errorf("harness proposal not redacted as text:\n%s", f.Data)
+		}
+	}
+	got := strings.Join(names, " ")
+	if !strings.Contains(got, "proposals/dream/harness/2026-09-30-app.md") {
+		t.Errorf("the harness dream proposal is not sent: %s", got)
+	}
+	for _, never := range []string{"proposals/dream/2026-09-30-app.md", "drafts", "dream-state", "dream.log", "dream-failed"} {
+		if strings.Contains(got, never) {
+			t.Errorf("%s would leave the machine: %s", never, got)
+		}
+	}
+}
+
+func TestCollectDoesNotFollowALinkedDreamDir(t *testing.T) {
+	home := t.TempDir()
+	elsewhere := t.TempDir()
+	os.WriteFile(filepath.Join(elsewhere, "secret.md"), []byte("private notes\n"), 0o600)
+	dream := filepath.Join(home, ".config", "sh-agent", "proposals", "dream")
+	os.MkdirAll(dream, 0o700)
+	if err := os.Symlink(elsewhere, filepath.Join(dream, "harness")); err != nil {
+		t.Fatal(err)
+	}
+	c, err := Collect(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range c.Files {
+		if strings.Contains(f.Name, "secret.md") {
+			t.Fatalf("followed a linked proposals/dream/harness: %s", f.Name)
+		}
+	}
+}

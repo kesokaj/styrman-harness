@@ -78,6 +78,21 @@ sh-agent report               # clones a throwaway holding only this machine's r
 | The checkout's origin is not the feedback repository | `report: <dir> is not the feedback repository: its origin is not "…"`, exit 1, nothing written — the checkout's own origin is never printed. Point it at the right checkout. |
 | `GIT_DIR` (or another redirecting variable) is set | `report: GIT_DIR is set; report commits only in the feedback checkout — unset it and re-run`, exit 1. |
 
+## The background dreamer (optional, once per machine)
+
+```bash
+sh-agent dream --install-timer   # systemd user timer (Linux) or launchd agent (macOS): sh-agent dream --all nightly at 03:00
+sh-agent status                  # its line: dream      last run <date>: <n> projects, <m> proposals; timer installed
+sh-agent dream --all --dry-run   # what each indexed project would send, and the CLI command; writes nothing
+sh-agent dream --remove-timer    # stop and remove it (uninstall does too)
+```
+
+- The unit runs `~/.local/bin/sh-agent`, with the PATH of the shell that ran `--install-timer`, so it finds `claude` or `agy` there. Run it from the shell you work in. A rerun from a shell with another PATH renders other text: the installed unit is kept and named, so run `--remove-timer` first.
+- A project is dreamt over only once `sh-agent search` or `index` has run in it (the global index is the list).
+- On Linux a user timer fires only while your user manager runs (a login, or `loginctl enable-linger`). `Persistent=true` runs a missed night at the next login.
+- The CLI is the manifest's vendor (`all` uses Claude Code); `--vendor agy|claude` overrides it for a run by hand.
+- Output: `~/.config/sh-agent/proposals/dream/` (per project; `harness/` for harness targets, which `report` sends; `drafts/` for draft skills). A failed project's output goes to `dream-failed/`, and the log is `dream.log`. Nothing is applied until `/retro` does it.
+
 ## Configure
 
 Nothing to configure. `--vendor VENDOR` selects the target CLI: `antigravity` (or `agy`) or `claude`; the default is the vendor recorded by the existing install, else `all` — passing `--vendor all` explicitly widens a single-vendor install to both through `install`; `update` keeps the recorded vendor instead. The recorded vendor also decides whether `/init-project` gives projects a `.claude/`: with `antigravity` alone it writes nothing under `.claude/`; an Antigravity-only machine installed with the default `all` needs `sh-agent install --vendor agy` for that. `--repo DIR` overrides where the checkout is; `$SH_AGENT_REPO` does the same persistently. Without either, install and update discover the checkout by walking up from the working directory, then fall back to the path recorded at the last install; when that discovery finds a checkout OTHER than the one already on record — an unpacked copy, a second clone sitting in a harness-shaped directory — the build is refused rather than run and deployed: `"checkout %s is not the installed one (%s); pass --repo %s to build and install from it"`, or, on a release-binary install, `"this home was installed from the release binary %s, not from a checkout; pass --repo %s to build and install from it"`. `--home DIR` installs elsewhere and is what every development run uses (a scratch home under `.agents/scratch/`, never `/tmp`). From its own git checkout, `install` rebuilds the binary with `go build` first; the running binary is installed as is when `go` is missing (with a warning) or when the tree is a plain copy with no `.git` — an unpacked bundle (BUG-015).

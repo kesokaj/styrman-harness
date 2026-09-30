@@ -30,6 +30,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -59,6 +60,7 @@ Commands:
       --global searches the global search index (~/.config/sh-agent/search.db): ~/.config/sh-agent's logs and proposals and the .agents/docs trail of every harness-scaffolded checkout that has run search; --kind is one of bug adr plan change handoff review testing retro spec deploy trail code doc feedback proposal; --limit 1-50, default 10
   index [--global] [--rebuild]  reconcile the search index, or delete and rebuild it, and print its counts
   memory add --type T --name SLUG --description TEXT  save one memory, its body on stdin, into this project's .agents/memory/ and its MEMORY.md line (T: user, feedback, project or reference); every CLI writes memory this way (R10)
+  dream --install-timer | --remove-timer  install (systemd user timer on Linux, launchd agent on macOS) or remove the nightly "dream --all", run with the PATH of the installing shell; uninstall removes it too
   dream --all | --project DIR [--dry-run]  the background dreamer: for every indexed project (or one) that changed since its last dream, send its memory, new trail, feedback and both CLIs' transcripts, redacted, to a CLI with no tools, and write the proposals and draft skills it returns under ~/.config/sh-agent/proposals/dream/ (R3's exception; --vendor picks the CLI, default from the manifest)
   memory show             print this project's memory index, capped at what a session loads, plus a hint when Claude Code's native memory is still on here
   version                 print the build version
@@ -117,6 +119,8 @@ func run(args []string, out io.Writer) error {
 	memDesc := fs.String("description", "", "memory add: one line")
 	dreamAll := fs.Bool("all", false, "dream: every project in the global search index")
 	dreamProject := fs.String("project", "", "dream: one checkout")
+	installTimer := fs.Bool("install-timer", false, "dream: install the nightly user timer")
+	removeTimer := fs.Bool("remove-timer", false, "dream: remove the nightly user timer")
 	if err := fs.Parse(reorder(rest)); err != nil {
 		return err
 	}
@@ -165,6 +169,18 @@ func run(args []string, out io.Writer) error {
 		fmt.Fprintln(out, "sh-agent", buildVersion())
 		return nil
 	case "uninstall":
+		// The dream timer is not in the manifest (the next install would delete
+		// it as stale); uninstall removes it by R4's dream clause, also when no
+		// manifest is left, and a dry run only says so.
+		if dream.TimerInstalled(home) {
+			if *dryRun {
+				fmt.Fprintln(out, "[dry-run] would remove the dream timer")
+			} else if err := dream.RemoveTimer(home, runtime.GOOS); err != nil {
+				return err
+			} else {
+				fmt.Fprintln(out, "removed the dream timer")
+			}
+		}
 		return harness.Uninstall(home, *dryRun, out)
 	case "report":
 		// Before ResolveSource, which errors when no harness is found: a
@@ -179,7 +195,28 @@ func run(args []string, out io.Writer) error {
 		if err != nil {
 			return err
 		}
-		return dream.Run(dream.Options{Home: home, Vendor: vendor, All: *dreamAll, Project: *dreamProject, DryRun: *dryRun, Out: out})
+		switch {
+		case *installTimer && *removeTimer:
+			return errors.New("sh-agent dream: --install-timer or --remove-timer, not both")
+		case *installTimer:
+			err = dream.InstallTimer(home, os.Getenv("PATH"), runtime.GOOS)
+			if err == nil {
+				fmt.Fprintln(out, "dream timer installed: sh-agent dream --all runs nightly at 03:00")
+			}
+		case *removeTimer:
+			err = dream.RemoveTimer(home, runtime.GOOS)
+			if err == nil {
+				fmt.Fprintln(out, "dream timer removed")
+			}
+		default:
+			err = dream.Run(dream.Options{Home: home, Vendor: vendor, All: *dreamAll, Project: *dreamProject, DryRun: *dryRun, Out: out})
+		}
+		var ee *dream.ExitError
+		if errors.As(err, &ee) {
+			fmt.Fprintln(os.Stderr, ee.Msg)
+			return exitCode(ee.Code)
+		}
+		return err
 	case "search", "index":
 		// Before ResolveSource too: searching needs no harness tree, and a
 		// release-binary or zip place has none (plan D10).
@@ -574,6 +611,7 @@ func status(src harness.Source, home, vendorFlag string, out io.Writer) error {
 	} else {
 		fmt.Fprintln(out, "retro      none yet — run /retro at the end of a session with corrections")
 	}
+	fmt.Fprintln(out, "dream      "+dream.StatusLine(home))
 
 	vendor, err := resolveVendor(vendorFlag, home)
 	if err != nil {

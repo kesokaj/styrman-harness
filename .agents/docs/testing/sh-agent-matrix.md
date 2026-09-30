@@ -41,6 +41,11 @@ The verb × place-kind matrix of `plans/2026-09-18-sh-agent-works-everywhere.md`
 | `index --rebuild` | exercised: same counts after a rebuild | refused: the same message | exercised: same |
 | `search --global zip` | exercised: the checkout registered itself; 873 trail files, `checkout:.agents/docs/plans/…` | exercised: answers outside a checkout, `0 hits` from a fresh home (nothing registered) | exercised: same as the checkout |
 
+| `memory add` / `memory show` (added 2026-09-30, plan `2026-09-30-parity-memory-dream`) | exercised: a build of the tree wrote `.agents/memory/prefer-tables.md` and its line, 0600 in a 0700 store, and `show` printed it with the rollout hint; outside a checkout, exit 2 (`testing/2026-09-30-verify-parity-memory-dream-phase-1.md`) | not run: the verb runs before the harness tree is resolved (`main.go`, the `memory` case), so the place kind never reaches it | not run: the same |
+| `dream --all --dry-run` / `dream --project DIR --dry-run` | exercised: two indexed fixture projects listed with their input counts and the CLI command, the home's file list identical before and after (`…-phase-3.md`, re-run in `…-phase-4-5.md`) | not run: runs before the tree is resolved (the `dream` case) | not run: the same |
+| `dream --all` (real CLI) | exercised: Claude Code over two seeded projects, 2+2 proposals, then `unchanged`; agy-only 3 of 3 after D7b (`…-phase-4.md`) | not run: as above | not run: as above |
+| `dream --install-timer` / `--remove-timer` | exercised against a fake `systemctl` on PATH into a scratch home; `systemd-analyze verify` exit 0; the real user manager is the operator's step (`…-phase-4-5.md`, the plan's Phase 5) | not run: as above | not run: as above |
+| `uninstall --dry-run` / `uninstall` with a dream timer | exercised: `TestUninstallDryRunLeavesTheTimer` (the dry run names the timer and calls no manager; the real run removes it with no manifest) | exercised by the same code path (`uninstall` does not depend on the place kind) | the same |
 The `search` and `index` rows ran from `.agents/scratch/matrix-search/` (gitignored) on 2026-09-29: the plain copy with `GIT_CEILING_DIRECTORIES` set to its parent, because a copy inside this checkout's scratch otherwise finds this repository's `.git` and searches it (a first run made exactly that mistake and was discarded).
 
 ## The two orderings

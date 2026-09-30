@@ -269,7 +269,7 @@ E2E criteria:
 - [ ] E2E 5, the real timer on this box — who: user — expect: `list-timers` shows it, then it is gone after `--remove-timer`
 
 ### Phase 6 — close
-- [ ] `testing/guide.md` § 3b (report tier) for Phase 1's change to `reorder`'s `takesValue` map, and § 3c rows for the `memory`/`dream` verbs — found in: Phase 2 (the guide names the map as a 3b trigger)
+- [x] `testing/guide.md` § 3b (report tier) for Phase 1's change — evidence: § 3b's report dry run in `testing/2026-09-30-verify-parity-memory-dream-phase-4-5.md` (only the harness dream file listed to send); § 3c rows added to `sh-agent-matrix.md` for `memory`, `dream`, the timer and `uninstall`, 2026-09-30 — to `reorder`'s `takesValue` map, and § 3c rows for the `memory`/`dream` verbs — found in: Phase 2 (the guide names the map as a 3b trigger)
 - [ ] Docs pass (`documentation`), `/review --docs`, AGENTS.md Layout, :59, and rule 1 (:13: the dream timer is neither a delivery path nor a report path, stated in the same commit), matrix rows; `deploy/local.md` states the timer's limits (no user manager without linger, `Persistent=true` catches up at login; a rerun from a shell with another PATH renders different text, so `--remove-timer` first)
 - [ ] Antigravity run of each changed skill and agent (`project-memory`, `feedback-log`, `init-project`, `dream`, `retro`, `distill`, `dreamer`) before the tag (AGENTS.md:77), plus the three-setup parity rows
 - [ ] Release through `/preflight` ("Include this in the next version")

@@ -65,8 +65,12 @@ func TestMemoryRefusalExitsTwo(t *testing.T) {
 // a value (takesValue), and refuses neither-nor with the usage line.
 func TestDreamVerb(t *testing.T) {
 	home := t.TempDir()
-	if err := run([]string{"dream", "--home", home}, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "usage") {
-		t.Fatalf("bare dream: %v", err)
+	var code exitCode
+	if err := run([]string{"dream", "--home", home}, &bytes.Buffer{}); !errors.As(err, &code) || code != 2 {
+		t.Fatalf("bare dream: %v, want exit 2", err)
+	}
+	if entries, _ := os.ReadDir(home); len(entries) != 0 {
+		t.Errorf("a usage error wrote %v", entries)
 	}
 	var out bytes.Buffer
 	if err := run([]string{"dream", "--all", "--dry-run", "--home", home, "--vendor", "claude"}, &out); err != nil {
@@ -75,8 +79,8 @@ func TestDreamVerb(t *testing.T) {
 	if entries, _ := os.ReadDir(home); len(entries) != 0 {
 		t.Errorf("a dry run on an empty home wrote %v", entries)
 	}
-	if err := run([]string{"dream", "--project", t.TempDir(), "--dry-run", "--home", home}, &out); err == nil || !strings.Contains(err.Error(), "not a git checkout") {
-		t.Errorf("--project outside a checkout: %v", err)
+	if err := run([]string{"dream", "--project", t.TempDir(), "--dry-run", "--home", home}, &out); !errors.As(err, &code) || code != 2 {
+		t.Errorf("--project outside a checkout: %v, want exit 2", err)
 	}
 }
 
@@ -109,5 +113,29 @@ func TestUninstallDryRunLeavesTheTimer(t *testing.T) {
 		if _, err := os.Stat(unit); !os.IsNotExist(err) {
 			t.Errorf("uninstall left the timer (no manifest):\n%s", out.String())
 		}
+	}
+}
+
+// TestDreamTimerDryRun: --dry-run with --install-timer or --remove-timer
+// writes no unit and calls no service manager.
+func TestDreamTimerDryRun(t *testing.T) {
+	home := t.TempDir()
+	bin := t.TempDir()
+	calls := filepath.Join(t.TempDir(), "calls")
+	for _, m := range []string{"systemctl", "launchctl"} {
+		os.WriteFile(filepath.Join(bin, m), []byte("#!/bin/sh\necho \"$*\" >> \""+calls+"\"\n"), 0o755)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	for _, flag := range []string{"--install-timer", "--remove-timer"} {
+		var out bytes.Buffer
+		if err := run([]string{"dream", flag, "--dry-run", "--home", home}, &out); err != nil || !strings.Contains(out.String(), "[dry-run] would") {
+			t.Errorf("%s --dry-run: %v, %q", flag, err, out.String())
+		}
+	}
+	if entries, _ := os.ReadDir(home); len(entries) != 0 {
+		t.Errorf("a dry run wrote %v", entries)
+	}
+	if _, err := os.Stat(calls); !os.IsNotExist(err) {
+		t.Error("a dry run called the service manager")
 	}
 }

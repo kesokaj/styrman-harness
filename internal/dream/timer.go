@@ -30,6 +30,8 @@ func linuxServicePath(home string) string {
 // the shell that ran --install-timer: the user manager's own PATH lacks
 // ~/.local/bin, where claude and agy live (cold read r1).
 func renderSystemd(bin, path string) (string, string) {
+	// systemd expands %-specifiers inside quotes too; %% is a literal %.
+	bin, path = strings.ReplaceAll(bin, "%", "%%"), strings.ReplaceAll(path, "%", "%%")
 	service := fmt.Sprintf(`[Unit]
 Description=sh-agent dream: the nightly background dreamer (R3)
 
@@ -91,6 +93,12 @@ func InstallTimer(home, path, goos string) error {
 	bin := filepath.Join(home, harness.BinPath)
 	if info, err := os.Stat(bin); err != nil || !info.Mode().IsRegular() {
 		return &ExitError{2, fmt.Sprintf("sh-agent dream --install-timer: no binary at %s: run sh-agent install first", bin)}
+	}
+	// A quote, a backslash or a line break would end the unit's quoted value
+	// and let the rest of the path become unit text (security review
+	// 2026-09-30); such a home or PATH is refused, never escaped by guess.
+	if strings.ContainsAny(bin+path, "\"\\\n\r") {
+		return &ExitError{2, "sh-agent dream --install-timer: the binary path or PATH holds a quote, a backslash or a line break; the timer's unit cannot carry it safely"}
 	}
 	var files map[string]string
 	var manager string

@@ -286,7 +286,7 @@ func TestDryRunLines(t *testing.T) {
 	if err := Run(o); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{f.root + ": memory", "would run: agy -p", calm.root + ": unchanged since", "gone: skip (gone)"} {
+	for _, want := range []string{f.root + ": memory", "would run: agy --input-format stream-json", calm.root + ": unchanged since", "gone: skip (gone)"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("dry run lacks %q:\n%s", want, out.String())
 		}
@@ -334,18 +334,21 @@ func TestDryRunOverCapAndDropped(t *testing.T) {
 	}
 }
 
-func TestReadStateFallback(t *testing.T) {
+func TestReadState(t *testing.T) {
 	home := t.TempDir()
-	if st := readState(home); st.Projects == nil || len(st.Projects) != 0 {
-		t.Errorf("missing file: %+v", st)
+	if st, err := readState(home); err != nil || st.Projects == nil || len(st.Projects) != 0 {
+		t.Errorf("missing file: %+v, %v", st, err)
 	}
 	write(t, statePath(home), "{not json", old)
-	if st := readState(home); st.Projects == nil || len(st.Projects) != 0 {
-		t.Errorf("corrupt file: %+v", st)
+	if _, err := readState(home); err == nil || !strings.Contains(err.Error(), "not valid JSON") {
+		t.Errorf("corrupt file: %v, want an error, never a silent reset", err)
 	}
 	write(t, statePath(home), `{"projects":{"/p":"2026-09-29T00:00:00Z"}}`, old)
 	o := Options{Now: func() time.Time { return now }}
-	st := readState(home)
+	st, err := readState(home)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if got := o.since(st, "/p"); !got.Equal(time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)) {
 		t.Errorf("saved watermark: %v", got)
 	}
@@ -354,12 +357,36 @@ func TestReadStateFallback(t *testing.T) {
 	}
 }
 
+// TestCollectDoesNotFollowLinkedTrail: a committed symlink under the docs
+// root is named and not read (security review 2026-09-30).
+func TestCollectDoesNotFollowLinkedTrail(t *testing.T) {
+	f := newFixture(t)
+	elsewhere := t.TempDir()
+	write(t, filepath.Join(elsewhere, "private.md"), "private notes elsewhere\n", fresh)
+	if err := os.Symlink(elsewhere, filepath.Join(f.root, ".agents", "docs", "reviews")); err != nil {
+		t.Fatal(err)
+	}
+	c, err := collect(f.home, "claude", project(f), since, maxPrompt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(c.Prompt, "private notes elsewhere") {
+		t.Error("a linked record directory was read")
+	}
+	if !strings.Contains(strings.Join(c.Dropped, " "), "reviews: a symlink") {
+		t.Errorf("dropped = %v", c.Dropped)
+	}
+}
+
 func TestCommand(t *testing.T) {
-	if c := strings.Join(command("antigravity"), " "); !strings.HasPrefix(c, "agy -p") {
-		t.Errorf("antigravity: %s", c)
+	agy := strings.Join(command("antigravity"), " ")
+	if !strings.HasPrefix(agy, "agy --input-format stream-json --output-format stream-json --mode plan -p") {
+		t.Errorf("antigravity: %s", agy)
 	}
 	for _, v := range []string{"claude", "all"} {
-		if c := command(v); c[0] != "claude" || c[2] != "--tools" || c[3] != "" {
+		c := command(v)
+		joined := strings.Join(c, " ")
+		if c[0] != "claude" || c[2] != "--tools" || c[3] != "" || !strings.Contains(joined, "--strict-mcp-config --setting-sources local --no-session-persistence") {
 			t.Errorf("%s: %q", v, c)
 		}
 	}

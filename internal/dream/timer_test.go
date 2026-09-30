@@ -176,3 +176,18 @@ func TestTimerMacOS(t *testing.T) {
 		t.Error("plist left after remove")
 	}
 }
+
+func TestInstallTimerRefusesUnsafePaths(t *testing.T) {
+	fakeManager(t, "systemctl", 0)
+	var ee *ExitError
+	for _, path := range []string{"/p\"\nExecStartPre=/bin/evil", "/p\\x", "/p\r"} {
+		home := timerHome(t)
+		if err := InstallTimer(home, path, "linux"); !errors.As(err, &ee) || ee.Code != 2 || TimerInstalled(home) {
+			t.Errorf("PATH %q: %v", path, err)
+		}
+	}
+	service, _ := renderSystemd("/h/100%/sh-agent", "/p%n")
+	if !strings.Contains(service, "/h/100%%/sh-agent") || !strings.Contains(service, "PATH=/p%%n") {
+		t.Errorf("a %% was not escaped:\n%s", service)
+	}
+}

@@ -65,6 +65,13 @@ func collect(home, vendor string, p search.Project, since time.Time, limit int) 
 		docs = ".agents/docs"
 	}
 	for _, dir := range trailDirs {
+		// A symlinked docs root or record directory is never followed: a
+		// repository could commit one pointing anywhere (security review
+		// 2026-09-30).
+		if linked(p.Root, docs, dir) {
+			c.Dropped = append(c.Dropped, filepath.Join(docs, dir)+": a symlink on the way, not followed")
+			continue
+		}
 		for _, f := range mdFiles(filepath.Join(p.Root, docs, dir)) {
 			if body, t := readFile(f); t.After(since) {
 				add(kindTrail, filepath.Join(dir, filepath.Base(f)), body, t)
@@ -76,12 +83,17 @@ func collect(home, vendor string, p search.Project, since time.Time, limit int) 
 		add(kindSkill, "skill "+s.name, s.name+": "+s.description, time.Time{})
 	}
 
-	for _, tr := range claudeTranscript(home, p.Root, since) {
+	trs, trErrs := claudeTranscript(home, p.Root, since)
+	for _, tr := range trs {
 		add(kindTranscript, "claude "+tr.label, tr.text, tr.ts)
 	}
+	c.Dropped = append(c.Dropped, trErrs...)
+	// An Antigravity read error fails the project, so its watermark stays and
+	// the conversations are read again next time, never skipped for good
+	// (code review 2026-09-30).
 	agy, err := search.AgyConversationText(home, p.Root, since)
 	if err != nil {
-		c.Dropped = append(c.Dropped, "antigravity transcripts: "+err.Error())
+		return c, fmt.Errorf("reading Antigravity's conversations: %w", err)
 	}
 	for _, a := range agy {
 		add(kindTranscript, "antigravity "+a.ID, a.Text, a.Modified)
@@ -90,11 +102,24 @@ func collect(home, vendor string, p search.Project, since time.Time, limit int) 
 	for i := range c.Inputs {
 		c.Inputs[i].Text = scrub(c.Inputs[i].Text, home)
 	}
+	for i := range c.Dropped {
+		c.Dropped[i] = scrub(c.Dropped[i], home)
+	}
 	if err := c.fit(limit); err != nil {
 		return c, err
 	}
 	c.Prompt = prompt(c)
 	return c, nil
+}
+
+// linked reports whether root/docs or root/docs/dir is a symlink.
+func linked(root, docs, dir string) bool {
+	for _, p := range []string{filepath.Join(root, docs), filepath.Join(root, docs, dir)} {
+		if info, err := os.Lstat(p); err == nil && info.Mode()&os.ModeSymlink != 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // scrub is what every input passes before it leaves sh-agent: report's
@@ -261,7 +286,7 @@ type transcript struct {
 // claudeTranscript is Claude Code's session text for root after since: the
 // user and assistant text parts of lines whose cwd is root or under it.
 // CLAUDE_CONFIG_DIR moves Claude Code's directory, as it does for the CLI.
-func claudeTranscript(home, root string, since time.Time) []transcript {
+func claudeTranscript(home, root string, since time.Time) ([]transcript, []string) {
 	base := filepath.Join(home, ".claude")
 	if d := os.Getenv("CLAUDE_CONFIG_DIR"); d != "" {
 		base = d
@@ -269,10 +294,11 @@ func claudeTranscript(home, root string, since time.Time) []transcript {
 	projects := filepath.Join(base, "projects")
 	dirs, err := os.ReadDir(projects)
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 	root = filepath.Clean(root)
 	var out []transcript
+	var errs []string
 	for _, d := range dirs {
 		if !d.IsDir() {
 			continue
@@ -284,19 +310,23 @@ func claudeTranscript(home, root string, since time.Time) []transcript {
 			if err != nil || !info.Mode().IsRegular() || !strings.HasSuffix(f.Name(), ".jsonl") || !info.ModTime().After(since) {
 				continue
 			}
-			if t := sessionText(path, root, since); t.text != "" {
+			t, err := sessionText(path, root, since)
+			if err != nil {
+				errs = append(errs, "claude transcript "+f.Name()+": "+err.Error())
+			}
+			if t.text != "" {
 				t.label = strings.TrimSuffix(f.Name(), ".jsonl")
 				out = append(out, t)
 			}
 		}
 	}
-	return out
+	return out, errs
 }
 
-func sessionText(path, root string, since time.Time) transcript {
+func sessionText(path, root string, since time.Time) (transcript, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return transcript{}
+		return transcript{}, err
 	}
 	defer f.Close()
 	var b strings.Builder
@@ -328,7 +358,7 @@ func sessionText(path, root string, since time.Time) transcript {
 			last = ts
 		}
 	}
-	return transcript{text: b.String(), ts: last}
+	return transcript{text: b.String(), ts: last}, sc.Err()
 }
 
 // contentText is a message's text: a plain string, or the text parts of a

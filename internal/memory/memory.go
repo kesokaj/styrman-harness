@@ -15,8 +15,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/kesokaj/styrman-harness/internal/harness"
@@ -26,7 +26,6 @@ import (
 const (
 	maxLines = 200
 	maxBytes = 25 * 1024
-	lockAge  = 30 * time.Second
 )
 
 // lockWait is how long Add retries a live lock before refusing.
@@ -130,6 +129,12 @@ func Add(dir string, e Entry, body io.Reader, now time.Time) (string, error) {
 		return "", refuse("%s is not ignored by git: run /init-project first", rel)
 	}
 
+	// A full index is refused before anything is created; the count is checked
+	// again under the lock, which is where the index is read for the write.
+	if pre, err := readLines(filepath.Join(store, "MEMORY.md")); err == nil && len(pre) >= maxLines && !hasLine(pre, e.Name) {
+		return "", refuse("MEMORY.md already holds %d lines, the most a session loads: run /dream to consolidate", len(pre))
+	}
+
 	// The index is read under the lock, so two writers never lose a line.
 	if err := os.MkdirAll(store, 0o700); err != nil {
 		return "", err
@@ -145,11 +150,10 @@ func Add(dir string, e Entry, body io.Reader, now time.Time) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	target := "(" + e.Name + ".md)"
 	line := fmt.Sprintf("- [%s](%s.md) — %s", e.Name, e.Name, e.Description)
 	replaced := false
 	for i, l := range lines {
-		if strings.Contains(l, target) {
+		if linkTarget(e.Name).MatchString(l) {
 			lines[i], replaced = line, true
 		}
 	}
@@ -171,6 +175,22 @@ func Add(dir string, e Entry, body io.Reader, now time.Time) (string, error) {
 		return "", err
 	}
 	return path, nil
+}
+
+// linkTarget matches the index line whose link target is name's file, and
+// only it: a description that mentions "(name.md)" is not a match (code review
+// 2026-09-30).
+func linkTarget(name string) *regexp.Regexp {
+	return regexp.MustCompile(`^- \[[^\]]*\]\(` + regexp.QuoteMeta(name) + `\.md\)`)
+}
+
+func hasLine(lines []string, name string) bool {
+	for _, l := range lines {
+		if linkTarget(name).MatchString(l) {
+			return true
+		}
+	}
+	return false
 }
 
 // Show returns the index, capped at what a session loads, plus the rollout
@@ -240,44 +260,33 @@ func readLines(path string) ([]string, error) {
 	return lines, sc.Err()
 }
 
-// lock takes the store's lock file, holding this process's pid. A lock whose
-// pid is gone, or older than lockAge, is stale and replaced; a live one is
-// retried for lockWait, then refused.
+// lock takes an exclusive flock on the store's lock file, retried for
+// lockWait, then refused. The kernel drops the lock when the process ends, so
+// a crashed writer never leaves a stale lock, and two waiters can never both
+// take it (code review 2026-09-30: the pid-file lock had three races). The
+// file itself stays; it is empty and gitignored with the store.
 func lock(path string) (func(), error) {
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o600)
+	if err != nil {
+		return nil, err
+	}
 	deadline := time.Now().Add(lockWait)
 	for {
-		f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
 		if err == nil {
-			fmt.Fprint(f, os.Getpid())
-			f.Close()
-			return func() { os.Remove(path) }, nil
+			return func() {
+				syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+				f.Close()
+			}, nil
 		}
-		if !errors.Is(err, os.ErrExist) {
+		if !errors.Is(err, syscall.EWOULDBLOCK) {
+			f.Close()
 			return nil, err
 		}
-		if stale(path) {
-			os.Remove(path)
-			continue
-		}
 		if time.Now().After(deadline) {
+			f.Close()
 			return nil, refuse("the memory store is busy: another sh-agent memory holds %s", path)
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-}
-
-func stale(path string) bool {
-	info, err := os.Stat(path)
-	if err != nil {
-		return false
-	}
-	if time.Since(info.ModTime()) > lockAge {
-		return true
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return false
-	}
-	pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
-	return err != nil || !harness.Alive(pid)
 }

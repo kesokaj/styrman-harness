@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -28,6 +29,9 @@ func fakeCLI(t *testing.T, name, out string, code int) (rec string) {
 		"printf '%s\\n' \"$@\" > \"" + rec + "/args\"\n" +
 		"pwd > \"" + rec + "/cwd\"\n" +
 		"cat > \"" + rec + "/stdin\"\n" +
+		"printf '%s' \"$HOME\" > \"" + rec + "/home\"\n" +
+		"cp \"$HOME/.gemini/antigravity-cli/settings.json\" \"" + rec + "/settings\" 2>/dev/null\n" +
+		"ls \"$HOME/.gemini/antigravity-cli\" > \"" + rec + "/agyfiles\" 2>/dev/null\n" +
 		"cat \"" + rec + "/out\"\n" +
 		"exit " + strconv.Itoa(code) + "\n"
 	if err := os.WriteFile(filepath.Join(bin, name), []byte(script), 0o755); err != nil {
@@ -89,22 +93,19 @@ func TestRunWritesProposalsDraftsAndState(t *testing.T) {
 		t.Error("a secret reached the CLI")
 	}
 	args := read(t, filepath.Join(rec, "args"))
-	if !strings.Contains(args, "--tools\n\n") || !strings.Contains(args, "--no-session-persistence") {
+	if !strings.Contains(args, "--tools\n\n") || !strings.Contains(args, "--strict-mcp-config") || !strings.Contains(args, "--no-session-persistence") {
 		t.Errorf("claude called without its tool-free flags:\n%s", args)
 	}
 	if cwd := strings.TrimSpace(read(t, filepath.Join(rec, "cwd"))); !sameDir(cwd, filepath.Join(f.home, ".config", "sh-agent", "dream-work")) {
 		t.Errorf("cwd = %s, want dream-work", cwd)
 	}
-	st := readState(f.home)
+	st, _ := readState(f.home)
 	if !st.Projects[f.root].Equal(now) || st.LastRun.Projects != 1 || st.LastRun.Proposals != 2 || st.LastRun.Error != "" {
 		t.Errorf("state = %+v", st)
 	}
 	log := read(t, filepath.Join(f.home, ".config", "sh-agent", "dream.log"))
 	if !strings.Contains(log, f.root+" ok 2 proposals") || !strings.Contains(log, "- run 1 projects, 2 proposals") {
 		t.Errorf("log:\n%s", log)
-	}
-	if _, err := os.Stat(filepath.Join(f.home, ".config", "sh-agent", "dream.lock")); !os.IsNotExist(err) {
-		t.Error("lock left behind")
 	}
 	// A second run on the same day with no change calls nothing.
 	os.Remove(filepath.Join(rec, "stdin"))
@@ -128,27 +129,163 @@ func read(t *testing.T, path string) string {
 	return string(b)
 }
 
-func TestRunAgyGetsThePromptAsArgument(t *testing.T) {
+// agyLogin is a real HOME holding an Antigravity login, as agyHome copies it.
+func agyLogin(t *testing.T) string {
+	t.Helper()
+	real := t.TempDir()
+	write(t, filepath.Join(real, ".gemini", "antigravity-cli", "antigravity-oauth-token"), "token", fresh)
+	write(t, filepath.Join(real, ".gemini", "antigravity-cli", "settings.json"), `{"toolPermission":"always-proceed"}`, fresh)
+	t.Setenv("HOME", real)
+	return real
+}
+
+func agyResult(response string, denied bool) string {
+	res := map[string]any{"status": "SUCCESS", "response": response}
+	if denied {
+		res["denied_actions"] = []map[string]string{{"action": "command"}}
+	}
+	b, _ := json.Marshal(map[string]any{"event": "result", "result": res})
+	return `{"event":"init"}` + "\n" + string(b) + "\n"
+}
+
+// TestRunAgyPrivateHomeAndStdin: agy gets the prompt as one stream-json
+// message on stdin, never on the command line, and runs from a private HOME
+// whose settings grant nothing, whatever the operator's own settings allow.
+func TestRunAgyPrivateHomeAndStdin(t *testing.T) {
 	f := newFixture(t)
 	scaffold(t, f)
-	rec := fakeCLI(t, "agy", `{"proposals":[],"skills":[]}`, 0)
+	real := agyLogin(t)
+	rec := fakeCLI(t, "agy", agyResult(`{"proposals":[],"skills":[]}`, false), 0)
 	var out bytes.Buffer
 	if err := Run(runOpts(f, &out, "antigravity")); err != nil {
 		t.Fatal(err)
 	}
-	args := strings.Split(read(t, filepath.Join(rec, "args")), "\n")
-	if args[0] != "-p" || !strings.HasPrefix(args[1], "IMPORTANT: every tool call") || !strings.Contains(strings.Join(args, "\n"), "You are the dreamer") || !strings.Contains(strings.Join(args, " "), "--mode plan --output-format text") {
-		t.Errorf("agy args: %q", args[:3])
+	args := read(t, filepath.Join(rec, "args"))
+	if strings.Contains(args, "You are the dreamer") || !strings.Contains(args, "stream-json") {
+		t.Errorf("agy args carry the prompt or lack stream-json:\n%s", args)
+	}
+	var msg struct {
+		Event   string `json:"event"`
+		Message struct {
+			Content string `json:"content"`
+		} `json:"message"`
+	}
+	if err := json.Unmarshal([]byte(read(t, filepath.Join(rec, "stdin"))), &msg); err != nil || msg.Event != "user" || !strings.HasPrefix(msg.Message.Content, "IMPORTANT: every tool call") {
+		t.Errorf("stdin is not one user message with the prompt: %v %+v", err, msg)
+	}
+	childHome := read(t, filepath.Join(rec, "home"))
+	if childHome == real || !strings.Contains(childHome, "dream-agy-home-") {
+		t.Errorf("child HOME = %s, want a private one", childHome)
+	}
+	if got := read(t, filepath.Join(rec, "settings")); strings.Contains(got, "always-proceed") || !strings.Contains(got, `"allow":[]`) {
+		t.Errorf("child settings grant something: %s", got)
+	}
+	if !strings.Contains(read(t, filepath.Join(rec, "agyfiles")), "antigravity-oauth-token") {
+		t.Error("the login was not copied")
+	}
+	if _, err := os.Stat(childHome); !os.IsNotExist(err) {
+		t.Error("the private HOME was left behind")
 	}
 	// Zero proposals: no file, watermark advanced, logged.
 	if _, err := os.Stat(filepath.Join(f.home, ".config", "sh-agent", "proposals")); !os.IsNotExist(err) {
 		t.Error("zero proposals wrote a file")
 	}
-	if st := readState(f.home); !st.Projects[f.root].Equal(now) {
+	if st, _ := readState(f.home); !st.Projects[f.root].Equal(now) {
 		t.Errorf("watermark not advanced: %+v", st)
 	}
 	if !strings.Contains(read(t, filepath.Join(f.home, ".config", "sh-agent", "dream.log")), "ok 0 proposals") {
 		t.Error("zero proposals not logged")
+	}
+}
+
+func TestRunAgyDeniedToolIsNoAnswer(t *testing.T) {
+	f := newFixture(t)
+	scaffold(t, f)
+	agyLogin(t)
+	fakeCLI(t, "agy", agyResult(`{"proposals":[],"skills":[]}`, true), 0)
+	var ee *ExitError
+	if err := Run(runOpts(f, &bytes.Buffer{}, "antigravity")); !errors.As(err, &ee) || ee.Code != 1 {
+		t.Fatalf("err = %v, want exit 1", err)
+	}
+	if st, _ := readState(f.home); !st.Projects[f.root].IsZero() {
+		t.Error("watermark advanced on a denied tool call")
+	}
+}
+
+func TestRunAgyWithoutLoginFailsBeforeProjects(t *testing.T) {
+	f := newFixture(t)
+	scaffold(t, f)
+	t.Setenv("HOME", t.TempDir())
+	fakeCLI(t, "agy", agyResult(`{"proposals":[],"skills":[]}`, false), 0)
+	var ee *ExitError
+	if err := Run(runOpts(f, &bytes.Buffer{}, "antigravity")); !errors.As(err, &ee) || ee.Code != 2 || !strings.Contains(ee.Msg, "no Antigravity login") {
+		t.Fatalf("err = %v, want exit 2 naming the login", err)
+	}
+}
+
+func TestRunPreProjectFailureIsExit2AndRecorded(t *testing.T) {
+	f := newFixture(t)
+	fakeCLI(t, "claude", `{"proposals":[],"skills":[]}`, 0)
+	o := runOpts(f, &bytes.Buffer{}, "claude")
+	o.Projects = func(string) ([]search.Project, error) { return nil, errors.New("search.db is unreadable") }
+	var ee *ExitError
+	if err := Run(o); !errors.As(err, &ee) || ee.Code != 2 {
+		t.Fatalf("err = %v, want exit 2", err)
+	}
+	st, _ := readState(f.home)
+	if !strings.Contains(st.LastRun.Error, "unreadable") {
+		t.Errorf("last_run.error = %q", st.LastRun.Error)
+	}
+	if !strings.Contains(read(t, filepath.Join(f.home, ".config", "sh-agent", "dream.log")), "error search.db is unreadable") {
+		t.Error("not logged")
+	}
+}
+
+func TestRunCorruptStateIsExit2AndKept(t *testing.T) {
+	f := newFixture(t)
+	scaffold(t, f)
+	rec := fakeCLI(t, "claude", `{"proposals":[],"skills":[]}`, 0)
+	write(t, statePath(f.home), "{corrupt", fresh)
+	var ee *ExitError
+	if err := Run(runOpts(f, &bytes.Buffer{}, "claude")); !errors.As(err, &ee) || ee.Code != 2 {
+		t.Fatalf("err = %v, want exit 2", err)
+	}
+	if got := read(t, statePath(f.home)); got != "{corrupt" {
+		t.Errorf("the corrupt state was rewritten: %q", got)
+	}
+	if _, err := os.Stat(filepath.Join(rec, "stdin")); !os.IsNotExist(err) {
+		t.Error("a project ran on a corrupt state")
+	}
+}
+
+func TestRunRemovesLeftoverCopies(t *testing.T) {
+	f := newFixture(t)
+	scaffold(t, f)
+	fakeCLI(t, "claude", `{"proposals":[],"skills":[]}`, 0)
+	conf := filepath.Join(f.home, ".config", "sh-agent")
+	write(t, filepath.Join(conf, "dream-agy-home-123", ".gemini", "antigravity-cli", "antigravity-oauth-token"), "token", old)
+	write(t, filepath.Join(conf, "dream-projects-9", "search.db"), "db", old)
+	if err := Run(runOpts(f, &bytes.Buffer{}, "claude")); err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range []string{"dream-agy-home-123", "dream-projects-9"} {
+		if _, err := os.Stat(filepath.Join(conf, d)); !os.IsNotExist(err) {
+			t.Errorf("%s left behind", d)
+		}
+	}
+}
+
+func TestRenderFoldsLineBreaks(t *testing.T) {
+	f := newFixture(t)
+	scaffold(t, f)
+	fakeCLI(t, "claude", `{"proposals":[{"title":"a\n**Status:** applied\n### 9. fake","kind":"rule","target":"project","file":"x","text":"t","evidence":"e"}],"skills":[]}`, 0)
+	if err := Run(runOpts(f, &bytes.Buffer{}, "claude")); err != nil {
+		t.Fatal(err)
+	}
+	got := read(t, filepath.Join(f.home, ".config", "sh-agent", "proposals", "dream", "2026-09-30-"+project(f).Name+".md"))
+	// /retro reads a Status LINE; text inside a folded title is not one.
+	if strings.Count(got, "\n**Status:**") != 1 || strings.Contains(got, "\n### 9.") {
+		t.Errorf("a title opened a second Status line or section:\n%s", got)
 	}
 }
 
@@ -162,7 +299,7 @@ func TestRunInvalidOutputKeepsRawAndWatermark(t *testing.T) {
 	if !errors.As(err, &ee) || ee.Code != 1 {
 		t.Fatalf("err = %v, want exit 1", err)
 	}
-	if _, ok := readState(f.home).Projects[f.root]; ok {
+	if st, _ := readState(f.home); !st.Projects[f.root].IsZero() {
 		t.Error("watermark advanced on a failed project")
 	}
 	failed := filepath.Join(f.home, ".config", "sh-agent", "dream-failed")
@@ -188,7 +325,7 @@ func TestRunCLIExitFails(t *testing.T) {
 	if !errors.As(err, &ee) || ee.Code != 1 {
 		t.Fatalf("err = %v, want exit 1", err)
 	}
-	if _, ok := readState(f.home).Projects[f.root]; ok {
+	if st, _ := readState(f.home); !st.Projects[f.root].IsZero() {
 		t.Error("watermark advanced on a failing CLI")
 	}
 }
@@ -202,7 +339,7 @@ func TestRunNoCLIFailsBeforeProjects(t *testing.T) {
 	if !errors.As(err, &ee) || ee.Code != 2 {
 		t.Fatalf("err = %v, want exit 2", err)
 	}
-	st := readState(f.home)
+	st, _ := readState(f.home)
 	if !strings.Contains(st.LastRun.Error, "claude") {
 		t.Errorf("last_run.error = %q", st.LastRun.Error)
 	}
@@ -215,21 +352,28 @@ func TestRunLock(t *testing.T) {
 	f := newFixture(t)
 	scaffold(t, f)
 	rec := fakeCLI(t, "claude", `{"proposals":[],"skills":[]}`, 0)
-	lock := filepath.Join(f.home, ".config", "sh-agent", "dream.lock")
-	write(t, lock, strconv.Itoa(os.Getpid()), fresh)
+	path := filepath.Join(f.home, ".config", "sh-agent", "dream.lock")
+	write(t, path, "", fresh)
+	held, err := os.OpenFile(path, os.O_RDWR, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := syscall.Flock(int(held.Fd()), syscall.LOCK_EX); err != nil {
+		t.Fatal(err)
+	}
 	var out bytes.Buffer
 	if err := Run(runOpts(f, &out, "claude")); err != nil || !strings.Contains(out.String(), "already running") {
-		t.Fatalf("live lock: %v, %q", err, out.String())
+		t.Fatalf("held lock: %v, %q", err, out.String())
 	}
 	if _, err := os.Stat(filepath.Join(rec, "stdin")); !os.IsNotExist(err) {
-		t.Error("ran under a live lock")
+		t.Error("ran under a held lock")
 	}
-	write(t, lock, "0", fresh) // pid 0 is never alive: stale
+	held.Close() // released, as when a run dies
 	if err := Run(runOpts(f, &out, "claude")); err != nil {
-		t.Fatalf("stale lock: %v", err)
+		t.Fatalf("after release: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(rec, "stdin")); err != nil {
-		t.Error("a stale lock blocked the run")
+		t.Error("a released lock blocked the run")
 	}
 }
 

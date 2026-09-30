@@ -7,7 +7,7 @@
 //	sh-agent diff                    unified diff of every drifted file
 //	sh-agent update [--check|--dry-run]  checkout: git pull and reinstall; release binary: download and verify the newest release
 //	sh-agent update --from-zip FILE  zip place: install the harness in a repository zip with the running binary
-//	sh-agent uninstall [--dry-run]   remove exactly what install wrote
+//	sh-agent uninstall [--dry-run]   remove exactly what install wrote, and the dream timer
 //	sh-agent list                    print the skill and agent inventory
 //	sh-agent render                  print the assembled context file
 //	sh-agent adopt <name|path>       copy a skill from elsewhere into the repo
@@ -32,6 +32,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"time"
 
@@ -49,7 +50,7 @@ Commands:
   diff                    unified diff of every drifted file
   update [--check|--dry-run]  checkout: git fetch, pull --ff-only and reinstall when behind; release binary: download the newest release, verify its signed checksums, replace the binary and reinstall (--check only reports, exit 2 when behind; --dry-run reports what update would do and changes nothing)
   update --from-zip FILE [--dry-run]  zip place: unpack a repository zip you downloaded, install its harness and the running binary (nothing in the zip replaces the binary), delete the unpacked copy; with the release's SHA256SUMS and SHA256SUMS.sig beside it the zip is verified, otherwise it is installed marked UNVERIFIED
-  uninstall [--dry-run]   remove exactly the files install wrote, nothing else
+  uninstall [--dry-run]   remove exactly the files install wrote, and the dream timer when one is installed; nothing else
   list                    print the skill and agent inventory
   render                  print the assembled context file
   adopt <name|path>       copy a skill installed elsewhere into the repo's skills/ (--force to replace)
@@ -198,6 +199,14 @@ func run(args []string, out io.Writer) error {
 		switch {
 		case *installTimer && *removeTimer:
 			return errors.New("sh-agent dream: --install-timer or --remove-timer, not both")
+		case (*installTimer || *removeTimer) && *dryRun:
+			// A new side effect goes below the read-only mode (context § Hard
+			// rules): the dry run names what would change and calls nothing.
+			what := "install the nightly dream timer (sh-agent dream --all at 03:00)"
+			if *removeTimer {
+				what = "remove the nightly dream timer"
+			}
+			fmt.Fprintln(out, "[dry-run] would "+what+"; installed now: "+strconv.FormatBool(dream.TimerInstalled(home)))
 		case *installTimer:
 			err = dream.InstallTimer(home, os.Getenv("PATH"), runtime.GOOS)
 			if err == nil {

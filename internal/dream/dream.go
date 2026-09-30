@@ -60,15 +60,25 @@ func Run(o Options) error {
 	if o.Projects == nil {
 		o.Projects = search.ListProjects
 	}
+	// A usage mistake is refused before anything is locked, logged or read.
+	switch {
+	case o.All && o.Project != "":
+		return &ExitError{2, "sh-agent dream: --all or --project <dir>, not both"}
+	case !o.All && o.Project == "":
+		return &ExitError{2, "usage: sh-agent dream --all | --project <dir> [--dry-run] | --install-timer | --remove-timer"}
+	}
+	if !o.DryRun {
+		return o.realRun()
+	}
 	projects, err := o.targets()
 	if err != nil {
-		return err
+		return &ExitError{2, "sh-agent dream: " + err.Error()}
 	}
-	st := readState(o.Home)
-	if o.DryRun {
-		return o.dryRun(projects, st)
+	st, err := readState(o.Home)
+	if err != nil {
+		return &ExitError{2, "sh-agent dream: " + err.Error()}
 	}
-	return o.realRun(projects, st)
+	return o.dryRun(projects, st)
 }
 
 // targets is --project's one checkout, or every indexed project for --all.
@@ -121,6 +131,9 @@ func (o Options) since(st state, root string) time.Time {
 // advances nothing.
 func (o Options) dryRun(projects []search.Project, st state) error {
 	cli := command(o.Vendor)
+	if o.Vendor == harness.VendorAntigravity {
+		cli = append(cli, "(prompt on stdin as one stream-json message; HOME a private copy with no grants)")
+	}
 	for _, p := range projects {
 		if why := skipReason(p); why != "" {
 			fmt.Fprintf(o.Out, "[dry-run] %s: skip (%s)\n", p.Root, why)
@@ -154,15 +167,18 @@ func (o Options) dryRun(projects []search.Project, st state) error {
 	return nil
 }
 
-// command is the tool-free headless call for the vendor (D4, D7b): agy has no
-// no-tools flag, so plan mode and the prompt's opening warning keep it from
-// calling one (a refused call ends its run with no answer); the prompt never
-// starts with a slash, so no command expansion is needed off.
+// command is the tool-free headless call for the vendor (D4, D7b, D28).
+// Claude Code: no built-in tools, no MCP servers, no user or project settings
+// (so no hooks), no saved session. Antigravity has no no-tools flag: it runs
+// in plan mode from a private HOME whose settings grant nothing, so any tool
+// call is refused, and the prompt's opening warning keeps it from trying; the
+// prompt goes on stdin as one stream-json message, never on the command line
+// (Linux caps one argument at 128 KiB, and argv is readable in /proc).
 func command(vendor string) []string {
 	if vendor == harness.VendorAntigravity {
-		return []string{"agy", "-p", "<prompt>", "--mode", "plan", "--output-format", "text"}
+		return []string{"agy", "--input-format", "stream-json", "--output-format", "stream-json", "--mode", "plan", "-p", ""}
 	}
-	return []string{"claude", "-p", "--tools", "", "--no-session-persistence", "--output-format", "text"}
+	return []string{"claude", "-p", "--tools", "", "--strict-mcp-config", "--setting-sources", "local", "--no-session-persistence", "--output-format", "text"}
 }
 
 // ExitError is a run's exit status: 1 when a project failed, 2 when the run
@@ -180,7 +196,10 @@ func StatusLine(home string) string {
 	if TimerInstalled(home) {
 		timer = "timer installed"
 	}
-	st := readState(home)
+	st, err := readState(home)
+	if err != nil {
+		return "state unreadable: " + err.Error() + "; " + timer
+	}
 	r := st.LastRun
 	switch {
 	case r.At.IsZero():

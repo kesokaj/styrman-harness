@@ -1,21 +1,23 @@
 package dream
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/kesokaj/styrman-harness/internal/harness"
-	"github.com/kesokaj/styrman-harness/internal/search"
 )
 
 const (
@@ -39,8 +41,11 @@ type draft struct {
 	Name, Description, Body string
 }
 
-// realRun dreams over every project and writes what the CLI proposes.
-func (o Options) realRun(projects []search.Project, st state) error {
+// realRun takes the lock, then reads the state and the projects, dreams over
+// every changed project and writes what the CLI proposes. Every failure before
+// the first project is a run log line, last_run.error where the state can be
+// written, and exit 2 (the plan's Interfaces, code review 2026-09-30).
+func (o Options) realRun() error {
 	conf, err := harness.ConfigDir(o.Home)
 	if err != nil {
 		return &ExitError{2, "sh-agent dream: " + err.Error()}
@@ -49,37 +54,60 @@ func (o Options) realRun(projects []search.Project, st state) error {
 	if err != nil {
 		return &ExitError{2, "sh-agent dream: " + err.Error()}
 	}
-	if held != "" {
-		fmt.Fprintf(o.Out, "sh-agent dream: already running (%s)\n", held)
+	if held {
+		fmt.Fprintln(o.Out, "sh-agent dream: already running")
 		return nil
 	}
 	defer unlock()
 
 	t0 := o.Now()
 	logf := logger(filepath.Join(conf, "dream.log"), o.Now)
-	prune(filepath.Join(conf, "dream-failed"), t0)
-	finish := func(n, proposals int, runErr string) {
+	st, err := readState(o.Home)
+	if err != nil {
+		// The state is not rewritten: that would erase the watermarks.
+		logf("- run 0 projects, 0 proposals, error " + err.Error())
+		return &ExitError{2, "sh-agent dream: " + err.Error()}
+	}
+	finish := func(n, proposals int, runErr string) error {
 		st.LastRun = lastRun{At: t0, Projects: n, Proposals: proposals, Error: runErr}
-		saveState(o.Home, st)
 		line := fmt.Sprintf("- run %d projects, %d proposals", n, proposals)
 		if runErr != "" {
 			line += ", error " + runErr
 		}
 		logf(line)
+		return saveState(o.Home, st)
+	}
+	fail := func(msg string) error {
+		finish(0, 0, msg)
+		return &ExitError{2, "sh-agent dream: " + msg}
 	}
 
+	removeCopies(conf)
+	prune(filepath.Join(conf, "dream-failed"), t0)
+	projects, err := o.targets()
+	if err != nil {
+		return fail(err.Error())
+	}
 	argv := command(o.Vendor)
 	if _, err := exec.LookPath(argv[0]); err != nil {
-		finish(0, 0, fmt.Sprintf("no %s on PATH", argv[0]))
-		return &ExitError{2, fmt.Sprintf("sh-agent dream: no %s on PATH: the dream job runs the CLI the manifest names (--vendor)", argv[0])}
+		return fail(fmt.Sprintf("no %s on PATH: the dream job runs the CLI the manifest names (--vendor)", argv[0]))
+	}
+	var env []string
+	if argv[0] == "agy" {
+		home, cleanup, err := agyHome(conf)
+		if err != nil {
+			return fail(err.Error())
+		}
+		defer cleanup()
+		env = withHome(os.Environ(), home)
 	}
 	work := filepath.Join(conf, "dream-work")
 	if err := os.MkdirAll(work, 0o700); err != nil {
-		finish(0, 0, err.Error())
-		return &ExitError{2, "sh-agent dream: " + err.Error()}
+		return fail(err.Error())
 	}
 
 	failed, total := 0, 0
+	var stateErr error
 	for _, p := range projects {
 		if why := skipReason(p); why != "" {
 			logf(p.Root + " skip " + why)
@@ -88,21 +116,21 @@ func (o Options) realRun(projects []search.Project, st state) error {
 		c, err := collect(o.Home, o.Vendor, p, o.since(st, p.Root), maxPrompt)
 		if err != nil {
 			failed++
-			logf(p.Root + " fail " + err.Error())
+			logf(p.Root + " fail " + scrub(err.Error(), o.Home))
 			continue
 		}
 		if !c.Changed {
 			logf(p.Root + " unchanged")
 			continue
 		}
-		stdout, stderr, err := call(argv, c.Prompt, work)
+		stdout, stderr, err := call(argv, c.Prompt, work, env)
 		if err != nil {
 			failed++
 			o.keepFailure(conf, c, t0, stdout, stderr)
 			logf(p.Root + " fail " + err.Error())
 			continue
 		}
-		resp, ok := parse(stdout)
+		resp, ok := parse(answer(argv[0], stdout))
 		if !ok {
 			failed++
 			o.keepFailure(conf, c, t0, stdout, stderr)
@@ -115,36 +143,42 @@ func (o Options) realRun(projects []search.Project, st state) error {
 			continue
 		}
 		st.Projects[p.Root] = t0
-		saveState(o.Home, st)
+		if err := saveState(o.Home, st); err != nil && stateErr == nil {
+			stateErr = err
+		}
 		total += len(resp.Proposals)
 		logf(fmt.Sprintf("%s ok %d proposals", p.Root, len(resp.Proposals)))
 	}
-	finish(len(projects), total, "")
+	if err := finish(len(projects), total, ""); err != nil && stateErr == nil {
+		stateErr = err
+	}
+	if stateErr != nil {
+		return &ExitError{2, "sh-agent dream: the watermarks could not be saved, so the next run re-sends this one: " + stateErr.Error()}
+	}
 	if failed > 0 {
 		return &ExitError{1, fmt.Sprintf("sh-agent dream: %d project(s) failed; see %s", failed, filepath.Join(conf, "dream.log"))}
 	}
 	return nil
 }
 
-// call runs the CLI in work: claude takes the prompt on stdin, agy as the
-// -p argument. The child keeps sh-agent's own environment (the plan's
-// Interfaces), so it authenticates as the operator's CLI does.
-func call(argv []string, prompt, work string) (string, string, error) {
+// call runs the CLI in work with the prompt on stdin: plain text for Claude
+// Code, one stream-json message for Antigravity. env replaces the child's
+// environment when set (agy's private HOME); otherwise the child keeps
+// sh-agent's own, so it authenticates as the operator's CLI does.
+func call(argv []string, prompt, work string, env []string) (string, string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), cliTimeout)
 	defer cancel()
-	args := append([]string(nil), argv[1:]...)
-	var stdin string
+	stdin := prompt
 	if argv[0] == "agy" {
-		for i, a := range args {
-			if a == "<prompt>" {
-				args[i] = prompt
-			}
+		msg, err := json.Marshal(map[string]any{"event": "user", "message": map[string]string{"content": prompt}})
+		if err != nil {
+			return "", "", err
 		}
-	} else {
-		stdin = prompt
+		stdin = string(msg) + "\n"
 	}
-	cmd := exec.CommandContext(ctx, argv[0], args...)
+	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	cmd.Dir = work
+	cmd.Env = env
 	cmd.Stdin = strings.NewReader(stdin)
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
@@ -156,6 +190,121 @@ func call(argv []string, prompt, work string) (string, string, error) {
 		return out.String(), errb.String(), fmt.Errorf("%s: %v", argv[0], err)
 	}
 	return out.String(), errb.String(), nil
+}
+
+// answer is the model's text: Claude Code prints it; Antigravity's
+// stream-json ends with a result event that carries it as "response". A
+// result that names denied actions is no answer.
+func answer(cli, stdout string) string {
+	if cli != "agy" {
+		return stdout
+	}
+	sc := bufio.NewScanner(strings.NewReader(stdout))
+	sc.Buffer(make([]byte, 64*1024), 16*1024*1024)
+	for sc.Scan() {
+		var ev struct {
+			Event  string `json:"event"`
+			Result struct {
+				Response      string            `json:"response"`
+				DeniedActions []json.RawMessage `json:"denied_actions"`
+			} `json:"result"`
+		}
+		if json.Unmarshal(sc.Bytes(), &ev) != nil || ev.Event != "result" {
+			continue
+		}
+		if len(ev.Result.DeniedActions) > 0 {
+			return ""
+		}
+		return ev.Result.Response
+	}
+	return ""
+}
+
+// agyHome is a private HOME for one run's Antigravity child: a copy of the
+// operator's login and a settings file that grants nothing, so a tool call is
+// refused whatever the operator allowed for interactive use (security review
+// 2026-09-30, D28). Its conversations stay in it and go with it. The login
+// is read from $HOME, the real one, never from --home.
+func agyHome(conf string) (string, func(), error) {
+	real := os.Getenv("HOME")
+	src := filepath.Join(real, ".gemini", "antigravity-cli")
+	if _, err := os.Stat(filepath.Join(src, "antigravity-oauth-token")); err != nil {
+		return "", nil, fmt.Errorf("no Antigravity login at %s: run agy once and log in", filepath.Join(src, "antigravity-oauth-token"))
+	}
+	home, err := os.MkdirTemp(conf, "dream-agy-home-")
+	if err != nil {
+		return "", nil, err
+	}
+	cleanup := func() { os.RemoveAll(home) }
+	dst := filepath.Join(home, ".gemini", "antigravity-cli")
+	if err := os.MkdirAll(dst, 0o700); err != nil {
+		cleanup()
+		return "", nil, err
+	}
+	for _, name := range []string{"antigravity-oauth-token", "installation_id"} {
+		if err := copyPrivate(filepath.Join(src, name), filepath.Join(dst, name)); err != nil && !(name == "installation_id" && errors.Is(err, os.ErrNotExist)) {
+			cleanup()
+			return "", nil, err
+		}
+	}
+	settings := []byte(`{"permissions":{"allow":[]},"trustedWorkspaces":[]}` + "\n")
+	if err := os.WriteFile(filepath.Join(dst, "settings.json"), settings, 0o600); err != nil {
+		cleanup()
+		return "", nil, err
+	}
+	return home, cleanup, nil
+}
+
+func copyPrivate(from, to string) error {
+	info, err := os.Lstat(from)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("%s is not a regular file", from)
+	}
+	in, err := os.Open(from)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(to, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		return err
+	}
+	return out.Close()
+}
+
+// withHome is env with HOME replaced.
+func withHome(env []string, home string) []string {
+	out := make([]string, 0, len(env)+1)
+	for _, e := range env {
+		if !strings.HasPrefix(e, "HOME=") {
+			out = append(out, e)
+		}
+	}
+	return append(out, "HOME="+home)
+}
+
+// removeCopies removes what a killed run left in conf: a private agy HOME
+// with its login copy, and the unredacted database copies of the readers
+// (security review 2026-09-30). It runs under the lock, so no live run owns
+// them.
+func removeCopies(conf string) {
+	entries, err := os.ReadDir(conf)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		n := e.Name()
+		if e.IsDir() && (strings.HasPrefix(n, "dream-agy-") || strings.HasPrefix(n, "dream-projects-")) {
+			os.RemoveAll(filepath.Join(conf, n))
+		}
+	}
 }
 
 // parse takes the first {...} in out that decodes as the response.
@@ -247,9 +396,9 @@ func (o Options) render(dir, day string, c Collected, cli string, ps []proposal,
 		inputs = append(inputs, fmt.Sprintf("%s %d", k, counts[k]))
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "---\nowner: sh-agent dream\ndate: %s\nproject: %s\ncli: %s\ninputs: %s\n", day, c.Root, cli, strings.Join(inputs, ", "))
+	fmt.Fprintf(&b, "---\nowner: sh-agent dream\ndate: %s\nproject: %s\ncli: %s\ninputs: %s\n", day, o.line(c.Root), cli, strings.Join(inputs, ", "))
 	if len(c.Dropped) > 0 {
-		fmt.Fprintf(&b, "left out: %q\n", strings.Join(c.Dropped, "; "))
+		fmt.Fprintf(&b, "left out: %q\n", o.line(strings.Join(c.Dropped, "; ")))
 	}
 	fmt.Fprintf(&b, "---\n# Dream proposals — %s   (%s)\n", c.Name, day)
 	for i, p := range ps {
@@ -258,7 +407,7 @@ func (o Options) render(dir, day string, c Collected, cli string, ps []proposal,
 			target = "harness"
 		}
 		fmt.Fprintf(&b, "\n### %d. %s\n**Status:** queued\n**Target:** %s   **Kind:** %s   **File:** %s\n\n%s\n\nEvidence: %s\n",
-			i+1, o.clean(p.Title), target, o.clean(p.Kind), o.clean(p.File), strings.TrimSpace(o.clean(p.Text)), o.clean(p.Evidence))
+			i+1, o.line(p.Title), target, o.line(p.Kind), o.line(p.File), strings.TrimSpace(o.clean(p.Text)), o.line(p.Evidence))
 	}
 	for _, e := range extra {
 		b.WriteString("\n" + e + "\n")
@@ -270,6 +419,13 @@ func (o Options) render(dir, day string, c Collected, cli string, ps []proposal,
 }
 
 func (o Options) clean(s string) string { return scrub(s, o.Home) }
+
+// line is a one-line field: scrubbed, and its line breaks folded, so a model's
+// title can never open a second **Status:** line or a fake section in the
+// Status-driven queue (security review 2026-09-30).
+func (o Options) line(s string) string {
+	return strings.Join(strings.Fields(strings.NewReplacer("\r", " ", "\n", " ").Replace(o.clean(s))), " ")
+}
 
 // unique is dir/base+ext, or with -2, -3 … when that exists.
 func unique(dir, base, ext string) (string, error) {
@@ -326,31 +482,33 @@ func logger(path string, now func() time.Time) func(string) {
 	}
 }
 
-func saveState(home string, st state) {
-	if data, err := json.MarshalIndent(st, "", "  "); err == nil {
-		harness.WriteAtomic(statePath(home), append(data, '\n'), 0o600)
+func saveState(home string, st state) error {
+	data, err := json.MarshalIndent(st, "", "  ")
+	if err != nil {
+		return err
 	}
+	return harness.WriteAtomic(statePath(home), append(data, '\n'), 0o600)
 }
 
-// lock takes path holding this pid. A lock whose pid is gone is stale and
-// replaced; a live one is returned in held, and nothing is taken.
-func lock(path string) (unlock func(), held string, err error) {
-	for tries := 0; tries < 2; tries++ {
-		f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-		if err == nil {
-			fmt.Fprint(f, os.Getpid())
-			f.Close()
-			return func() { os.Remove(path) }, "", nil
-		}
-		if !errors.Is(err, os.ErrExist) {
-			return nil, "", err
-		}
-		data, _ := os.ReadFile(path)
-		pid, perr := strconv.Atoi(strings.TrimSpace(string(data)))
-		if perr == nil && harness.Alive(pid) {
-			return nil, "pid " + strconv.Itoa(pid), nil
-		}
-		os.Remove(path)
+// lock takes an exclusive flock on path without waiting: held is true when
+// another run has it. The kernel releases it when that run ends, however it
+// ends, so no stale lock can stop the nightly job (code review 2026-09-30).
+func lock(path string) (unlock func(), held bool, err error) {
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o600)
+	if err != nil {
+		return nil, false, err
 	}
-	return nil, "", errors.New("could not take " + path)
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		f.Close()
+		if errors.Is(err, syscall.EWOULDBLOCK) {
+			return nil, true, nil
+		}
+		return nil, false, err
+	}
+	f.Truncate(0)
+	fmt.Fprint(f, os.Getpid())
+	return func() {
+		syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		f.Close()
+	}, false, nil
 }

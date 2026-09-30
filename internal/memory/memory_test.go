@@ -5,8 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -217,30 +217,50 @@ func samePath(a, b string) bool {
 	return ra == rb && filepath.Base(a) == filepath.Base(b)
 }
 
-func TestStaleLockIsReplaced(t *testing.T) {
+func TestLeftoverLockFileIsNoLock(t *testing.T) {
 	dir := repo(t)
 	store := filepath.Join(dir, ".agents", "memory")
 	os.MkdirAll(store, 0o700)
-	// Pid 0 is never a live process.
-	os.WriteFile(filepath.Join(store, ".lock"), []byte("0"), 0o600)
-	if _, err := add(dir, "after-stale", "d", "x\n"); err != nil {
-		t.Fatalf("stale lock blocked the write: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(store, ".lock")); !os.IsNotExist(err) {
-		t.Error("lock left behind")
+	// A lock file with no process holding it, as a crashed writer leaves it.
+	os.WriteFile(filepath.Join(store, ".lock"), []byte("12345"), 0o600)
+	if _, err := add(dir, "after-crash", "d", "x\n"); err != nil {
+		t.Fatalf("a leftover lock file blocked the write: %v", err)
 	}
 }
 
-func TestLiveLockRefusesAfterRetry(t *testing.T) {
+func TestHeldLockRefusesAfterRetry(t *testing.T) {
 	old := lockWait
 	lockWait = 50 * time.Millisecond
 	defer func() { lockWait = old }()
 	dir := repo(t)
 	store := filepath.Join(dir, ".agents", "memory")
 	os.MkdirAll(store, 0o700)
-	os.WriteFile(filepath.Join(store, ".lock"), []byte(strconv.Itoa(os.Getpid())), 0o600)
+	f, err := os.OpenFile(filepath.Join(store, ".lock"), os.O_RDWR|os.O_CREATE, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := add(dir, "busy", "d", "x\n"); !IsRefusal(err) || !strings.Contains(err.Error(), "busy") {
 		t.Fatalf("err = %v, want a store-busy refusal", err)
+	}
+}
+
+// TestIndexMatchIsTheLinkTarget: a description that mentions another file's
+// name never makes its line the one replaced.
+func TestIndexMatchIsTheLinkTarget(t *testing.T) {
+	dir := repo(t)
+	if _, err := add(dir, "new-name", "supersedes (old-name.md)", "a\n"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := add(dir, "old-name", "the old one", "b\n"); err != nil {
+		t.Fatal(err)
+	}
+	want := "- [new-name](new-name.md) — supersedes (old-name.md)\n- [old-name](old-name.md) — the old one\n"
+	if got := read(t, filepath.Join(dir, ".agents", "memory", "MEMORY.md")); got != want {
+		t.Errorf("index:\n%s\nwant:\n%s", got, want)
 	}
 }
 

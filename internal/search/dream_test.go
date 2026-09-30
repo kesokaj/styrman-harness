@@ -1,6 +1,7 @@
 package search
 
 import (
+	"bytes"
 	"database/sql"
 	"os"
 	"path/filepath"
@@ -94,11 +95,20 @@ func agyFixture(t *testing.T, home string, convs map[string]struct {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := db.Exec("CREATE TABLE steps (`idx` integer, `step_payload` blob)"); err != nil {
+		if _, err := db.Exec("CREATE TABLE steps (`idx` integer, `step_type` integer, `step_payload` blob)"); err != nil {
 			t.Fatal(err)
 		}
 		for i, p := range c.payloads {
-			if _, err := db.Exec(`INSERT INTO steps VALUES(?,?)`, i, p); err != nil {
+			// Step types as the D8 probe found them: 14 the user's input, 15
+			// the model's reply, 132 a tool's output.
+			typ := 15
+			if i == 0 {
+				typ = 14
+			}
+			if bytes.Contains(p, []byte("TOOL OUTPUT")) {
+				typ = 132
+			}
+			if _, err := db.Exec(`INSERT INTO steps VALUES(?,?,?)`, i, typ, p); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -127,6 +137,7 @@ func TestAgyConversationText(t *testing.T) {
 		"new-here": {"/p/one", "2026-09-30 16:14:07.567153506+00:00", [][]byte{
 			blob("b$7863135a-0a35-4648-9cef-f196af3f2197", "Remember that we deploy on Fridays please."),
 			blob("Remember that we deploy on Fridays please.", "Saved: deploys happen on Fridays, noted for later."),
+			blob("TOOL OUTPUT: the contents of a private file read by a tool"),
 		}},
 		"old-here":  {"/p/one", "2026-09-01 10:00:00.000000000+00:00", [][]byte{blob("this is an old conversation text")}},
 		"new-other": {"/p/two", "2026-09-30 16:00:00.000000000+00:00", [][]byte{blob("another project entirely, not ours")}},
@@ -150,6 +161,9 @@ func TestAgyConversationText(t *testing.T) {
 	}
 	if strings.Count(text, "Remember that we deploy") != 1 {
 		t.Errorf("text %q repeats a run: dedup failed", text)
+	}
+	if strings.Contains(text, "private file read by a tool") {
+		t.Errorf("text %q carries a tool's output (security review 2026-09-30)", text)
 	}
 	if strings.Contains(text, "7863135a") {
 		t.Errorf("text %q keeps an id run", text)

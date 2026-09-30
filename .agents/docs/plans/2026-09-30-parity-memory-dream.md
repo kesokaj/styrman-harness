@@ -329,6 +329,15 @@ Assumptions:
   - `ListProjects` opens read-only, never creating the db;
   - the proposal frontmatter `project` carries the root.
   — by: the operator, "Go all" (r3 non-blocking 7–15)
+- D28 — 2026-09-30 — After the feature review (`reviews/2026-09-30-review-cb799ff-f1ca525-code.md`, `reviews/2026-09-30-security-cb799ff-f1ca525.md`):
+  - the Antigravity child runs from a private HOME holding a copy of the operator's login and settings that grant nothing, removed after the run; any tool call is refused whatever the operator allows interactively;
+  - its prompt goes on stdin as one stream-json message (Linux caps one argument at 128 KiB, and argv is readable in /proc); this supersedes D7b's invocation, and D7b's prompt warning stays;
+  - Claude Code adds `--strict-mcp-config --setting-sources local`;
+  - locks are flock;
+  - pre-project failures and a corrupt state are exit 2 and recorded, and the corrupt state is never rewritten;
+  - only the user's and the model's Antigravity steps are read;
+  - symlinked trail directories are not followed.
+  — supersedes D7b's invocation — by: code review and security review, 2026-09-30
 - Open: redaction beyond credential shapes and `~` — default: none (the same set as `report`)
 - Rejected: the timer in the manifest — the next `install` deletes listed files as stale (apply.go:88-109)
 - Rejected: `ExecStart` from `os.Executable()` — under `go run` it is a temp build; BinPath is what `update` keeps current

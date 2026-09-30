@@ -340,6 +340,7 @@ Assumptions:
   - symlinked trail directories are not followed.
   — supersedes D7b's invocation — by: code review and security review, 2026-09-30
 - D29 — 2026-09-30 — After two review rounds found leaks in the Antigravity transcript reader (tool output, then tool-call arguments), the operator chose to keep both CLIs' transcripts, filtered, over dropping them or keeping Claude Code's alone: "Keep both, filtered (Recommended)". The residual risk is an unknown field type in the undocumented format; the text is redacted and goes only to the operator's own CLI's model — by: the operator, 2026-09-30
+- D30 — 2026-09-30 — The third review of the Antigravity reader (`reviews/2026-09-30-security-e2cffc1-a275b96.md`: argument pieces glued to a printable length byte or split at a multi-byte character) replaced the byte-run scan with a schemaless protobuf wire-format decoder. Each tool argument is then one whole JSON string field, dropped whole. The operator chose it over dropping the transcripts: "Decode protobuf properly (Recommended)". Measured on copies of the 95 local conversation databases: 971 prose leaves kept, 0 with a tool-argument key. Supersedes D8's extraction — by: the operator, 2026-09-30
 - Open: redaction beyond credential shapes and `~` — default: none (the same set as `report`)
 - Rejected: the timer in the manifest — the next `install` deletes listed files as stale (apply.go:88-109)
 - Rejected: `ExecStart` from `os.Executable()` — under `go run` it is a temp build; BinPath is what `update` keeps current

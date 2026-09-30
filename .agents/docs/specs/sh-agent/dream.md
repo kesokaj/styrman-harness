@@ -36,7 +36,7 @@ Status: built 2026-09-30 (plan `plans/2026-09-30-parity-memory-dream.md`). R3's 
 
 **Known limit:** Claude Code runs with `--setting-sources local` from an empty directory, so a user-level `apiKeyHelper` or other settings-based authentication is not loaded. On such a machine the run fails, logged per project with its stderr kept in `dream-failed/`. A login (`claude` `/login`) works.
 
-**Where the data goes:** to the model of the one CLI the run uses, whatever wrote it. With vendor `claude` or `all`, Antigravity's conversation text also goes to Claude Code's provider; with vendor `antigravity`, Claude Code's transcript text also goes to Antigravity's provider (plan D17: both are the operator's own accounts on the same machine). From Antigravity, only the user's input and the model's prose are read: a reply's tool-call arguments (JSON objects: a command, a file written) are dropped, as the Claude Code reader drops tool calls. From Claude Code, only text parts are read.
+**Where the data goes:** to the model of the one CLI the run uses, whatever wrote it. With vendor `claude` or `all`, Antigravity's conversation text also goes to Claude Code's provider; with vendor `antigravity`, Claude Code's transcript text also goes to Antigravity's provider (plan D17: both are the operator's own accounts on the same machine). From Antigravity, only the user's input and the model's replies are read (step types 14 and 15), and each step's payload is decoded as protobuf by its wire format, with no schema (D30): a length-delimited field that is printable UTF-8 is a text leaf, anything else is tried as a nested message. A leaf is sent only when it has three spaces or more and is not JSON, so a tool call's arguments (a command, a file written), which are one whole JSON string field, never reach the prompt. On the 95 conversation databases of the Linux box, 971 prose leaves were kept and none carried a tool-argument key. From Claude Code, only text parts are read.
 
 **Hardening details:**
 - The private agy settings are `{"toolPermission":"request-review","permissions":{"allow":[]},"trustedWorkspaces":[]}`.
@@ -57,7 +57,7 @@ Status: built 2026-09-30 (plan `plans/2026-09-30-parity-memory-dream.md`). R3's 
 | `dream-state.json` | `projects` (root → watermark) and `last_run` (at, projects, proposals, error) |
 | `dream.log` | one line per project (`ok N proposals`, `unchanged`, `skip <why>`, `fail <why>`) and one per run |
 | `dream.lock` | an flock held for the run (the pid is written in it for reading only); the kernel releases it however the run ends, and a held one makes a second run exit 0 "already running" |
-| `dream-agy-home-*`, `dream-agy-*`, `dream-projects-*` | per-run private copies (agy HOME, Antigravity databases, the index); removed after the run, and any leftover from a killed run at the start of the next, under the lock |
+| `dream-agy-home-*`, `dream-agy-*`, `dream-projects-*` | per-run private copies (agy HOME, Antigravity databases, the index); removed after the run; at the start of a run, under the lock, only copies older than an hour are removed (leftovers of a killed run; a dry run takes no lock) |
 | `dream-work/` | the CLI's working directory, kept empty; not a project, so the run's own conversation never maps to one |
 | `dream-failed/` | a failed project's stdout and stderr, scrubbed; files older than 30 days are pruned at the start of a run |
 | `proposals/dream/` | the output above |

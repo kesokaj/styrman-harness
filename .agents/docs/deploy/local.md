@@ -87,7 +87,9 @@ sh-agent dream --all --dry-run   # what each indexed project would send, and the
 sh-agent dream --remove-timer    # stop and remove it (uninstall does too)
 ```
 
-- The unit runs `~/.local/bin/sh-agent`, with the PATH of the shell that ran `--install-timer`, so it finds `claude` or `agy` there. Run it from the shell you work in. A rerun from a shell with another PATH renders other text: the installed unit is kept and named, so run `--remove-timer` first.
+- The unit runs `~/.local/bin/sh-agent`, with the absolute entries of the PATH of the shell that ran `--install-timer`, so it finds `claude` or `agy` there; one reachable only through a relative PATH entry is not found at 03:00. Run it from the shell you work in. A rerun from a shell with another PATH renders other text: the installed unit is kept and named, so run `--remove-timer` first.
+- Claude Code runs with `--setting-sources local`: a user-level `apiKeyHelper` is not loaded and the run fails; a `claude` login works.
+- Antigravity needs the operator's `~/.gemini/antigravity-cli/antigravity-oauth-token`; the run copies it into a private HOME under `~/.config/sh-agent/dream-agy-home-*`, removed after the run.
 - A project is dreamt over only once `sh-agent search` or `index` has run in it (the global index is the list).
 - On Linux a user timer fires only while your user manager runs (a login, or `loginctl enable-linger`). `Persistent=true` runs a missed night at the next login.
 - The CLI is the manifest's vendor (`all` uses Claude Code); `--vendor agy|claude` overrides it for a run by hand.
@@ -105,7 +107,7 @@ Nothing to configure. `--vendor VENDOR` selects the target CLI: `antigravity` (o
 
 ## First session after install
 
-Claude Code asks once per session before the first read or write under `~/.config/sh-agent/` (feedback log, proposals, the retro index), because it is outside the project. Approve it, or add the directory to `permissions.additionalDirectories` in `~/.claude/settings.json` yourself — the installer touches no vendor setting except the attribution key (ADR-025). Antigravity prompts the same way for paths outside the workspace. The project's own auto memory store (`.agents/memory/`, set up by `/init-project`) is inside the project, so it needs no such prompt.
+Claude Code asks once per session before the first read or write under `~/.config/sh-agent/` (feedback log, proposals, the retro index), because it is outside the project. Approve it, or add the directory to `permissions.additionalDirectories` in `~/.claude/settings.json` yourself — the installer touches no vendor setting except the attribution key (ADR-025). Antigravity prompts the same way for paths outside the workspace. The project's own memory store (`.agents/memory/`, written by `sh-agent memory` on both CLIs; Claude Code's own auto memory is switched off per project by `/init-project`) is inside the project, so it needs no such prompt.
 
 ## Operator steps
 

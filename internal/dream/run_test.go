@@ -177,7 +177,7 @@ func TestRunAgyPrivateHomeAndStdin(t *testing.T) {
 	if childHome == real || !strings.Contains(childHome, "dream-agy-home-") {
 		t.Errorf("child HOME = %s, want a private one", childHome)
 	}
-	if got := read(t, filepath.Join(rec, "settings")); strings.Contains(got, "always-proceed") || !strings.Contains(got, `"allow":[]`) {
+	if got := read(t, filepath.Join(rec, "settings")); strings.Contains(got, "always-proceed") || !strings.Contains(got, `"allow":[]`) || !strings.Contains(got, `"toolPermission":"request-review"`) {
 		t.Errorf("child settings grant something: %s", got)
 	}
 	if !strings.Contains(read(t, filepath.Join(rec, "agyfiles")), "antigravity-oauth-token") {
@@ -476,6 +476,9 @@ func TestAnswerNeedsASuccessfulResult(t *testing.T) {
 		`{"event":"result","result":{"status":"ERROR","response":"{\"proposals\":[],\"skills\":[]}"}}`,
 		`{"event":"result","result":{"status":"SUCCESS","response":"x","denied_actions":[{"action":"command"}]}}`,
 		`{"event":"init"}`,
+		// A tool step that ran, denied or not, means the answer was not
+		// tool-free (security review of the release range).
+		`{"event":"step_update","step_update":{"step_type":"tool","tool_name":"run_command"}}` + "\n" + ok,
 	} {
 		if got := answer("agy", bad); got != "" {
 			t.Errorf("%s gave %q", bad, got)

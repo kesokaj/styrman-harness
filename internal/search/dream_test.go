@@ -3,6 +3,7 @@ package search
 import (
 	"bytes"
 	"database/sql"
+	"encoding/binary"
 	"os"
 	"path/filepath"
 	"strings"
@@ -116,12 +117,11 @@ func agyFixture(t *testing.T, home string, convs map[string]struct {
 	}
 }
 
+// blob is a step payload in real protobuf framing: one text field per part.
 func blob(parts ...string) []byte {
 	var b []byte
-	for _, p := range parts {
-		b = append(b, 0x0a, 0x8f, 0x01)
-		b = append(b, p...)
-		b = append(b, 0x12, 0x00)
+	for i, p := range parts {
+		b = append(b, pb(i+1, []byte(p))...)
 	}
 	return b
 }
@@ -139,6 +139,10 @@ func TestAgyConversationText(t *testing.T) {
 			blob("Remember that we deploy on Fridays please.", "Saved: deploys happen on Fridays, noted for later."),
 			blob("TOOL OUTPUT: the contents of a private file read by a tool"),
 			blob("I will look at the config file first, then answer.", `{"CommandLine":"cat /etc/private secrets here","toolAction":"Reading"}`, `{"TargetFile":"/p/one/x.go","CodeContent":"package x // a whole written file"}`),
+			// A length byte that is printable ('~' is 126, '`' is 96) glues
+			// itself to the argument's first byte, as in real conversations
+			// (code review of the release range).
+			blob(`{"AbsolutePath":"/p/one/secret.env","toolAction":"Reading a file"}`, `{"Action":"list","Query":"find all the tokens here"}`),
 		}},
 		"old-here":  {"/p/one", "2026-09-01 10:00:00.000000000+00:00", [][]byte{blob("this is an old conversation text")}},
 		"new-other": {"/p/two", "2026-09-30 16:00:00.000000000+00:00", [][]byte{blob("another project entirely, not ours")}},
@@ -166,7 +170,7 @@ func TestAgyConversationText(t *testing.T) {
 	if !strings.Contains(text, "I will look at the config file first") {
 		t.Errorf("text %q lost the model's prose", text)
 	}
-	if strings.Contains(text, "CommandLine") || strings.Contains(text, "CodeContent") {
+	if strings.Contains(text, "CommandLine") || strings.Contains(text, "CodeContent") || strings.Contains(text, "AbsolutePath") || strings.Contains(text, "find all the tokens") {
 		t.Errorf("text %q carries a tool call's arguments (security review round 2)", text)
 	}
 	if strings.Contains(text, "private file read by a tool") {
@@ -219,5 +223,56 @@ func TestInWorkspace(t *testing.T) {
 		if got := inWorkspace(uris, "/p/one"); got != want {
 			t.Errorf("%s: %v, want %v", uris, got, want)
 		}
+	}
+}
+
+// pb builds protobuf wire bytes: a length-delimited field n holding b.
+func pb(n int, b []byte) []byte {
+	out := binary.AppendUvarint(nil, uint64(n<<3|2))
+	out = binary.AppendUvarint(out, uint64(len(b)))
+	return append(out, b...)
+}
+
+func pbVarint(n int, v uint64) []byte {
+	out := binary.AppendUvarint(nil, uint64(n<<3|0))
+	return binary.AppendUvarint(out, v)
+}
+
+// TestProseLeaves decodes real protobuf framing: every tool argument is one
+// whole JSON string field and goes whole, whatever its length byte or its
+// characters; prose, nested or not, stays (security review of the release
+// range: a pattern scan leaked glued and split argument pieces).
+func TestProseLeaves(t *testing.T) {
+	arg126 := `{"AbsolutePath":"/p/one/secret.env","toolAction":"Reading a file for the user now"}`
+	for len(arg126) < 126 {
+		arg126 = arg126[:len(arg126)-1] + ` }`
+	}
+	argDash := `{"CommandLine":"grep -r token — then cat → the result","toolAction":"Searching"}`
+	argBig := `{"TargetFile":"/p/one/x.go","CodeContent":"` + strings.Repeat("package x // a whole written file line\\n", 150) + `"}`
+	nested := pb(3, []byte("The model's reply in a nested message, plain prose."))
+	msg := bytes.Join([][]byte{
+		pbVarint(1, 14),
+		pb(2, []byte("The user's own words: please remember the deploy day.")),
+		pb(4, nested),
+		pb(5, []byte(arg126)),
+		pb(6, []byte(argDash)),
+		pb(7, []byte(argBig)),
+		pb(8, []byte(`["a","json","array","of","words"]`)),
+		pb(9, []byte("short")),
+	}, nil)
+	got := strings.Join(proseLeaves(msg), "\n")
+	for _, want := range []string{"The user's own words", "The model's reply in a nested message"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("lost %q:\n%s", want, got)
+		}
+	}
+	for _, not := range []string{"AbsolutePath", "secret.env", "CommandLine", "grep -r token", "CodeContent", "whole written file", `"json"`, "short"} {
+		if strings.Contains(got, not) {
+			t.Errorf("kept %q:\n%s", not, got)
+		}
+	}
+	// Garbage that is no protobuf yields nothing, never a panic.
+	if leaves := proseLeaves([]byte{0xff, 0xff, 0xff, 0x01, 0x02}); len(leaves) != 0 {
+		t.Errorf("garbage gave %q", leaves)
 	}
 }

@@ -203,14 +203,25 @@ func answer(cli, stdout string) string {
 	sc.Buffer(make([]byte, 64*1024), 16*1024*1024)
 	for sc.Scan() {
 		var ev struct {
-			Event  string `json:"event"`
+			Event      string `json:"event"`
+			StepUpdate struct {
+				StepType string `json:"step_type"`
+			} `json:"step_update"`
 			Result struct {
 				Status        string            `json:"status"`
 				Response      string            `json:"response"`
 				DeniedActions []json.RawMessage `json:"denied_actions"`
 			} `json:"result"`
 		}
-		if json.Unmarshal(sc.Bytes(), &ev) != nil || ev.Event != "result" {
+		if json.Unmarshal(sc.Bytes(), &ev) != nil {
+			continue
+		}
+		// A tool step that ran, denied or not, means the answer was not
+		// tool-free: no answer (security review of the release range).
+		if ev.Event == "step_update" && ev.StepUpdate.StepType == "tool" {
+			return ""
+		}
+		if ev.Event != "result" {
 			continue
 		}
 		if ev.Result.Status != "SUCCESS" || len(ev.Result.DeniedActions) > 0 {

@@ -123,6 +123,17 @@ go build -o .agents/scratch/sh-agent ./cmd/sh-agent
 
 A new or changed verb also gets its rows in `sh-agent-matrix.md` (section 3c). A test written after its code is checked by the mutation protocol (`review-standards` § 2): the mutated code compiles and a named test fails.
 
+## 3e. Memory, dream and the timer (change to `internal/memory`, `internal/dream`, or the `memory`/`dream` wiring in `cmd/sh-agent`)
+
+```bash
+go test -race ./internal/memory ./internal/dream ./internal/search ./cmd/sh-agent
+```
+
+- The unit tests put fake `claude`, `agy`, `systemctl` and `launchctl` on PATH; nothing calls a real CLI or manager.
+- A real `sh-agent dream` run in development goes against a scratch `--home` (under `.agents/scratch/`) whose search.db indexes only fixture projects — never `--all` against the real home: a real run sends redacted project content and transcripts to a model provider.
+- The timer is verified by `systemd-analyze verify` on units rendered through a fake manager. The real `--install-timer` is the operator's step (R6).
+- The kit is in `testing/2026-09-30-verify-parity-memory-dream-phase-4.md`.
+
 ## 4. Sandbox start of each CLI (change to `context/`, `agents/`, or `skills/`)
 
 One start of Claude Code and one of Antigravity in the sandbox (paths and flags in

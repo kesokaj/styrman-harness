@@ -61,7 +61,7 @@ The handoff records the remainder — it is never a substitute for rows already 
 
 1. Run `date +%F` and use that date everywhere below, and `date +%F-%H%M` for the handoff's file name (Step 5) — never a date from memory.
 2. If the session changed source files and no `changes/` entry covers those changes, dispatch the `changelog` agent **before** writing the handoff.
-3. Bring `ROADMAP.md` and `TODO.md` current yourself (Definition of Done step 4): both are empty (headers only) at every checkpoint, not just at Done — a ticked line is deleted in the commit that ticks it; while a plan is in progress "Now" names it and `TODO.md` holds only items the plan will consume. Anything the operator must do, and any deferred idea worth keeping, goes in this handoff's Next Steps, not in those files. The dispatches above record; they do not own those two lines.
+3. Bring `ROADMAP.md` and `TODO.md` current yourself (Definition of Done step 4): both are empty (headers only) at every checkpoint, not just at Done — a ticked line is deleted in the commit that ticks it; while a plan is in progress "Now" names it and `TODO.md` holds only items the plan will consume. Anything the operator must do — other than a standing procedure the deploy guide already records (Step 4's Next Steps rule) — and any deferred idea worth keeping, goes in this handoff's Next Steps, not in those files. The dispatches above record; they do not own those two lines.
 4. Only then write the handoff (Step 4).
 
 ## Step 4: Write the Handoff Document
@@ -121,6 +121,18 @@ Branch: <current git branch>
 <If the user provided arguments, tailor this section to what the next session
 should focus on. Otherwise, infer from the open items above. Name a skill or
 agent to start with only when one is genuinely the first move.>
+
+Never list a step the project's deploy guide records as a standing by-hand
+procedure (its § Operator steps: an update at each place, a smoke check after
+it): the guide owns it, the operator runs it, and repeating it here reads as a
+question ("dont ask all the time about this", 2026-09-30). Point at the guide
+once when the release changed what those steps pick up; otherwise say nothing.
+
+An item the previous handoff's Next Steps already held is not carried again:
+this session does it, or puts it to the operator as one line with a
+recommendation and records the answer. A second handoff that lists the same
+open item is a session that left work waiting ("nothing waiting in this
+project", 2026-09-30).
 
 1. <prioritized action item>
 2. <prioritized action item>

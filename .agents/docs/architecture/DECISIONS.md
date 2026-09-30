@@ -485,3 +485,15 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
 
 **Revisit:** if a checkout place ever belongs to someone other than the operator, or if a second operator joins and carries a different key, a commit-signature check becomes a tool for that separation and should be reconsidered.
 
+## ADR-046a: Addendum to ADR-046 — the premise corrected, the command corrected     (2026-09-30) — Accepted
+
+**Context:** The v1.13.1 gate's security review (`.agents/docs/reviews/2026-09-30-security-v1.13.0-f00d059.md`, finding 2) found two errors in ADR-046.
+
+**Decision:** (1) ADR-046's Reasons bullet says "no commit signature check adds a new trust root without them also being compromised"; that is false. A check against the operator's ed25519 signing key would be an independent root. That key is already the allowed-signers line in `deploy/remote.md` and compiled into release binaries. It would defend against exactly the compromises the ADR's Consequences name: a GitHub account takeover by session or PAT, or a transport compromise. The only exception is a signing key that doubles as the GitHub SSH key and is itself stolen. The decision to accept the unsigned checkout place stands anyway, for the R9 reasons and because signing every commit on `main` is a cost the git rules do not ask for. But the Revisit clause is judged against this corrected reasoning, so the reasoning should be true.
+
+(2) The Consequences name "`sh-agent install --from-zip`"; `--from-zip` belongs to `update` (not `install`) and is refused on any other verb. Zip places are also their own kind of place, not release-binary places, per `.agents/docs/specs/sh-agent/delivery.md` § The model.
+
+(3) The ADR's acceptance rests on the operator's instruction "fix all issues in your recommended way" (handoff `2026-09-30-0802`), the ADR being the recommended option. No separate confirmation in the operator's own words exists, and the record says so.
+
+**Consequences:** the corrections do not change the decision or its consequences; only the record. ADR-046 stands as written; this addendum makes the record accurate for future reference to the reasoning.
+

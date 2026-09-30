@@ -38,14 +38,15 @@ const redactedValue = "[redacted by sh-agent report]"
 // listed — a bare `sk-` would match every "task-".
 var prefixNeedles = []string{
 	"-----BEGIN", "PRIVATE KEY", "AKIA", "ASIA", "AIza", "ya29.", "GOCSPX-",
-	"ghp_", "gho_", "ghs_", "ghu_", "github_pat_", "glpat-",
+	"ghp_", "gho_", "ghs_", "ghu_", "ghr_", "github_pat_", "glpat-", "gldt-", "glrt-", "glptt-",
 	"sk-ant-", "sk-proj-", "xoxb-", "xoxp-", "xoxa-", "xoxs-",
-	// Security review 2026-09-30, finding 3: Stripe and PyPI (every token
-	// opens with the base64 of its macaroon location).
-	"sk_live_", "rk_live_", "whsec_", "pypi-AgEIcHlwaS5vcmc", "pypi-AgENdGVzdC5weXBpLm9yZw",
-	// Security check of the fix, rounds 2 and 3: the test-mode and the
-	// service, admin and None key shapes.
-	"sk_test_", "rk_test_", "sk-svcacct-", "sk-admin-", "sk-None-",
+	// Security review 2026-09-30, finding 3: Stripe webhook secrets and PyPI
+	// (every token opens with the base64 of its macaroon location); the
+	// Stripe keys are a keyword needle below, because `sk_test_` sits inside
+	// `task_test_` (v1.13.1 gate). Rounds 2 and 3 of the check: the service,
+	// admin and None key shapes.
+	"whsec_", "pypi-AgEIcHlwaS5vcmc", "pypi-AgENdGVzdC5weXBpLm9yZw",
+	"sk-svcacct-", "sk-admin-", "sk-None-",
 }
 
 // keywordNeedles are assignment and header shapes, matched without regard to
@@ -70,6 +71,9 @@ var keywordNeedles = []struct {
 	// a word that happens to end in `sk-` before 32 alphanumerics is the
 	// accepted over-redaction.
 	{"jwt", regexp.MustCompile(`eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.`)},
+	// Stripe live and test keys: the prefix plus sixteen alphanumerics, so a
+	// name such as `task_test_helper` stays.
+	{"stripe key", regexp.MustCompile(`[sr]k_(live|test)_[A-Za-z0-9]{16,}`)},
 	{"openai key", regexp.MustCompile(`sk-[A-Za-z0-9]{32,}`)},
 	{"npm token", regexp.MustCompile(`npm_[A-Za-z0-9]{36}`)},
 	{"hugging face token", regexp.MustCompile(`hf_[A-Za-z0-9]{30,}`)},

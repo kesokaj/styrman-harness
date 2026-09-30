@@ -1909,6 +1909,15 @@ func TestWriteAtomicClosesBeforeRename(t *testing.T) {
 	}
 	body := string(src)[strings.Index(string(src), "func WriteAtomic("):]
 	body = body[:strings.Index(body, "\n}\n")]
+	// Code lines only: a comment naming the close above the rename must not
+	// satisfy the check (v1.13.1 gate review).
+	var code []string
+	for _, line := range strings.Split(body, "\n") {
+		if !strings.HasPrefix(strings.TrimSpace(line), "//") {
+			code = append(code, line)
+		}
+	}
+	body = strings.Join(code, "\n")
 	closeAt, renameAt := strings.Index(body, "tmp.Close()"), strings.Index(body, "os.Rename(")
 	if closeAt < 0 || renameAt < 0 || closeAt > renameAt {
 		t.Errorf("WriteAtomic must close the temp file before renaming it: close at %d, rename at %d", closeAt, renameAt)

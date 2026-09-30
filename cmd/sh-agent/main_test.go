@@ -1808,3 +1808,40 @@ func TestSettingsWriteUsesHarnessWriteAtomic(t *testing.T) {
 		t.Error("main.go does not call harness.WriteAtomic")
 	}
 }
+
+// TestAttributionSetReportsAnUnwritableSettingsFile drives the error branch
+// behind harness.WriteAtomic: a settings directory that cannot take a temp
+// file makes the edit fail, and the failure is reported with its cause and
+// the by-hand remedy, the file left as it was (v1.13.1 gate review).
+func TestAttributionSetReportsAnUnwritableSettingsFile(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores the directory permissions this test relies on")
+	}
+	home := t.TempDir()
+	dir := filepath.Join(home, ".claude")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "settings.json")
+	if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o700) })
+	var out bytes.Buffer
+	attributionSet(home, false, &out)
+	got := out.String()
+	if !strings.Contains(got, "could not be written") || !strings.Contains(got, "add the key by hand") {
+		t.Errorf("the failure should be reported with the remedy, got %q", got)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil || string(data) != "{}\n" {
+		t.Errorf("the settings file should be untouched, got %q %v", data, err)
+	}
+	entries, _ := os.ReadDir(dir)
+	if len(entries) != 1 {
+		t.Errorf("no temp file should be left behind, got %d entries", len(entries))
+	}
+}

@@ -77,7 +77,7 @@ func TestReportRedactShapes(t *testing.T) {
 		// macaroon location), a Slack webhook, a JWT, an OpenAI key, an npm
 		// token, a Hugging Face token, and a URL whose userinfo is a bare
 		// token with no password.
-		"sk_live_FAKEVALUE", "rk_live_FAKEVALUE", "whsec_FAKEVALUE",
+		"sk_live_FAKEVALUEFAKEVALUE", "rk_live_FAKEVALUEFAKEVALUE", "whsec_FAKEVALUE",
 		"pypi-AgEIcHlwaS5vcmcFAKEVALUE",
 		"https://hooks.slack.com/services/T0/B0/FAKEVALUE",
 		"eyJhbGciOiJIUzI1NiJ9.eyJFAKEVALUEx.FAKEVALUE",
@@ -93,7 +93,10 @@ func TestReportRedactShapes(t *testing.T) {
 		"pypi-AgENdGVzdC5weXBpLm9yZwFAKEVALUE",
 		// Round 2 of the check: test-mode keys, service and admin keys, a
 		// workflow webhook, a percent-escaped userinfo token.
-		"sk_test_FAKEVALUE", "rk_test_FAKEVALUE", "sk-svcacct-FAKEVALUE", "sk-admin-FAKEVALUE",
+		"sk_test_FAKEVALUEFAKEVALUE", "rk_test_FAKEVALUEFAKEVALUE", "sk-svcacct-FAKEVALUE", "sk-admin-FAKEVALUE",
+		// v1.13.1 gate: the GitHub refresh token and GitLab deploy, runner
+		// and pipeline-trigger tokens the guide's vendor list implied.
+		"ghr_FAKEVALUE", "gldt-FAKEVALUE", "glrt-FAKEVALUE", "glptt-FAKEVALUE",
 		"https://hooks.slack.com/workflows/T0/A0/FAKEVALUE", "https://FAKEVALUE%2FFAKEVALUE%3DFAKE@host/r",
 		// Round 3, one rule per kind: any Slack webhook path in any case, a
 		// userinfo token of sixteen characters, a padded one, an sk-None key.
@@ -131,6 +134,7 @@ func TestReportRedactShapes(t *testing.T) {
 		"npm_config_registry=https://r.example", "ssh://git@github.com/o/r.git", "sk-1234 is a short id",
 		"the eyJ prefix marks base64 JSON", "hf_hub is the client library", "a whsec is a webhook secret",
 		"https://deploy-bot@host/r", "see slack.com/apps for hooks",
+		"task_test_helper ran", "network_test_case 3 passed",
 	} {
 		// "ASIAN" contains the ASIA prefix: accepted over-redaction, pinned
 		// here so a change to it is deliberate.

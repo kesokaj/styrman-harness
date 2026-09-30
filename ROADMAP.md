@@ -6,6 +6,7 @@ Last reviewed: 2026-09-30
 
 ## Now
 
+- Audit fix: everything the two 2026-09-30 audits found, fixed, improved and extended — `.agents/docs/plans/2026-09-30-audit-fix.md` (phases in `PRIORITY_TODO.md`)
 
 ## Next
 

@@ -115,7 +115,7 @@ Trigger / Current behavior / Expected behavior / diff / Rationale     ← projec
 <this session's entries for this project, or "none">
 
 ## Memory
-<the `dream` skill's store line, counts per verdict, its table, what was applied and the full text of every deleted memory — or "no auto memory store">
+<the `dream` skill's store line, counts per verdict, its table, what was applied and the full text of every deleted memory — or "no memory store">
 
 ## Not proposed
 <what was deliberately left alone, and why>

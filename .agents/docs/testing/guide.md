@@ -137,6 +137,15 @@ it from the real home is `chmod 600`, lives only for the run, and is deleted by 
 after (security review 2026-09-21). Prefer the real-home smoke checks of § 5 when the change
 needs no separate home.
 
+A change that must hold on each kind of machine (R10: Claude Code only, Antigravity only, both)
+is checked in three sandbox homes, one per `sh-agent install --home <sb> --vendor claude|agy|all`,
+with `HOME=<sb>` for the whole run so every `sh-agent` call the agent makes lands there (BUG-107).
+Claude Code runs with `CLAUDE_CONFIG_DIR=<sb>/.claude` and a copy of `~/.claude/.credentials.json`
+in it; Antigravity with its token and a settings file written for the run (AGENTS.md § Testing).
+A vendor setting the session cannot write, such as a project's `.claude/settings.local.json`,
+reaches Claude Code through `claude -p --settings '<json>'` instead. Kit and first use:
+`testing/2026-09-30-verify-parity-memory-dream-phase-2.md`.
+
 ## 5. Real-home smoke checks (after any install into a real home)
 
 The three checks in `.agents/docs/testing/2026-09-03-verify-real-home.md` (context

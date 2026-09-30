@@ -1,6 +1,6 @@
 # styrman-harness
 
-A personal agent harness for **Claude Code** and the **Antigravity CLI** (`agy`): one global context file in the [agents.md](https://agents.md) standard, skills in the [Agent Skills](https://agentskills.io) `SKILL.md` standard, subagents, and `sh-agent` — a small Go binary that installs, resyncs, inspects, and removes all of it. No hooks, no gates, no CI.
+A personal agent harness for **Claude Code** and the **Antigravity CLI** (`agy`): one global context file in the [agents.md](https://agents.md) standard, skills in the [Agent Skills](https://agentskills.io) `SKILL.md` standard, subagents, and `sh-agent` — a small Go binary that installs, resyncs, inspects, and removes all of it, and gives every session a local search index of the project it works in (`sh-agent search`). No hooks, no gates, no CI, no service.
 
 ## How it works
 
@@ -27,7 +27,7 @@ flowchart LR
         installer["sh-agent install / sh-agent update"]
         homeFiles["~/.claude and ~/.gemini/config<br/>installed files, no repository"]
         sessions["Claude Code and Antigravity sessions<br/>feedback-log skill logs, /retro queues"]
-        configDir["~/.config/sh-agent/<br/>feedback.jsonl, retros.jsonl, proposals/, state.json"]
+        configDir["~/.config/sh-agent/<br/>feedback.jsonl, retros.jsonl, proposals/, state.json, search.db (a cache, never sent)"]
         reporter["sh-agent report<br/>throwaway clone, pushed, then removed"]
     end
     edit --> ship
@@ -250,7 +250,7 @@ agents/      subagents in Claude Code format — the single source; Antigravity'
 skills/      skills, each a directory with SKILL.md (+ references/, assets/); `feature` and `bug` are the work protocols and load themselves; `review` is the review command on both CLIs
 commands/    markdown prompts invoked as /name (empty; prefer skills)
 rules/       extra always-on or path-scoped rules (empty)
-cmd/sh-agent  the binary; internal/harness is its logic and tests
+cmd/sh-agent  the binary; internal/harness is the installer's logic and tests; internal/search the search index (`sh-agent search`, `sh-agent index`)
 .agents/     this repo's own trail (docs/, incl. bugs/INDEX.md), scratch/ (gitignored), and a skills -> ../skills symlink for the skills CLI
 ```
 

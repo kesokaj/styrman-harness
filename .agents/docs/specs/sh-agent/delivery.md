@@ -74,7 +74,7 @@ This is easy to get wrong when several of those repositories sit side by side on
 
 ## Where things stand
 
-**Built and shipped:** `sh-agent` with install, update, status, diff, uninstall, list, render, adopt, report and version; `update` refusing a dirty checkout on every path; the installer refusing secret-shaped files and duplicate skill names; `v1.0.0` tagged and signed; the skills and agents are whatever `sh-agent list` prints for the checkout.
+**Built and shipped:** `sh-agent` with install, update, status, diff, uninstall, list, render, adopt, report, version and, since v1.13.0, search and index (`specs/sh-agent/search.md`); `update` refusing a dirty checkout on every path; the installer refusing secret-shaped files and duplicate skill names; `v1.0.0` tagged and signed; the skills and agents are whatever `sh-agent list` prints for the checkout.
 
 **The loop back is built:** `sh-agent report` since 2026-09-17, run end to end from the Linux box into the private `styrman-harness-feedback` repository (`.agents/docs/testing/2026-09-17-delivery-rework-e2e.md`). How to run it and what fails: `.agents/docs/deploy/local.md` § Report back. Not yet exercised on real data: a redaction firing, and any place but that one box.
 

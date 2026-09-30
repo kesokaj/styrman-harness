@@ -330,19 +330,36 @@ func TestWorktreeRenameStaysInsideCheckout(t *testing.T) {
 // skip-worktree whose parent directory becomes a symlink was read through
 // the link, outside the checkout.
 func TestReadsNeverLeaveCheckout(t *testing.T) {
+	for _, tc := range []struct{ bit, link string }{
+		{"--skip-worktree", "absolute"},
+		{"--assume-unchanged", "relative"}, // the shape the security check measured
+	} {
+		t.Run(tc.bit+"-"+tc.link, func(t *testing.T) { readsNeverLeaveCheckout(t, tc.bit, tc.link == "relative") })
+	}
+}
+
+func readsNeverLeaveCheckout(t *testing.T, bit string, relative bool) {
 	root := newRepo(t)
 	home := t.TempDir()
 	writeFile(t, root, "dir/a.md", "inside the checkout\n")
 	commitAll(t, root, "add")
-	gitT(t, root, "update-index", "--skip-worktree", "dir/a.md")
-	outside := t.TempDir()
+	gitT(t, root, "update-index", bit, "dir/a.md")
+	outside := filepath.Join(filepath.Dir(root), "beside-"+filepath.Base(root))
+	if err := os.MkdirAll(outside, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(outside) })
 	if err := os.WriteFile(filepath.Join(outside, "a.md"), []byte("canary beside the checkout: pangolin\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.RemoveAll(filepath.Join(root, "dir")); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(outside, filepath.Join(root, "dir")); err != nil {
+	target := outside
+	if relative {
+		target = filepath.Join("..", filepath.Base(outside))
+	}
+	if err := os.Symlink(target, filepath.Join(root, "dir")); err != nil {
 		t.Fatal(err)
 	}
 	// The condition holds: git still lists the path, and it now resolves outside.

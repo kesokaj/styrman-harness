@@ -187,18 +187,15 @@ func configView(dir string) ([]entry, error) {
 	for _, p := range props {
 		names = append(names, filepath.ToSlash(strings.TrimPrefix(p, dir+string(filepath.Separator))))
 	}
-	cfgRoot, err := os.OpenRoot(dir)
-	if err != nil {
-		return nil, err
-	}
-	defer cfgRoot.Close()
+	// Plain reads: ~/.config/sh-agent is the operator's own state, and a
+	// dotfiles arrangement may symlink its proposals directory.
 	var out []entry
 	for _, n := range names {
-		fi, err := cfgRoot.Lstat(filepath.FromSlash(n))
+		fi, err := os.Stat(filepath.Join(dir, n))
 		if err != nil || !fi.Mode().IsRegular() {
 			continue
 		}
-		data, err := readAll(cfgRoot, filepath.FromSlash(n))
+		data, err := os.ReadFile(filepath.Join(dir, n))
 		if err != nil {
 			continue
 		}
@@ -208,7 +205,10 @@ func configView(dir string) ([]entry, error) {
 	return out, nil
 }
 
-// readAll reads one file through the root, so the read cannot leave it.
+// readAll reads one file through the root, so the read cannot leave it. On
+// a Go before 1.25.12, os.Root.Open carries advisory GO-2026-4970 (an escape
+// through a path ending in "/"); every call here follows an Lstat of the
+// same path that reported a regular file, which such a path never is.
 func readAll(fsRoot *os.Root, rel string) ([]byte, error) {
 	f, err := fsRoot.Open(rel)
 	if err != nil {

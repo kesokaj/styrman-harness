@@ -261,7 +261,7 @@ gofmt -l cmd internal && go vet ./... && go test -race ./...   # gofmt takes the
 # TestRenderedContextFitsAntigravityBlock (internal/harness/size_test.go) is part of `go test ./...` above and is
 # the check a change to context/*.md or rules/*.md must pass: it renders the real checkout and pins the result
 # under 22,000 bytes, inside Antigravity's 24,000-byte global rules block (REQUIREMENTS § Known limits, ADR-035)
-# govulncheck: clean on go1.25.8+; an older Go reports two stdlib advisories, fixed by a newer Go on the machine, never a pin here (ADR-029)
+# govulncheck: two known, unreachable advisories (GO-2026-5024 in golang.org/x/sys via the SQLite driver; on a Go before 1.25.12, GO-2026-4970 in os.Root.Open, guarded by an Lstat); an older Go also reports two stdlib advisories, fixed by a newer Go on the machine, never a pin here (ADR-029, ADR-045a)
 go run ./cmd/sh-agent install --home .agents/scratch/home   # never test against your real $HOME; scratch lives in the repo, never /tmp
 ```
 

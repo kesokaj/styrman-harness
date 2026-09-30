@@ -26,6 +26,7 @@ These rules apply to all Go code in this environment.
 - Exported symbols must have a doc comment following `godoc` conventions.
 - No global mutable state — pass dependencies explicitly, wired by hand in `main()`.
 - No `init()` functions unless absolutely required (e.g., registering database drivers).
+- A path from the user, the home, the environment or a flag is never part of a `filepath.Glob` pattern: `[`, `*` and `?` in it are read as pattern and reach other directories. List the parent with `os.ReadDir` and match names by prefix or suffix; a glob takes literal patterns only.
 - An HTTP service reads `references/golang-io-web.md` (routing, JSON helpers, timeouts, shutdown) before its first handler and `references/golang-testing.md` before its first test; the other references are read when their domain comes up.
 
 ### Logging

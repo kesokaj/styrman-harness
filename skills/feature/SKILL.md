@@ -22,6 +22,8 @@ When the request ranges over a LIST — a backlog, `TODO.md`, a review's finding
 
 When the confirmed scope touches an area this session has not read, or an estimated 10+ files, dispatch `explorer` with the scope restatement only, asking for the closest existing surfaces with file:line, the patterns to mirror, and what the request leaves open; `## Surfaces touched` cites its brief (`<docs-root>/plans/<date>-recon-<slug>.md`).
 
+When the feature adds a CAPABILITY (a verb, a tool, an index) rather than changing a surface, the scope names its consumers by asking who would use it, not who uses the old mechanism today: a search index's consumers include the agents that WRITE records and never grepped before (the operator's correction of 2026-09-29, styrman-harness). The consumers go under the restatement in the numbered-list form above, one line each, and the plan gets a task per consumer or a line saying why not.
+
 ## Step 2: Plan file — `<docs-root>/plans/<date>-<slug>.md`
 
 ```markdown

@@ -166,10 +166,9 @@ Tiers: unit, integration (local bare repositories, fake `gh` on PATH), e2e (a re
 Deferred from the e2e box on 2026-09-18, each needing a machine or a session this plan should not hold open. Owner: the operator to run, the next session to log.
 
 - The swapped-signature edge case on **darwin**: a tampered `SHA256SUMS.sig` must make `update` refuse and leave the binary untouched. Proven on Linux against the real releases; never run on the Mac.
-- **`linux/arm64`**: built and published for all three releases, never executed on any machine. No box of that kind exists here.
 - **The Claude Code side of the work Mac**: still installed `--vendor antigravity` only, so `~/.claude` there holds nothing from any release. devbox now covers the Claude side on Linux (`--vendor all`). One `sh-agent install --vendor all` on the Mac plus one `claude -p` closes it.
 - **`sh-agent update` on devbox**: that machine reached v1.2.1 by download and `install`, never by updating from an earlier release. The cross-release update is proven on Linux (a scratch place, v1.1.0 → v1.2.0) and on the Mac (v1.2.0 → v1.2.1), so this is confirmation, not a gap.
-- **BUG-078's prevention rule** is recorded but not graduated: nothing yet warns when an earlier `PATH` entry shadows the binary `install` just wrote.
+- Struck 2026-09-30 on the operator's word ("Go with your recommendations"): the `linux/arm64` leg (built and published every release, never executed; no such box exists) and the BUG-078 line, which is stale: its rule graduated into `context/AGENTS.md` § Hard rules, and `sh-agent status` prints a `shadowed` line when an earlier `PATH` entry wins (BUG-079).
 
 ## Risks
 

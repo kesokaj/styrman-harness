@@ -75,7 +75,7 @@ date: YYYY-MM-DD
 ---
 # Handoff — YYYY-MM-DD — <topic>
 
-Session ID: <conversation-id>        (same machine: `claude --resume <id>`; matches the feedback log's session field)
+Session ID: <conversation-id>        (same machine: `claude --resume <id>` or `agy --conversation <id>`; matches the feedback log's session field)
 Project: <absolute path to project root — the only absolute path in the file>
 Branch: <current git branch>
 

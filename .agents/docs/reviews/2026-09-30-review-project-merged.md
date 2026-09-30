@@ -92,6 +92,6 @@ Round-3 agent findings: reviewer APPROVE, none; verifier PASS, "close-before-ren
 - 4 fixed — `internal/harness/report.go`; remaining shapes after three rounds left: operator — one choice: (a) generalise to one rule per kind (`(?i)hooks\.slack\.com/`, `://[^/\s:@]{16,}@`, an `sk-None-` prefix), recommended, or (b) accept and record; the redaction is documented as a safety net, not a guarantee (`delivery.md` § report).
 - 5 fixed — `skills/VENDORED.md`, `AGENTS.md`; left: operator — whether the two forks should be renamed to satisfy the "differently named skill" rule (recommended: keep the names; the rule's purpose, that a re-fetch never overwrites local text, is now stated in the manifest).
 - 6 fixed — `internal/harness/report.go` `pushError`.
-- 7 left: operator — `main.go` layout, deferred; both lenses non-blocking.
+- 7 left: operator — `main.go` layout, deferred; both lenses non-blocking. Struck 2026-09-30 on the operator's word ("Go with your recommendations"): the file works, and splitting it is churn.
 - Docs: `deploy/local.md:66` and `specs/sh-agent/delivery.md:56` describe the redaction shapes — in flight: `documentation`.
 - Operator's choices (2026-09-30, "Go with your recommendations"): finding 4's remainder fixed by one rule per kind (`changes/2026-09-30-0910-redaction-per-kind-rules.md`, `reviews/2026-09-30-security-worktree-redaction.md` § Outcome); finding 5's fork names kept.

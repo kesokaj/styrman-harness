@@ -72,6 +72,9 @@
 | BUG-103 | 2026-09-29 | skills/init-project / skills/dream (slug derivation) | fixed | an empty slug from a failed `git rev-parse` collapsed the store to the shared root; migration ran even after a refused settings write | stop on an empty/unset derived result, and gate a dependent step on the prior write's confirmed success |
 | BUG-104 | 2026-09-29 | internal/harness (tests) | fixed | `TestReinstallBuildsAndInstalls` flaked under a concurrent `go test`, seeing another process's build dir via a wildcard glob | a test asserting a shared directory is clean names the exact path its own run created, never a glob over a directory other processes write to |
 | BUG-108 | 2026-09-30 | internal/search (git status parsing) | fixed | work-tree rename (`git add -N` after a move) misparsed by `gitView`, indexing a file outside the checkout as `../x` | parse a tool's output only in a shape a flag pins (`--no-renames`), never one the tool may vary by heuristic; re-examine an "equivalent" mutation for the input shape that makes it live |
+| BUG-113 | 2026-09-30 | skills/init-project, skills/dream | fixed | `/init-project` wrote `.claude/` (links, settings.local.json, .gitignore lines) on an Antigravity-only machine | a step writing a vendor's own path runs only when that vendor is installed (read the manifest's vendor); a reader of that path has a fallback |
+| BUG-114 | 2026-09-30 | context/AGENTS.md (size budget) | fixed | a clause added for BUG-113 pushed the Antigravity rules block to 22050 bytes, over the 22000 budget | after editing `context/AGENTS.md`, run `go test ./internal/harness -run TestRenderedContext -v` and read the byte count before any dispatch |
+
 ## Graduated
 
 | ID | Area | Graduated to |

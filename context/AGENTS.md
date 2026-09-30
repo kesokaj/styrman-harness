@@ -35,7 +35,7 @@ Skill = knowledge the main thread loads while working. Subagent = judgement inde
 
 ## Global vs project
 
-Global is this harness, deployed by `sh-agent install`; a skill found elsewhere goes into the harness checkout's `skills/` (`sh-agent adopt <skill>`), then `sh-agent install`, never only into a vendor directory. Project is `.agents/{skills,agents,commands,rules,workflows}`, committed with the project, with `.claude/*` symlinked into it by `/init-project`. A project skill or agent may not load on every vendor, and which copy wins a name clash is not guaranteed: in a project, a skill or agent never reuses a harness name — extend one with a differently named skill or a `.agents/rules/` file. Project-specific verbs, rules, and reviewer checklists go in the project, never in the harness.
+Global is this harness, deployed by `sh-agent install`; a skill found elsewhere goes into the harness checkout's `skills/` (`sh-agent adopt <skill>`), then `sh-agent install`, never only into a vendor directory. Project is `.agents/{skills,agents,commands,rules,workflows}`, committed with the project, with `.claude/*` linked into it by `/init-project` (Claude Code only). A project skill or agent may not load on every vendor, and which copy wins a name clash is not guaranteed: a skill or agent never reuses a harness name — extend one with a differently named skill or a `.agents/rules/` file. Project-specific verbs, rules, and reviewer checklists go in the project, never in the harness.
 
 ## Learning loop
 

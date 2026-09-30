@@ -213,6 +213,8 @@ And back: `sh-agent report --dry-run` lists every file and every redaction it wo
 
 The project's auto memory store is `.agents/memory/` (gitignored), set up by `/init-project`, read by both CLIs, never committed and never sent by `sh-agent report` — only `feedback.jsonl`, `retros.jsonl`, `proposals/`, the install manifest and the run's `report.json` leave the machine (`.agents/docs/deploy/local.md` § Report back).
 
+`/init-project` links `.claude/*` into the project only for Claude Code: on a machine installed for Antigravity alone (`sh-agent install --vendor agy`, recorded in the manifest) it writes nothing under `.claude/` — no links, no `settings.local.json`, no memory migration, no `.claude/` lines in `.gitignore` — and the memory store is the only per-machine thing it sets up. An Antigravity-only machine installed with the default vendor `all` needs `sh-agent install --vendor agy` once for this to take effect. An update run never removes a `.claude/` an earlier run made; it names it for you to delete by hand.
+
 An existing `~/.claude/CLAUDE.md` that sh-agent did not write is left alone. Move only rules meant for every machine into a rule file under `rules/` in this repository — `rules/` is deployed to every install on every machine, so credentials and personal or host-specific notes never go there — then remove `~/.claude/CLAUDE.md` and run `sh-agent install`, which writes the one-line import (`@AGENTS.md`).
 
 ## Adding things by hand — no code

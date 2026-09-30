@@ -5,7 +5,7 @@ description: "Scaffold a new project with the standard agent directory structure
 
 # Init Project Workflow
 
-Scaffold a new project, or update an older scaffold, so its rules, skills and agents live in `.agents/`, linked for Claude Code through `.claude/*`, and its `.agents/docs/` trail lets a zero-context agent resume. The templates ship with this skill in its `assets/` directory.
+Scaffold a new project, or update an older scaffold, so its rules, skills and agents live in `.agents/`, linked for Claude Code through `.claude/*` when the machine uses it, and its `.agents/docs/` trail lets a zero-context agent resume. The templates ship with this skill in its `assets/` directory.
 
 ## Usage
 
@@ -22,6 +22,14 @@ Confirm the current workspace is the intended project root (`git rev-parse --sho
 If `.agents/docs/changes/` already has entries, this run is an **update** of a scaffold an older harness wrote: every step below adds only what is missing and never rewrites or deletes what the project wrote. An update never edits `REQUIREMENTS.md`, an existing `AGENTS.md` (except the `CLAUDE.md` fold in Step 3), `DECISIONS.md`, a deploy guide that exists, any file under `changes/`, `handoffs/`, `plans/`, `reviews/`, `specs/`, `testing/` or `retros/`, a bug record or an `INDEX.md` row, or anything in `.agents/{rules,skills,agents,commands,workflows,scratch}`. Where the note under a file's title differs from the template's (`TODO.md`, `ROADMAP.md`, `.agents/docs/bugs/INDEX.md`), it shows both and takes the template's note only on the user's yes. It asks the new-project questions only for a file it creates, leaves out a file it would change that has uncommitted changes and names it in the summary, and a second run adds nothing. If `.agents/docs/` does not exist but a bare `docs/changes/` or `docs/bugs/` does, stop and ask: moving a trail between docs roots is a migration, not an update.
 
 In an update, count the files in `<docs-root>/handoffs/` and `<docs-root>/changes/` whose names start with a date not followed by a four-digit time. A directory that does not exist counts zero; for one that exists, run `ls <dir>`, and when that command fails, Step 7's summary says "<dir> could not be listed; date-only names not counted". Otherwise count its output with `grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}-' | grep -vcE '^[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{4}-'`. When the total is above zero, Step 7's summary carries this warning, and nothing is renamed: "N handoff/change files have date-only names. New files are named YYYY-MM-DD-HHMM-<slug>.md; the old names stay, and a date-only name counts as older than every timed name of its day."
+
+**Claude Code or not.** Every `.claude/` write — Step 5's links, Step 5b's settings file and migration, Step 6's two `.claude/` lines — is for Claude Code only. Before Step 5, read the install manifest:
+
+```bash
+grep -q '"vendor": "antigravity"' ~/.config/sh-agent/state.json && echo "Antigravity only: no .claude/"
+```
+
+When it prints, the harness is installed for Antigravity alone (`sh-agent install --vendor agy`): skip those writes and create no `.claude/` directory. Any other result — the vendor `all` or `claude`, no manifest, a read that fails — keeps them. An update run never removes a `.claude/` an earlier run made; on an Antigravity-only machine Step 7 names it for the operator to delete.
 
 Every write this skill makes — a root file, a template copy, a `.gitignore` line, the settings file, the store — first checks that the target path and its directory are not symlinks (`test -L`): a committed link would carry the write outside the project. A linked path is reported and skipped, never written through.
 
@@ -84,7 +92,7 @@ Antigravity is meant to read `.agents/` natively, but in the harness's 2026-09-1
 
 ## Step 5: Claude Code discovery — symlinks
 
-Claude Code reads `.claude/` for project skills, agents, commands, and rules. Point it at the real tree instead of duplicating it:
+Skipped on an Antigravity-only machine (Step 1). Claude Code reads `.claude/` for project skills, agents, commands, and rules. Point it at the real tree instead of duplicating it:
 
 ```bash
 for n in skills agents commands rules; do
@@ -102,6 +110,8 @@ Claude Code guards writes under `.claude/` and may refuse the `mkdir` and `ln` c
 Claude Code writes auto memory per project; the harness keeps that store inside the project, gitignored, where both CLIs read it (the harness's `specs/sh-agent/memory-loop.md`). New and update paths alike:
 
 1. `root=$(git rev-parse --show-toplevel)`; when that fails or is empty, stop Step 5b and say so. Then the trust checks, before any write: `.gitignore` must not be a symlink (`test ! -L .gitignore`; a committed link would carry the append outside the clone — report and stop); `store="$root/.agents/memory"`; the store must be the project's own directory: when `.agents` or `.agents/memory` is a symlink (`test -L`) or git tracks anything under `.agents/memory` (`git ls-files .agents/memory` prints a path), stop Step 5b and report it — a committed link would carry the operator's memory wherever it points; otherwise append `.agents/memory` and `.claude/settings.local.json` to `.gitignore` when it lacks them (before anything exists to stage; Step 6 then finds both present), then `mkdir -p -m 700 "$store"` (one command; a separate `chmod` is refused in a headless session, so an existing directory keeps its mode — say so and name `chmod 700 .agents/memory` for the operator when `stat -c %a` shows otherwise). For the migration in step 3, `slug=$(printf '%s' "$root" | sed 's#[^A-Za-z0-9-]#-#g')` — Claude Code's own project name under `~/.claude/projects/`: every character other than a letter, a digit or a hyphen becomes a hyphen.
+On an Antigravity-only machine (Step 1) item 1 runs without the `.claude/settings.local.json` line, and items 2 and 3 are skipped: the store still serves Antigravity, whose agent writes it.
+
 2. `.claude/settings.local.json` (gitignored in Step 6; never `settings.json`, which is shared). First the trust check, in every branch: when git tracks the file (`git ls-files --error-unmatch .claude/settings.local.json`), or `.claude` or the file is a symlink (`test -L`), the file is not the operator's own — report that, write nothing into it, and move nothing in step 3. Otherwise: absent → write `{"autoMemoryDirectory": "<root>/.agents/memory"}` with the absolute root as a JSON string (`python3 -c 'import json,sys; print(json.dumps({"autoMemoryDirectory": sys.argv[1] + "/.agents/memory"}))' "$root"`, so a `"` or `\` in the path is escaped; Claude Code accepts no relative path, which is why this file is per machine); present with the key → keep the file as it is and report the value; the migration below moves files only into `$store`, this project's `.agents/memory/`, so a value elsewhere, or a file git tracks (a committed settings file is not the operator's own), means report and move nothing; present without the key → when it is an empty object, overwrite it with the one-key object, otherwise insert one line after the opening `{` with the Edit tool — `"autoMemoryDirectory": <the same JSON string as the absent branch>,` — touching no other line (never `jq` or a re-serialisation, which reformat the file, and no backup copy: a fixed copy path could be a committed symlink), and run `python3 -c 'import json,sys; json.load(open(sys.argv[1]))' .claude/settings.local.json`; a failed parse removes that one inserted line again with the Edit tool, reports the intended content for the user, and makes no second attempt. For a tracked file, name `git rm --cached .claude/settings.local.json` for the user: the Step 6 line does not untrack it. Claude Code honours the key in a trusted workspace only; `/dream` detects a split store.
 3. Migration, move never copy, and only when `.claude/settings.local.json` now holds the key (written in step 2 or already there and untracked) — after a refused write, print `migration skipped: the setting is not in place`, since Claude Code would not load the new store: `old="$HOME/.claude/projects/$slug/memory"`. When `old` holds memory files (`ls "$old"/*.md`) and `store` holds none: `mv "$old"/*.md "$store"/` and report each file. When both hold files: move nothing, report both paths for the user to merge. When `old` holds none (absent or empty): print `no memory files at <old>` and, as a hint, the `~/.claude/projects/*/memory` directories whose name ends with the repository's last path component; move nothing.
 
@@ -112,7 +122,7 @@ The Step 5 headless guard applies to `.claude/settings.local.json` too: when the
 ## Step 6: README and .gitignore
 
 - If no `README.md` exists, create a short one from the project overview: name, quick start (the real commands), architecture in three lines, deploy path.
-- Append each of these lines that `.gitignore` lacks, never removing or reordering a line already there, and only when `.gitignore` is not a symlink (`test ! -L .gitignore`; otherwise report the lines for the user):
+- Append each of these lines that `.gitignore` lacks (on an Antigravity-only machine, Step 1, all but the two `.claude/` lines), never removing or reordering a line already there, and only when `.gitignore` is not a symlink (`test ! -L .gitignore`; otherwise report the lines for the user):
 
 ```
 .DS_Store
@@ -125,4 +135,4 @@ The Step 5 headless guard applies to `.claude/settings.local.json` too: when the
 
 ## Step 7: Summary, commit, push
 
-Report what was created, or for an update what it added and what it kept as the project's, the memory store's path and what Step 5b moved, including each template `##` heading a kept deploy guide lacks, and remind the user to fill a `REQUIREMENTS.md` or `ROADMAP.md` this run created, and the date-only-names warning when Step 1 counted any. Then, per the global git workflow, stage the created or changed paths by name, read `git diff --cached --stat`, and commit in its own call (`init: scaffold agent tree and project docs`, or `init: update scaffold to current templates`); an update that changed nothing makes no commit. Push only when `git remote` names a remote, and ask first when a deploy guide says a push deploys.
+Report what was created, or for an update what it added and what it kept as the project's, whether the `.claude/` steps ran (on an Antigravity-only machine, name a `.claude/` an earlier run left for the operator to delete), the memory store's path and what Step 5b moved, including each template `##` heading a kept deploy guide lacks, and remind the user to fill a `REQUIREMENTS.md` or `ROADMAP.md` this run created, and the date-only-names warning when Step 1 counted any. Then, per the global git workflow, stage the created or changed paths by name, read `git diff --cached --stat`, and commit in its own call (`init: scaffold agent tree and project docs`, or `init: update scaffold to current templates`); an update that changed nothing makes no commit. Push only when `git remote` names a remote, and ask first when a deploy guide says a push deploys.

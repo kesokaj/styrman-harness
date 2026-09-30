@@ -265,6 +265,9 @@ func TestRunRemovesLeftoverCopies(t *testing.T) {
 	conf := filepath.Join(f.home, ".config", "sh-agent")
 	write(t, filepath.Join(conf, "dream-agy-home-123", ".gemini", "antigravity-cli", "antigravity-oauth-token"), "token", old)
 	write(t, filepath.Join(conf, "dream-projects-9", "search.db"), "db", old)
+	for _, d := range []string{"dream-agy-home-123", "dream-projects-9"} {
+		os.Chtimes(filepath.Join(conf, d), old, old)
+	}
 	if err := Run(runOpts(f, &bytes.Buffer{}, "claude")); err != nil {
 		t.Fatal(err)
 	}
@@ -412,5 +415,70 @@ func TestStatusLine(t *testing.T) {
 	write(t, filepath.Join(home, ".config", "systemd", "user", "sh-agent-dream.timer"), "x", fresh)
 	if got := StatusLine(home); got != "last run 2026-09-30 failed: no claude on PATH; timer installed" {
 		t.Errorf("failed: %q", got)
+	}
+}
+
+// TestRunAgyReadErrorKeepsWatermark: an Antigravity database that cannot be
+// read fails the project, so its conversations are read again next time.
+func TestRunAgyReadErrorKeepsWatermark(t *testing.T) {
+	f := newFixture(t)
+	scaffold(t, f)
+	write(t, filepath.Join(f.home, ".gemini", "antigravity-cli", "conversation_summaries.db"), "not a database at all", fresh)
+	fakeCLI(t, "claude", `{"proposals":[],"skills":[]}`, 0)
+	var ee *ExitError
+	if err := Run(runOpts(f, &bytes.Buffer{}, "claude")); !errors.As(err, &ee) || ee.Code != 1 {
+		t.Fatalf("err = %v, want exit 1", err)
+	}
+	if st, _ := readState(f.home); !st.Projects[f.root].IsZero() {
+		t.Error("watermark advanced past unread conversations")
+	}
+	if !strings.Contains(read(t, filepath.Join(f.home, ".config", "sh-agent", "dream.log")), "fail reading Antigravity") {
+		t.Error("the read error is not logged")
+	}
+}
+
+func TestRunStateWriteFailureIsExit2(t *testing.T) {
+	f := newFixture(t)
+	scaffold(t, f)
+	fakeCLI(t, "claude", `{"proposals":[],"skills":[]}`, 0)
+	old := writeState
+	writeState = func(string, []byte) error { return errors.New("disk full") }
+	defer func() { writeState = old }()
+	var ee *ExitError
+	if err := Run(runOpts(f, &bytes.Buffer{}, "claude")); !errors.As(err, &ee) || ee.Code != 2 || !strings.Contains(ee.Msg, "could not be saved") {
+		t.Fatalf("err = %v, want exit 2 naming the lost watermarks", err)
+	}
+}
+
+// A fresh copy belongs to a live dry run, which takes no lock: only copies
+// older than an hour are a killed run's leftovers.
+func TestRemoveCopiesKeepsFreshOnes(t *testing.T) {
+	conf := t.TempDir()
+	write(t, filepath.Join(conf, "dream-projects-1", "search.db"), "db", time.Now())
+	write(t, filepath.Join(conf, "dream-projects-2", "search.db"), "db", time.Now().Add(-2*time.Hour))
+	os.Chtimes(filepath.Join(conf, "dream-projects-1"), time.Now(), time.Now())
+	os.Chtimes(filepath.Join(conf, "dream-projects-2"), time.Now().Add(-2*time.Hour), time.Now().Add(-2*time.Hour))
+	removeCopies(conf)
+	if _, err := os.Stat(filepath.Join(conf, "dream-projects-1")); err != nil {
+		t.Error("a fresh copy was removed")
+	}
+	if _, err := os.Stat(filepath.Join(conf, "dream-projects-2")); !os.IsNotExist(err) {
+		t.Error("an old copy was kept")
+	}
+}
+
+func TestAnswerNeedsASuccessfulResult(t *testing.T) {
+	ok := `{"event":"result","result":{"status":"SUCCESS","response":"{\"proposals\":[],\"skills\":[]}"}}`
+	if answer("agy", ok) == "" {
+		t.Error("a successful result gave no answer")
+	}
+	for _, bad := range []string{
+		`{"event":"result","result":{"status":"ERROR","response":"{\"proposals\":[],\"skills\":[]}"}}`,
+		`{"event":"result","result":{"status":"SUCCESS","response":"x","denied_actions":[{"action":"command"}]}}`,
+		`{"event":"init"}`,
+	} {
+		if got := answer("agy", bad); got != "" {
+			t.Errorf("%s gave %q", bad, got)
+		}
 	}
 }

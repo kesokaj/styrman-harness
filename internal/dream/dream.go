@@ -6,7 +6,6 @@
 package dream
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -81,11 +80,10 @@ func Run(o Options) error {
 	return o.dryRun(projects, st)
 }
 
-// targets is --project's one checkout, or every indexed project for --all.
+// targets is --project's one checkout, or every indexed project for --all;
+// Run has already refused both and neither.
 func (o Options) targets() ([]search.Project, error) {
 	switch {
-	case o.Project != "" && o.All:
-		return nil, errors.New("sh-agent dream: --all or --project <dir>, not both")
 	case o.Project != "":
 		abs, err := filepath.Abs(o.Project)
 		if err != nil {
@@ -96,10 +94,8 @@ func (o Options) targets() ([]search.Project, error) {
 			return nil, err
 		}
 		return []search.Project{{Root: root, Name: filepath.Base(root), DocsRoot: ".agents/docs"}}, nil
-	case o.All:
-		return o.Projects(o.Home)
 	}
-	return nil, errors.New("usage: sh-agent dream --all | --project <dir> [--dry-run]")
+	return o.Projects(o.Home)
 }
 
 // skipReason says why a project is not dreamt over, or "" when it is.

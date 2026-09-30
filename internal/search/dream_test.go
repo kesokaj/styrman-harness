@@ -138,6 +138,7 @@ func TestAgyConversationText(t *testing.T) {
 			blob("b$7863135a-0a35-4648-9cef-f196af3f2197", "Remember that we deploy on Fridays please."),
 			blob("Remember that we deploy on Fridays please.", "Saved: deploys happen on Fridays, noted for later."),
 			blob("TOOL OUTPUT: the contents of a private file read by a tool"),
+			blob("I will look at the config file first, then answer.", `{"CommandLine":"cat /etc/private secrets here","toolAction":"Reading"}`, `{"TargetFile":"/p/one/x.go","CodeContent":"package x // a whole written file"}`),
 		}},
 		"old-here":  {"/p/one", "2026-09-01 10:00:00.000000000+00:00", [][]byte{blob("this is an old conversation text")}},
 		"new-other": {"/p/two", "2026-09-30 16:00:00.000000000+00:00", [][]byte{blob("another project entirely, not ours")}},
@@ -161,6 +162,12 @@ func TestAgyConversationText(t *testing.T) {
 	}
 	if strings.Count(text, "Remember that we deploy") != 1 {
 		t.Errorf("text %q repeats a run: dedup failed", text)
+	}
+	if !strings.Contains(text, "I will look at the config file first") {
+		t.Errorf("text %q lost the model's prose", text)
+	}
+	if strings.Contains(text, "CommandLine") || strings.Contains(text, "CodeContent") {
+		t.Errorf("text %q carries a tool call's arguments (security review round 2)", text)
 	}
 	if strings.Contains(text, "private file read by a tool") {
 		t.Errorf("text %q carries a tool's output (security review 2026-09-30)", text)

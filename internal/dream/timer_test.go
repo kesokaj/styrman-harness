@@ -191,3 +191,18 @@ func TestInstallTimerRefusesUnsafePaths(t *testing.T) {
 		t.Errorf("a %% was not escaped:\n%s", service)
 	}
 }
+
+// TestInstallTimerKeepsOnlyAbsolutePath: a relative PATH entry (".", "bin",
+// an empty one) would resolve against the unit's working directory at 03:00,
+// not where the operator's shell was; only absolute entries are frozen in.
+func TestInstallTimerKeepsOnlyAbsolutePath(t *testing.T) {
+	home := timerHome(t)
+	fakeManager(t, "systemctl", 0)
+	if err := InstallTimer(home, "/a/bin::.:node_modules/.bin:/b", "linux"); err != nil {
+		t.Fatal(err)
+	}
+	service := read(t, filepath.Join(home, ".config", "systemd", "user", "sh-agent-dream.service"))
+	if !strings.Contains(service, `Environment="PATH=/a/bin:/b"`) {
+		t.Errorf("service:\n%s", service)
+	}
+}

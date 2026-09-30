@@ -234,7 +234,10 @@ func conversationText(src, id, tmp string) (string, error) {
 		}
 		for _, run := range textRun.FindAll(payload, -1) {
 			s := strings.TrimSpace(string(bytes.ToValidUTF8(run, nil)))
-			if strings.Count(s, " ") < 3 || seen[s] {
+			// A reply step also holds its tool calls' arguments, JSON objects:
+			// the command run, a whole file written. The Claude Code reader
+			// sends no tool call either (security review round 2).
+			if strings.Count(s, " ") < 3 || seen[s] || strings.HasPrefix(s, `{"`) {
 				continue
 			}
 			seen[s] = true

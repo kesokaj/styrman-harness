@@ -29,6 +29,10 @@ const (
 
 var promptOrder = []string{kindMemory, kindFeedback, kindTrail, kindSkill, kindTranscript}
 
+// transcriptLineMax is the longest transcript line read; a longer one ends
+// that file's read, which is named as left out. A test lowers it.
+var transcriptLineMax = 16 * 1024 * 1024
+
 // trailDirs are the records a dream reads under a project's docs root.
 var trailDirs = []string{"bugs", "reviews", "retros", "changes", "handoffs"}
 
@@ -112,9 +116,13 @@ func collect(home, vendor string, p search.Project, since time.Time, limit int) 
 	return c, nil
 }
 
-// linked reports whether root/docs or root/docs/dir is a symlink.
+// linked reports whether any directory from root down to docs/dir is a
+// symlink: .agents, .agents/docs and the record directory alike (code
+// review round 2).
 func linked(root, docs, dir string) bool {
-	for _, p := range []string{filepath.Join(root, docs), filepath.Join(root, docs, dir)} {
+	p := root
+	for _, part := range strings.Split(filepath.ToSlash(filepath.Join(docs, dir)), "/") {
+		p = filepath.Join(p, part)
 		if info, err := os.Lstat(p); err == nil && info.Mode()&os.ModeSymlink != 0 {
 			return true
 		}
@@ -332,7 +340,7 @@ func sessionText(path, root string, since time.Time) (transcript, error) {
 	var b strings.Builder
 	var last time.Time
 	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 64*1024), 16*1024*1024)
+	sc.Buffer(make([]byte, 64*1024), transcriptLineMax)
 	for sc.Scan() {
 		var l struct {
 			Type      string `json:"type"`

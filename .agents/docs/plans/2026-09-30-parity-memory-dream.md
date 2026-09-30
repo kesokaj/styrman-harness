@@ -329,6 +329,7 @@ Assumptions:
   - `ListProjects` opens read-only, never creating the db;
   - the proposal frontmatter `project` carries the root.
   — by: the operator, "Go all" (r3 non-blocking 7–15)
+- D8b — 2026-09-30 — Antigravity step types, from copies of two real conversation databases (`.agents/scratch/agyprobe/` and the gate18 handoff run): 14 is the user's input (the run prompt), 15 the model's reply (the context answer, the handoff's planning text), 132 a tool step (a `view_file` of a SKILL.md), 101 a message event. Only 14 and 15 are read — by: implementer, probe
 - D28 — 2026-09-30 — After the feature review (`reviews/2026-09-30-review-cb799ff-f1ca525-code.md`, `reviews/2026-09-30-security-cb799ff-f1ca525.md`):
   - the Antigravity child runs from a private HOME holding a copy of the operator's login and settings that grant nothing, removed after the run; any tool call is refused whatever the operator allows interactively;
   - its prompt goes on stdin as one stream-json message (Linux caps one argument at 128 KiB, and argv is readable in /proc); this supersedes D7b's invocation, and D7b's prompt warning stays;

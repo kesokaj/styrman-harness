@@ -34,6 +34,15 @@ Status: built 2026-09-30 (plan `plans/2026-09-30-parity-memory-dream.md`). R3's 
    One-line fields (title, kind, file, evidence) have line breaks folded. Same-day reruns get `-2`, `-3`. Zero proposals write no file.
 6. **Advance** the watermark to the run's start, only after a successful parse and write.
 
+**Known limit:** Claude Code runs with `--setting-sources local` from an empty directory, so a user-level `apiKeyHelper` or other settings-based authentication is not loaded. On such a machine the run fails, logged per project with its stderr kept in `dream-failed/`. A login (`claude` `/login`) works.
+
+**Where the data goes:** to the model of the one CLI the run uses, whatever wrote it. With vendor `claude` or `all`, Antigravity's conversation text also goes to Claude Code's provider; with vendor `antigravity`, Claude Code's transcript text also goes to Antigravity's provider (plan D17: both are the operator's own accounts on the same machine). From Antigravity, only the user's input and the model's prose are read: a reply's tool-call arguments (JSON objects: a command, a file written) are dropped, as the Claude Code reader drops tool calls. From Claude Code, only text parts are read.
+
+**Hardening details:**
+- The private agy settings are `{"toolPermission":"request-review","permissions":{"allow":[]},"trustedWorkspaces":[]}`.
+- A stream result whose status is not `SUCCESS`, or that names `denied_actions`, is no answer.
+- The timer freezes only the absolute entries of the installing shell's PATH.
+
 ## Consumers
 
 - Project-level `/retro` (source 9) reads its project's `proposals/dream/*.md`, re-derives each proposal against the files, and sets its Status to applied or rejected.

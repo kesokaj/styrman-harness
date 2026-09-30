@@ -94,6 +94,7 @@ func InstallTimer(home, path, goos string) error {
 	if info, err := os.Stat(bin); err != nil || !info.Mode().IsRegular() {
 		return &ExitError{2, fmt.Sprintf("sh-agent dream --install-timer: no binary at %s: run sh-agent install first", bin)}
 	}
+	path = absolutePath(path)
 	// A quote, a backslash or a line break would end the unit's quoted value
 	// and let the rest of the path become unit text (security review
 	// 2026-09-30); such a home or PATH is refused, never escaped by guess.
@@ -143,6 +144,19 @@ func InstallTimer(home, path, goos string) error {
 		}
 	}
 	return nil
+}
+
+// absolutePath keeps PATH's absolute entries: a relative one (".", "bin", an
+// empty one) would resolve against the unit's working directory at 03:00,
+// not where the installing shell was (security review round 2).
+func absolutePath(path string) string {
+	var keep []string
+	for _, e := range filepath.SplitList(path) {
+		if filepath.IsAbs(e) {
+			keep = append(keep, e)
+		}
+	}
+	return strings.Join(keep, string(filepath.ListSeparator))
 }
 
 // RemoveTimer stops and removes the dream timer; absent is fine.

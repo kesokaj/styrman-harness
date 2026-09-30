@@ -3,6 +3,7 @@ package dream
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -224,17 +225,10 @@ func TestTargets(t *testing.T) {
 	if err != nil || len(got) != 1 || !sameDir(got[0].Root, f.root) || got[0].DocsRoot != ".agents/docs" {
 		t.Errorf("--project from a subdirectory: %+v, %v", got, err)
 	}
-	o.All = true
-	if _, err := o.targets(); err == nil || !strings.Contains(err.Error(), "not both") {
-		t.Errorf("--all with --project: %v", err)
-	}
-	o.Project = ""
+	// Both and neither are refused by Run before targets (TestRunUsage).
+	o.Project, o.All = "", true
 	if got, err := o.targets(); err != nil || len(got) != 2 {
 		t.Errorf("--all: %+v, %v", got, err)
-	}
-	o.All = false
-	if _, err := o.targets(); err == nil || !strings.Contains(err.Error(), "usage") {
-		t.Errorf("neither: %v", err)
 	}
 	o.Project = t.TempDir() // not a checkout
 	if _, err := o.targets(); err == nil {
@@ -389,5 +383,53 @@ func TestCommand(t *testing.T) {
 		if c[0] != "claude" || c[2] != "--tools" || c[3] != "" || !strings.Contains(joined, "--strict-mcp-config --setting-sources local --no-session-persistence") {
 			t.Errorf("%s: %q", v, c)
 		}
+	}
+}
+
+func TestCollectNamesAnUnreadableTranscript(t *testing.T) {
+	f := newFixture(t)
+	old := transcriptLineMax
+	// The scanner's limit is the larger of this and its 64 KiB start buffer.
+	transcriptLineMax = 80 * 1024
+	defer func() { transcriptLineMax = old }()
+	long, _ := json.Marshal(map[string]any{"type": "user", "cwd": f.root, "timestamp": fresh.Format(time.RFC3339Nano), "message": map[string]any{"content": strings.Repeat("x", 100*1024)}})
+	write(t, filepath.Join(f.home, ".claude", "projects", "-x", "long.jsonl"), string(long)+"\n", fresh)
+	c, err := collect(f.home, "claude", project(f), since, maxPrompt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(c.Dropped, " "), "claude transcript long.jsonl") {
+		t.Errorf("dropped = %v", c.Dropped)
+	}
+}
+
+// TestCollectDoesNotFollowALinkedAgentsDir: .agents itself as a symlink.
+func TestCollectDoesNotFollowALinkedAgentsDir(t *testing.T) {
+	f := newFixture(t)
+	elsewhere := t.TempDir()
+	write(t, filepath.Join(elsewhere, "docs", "changes", "x.md"), "outside the repository\n", fresh)
+	os.RemoveAll(filepath.Join(f.root, ".agents"))
+	if err := os.Symlink(elsewhere, filepath.Join(f.root, ".agents")); err != nil {
+		t.Fatal(err)
+	}
+	c, err := collect(f.home, "claude", project(f), since, maxPrompt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(c.Prompt, "outside the repository") {
+		t.Error("a linked .agents was followed")
+	}
+}
+
+func TestRunUsage(t *testing.T) {
+	home := t.TempDir()
+	var ee *ExitError
+	for _, o := range []Options{{Home: home, All: true, Project: "/x"}, {Home: home}} {
+		if err := Run(o); !errors.As(err, &ee) || ee.Code != 2 {
+			t.Errorf("%+v: %v, want exit 2", o, err)
+		}
+	}
+	if entries, _ := os.ReadDir(home); len(entries) != 0 {
+		t.Errorf("a usage error wrote %v", entries)
 	}
 }

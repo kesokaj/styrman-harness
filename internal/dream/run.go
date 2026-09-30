@@ -205,6 +205,7 @@ func answer(cli, stdout string) string {
 		var ev struct {
 			Event  string `json:"event"`
 			Result struct {
+				Status        string            `json:"status"`
 				Response      string            `json:"response"`
 				DeniedActions []json.RawMessage `json:"denied_actions"`
 			} `json:"result"`
@@ -212,7 +213,7 @@ func answer(cli, stdout string) string {
 		if json.Unmarshal(sc.Bytes(), &ev) != nil || ev.Event != "result" {
 			continue
 		}
-		if len(ev.Result.DeniedActions) > 0 {
+		if ev.Result.Status != "SUCCESS" || len(ev.Result.DeniedActions) > 0 {
 			return ""
 		}
 		return ev.Result.Response
@@ -247,7 +248,9 @@ func agyHome(conf string) (string, func(), error) {
 			return "", nil, err
 		}
 	}
-	settings := []byte(`{"permissions":{"allow":[]},"trustedWorkspaces":[]}` + "\n")
+	// Nothing allowed, and tool calls set to ask, which a headless run cannot:
+	// explicit, never agy's default (security review round 2).
+	settings := []byte(`{"toolPermission":"request-review","permissions":{"allow":[]},"trustedWorkspaces":[]}` + "\n")
 	if err := os.WriteFile(filepath.Join(dst, "settings.json"), settings, 0o600); err != nil {
 		cleanup()
 		return "", nil, err
@@ -292,8 +295,9 @@ func withHome(env []string, home string) []string {
 
 // removeCopies removes what a killed run left in conf: a private agy HOME
 // with its login copy, and the unredacted database copies of the readers
-// (security review 2026-09-30). It runs under the lock, so no live run owns
-// them.
+// (security review 2026-09-30). A dry run takes no lock and makes copies
+// too, so only copies older than an hour, far past any live run's, are
+// removed (code review round 2).
 func removeCopies(conf string) {
 	entries, err := os.ReadDir(conf)
 	if err != nil {
@@ -301,7 +305,10 @@ func removeCopies(conf string) {
 	}
 	for _, e := range entries {
 		n := e.Name()
-		if e.IsDir() && (strings.HasPrefix(n, "dream-agy-") || strings.HasPrefix(n, "dream-projects-")) {
+		if !e.IsDir() || !(strings.HasPrefix(n, "dream-agy-") || strings.HasPrefix(n, "dream-projects-")) {
+			continue
+		}
+		if info, err := e.Info(); err == nil && time.Since(info.ModTime()) > time.Hour {
 			os.RemoveAll(filepath.Join(conf, n))
 		}
 	}
@@ -482,12 +489,15 @@ func logger(path string, now func() time.Time) func(string) {
 	}
 }
 
+// writeState writes the state file; a test replaces it with a failing one.
+var writeState = func(path string, data []byte) error { return harness.WriteAtomic(path, data, 0o600) }
+
 func saveState(home string, st state) error {
 	data, err := json.MarshalIndent(st, "", "  ")
 	if err != nil {
 		return err
 	}
-	return harness.WriteAtomic(statePath(home), append(data, '\n'), 0o600)
+	return writeState(statePath(home), append(data, '\n'))
 }
 
 // lock takes an exclusive flock on path without waiting: held is true when

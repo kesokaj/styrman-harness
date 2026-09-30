@@ -104,7 +104,11 @@ func gitView(root, prefix string) ([]entry, error) {
 		view[p] = entry{path: p, oid: f[1], state: "tracked"}
 		order = append(order, p)
 	}
-	out, err = git(root, nil, "status", "--porcelain=v1", "-z", "--untracked-files=all")
+	// --no-renames: a rename is two records (D and A), never a pair the
+	// parser has to keep in step — a work-tree rename was once read as an
+	// entry with three characters cut off, which pointed outside the
+	// checkout (release gate security review, v1.13.0).
+	out, err = git(root, nil, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--no-renames")
 	if err != nil {
 		return nil, err
 	}
@@ -115,9 +119,6 @@ func gitView(root, prefix string) ([]entry, error) {
 			continue
 		}
 		x, y, p := rec[0], rec[1], rec[3:]
-		if x == 'R' || x == 'C' {
-			i++ // the original path follows; the new one is p
-		}
 		if !under(p) {
 			continue
 		}

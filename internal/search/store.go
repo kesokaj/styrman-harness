@@ -157,7 +157,10 @@ func prepareFiles(path string) error {
 			}
 		}
 	}
-	// O_EXCL never follows a link put there since the check above.
+	// O_EXCL creates a missing file 0600 without following a link. A file
+	// that appears between the check above and this call is opened as it
+	// is: closing that window would take a lock the rest of the index does
+	// not hold, and whoever can race here already writes to the directory.
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 	switch {
 	case err == nil:

@@ -41,7 +41,7 @@ The global file is named "the global search index", never "cross-project index":
 
 1. `git rev-parse --show-toplevel` from the working directory.
 2. `git ls-files -s -z`: path and blob ID of every index entry.
-3. `git status --porcelain=v1 -z --untracked-files=all`: modified and untracked paths, each ID computed from the file's own bytes as a git blob ID (`git hash-object --stdin-paths` misreads names with a trailing CR or a leading quote); deleted paths leave.
+3. `git status --porcelain=v1 -z --untracked-files=all --no-renames`: modified and untracked paths (a rename is a deletion and an addition), each ID computed from the file's own bytes as a git blob ID (`git hash-object --stdin-paths` misreads names with a trailing CR or a leading quote); deleted paths leave.
 4. Everything derived from content (chunks, records, references) is stored once per blob ID, so a branch switch re-reads only content the index has never seen. Every query joins through the current path-to-blob view, which is what keeps another branch's content out of an answer.
 5. When nothing changed, no write lock is taken; the reconcile costs about 15 ms here. A blob no view references is deleted after 14 days unseen.
 
@@ -75,6 +75,7 @@ References are record IDs (`BUG-NNN`, `ADR-NNN`) and path-shaped tokens on every
 | Global rebuild | `note: N project registrations dropped; each returns on its next search` | 0 |
 | Global: a registered checkout's check cannot run (for example `.agents` unreadable) | `note: skipped <root> this time (<error>)`; the registration stays | 0 |
 | A file edited and then restored while `search` waits for the write lock | the edit stays indexed for that blob until `index --rebuild` (known limit, plan D35) | 0 |
+| A copied project directory that brings its own `search.db` | trusted as it is: an index is only as trusted as the folder it sits in, and whoever can plant one can plant `AGENTS.md` and trail files there too; after copying a project in, run `sh-agent index --rebuild` (known limit, the operator's choice at the v1.13.0 gate) | 0 |
 | Network filesystem | not supported: SQLite's WAL needs one host's shared memory; the SQLite error is printed | 1 |
 
 `sh-agent report` never collects `search.db`; its dry run lists it as skipped. `sh-agent uninstall` leaves `~/.config/sh-agent/search.db`, which is not in the install manifest; delete it by hand if wanted.

@@ -230,8 +230,12 @@ func TestDropReasonIgnoresLocale(t *testing.T) {
 func TestRefuseSymlinkedDatabase(t *testing.T) {
 	for _, name := range []string{"search.db", "search.db-wal", "search.db-shm"} {
 		root := newRepo(t)
+		// An EMPTY target: SQLite accepts an empty file as a new database, so
+		// the old code wrote through the link (86,016 bytes in the security
+		// review's probe); a non-empty text file would have been rejected as
+		// not a database and would hide the defect (gate code review).
 		outside := filepath.Join(t.TempDir(), "victim")
-		if err := os.WriteFile(outside, []byte("keep me"), 0o644); err != nil {
+		if err := os.WriteFile(outside, nil, 0o644); err != nil {
 			t.Fatal(err)
 		}
 		if err := os.MkdirAll(filepath.Join(root, ".agents", "scratch"), 0o755); err != nil {
@@ -244,14 +248,14 @@ func TestRefuseSymlinkedDatabase(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "not a regular file") {
 			t.Errorf("%s a symlink: want a refusal, got %v\n%s", name, err, out)
 		}
-		if data, _ := os.ReadFile(outside); string(data) != "keep me" {
-			t.Errorf("%s: wrote through the symlink: %q", name, data)
+		if fi, _ := os.Stat(outside); fi.Size() != 0 {
+			t.Errorf("%s: wrote through the symlink: %d bytes", name, fi.Size())
 		}
 	}
 	// The global search index file too.
 	home := t.TempDir()
 	outside := filepath.Join(t.TempDir(), "victim")
-	os.WriteFile(outside, []byte("keep me"), 0o644)
+	os.WriteFile(outside, nil, 0o644)
 	os.MkdirAll(filepath.Join(home, ".config", "sh-agent"), 0o700)
 	if err := os.Symlink(outside, filepath.Join(home, ".config", "sh-agent", "search.db")); err != nil {
 		t.Fatal(err)
@@ -259,8 +263,8 @@ func TestRefuseSymlinkedDatabase(t *testing.T) {
 	if _, err := runSearch(t, Options{Dir: t.TempDir(), Home: home, Global: true, Words: []string{"x"}}); err == nil || !strings.Contains(err.Error(), "not a regular file") {
 		t.Errorf("global index a symlink: want a refusal, got %v", err)
 	}
-	if data, _ := os.ReadFile(outside); string(data) != "keep me" {
-		t.Errorf("global: wrote through the symlink: %q", data)
+	if fi, _ := os.Stat(outside); fi.Size() != 0 {
+		t.Errorf("global: wrote through the symlink: %d bytes", fi.Size())
 	}
 }
 
@@ -288,5 +292,36 @@ func TestDatabaseIsPrivate(t *testing.T) {
 	mustSearch(t, Options{Dir: root, Home: home, Words: []string{"plan"}})
 	if fi, _ := os.Stat(projectDB(root)); fi.Mode().Perm() != 0o600 {
 		t.Errorf("an existing 0644 index stayed %04o", fi.Mode().Perm())
+	}
+}
+
+// Release gate security review of v1.12.1..c872598, finding 1: a rename in
+// the working tree misparsed, the old path read as an entry with three
+// characters cut off, which could point outside the checkout.
+func TestWorktreeRenameStaysInsideCheckout(t *testing.T) {
+	root := newRepo(t)
+	home := t.TempDir()
+	outside := filepath.Join(filepath.Dir(root), "x")
+	if err := os.WriteFile(outside, []byte("canary outside the checkout: numbat\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Remove(outside) })
+	writeFile(t, root, "abc../x", "the moved wombat note\n") // a tracked path that, cut by three, reads ../x
+	commitAll(t, root, "add")
+	if err := os.Rename(filepath.Join(root, "abc..", "x"), filepath.Join(root, "moved.md")); err != nil {
+		t.Fatal(err)
+	}
+	gitT(t, root, "add", "-N", "moved.md")
+	// The condition holds: git reports a rename in the work tree.
+	if st := gitT(t, root, "status", "--porcelain=v1"); !strings.Contains(st, "R") {
+		t.Fatalf("fixture: want a rename in git status, got %q", st)
+	}
+	out := mustSearch(t, Options{Dir: root, Home: home, Words: []string{"numbat"}})
+	if !strings.HasPrefix(out, "search: 0 hits") || strings.Contains(out, "../x") || strings.Contains(out, "canary") {
+		t.Errorf("a file outside the checkout was indexed:\n%s", out)
+	}
+	out = mustSearch(t, Options{Dir: root, Home: home, Words: []string{"wombat"}})
+	if !strings.Contains(out, "moved.md:1") {
+		t.Errorf("the moved file is not found at its new path:\n%s", out)
 	}
 }

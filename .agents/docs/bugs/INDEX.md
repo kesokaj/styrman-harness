@@ -82,6 +82,7 @@
 | BUG-120 | 2026-09-30 | skills/dream (claim reversal) | fixed | stale "all Claude Code loads" line survived after native loading was switched off | before calling a claim reversed, grep its key words across living files, not only the setting's name |
 | BUG-121 | 2026-09-30 | internal/search, internal/dream | fixed | `dream --dry-run` created -wal/-shm files and a reader left an empty config dir behind | a read-only or dry-run path gets a before/after directory listing test; cleanup order lives in one deferred function |
 | BUG-122 | 2026-09-30 | process (commit procedure) | fixed | commit ran after the secret scan printed 3 hits because scan and commit were chained with `;` | run the scan in its own call, read it, then commit in a separate call (existing global rule; retro graduation candidate) |
+| BUG-123 | 2026-09-30 | testing (real-home gate kit) | fixed | a real-home gate run of /distill appended test lines to the real ~/.config/sh-agent feedback.jsonl and retros.jsonl | gate runs of skills that write ~/.config/sh-agent run in a sandbox home; the kit lists that dir before and after every real-home batch and reads any change |
 
 ## Graduated
 

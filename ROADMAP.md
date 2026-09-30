@@ -6,7 +6,6 @@ Last reviewed: 2026-09-30
 
 ## Now
 
-- R-parity, `sh-agent memory`, background `sh-agent dream` — `.agents/docs/plans/2026-09-30-parity-memory-dream.md`
 
 ## Next
 

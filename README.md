@@ -213,7 +213,7 @@ And back: `sh-agent report --dry-run` lists every file and every redaction it wo
 | the binary | `~/.local/bin/sh-agent` | same |
 | manifest, feedback log, retro proposals, and `retros.jsonl` (cross-project retro/distill index; a dream leaves its record in the project's `retros/` and no line here) | `~/.config/sh-agent/` | same |
 
-The project's auto memory store is `.agents/memory/` (gitignored), set up by `/init-project`, read by both CLIs, never committed and never sent by `sh-agent report` — only `feedback.jsonl`, `retros.jsonl`, `proposals/`, the install manifest and the run's `report.json` leave the machine (`.agents/docs/deploy/local.md` § Report back).
+The project's memory store is `.agents/memory/` (gitignored), set up by `/init-project`, written and read by both CLIs through `sh-agent memory` (Claude Code's own auto memory is switched off per project, R10), never committed and never sent by `sh-agent report` — only `feedback.jsonl`, `retros.jsonl`, `proposals/`, the install manifest and the run's `report.json` leave the machine (`.agents/docs/deploy/local.md` § Report back).
 
 `/init-project` links `.claude/*` into the project only for Claude Code: on a machine installed for Antigravity alone (`sh-agent install --vendor agy`, recorded in the manifest) it writes nothing under `.claude/` — no links, no `settings.local.json`, no memory migration, no `.claude/` lines in `.gitignore` — and the memory store is the only per-machine thing it sets up. An Antigravity-only machine installed with the default vendor `all` needs `sh-agent install --vendor agy` once for this to take effect. An update run never removes a `.claude/` an earlier run made; it names it for you to delete by hand.
 

@@ -19,6 +19,10 @@
 # checkout (BUG-106), lists ~/.config/sh-agent before the run and traps EXIT to
 # list it after (BUG-107, BUG-123), and puts a wrapper first on PATH that pins
 # `--home "$KIT_HOME"` on every sh-agent call the agent makes (BUG-107).
+# The exit check is that EXIT trap and nothing else: a kit never sets an EXIT
+# trap of its own after sourcing this file and never ends in `exec <cli>`,
+# and a run counts only when its output holds "kit: real config unchanged"
+# (or the FAIL line).
 set -euo pipefail
 : "${KIT_CLONE:?KIT_CLONE is required}"
 : "${KIT_HOME:?KIT_HOME is required}"
@@ -73,10 +77,13 @@ kit_list_real_config() { { ls -la "$kit_real_config/" 2>/dev/null || true; } | s
 kit_fingerprint() {
   # -H: the directory itself may be a symlink (a dotfiles setup), and find
   # would otherwise stop at it. Links inside are listed by name, never
-  # walked (-L would follow one to `/` and read the whole machine); a link
-  # to a file is read through by cksum, so its target's content counts.
+  # walked (-L would follow one to `/` and read the whole machine). A link
+  # that points at a regular file is read through, so that file's content
+  # counts; any other link gives the path it points at, so re-pointing it
+  # shows, and a link to a device or a fifo, which never ends, is not read.
   { find -H "$kit_real_config" -print 2>/dev/null || true
-    find -H "$kit_real_config" \( -type f -o -type l \) -exec cksum {} + 2>/dev/null || true; } | LC_ALL=C sort | cksum | cut -d' ' -f1
+    find -H "$kit_real_config" -type f -exec cksum {} + 2>/dev/null || true
+    find -H "$kit_real_config" -type l -exec sh -c 'for p; do if [ -f "$p" ]; then cksum "$p"; else printf "%s -> %s\n" "$p" "$(readlink "$p")"; fi; done' sh {} + 2>/dev/null || true; } | LC_ALL=C sort | cksum | cut -d' ' -f1
 }
 echo "kit: real $kit_real_config before the run:"; kit_list_real_config
 kit_before=$(kit_fingerprint)
@@ -87,6 +94,9 @@ kit_on_exit() {
     echo "kit: FAIL the real ~/.config/sh-agent changed during the run (BUG-107, BUG-123); the run does not count" >&2
     exit 1
   fi
+  # Said in so many words: a run whose output holds neither this line nor
+  # the FAIL line above did not reach the check.
+  echo "kit: real config unchanged"
   exit "$rc"
 }
 trap kit_on_exit EXIT

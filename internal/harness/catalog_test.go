@@ -708,6 +708,15 @@ func TestRefreshCatalogScript(t *testing.T) {
 	if testing.Short() {
 		t.Skip("runs git and a nested go test")
 	}
+	// The manifest carries the day's date, and the test compares the catalog
+	// across runs of the script: a test that crosses midnight would compare
+	// two dates and fail for that alone (seen once, 2026-10-02 00:00). Wait
+	// the last two minutes of a day out.
+	if now := time.Now(); now.Hour() == 23 && now.Minute() >= 58 {
+		midnight := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 2, 0, now.Location())
+		t.Logf("waiting %s for midnight to pass", time.Until(midnight).Round(time.Second))
+		time.Sleep(time.Until(midnight))
+	}
 	for _, tool := range []string{"bash", "git", "go"} {
 		if _, err := exec.LookPath(tool); err != nil {
 			t.Skipf("%s not on PATH", tool)
@@ -1416,6 +1425,18 @@ func TestRefreshCatalogScript(t *testing.T) {
 		git(gskills, "reset", "-q", "--hard", pinG)
 		git(gskills, "clean", "-qfd")
 	}
+	// The id of an annotated tag is forty hex digits and peels to a commit:
+	// it is not that commit's id, and the manifest would record a pin that
+	// names no commit. The comparison after the checkout refuses it.
+	git(gskills, "tag", "-a", "annotated", "-m", "a tag object", pinG)
+	tagObject := git(gskills, "rev-parse", "annotated")
+	if tagObject == pinG {
+		t.Fatal("fixture: the annotated tag's id is the commit's id")
+	}
+	if out, code := run(pinA, tagObject); code != 1 || !strings.Contains(out, "did not check out as itself in the google-skills source") || snapshot() != good {
+		t.Errorf("a pin that is a tag object's id: want exit 1, the comparison's refusal and an untouched destination, got exit %d\n%s", code, out)
+	}
+	git(gskills, "tag", "-d", "annotated")
 	refuse("no frontmatter", "bad", map[string]string{"skills/cloud/bad/SKILL.md": "no frontmatter here\n"}, nil, "bad")
 	refuse("collision", "alpha", map[string]string{"skills/cloud/alpha/SKILL.md": skill("alpha", "description: a second alpha\n")}, nil, "")
 	refuse("symlink", "gamma", nil, func() {
@@ -1649,6 +1670,57 @@ func TestKitPreambleAssertsCommit(t *testing.T) {
 	// (sh-agent itself makes `proposals/` and `feedback/` there).
 	if code, out := runThen("", `mkdir "$HOME/.config/sh-agent/made-through-the-link"`); code != 1 || !strings.Contains(out, "changed during the run") {
 		t.Errorf("a new directory through a symlinked config directory: want exit 1 and the kit's FAIL line, got exit %d\n%s", code, out)
+	}
+	// A link to something that never ends (a device, a fifo) is in some
+	// dotfiles too: its name is listed, and nothing reads through it.
+	if err := os.Symlink("/dev/zero", filepath.Join(real, "endless")); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan int, 1)
+	go func() { code, _ := runThen("", ":"); done <- code }()
+	select {
+	case code := <-done:
+		if code != 0 {
+			t.Errorf("a config holding a link to /dev/zero, left alone: want exit 0, got %d", code)
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("the preamble hangs on a link to /dev/zero in the real config: the fingerprint reads through it")
+	}
+	// The same for a fifo behind a link: opening it would block for ever.
+	fifo := filepath.Join(tmp, "dotfiles-fifo")
+	if err := syscall.Mkfifo(fifo, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(fifo, filepath.Join(real, "pipe")); err != nil {
+		t.Fatal(err)
+	}
+	go func() { code, _ := runThen("", ":"); done <- code }()
+	select {
+	case code := <-done:
+		if code != 0 {
+			t.Errorf("a config holding a link to a fifo, left alone: want exit 0, got %d", code)
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("the preamble hangs on a link to a fifo in the real config")
+	}
+	// A link that is re-pointed during the run keeps its name: where it
+	// points is part of the fingerprint, for a link to a directory too.
+	d1, d2 := filepath.Join(tmp, "dotfiles-d1"), filepath.Join(tmp, "dotfiles-d2")
+	for _, d := range []string{d1, d2} {
+		if err := os.Mkdir(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink(d1, filepath.Join(real, "sub")); err != nil {
+		t.Fatal(err)
+	}
+	if code, out := runThen("", `ln -sfn "`+d2+`" "$HOME/.config/sh-agent/sub"`); code != 1 || !strings.Contains(out, "changed during the run") {
+		t.Errorf("a link re-pointed at another directory: want exit 1 and the kit's FAIL line, got exit %d\n%s", code, out)
+	}
+	// A run that leaves everything alone says so in a line of its own: a kit
+	// whose output holds neither that line nor the FAIL line did not check.
+	if code, out := runThen("", ":"); code != 0 || !strings.Contains(out, "kit: real config unchanged") {
+		t.Errorf("a clean run: want exit 0 and the line that says the check ran, got exit %d\n%s", code, out)
 	}
 	// A new symlink that loops back to the directory is a new name too, and
 	// following it must neither hide it nor run away.

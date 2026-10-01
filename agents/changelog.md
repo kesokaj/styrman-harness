@@ -63,7 +63,7 @@ How it was tested / how to confirm it works (link the testing/ log when one exis
 Only what the dispatch names: a log path, or a command with its output. A verification the dispatch does not name is written as "not verified" / "not measured", never inferred — an ADR that says "measurement confirms" without a log path is a claim to strike.
 
 ## Docs
-Which of README, specs, testing guides, deploy guides, and the project AGENTS.md changed in this task (paths), or `no docs changed — <reason>` (an internal-only refactor, or no interface, command, or deploy step changed). The step-3 decision is on the record either way.
+Which of README, specs, testing guides, deploy guides, `docs/onboarding.md`, and the project AGENTS.md changed in this task (paths), or `no docs changed — <reason>` (an internal-only refactor, or no interface, command, or deploy step changed). The step-3 decision is on the record either way.
 
 ## Requirements
 Which REQUIREMENTS.md items this satisfies (or "n/a").

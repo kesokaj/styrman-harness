@@ -401,7 +401,7 @@ func Migrate(dsn string) error {
 
 ## Lint: golangci-lint v2
 
-Install the release binary, not `go install` (the project documents that the latter is not guaranteed to work), and never a script piped into `sh`: `gh release download v2.14.0 --repo golangci/golangci-lint -p 'golangci-lint-2.14.0-linux-amd64.tar.gz' -p 'golangci-lint-2.14.0-checksums.txt' && sha256sum -c --ignore-missing golangci-lint-2.14.0-checksums.txt && tar -xzf golangci-lint-2.14.0-linux-amd64.tar.gz --strip-components=1 -C "$(go env GOPATH)/bin" golangci-lint-2.14.0-linux-amd64/golangci-lint` (macOS: the `darwin-arm64` asset and `shasum -a 256 -c`). Run `golangci-lint run` and `golangci-lint fmt`; `golangci-lint config verify` checks the file. The minimal config for a stdlib-first service, `.golangci.yml` at the module root:
+Install it pinned through the Go toolchain, which verifies the module against the checksum database: `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0`. The project prefers its release binaries for reproducible version information; when that matters, download the pinned release asset and its `-checksums.txt` into `.agents/scratch/` and verify with `sha256sum -c --ignore-missing` (macOS: `shasum -a 256 -c --ignore-missing`) before extracting — never a script piped into `sh`.
 
 ```yaml
 version: "2"

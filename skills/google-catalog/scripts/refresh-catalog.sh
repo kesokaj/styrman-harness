@@ -148,8 +148,11 @@ for v in CATALOG_AGENTS_CLI_REPO CATALOG_GOOGLE_SKILLS_REPO; do
       host=${val#https://}
       case "${host%%/*}" in
         *@*) fail "$v must be an https:// URL or an absolute path without credentials in it (the value goes into MANIFEST.md); use a credential helper" ;;
+      esac
+      case "$val" in
+        *\?*) fail "$v must be an https:// URL or an absolute path without credentials in it: no query string (the value goes into MANIFEST.md)" ;;
       esac ;;
-    *) fail "$v must be an https:// URL or an absolute path, got: $(printf '%q' "$val")" ;;
+    *) fail "$v must be an https:// URL or an absolute path (its value is not shown: it may hold a credential)" ;;
   esac
 done
 
@@ -164,14 +167,23 @@ mkdir -p "$work"
 # that does not resolve) leaves a directory the corrected run accepts.
 : > "$work/.refresh-catalog-work"
 fetch() { # <clone name> <url> <pin>: a full clone, reused; checked out at the pin
-  local dir="$work/$1"
+  # A source is named by its role in every message, never by its value, and
+  # git's own complaint is shown with the value taken out: a token can sit in
+  # a URL's path, where no check can know it for one.
+  local dir="$work/$1" err
   if [ -d "$dir/.git" ]; then
     git -C "$dir" remote set-url -- origin "$2"
-    git -C "$dir" fetch -q origin '+refs/heads/*:refs/remotes/origin/*' || fail "cannot fetch $2"
+    err=$(git -C "$dir" fetch -q origin '+refs/heads/*:refs/remotes/origin/*' 2>&1) || {
+      printf '%s\n' "${err//"$2"/<the $1 source>}" >&2
+      fail "cannot fetch the $1 source"
+    }
   else
-    git clone -q -- "$2" "$dir" || fail "cannot clone $2"
+    err=$(git clone -q -- "$2" "$dir" 2>&1) || {
+      printf '%s\n' "${err//"$2"/<the $1 source>}" >&2
+      fail "cannot clone the $1 source"
+    }
   fi
-  git -C "$dir" -c advice.detachedHead=false checkout -q --detach "$3" 2>/dev/null || fail "pin $3 does not resolve in $2"
+  git -C "$dir" -c advice.detachedHead=false checkout -q --detach "$3" 2>/dev/null || fail "pin $3 does not resolve in the $1 source"
 }
 fetch agents-cli "$url_a" "$pin_a"
 fetch google-skills "$url_g" "$pin_g"

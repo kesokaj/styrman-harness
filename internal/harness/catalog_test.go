@@ -832,7 +832,7 @@ func TestRefreshCatalogScript(t *testing.T) {
 	}
 	foreign := filepath.Join(tmp, "someone-elses-directory")
 	put(foreign, map[string]string{"agents-cli/notes.txt": "the operator's own clone\n", "build/keep.txt": "kept\n"})
-	if out, err := workRun(filepath.Join(tmp, "dest-f"), foreign, pinA, pinG); err == nil || !strings.Contains(out, "is not a work directory of this script") {
+	if out, err := workRun(filepath.Join(tmp, "dest-f"), foreign, pinA, pinG); err == nil || !strings.Contains(out, "is not a work directory of this script") || !strings.Contains(out, "name an empty or new directory, or delete this one") {
 		t.Errorf("a non-empty --work without the marker: want a refusal, got err %v\n%s", err, out)
 	}
 	for _, f := range []string{"agents-cli/notes.txt", "build/keep.txt"} {
@@ -853,16 +853,37 @@ func TestRefreshCatalogScript(t *testing.T) {
 	}
 	// The source overrides take an https URL or an absolute path, nothing
 	// else: git has transports that run a command (`ext::`).
-	for _, bad := range []string{"ext::sh -c id", "relative/path", "http://example.invalid/x", "file:///x", "https://user:token@example.invalid/x"} {
+	for _, bad := range []string{"ext::sh -c id", "relative/path", "http://example.invalid/x", "file:///x", "https://user:token@example.invalid/x", "http://user:token@example.invalid/x", "https://example.invalid/x?access_token=abc"} {
 		cmd := exec.Command("bash", script, "--dest", filepath.Join(tmp, "dest-o"), "--work", filepath.Join(tmp, "work-o"), pinA, pinG)
 		cmd.Dir = tmp
 		cmd.Env = fixtureEnv("HOME="+fakeHome, "CATALOG_AGENTS_CLI_REPO="+bad, "CATALOG_GOOGLE_SKILLS_REPO="+gskills, "CATALOG_DIR=", "CATALOG_WRITE=")
-		if out, err := cmd.CombinedOutput(); err == nil || !strings.Contains(string(out), "CATALOG_AGENTS_CLI_REPO must be an https:// URL or an absolute path") {
+		out, err := cmd.CombinedOutput()
+		if err == nil || !strings.Contains(string(out), "CATALOG_AGENTS_CLI_REPO must be an https:// URL or an absolute path") {
 			t.Errorf("override %q: want a refusal naming the variable, got err %v\n%s", bad, err, out)
+		}
+		// No refused value is echoed: any of them may hold a credential
+		// (an http:// URL with user information is refused for its scheme).
+		if strings.Contains(string(out), bad) || strings.Contains(string(out), "token") || strings.Contains(string(out), "example.invalid") {
+			t.Errorf("override %q: the refusal echoes the value:\n%s", bad, out)
+		}
+		if strings.HasPrefix(bad, "https://") && !strings.Contains(string(out), "without credentials") {
+			t.Errorf("override with credentials: the refusal does not say why:\n%s", out)
 		}
 	}
 	if _, err := os.Stat(filepath.Join(tmp, "work-o")); err == nil {
 		t.Error("a refused override still created the work directory")
+	}
+	// A source that passes the check and then cannot be cloned is named by
+	// its role, not by its value: a token can sit in a URL's path.
+	{
+		cmd := exec.Command("bash", script, "--dest", filepath.Join(tmp, "dest-c"), "--work", filepath.Join(tmp, "work-c"), pinA, pinG)
+		cmd.Dir = tmp
+		secretPath := filepath.Join(tmp, "no-such-SECRETPATH-repository")
+		cmd.Env = fixtureEnv("HOME="+fakeHome, "CATALOG_AGENTS_CLI_REPO="+secretPath, "CATALOG_GOOGLE_SKILLS_REPO="+gskills, "CATALOG_DIR=", "CATALOG_WRITE=")
+		out, err := cmd.CombinedOutput()
+		if err == nil || !strings.Contains(string(out), "cannot clone the agents-cli source") || strings.Contains(string(out), "SECRETPATH") {
+			t.Errorf("a source that cannot be cloned: want it named by role and its value kept out of the output, git's own message included, got err %v\n%s", err, out)
+		}
 	}
 	var noHome []string
 	for _, kv := range fixtureEnv() {

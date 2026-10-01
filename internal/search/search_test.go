@@ -771,3 +771,24 @@ func TestHeaderNamesLeftOutDirectories(t *testing.T) {
 		t.Errorf("a root marker: want ./ first in the header:\n%s", buf.String())
 	}
 }
+
+// TestPrintableDropsLineAndDirectionControls: printable is the one filter
+// between project text and the terminal (or a model reading the output). It
+// replaces control characters, and also the Unicode line and paragraph
+// separators and the bidirectional controls, which can forge a line or
+// reorder what is shown (security review of a62eb9d..768efce).
+func TestPrintableDropsLineAndDirectionControls(t *testing.T) {
+	for in, want := range map[string]string{
+		"plain/dir/":          "plain/dir/",
+		"a\x1bb\nc":           "a?b?c",
+		"a\u2028b\u2029c":     "a?b?c",
+		"a\u202eb\u202cc":     "a?b?c",
+		"a\u2066b\u2069c":     "a?b?c",
+		"a\u200eb\u200fc":     "a?b?c",
+		"åäö — ünïcode stays": "åäö — ünïcode stays",
+	} {
+		if got := printable(in); got != want {
+			t.Errorf("printable(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

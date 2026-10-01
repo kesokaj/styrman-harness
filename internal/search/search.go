@@ -618,6 +618,12 @@ func printable(s string) string {
 		if r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f) {
 			return '?'
 		}
+		// Unicode's own line and paragraph separators forge a line as a
+		// newline does, and the direction marks and overrides reorder what
+		// a terminal shows.
+		if r == 0x2028 || r == 0x2029 || r == 0x200e || r == 0x200f || (r >= 0x202a && r <= 0x202e) || (r >= 0x2066 && r <= 0x2069) {
+			return '?'
+		}
 		return r
 	}, s)
 }

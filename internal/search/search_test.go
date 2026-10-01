@@ -776,7 +776,10 @@ func TestHeaderNamesLeftOutDirectories(t *testing.T) {
 // between project text and the terminal (or a model reading the output). It
 // replaces control characters, and also the Unicode line and paragraph
 // separators and the bidirectional controls, which can forge a line or
-// reorder what is shown (security review of a62eb9d..768efce).
+// reorder what is shown (security review of a62eb9d..768efce), and, by
+// Unicode property and not by a list, every format character, variation
+// selector and other default-ignorable character, which hide text from the
+// eye while a model still reads it (BUG-152).
 func TestPrintableDropsLineAndDirectionControls(t *testing.T) {
 	for in, want := range map[string]string{
 		"plain/dir/":          "plain/dir/",

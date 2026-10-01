@@ -92,7 +92,9 @@ func ParseStrict(front string) (Frontmatter, error) {
 	}
 	if l, bad := unreadLine(front); bad {
 		// A `---` inside the block is a fence that Split did not take for
-		// one (two carriage returns, a trailing space): say that, not "key".
+		// one (a trailing space, text after it): say that, not "key". Two
+		// carriage returns never get here: the line-break check above
+		// refuses the block first.
 		if strings.HasPrefix(strings.TrimSpace(l), "---") {
 			return nil, fmt.Errorf("frontmatter holds a `---` line that is not a fence (%q, as read): a fence is exactly --- on its own line, with at most one carriage return; what follows it would not be checked, so the block is refused", l)
 		}
@@ -112,8 +114,8 @@ func ParseStrict(front string) (Frontmatter, error) {
 // (security review 2026-10-01).
 func unreadLine(front string) (string, bool) {
 	for _, l := range strings.Split(front, "\n") {
-		// One carriage return is the line ending; a second one is content,
-		// and is shown as such in the refusal.
+		// One carriage return is the line ending (a second one was refused
+		// by ParseStrict's line-break check before this runs).
 		l = strings.TrimSuffix(l, "\r")
 		if l == "" || l[0] == ' ' || l[0] == '\t' || l[0] == '#' || l == "-" || strings.HasPrefix(l, "- ") {
 			continue

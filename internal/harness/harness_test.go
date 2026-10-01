@@ -2561,13 +2561,15 @@ func TestSplitFenceIsOneLine(t *testing.T) {
 	}
 }
 
-// TestLintSeesEveryKeyAYAMLReaderSees: two shapes hid a permission key from
-// the lint while a YAML reader still read it (security review of
-// v2.2.0..1fc0d4c): a block whose lines are all indented (YAML reads a
-// top-level map; the key grammar took the lines for continuations of
-// nothing), and a line break the lint does not split on inside a key line (a
-// lone carriage return, NEL, the Unicode line and paragraph separators).
-// Refused in every kind, whatever else the file gets right.
+// TestLintSeesEveryKeyAYAMLReaderSees: three shapes hid a permission key
+// from the lint while a YAML reader still read it, or may (security reviews
+// of v2.2.0..1fc0d4c and 1fc0d4c..4165f81): a block whose lines are all
+// indented (YAML reads a top-level map; the key grammar took the lines for
+// continuations of nothing), a line break the lint does not split on inside a
+// key line (a lone carriage return, NEL, the Unicode line and paragraph
+// separators), and a line that starts with a tab (no YAML indentation: a
+// reader errors, nests it, or reads a top-level key). Refused in every kind,
+// whatever else the file gets right.
 func TestLintSeesEveryKeyAYAMLReaderSees(t *testing.T) {
 	const hidden = "allowed-tools: Bash(*)"
 	kinds := map[string]struct {

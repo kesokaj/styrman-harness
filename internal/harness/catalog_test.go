@@ -345,6 +345,56 @@ func TestCatalogWriteModeNeedsCatalogDir(t *testing.T) {
 	}
 }
 
+// headPipeProblem is the first line of a shell script that pipes into `head`
+// without a guard. Under `set -o pipefail` the producer is killed by SIGPIPE
+// once its output outgrows a pipe, the pipeline's status is 141, and `set -e`
+// ends the script with no message (BUG-155; BUG-138 and BUG-148 are the same
+// family). A producer stops itself instead (`find -quit`, `awk '{…; exit}'`);
+// a line that must keep the pipe ends `|| true`.
+func headPipeProblem(script string) string {
+	for _, l := range strings.Split(script, "\n") {
+		t := strings.TrimSpace(l)
+		if strings.HasPrefix(t, "#") || !regexp.MustCompile(`\|\s*head\b`).MatchString(t) {
+			continue
+		}
+		if !strings.HasSuffix(t, "|| true") {
+			return t
+		}
+	}
+	return ""
+}
+
+// TestScriptsHaveNoBareHeadPipe pins that rule on the harness's own scripts
+// that run under pipefail, and proves the check on both states first.
+func TestScriptsHaveNoBareHeadPipe(t *testing.T) {
+	if got := headPipeProblem("bad=$(find . -print | head -1)\n"); got == "" {
+		t.Fatal("the check passes a bare `| head` in a command substitution")
+	}
+	if got := headPipeProblem("# never `| head -1`\ngrep x f | head -20 >&2 || true\nbad=$(find . -print -quit)\n"); got != "" {
+		t.Fatalf("the check refuses a guarded or commented line: %q", got)
+	}
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	scripts, err := filepath.Glob(filepath.Join(root, "skills", "*", "scripts", "*.sh"))
+	if err != nil || len(scripts) == 0 {
+		t.Fatalf("no harness script found under skills/*/scripts: %v", err)
+	}
+	for _, f := range scripts {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(b), "pipefail") {
+			continue
+		}
+		if l := headPipeProblem(string(b)); l != "" {
+			t.Errorf("%s pipes into head without a guard (BUG-155): %s", filepath.Base(f), l)
+		}
+	}
+}
+
 // TestCatalogNotesNeverAllowQuiet: the router does not follow an entry's
 // `--quiet` (step 4), and a note never relaxes the router. A note that names
 // the flag therefore says to leave it out, in one of three fixed phrases;
@@ -863,6 +913,19 @@ func TestRefreshCatalogScript(t *testing.T) {
 		// (security review of 1fc0d4c..4165f81).
 		t.Errorf("a run that fails after the clone does not say an override's value stays in the work directory:\n%s", out)
 	}
+	// The same when no refusal of the script's own ends the run: a plain
+	// command that fails under set -e (here the destination cannot be made,
+	// its parent is read-only) still leaves the value on disk, and the run
+	// still says so (review of 4165f81..7b3e969).
+	roParent := filepath.Join(tmp, "read-only")
+	if err := os.Mkdir(roParent, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := workRun(filepath.Join(roParent, "dest"), filepath.Join(tmp, "ro-work"), pinA, pinG); err == nil {
+		t.Errorf("a destination that cannot be created: want a failure\n%s", out)
+	} else if !strings.Contains(out, "delete that directory if the value is sensitive") {
+		t.Errorf("a run stopped by a failing command after the clone does not say an override's value stays in the work directory:\n%s", out)
+	}
 	if out, err := workRun(freshDest, freshWork, pinA, pinG); err != nil {
 		t.Errorf("the corrected run on the same --work was refused: %v\n%s", err, out)
 	} else if _, err := os.Stat(filepath.Join(freshDest, "gamma", "SKILL.md")); err != nil {
@@ -924,6 +987,26 @@ func TestRefreshCatalogScript(t *testing.T) {
 		}
 		if snapshot() != good {
 			t.Error("a failed fetch changed the destination")
+		}
+		// Before the fetch the clone is pointed at the source, and git
+		// repeats the value when it cannot write the clone's config (a
+		// stale lock file): that message is not shown either (security
+		// review of 4165f81..7b3e969).
+		lock := filepath.Join(work, "agents-cli", ".git", "config.lock")
+		if err := os.WriteFile(lock, nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		lockPath := filepath.Join(tmp, "no-such-SECRETLOCK-repository")
+		cmd = exec.Command("bash", script, "--dest", dest, "--work", work, pinA, pinG)
+		cmd.Dir = repo
+		cmd.Env = fixtureEnv("CATALOG_AGENTS_CLI_REPO="+lockPath, "CATALOG_GOOGLE_SKILLS_REPO="+gskills, "CATALOG_DIR=", "CATALOG_WRITE=")
+		out, err = cmd.CombinedOutput()
+		os.Remove(lock)
+		if err == nil || !strings.Contains(string(out), "cannot point the agents-cli clone at its source") || strings.Contains(string(out), "SECRETLOCK") || strings.Contains(string(out), "error:") {
+			t.Errorf("a clone whose config cannot be written: want it named by role, and neither the source's value nor git's own message in the output, got err %v\n%s", err, out)
+		}
+		if snapshot() != good {
+			t.Error("a failed set-url changed the destination")
 		}
 		if out, code := run(pinA, pinG); code != 0 || snapshot() != good {
 			t.Fatalf("could not refresh again after the failed fetch (exit %d)\n%s", code, out)
@@ -998,6 +1081,17 @@ func TestRefreshCatalogScript(t *testing.T) {
 		}
 	}, "gamma")
 	refuse("go.mod", "delta", map[string]string{"skills/cloud/delta/go.mod": "module x\n"}, nil, "")
+	// An entry with very many offending files is refused in the same words:
+	// `find | head -1` under pipefail ended the script with status 141 and no
+	// message once find wrote more than a pipe holds (security review of
+	// 4165f81..7b3e969). 1,500 dotfiles with long names are about 200 KB.
+	refuse("many dotfiles", "holds a dotfile", nil, func() {
+		many := map[string]string{}
+		for i := 0; i < 1500; i++ {
+			many[fmt.Sprintf("skills/cloud/delta/.a-dotfile-with-a-long-name-to-fill-the-pipe-%04d", i)] = "x\n"
+		}
+		put(gskills, many)
+	}, "")
 	refuse("go file", "epsilon", map[string]string{"skills/developers/epsilon/main.go": "package main\n"}, nil, "")
 	// The hint is printed shell-quoted: the name comes from upstream and the
 	// operator pastes the hint into a shell (code review round 3).

@@ -40,19 +40,28 @@
 # CATALOG_AGENTS_CLI_REPO and CATALOG_GOOGLE_SKILLS_REPO, each an https:// URL
 # (with no user information or query string in it) or an absolute path,
 # nothing else. No message shows such a value, and the manifest records the
-# upstream repositories' names, never an override. Relative --dest and --work are resolved
+# upstream repositories' names, never an override. git itself keeps the value
+# in the work clones, and a run that used an override says so when it ends,
+# whether it succeeded or failed. Relative --dest and --work are resolved
 # against the caller's directory.
 set -euo pipefail
 
 usage() { sed -n '2,6p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; }
+fail() { echo "refresh-catalog: $*" >&2; exit 1; }
 # git keeps a clone's source in its config, FETCH_HEAD and reflogs: with an
 # override, that is the override's value, on disk under the work directory
-# from the first clone or fetch on, whether the run then succeeds or fails.
+# from the first clone or fetch on. The run says so when it ends, however it
+# ends: done, refused through fail, or stopped by a command under set -e.
 on_disk=""
 override_note() {
-  [ -z "$on_disk" ] || echo "note: a source override was used; git keeps its value in the work clones under $work: delete that directory if the value is sensitive"
+  local rc=$?
+  [ -n "$on_disk" ] || return 0
+  local note="note: a source override was used; git keeps its value in the work clones under $work: delete that directory if the value is sensitive"
+  if [ "$rc" -eq 0 ]; then echo "$note"; else echo "$note" >&2; fi
 }
-fail() { echo "refresh-catalog: $*" >&2; override_note >&2; exit 1; }
+trap override_note EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 repo=$(cd "$script_dir/../../.." && pwd)
@@ -186,7 +195,8 @@ fetch() { # <clone name> <url> <pin>: a full clone, reused; checked out at the p
   # in ways no filter here can follow, and a token can sit in a URL's path.
   local dir="$work/$1"
   if [ -d "$dir/.git" ]; then
-    git -C "$dir" remote set-url -- origin "$2"
+    git -C "$dir" remote set-url -- origin "$2" >/dev/null 2>&1 ||
+      fail "cannot point the $1 clone at its source (git's own message is not shown: it repeats the source's value; remove $dir and run again)"
     git -C "$dir" fetch -q origin '+refs/heads/*:refs/remotes/origin/*' >/dev/null 2>&1 ||
       fail "cannot fetch the $1 source (git's own message is not shown: it repeats the source's value; run git fetch in $dir to see it)"
   else
@@ -239,11 +249,13 @@ while IFS='|' read -r label clone sub; do
     [ -f "$d/SKILL.md" ] || fail "entry $name ($label) has no SKILL.md (--exclude $name)"
     prev=$(awk -v n="$name" '$1 == n {print $2}' "$origins")
     [ -z "$prev" ] || fail "entry $name is in two source sets, $prev and $label (--exclude $name drops both)"
-    bad=$(find "${d%/}" -type l -print | head -1)
+    # `-quit`, never `| head -1`: under pipefail a find that wrote more than a
+    # pipe holds ended the script with status 141 and no message.
+    bad=$(find "${d%/}" -type l -print -quit)
     [ -z "$bad" ] || fail "entry $name ($label) holds a symlink: $(printf '%q' "${bad#"$root"/}") (--exclude $name)"
-    bad=$(find "${d%/}" -type f \( -name go.mod -o -name go.sum -o -name '*.go' \) -print | head -1)
+    bad=$(find "${d%/}" -type f \( -name go.mod -o -name go.sum -o -name '*.go' \) -print -quit)
     [ -z "$bad" ] || fail "entry $name ($label) holds a Go file the module would pick up: $(printf '%q' "${bad#"$root"/}") (--exclude $name)"
-    bad=$(find "${d%/}" -mindepth 1 -name '.*' -print | head -1)
+    bad=$(find "${d%/}" -mindepth 1 -name '.*' -print -quit)
     [ -z "$bad" ] || fail "entry $name ($label) holds a dotfile that would change how git or a tool treats the subtree: $(printf '%q' "${bad#"$root"/}") (--exclude $name)"
     mkdir -p "$build/$name"
     cp -R "${d%/}/." "$build/$name/"
@@ -282,7 +294,7 @@ today=$(date +%F)
 count() { awk -v l="$1" '$2 == l' "$origins" | wc -l | tr -d ' '; }
 fetched() { # <path cell> <pin>: the old row's date when its pin is the same
   if [ -f "$old" ]; then
-    d=$(awk -F'|' -v p=" $1 " -v pin=" $2 " '$3 == p && $4 == pin {gsub(/ /, "", $6); print $6}' "$old" | head -1)
+    d=$(awk -F'|' -v p=" $1 " -v pin=" $2 " '$3 == p && $4 == pin {gsub(/ /, "", $6); print $6; exit}' "$old")
     [ -n "$d" ] && { echo "$d"; return; }
   fi
   echo "$today"
@@ -315,7 +327,7 @@ manifest_date=$today
 if [ -f "$old" ]; then
   if grep -q '^## Excluded' "$old"; then tail_sections=$(sed -n '/^## Excluded/,$p' "$old"); fi
   old_table=$(sed -n '/^| Repository | Path |/,/^$/p' "$old" | sed '/^$/d')
-  if [ "$old_table" = "$table" ]; then manifest_date=$(sed -n 's/^date: //p' "$old" | head -1); fi
+  if [ "$old_table" = "$table" ]; then manifest_date=$(awk '/^date: /{sub(/^date: /, ""); print; exit}' "$old"); fi
 fi
 cat > "$build/MANIFEST.md" <<MANIFEST
 ---
@@ -365,4 +377,3 @@ removed=${removed% }; echo "removed: ${removed:-none}"
 ex=$(printf '%s\n' "$excludes" | sed '/^$/d' | sort -u | tr '\n' ' ')
 echo "excluded: ${ex:-none}"
 echo "next: git add skills/google-catalog && go test ./..."
-override_note

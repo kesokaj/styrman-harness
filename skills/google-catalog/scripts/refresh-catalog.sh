@@ -65,24 +65,39 @@ abs() { case "$1" in /*) printf '%s\n' "$1" ;; *) printf '%s/%s\n' "$PWD" "$1" ;
 dest=$(abs "$dest")
 work=$(abs "$work")
 # One spelling per place before the guard compares anything: `..` and
-# symlinks resolved, through the path itself or, when it does not exist yet,
-# through its parent (security review of the v2.1.0 gate).
+# symlinks resolved through the nearest ancestor that exists; what is left
+# below it is the part `mkdir -p` would create (security review of the
+# v2.1.0 gate).
 phys() {
-  if [ -d "$1" ]; then (cd -P "$1" && pwd -P)
-  elif [ -d "$(dirname "$1")" ]; then printf '%s/%s\n' "$(cd -P "$(dirname "$1")" && pwd -P)" "$(basename "$1")"
-  else printf '%s\n' "$1"; fi
+  local p=$1 rest="" base
+  while [ ! -d "$p" ] && [ "$p" != / ] && [ "$p" != . ]; do
+    rest="/$(basename "$p")$rest"
+    p=$(dirname "$p")
+  done
+  base=$(cd -P "$p" && pwd -P)
+  if [ -z "$rest" ]; then printf '%s\n' "$base"; else printf '%s%s\n' "${base%/}" "$rest"; fi
 }
 dest=$(phys "$dest")
 repo_phys=$(phys "$repo")
-home_phys=$(phys "$HOME")
+home_phys=""
+if [ -n "${HOME:-}" ]; then home_phys=$(phys "$HOME"); fi
+# After that, a `.` or `..` can only sit below a directory that does not
+# exist, where nothing can say what it names until `mkdir -p` makes it real:
+# refused, since it can name the home directory, the checkout or /.
+case "$dest/" in
+  */../* | */./*) fail "--dest $dest goes through . or .. below a directory that does not exist: name the directory itself" ;;
+esac
 # The swap below deletes directories under --dest, so --dest is never a place
 # that holds anything else: not /, the home directory, the checkout, or an
 # ancestor of either (security review S1).
 case "${dest%/}/" in
-  / | "${home_phys%/}/" | "${repo_phys%/}/") fail "--dest $dest is not a catalog directory" ;;
+  / | "${repo_phys%/}/") fail "--dest $dest is not a catalog directory" ;;
 esac
 case "${repo_phys%/}/" in "${dest%/}/"*) fail "--dest $dest contains the checkout" ;; esac
-case "${home_phys%/}/" in "${dest%/}/"*) fail "--dest $dest contains the home directory" ;; esac
+if [ -n "$home_phys" ]; then
+  case "${dest%/}/" in "${home_phys%/}/") fail "--dest $dest is not a catalog directory" ;; esac
+  case "${home_phys%/}/" in "${dest%/}/"*) fail "--dest $dest contains the home directory" ;; esac
+fi
 if [ -d "$dest" ] && [ -n "$(ls -A "$dest")" ] && [ ! -f "$dest/CHECKSUMS" ]; then
   fail "--dest $dest is not empty and has no CHECKSUMS: not a catalog, nothing is replaced there"
 fi
@@ -146,10 +161,11 @@ while IFS='|' read -r label clone sub; do
     # A skill name is lowercase letters, digits and hyphens: anything else
     # (a space, a capital, a glob character) would break the bookkeeping
     # below. Excluding it comes first, so one odd upstream directory never
-    # blocks every refresh. The hint is shell-quoted: the name is upstream's
-    # and the operator pastes the hint into a shell.
+    # blocks every refresh. The name is printed shell-quoted both times: it is
+    # upstream's, the operator pastes the hint into a shell, and a raw escape
+    # sequence must not reach the terminal.
     case "$name" in
-      *[!a-z0-9-]* | -*) fail "entry \"$name\" ($label) is not a plain skill name (lowercase letters, digits, hyphens); the catalog cannot carry it (--exclude $(printf '%q' "$name"))" ;;
+      *[!a-z0-9-]* | -*) fail "entry $(printf '%q' "$name") ($label) is not a plain skill name (lowercase letters, digits, hyphens); the catalog cannot carry it (--exclude $(printf '%q' "$name"))" ;;
     esac
     [ ! -L "${d%/}" ] || fail "entry $name ($label) is itself a symlink (--exclude $name)"
     [ -f "$d/SKILL.md" ] || fail "entry $name ($label) has no SKILL.md (--exclude $name)"

@@ -278,22 +278,41 @@ func TestUnitNamesPerHome(t *testing.T) {
 
 // TestUnitForIgnoresHomeOverride: a sandbox run sets HOME to its own
 // directory and passes that directory as --home. The service manager is the
-// user's, not the sandbox's, so that home is not the real one and must not get
-// the bare unit names (security review of the v2.1.0 gate: with HOME as the
-// yardstick, a sandbox --remove-timer reached the operator's real timer).
+// account's, not the sandbox's, so that home is not the real one and must not
+// get the bare unit names (security review of the v2.1.0 gate: with HOME as
+// the yardstick, a sandbox --remove-timer reached the operator's real timer).
+// No skip: where the account database has no entry for this uid, no home is
+// the real one, and the sandbox still gets suffixed names.
 func TestUnitForIgnoresHomeOverride(t *testing.T) {
 	sandbox := t.TempDir()
 	t.Setenv("HOME", sandbox)
-	// The yardstick is the platform's own account lookup, not the function
-	// under test: where that lookup falls back to HOME (a pure-Go build on
-	// macOS), there is nothing to tell apart.
-	u, err := user.Current()
-	if err != nil || u.HomeDir == "" || filepath.Clean(u.HomeDir) == filepath.Clean(sandbox) {
-		t.Skipf("this platform resolves the account's home from HOME (%v): nothing to tell apart", err)
-	}
 	unit, plist := UnitFor(sandbox)
 	if unit == unitName || plist == plistName {
 		t.Errorf("a HOME override got the real home's unit names: %s, %s", unit, plist)
+	}
+}
+
+// TestAccountHomeNeverFallsBackToHOME: an account the database does not
+// list (LDAP, SSSD, systemd-homed, a container's bare uid — os/user without
+// cgo reads only /etc/passwd on Linux) has no known home. HOME is not an
+// answer there: it is what a sandbox overrides (code review of 7dd0645..f62513b).
+func TestAccountHomeNeverFallsBackToHOME(t *testing.T) {
+	sandbox := t.TempDir()
+	t.Setenv("HOME", sandbox)
+	prev := lookupAccount
+	lookupAccount = func() (*user.User, error) { return nil, user.UnknownUserIdError(os.Getuid()) }
+	t.Cleanup(func() { lookupAccount = prev })
+	if home, err := accountHome(); err == nil {
+		t.Fatalf("an unlisted account got a home: %q", home)
+	}
+	unit, plist := UnitFor(sandbox)
+	if unit == unitName || plist == plistName {
+		t.Errorf("with no account home, a home still got the bare unit names: %s, %s", unit, plist)
+	}
+	// An entry with an empty home directory is no answer either.
+	lookupAccount = func() (*user.User, error) { return &user.User{Uid: "1"}, nil }
+	if home, err := accountHome(); err == nil {
+		t.Errorf("an account with no home directory got one: %q", home)
 	}
 }
 

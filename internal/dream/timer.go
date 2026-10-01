@@ -30,19 +30,29 @@ const (
 var userHomeDir = accountHome
 
 // accountHome is the home of the account the process runs as, from the
-// account database rather than from HOME: the user service manager belongs
-// to the account, and a sandbox run overrides HOME (the testing guide's kits
+// account database and never from HOME: the user service manager belongs to
+// the account, and a sandbox run overrides HOME (the testing guide's kits
 // do), so HOME as the yardstick let a sandbox --remove-timer or uninstall
-// reach the operator's real timer (security review of the v2.1.0 gate).
-// Where the lookup itself falls back to HOME — a build without cgo on macOS,
-// whose accounts are not in /etc/passwd — this is HOME again: a known limit,
-// named in the dream spec.
+// reach the operator's real timer (BUG-149). An account the database does
+// not list has no known home, and then no home gets the bare names:
+// user.Current would answer with HOME there without saying so (os/user
+// without cgo reads only /etc/passwd on Linux, so LDAP, SSSD and
+// systemd-homed accounts and a container's bare uid are not listed; on
+// macOS it asks the system's own resolver, with or without cgo).
 func accountHome() (string, error) {
-	if u, err := user.Current(); err == nil && u.HomeDir != "" {
-		return u.HomeDir, nil
+	u, err := lookupAccount()
+	if err != nil {
+		return "", err
 	}
-	return os.UserHomeDir()
+	if u.HomeDir == "" {
+		return "", errors.New("the account has no home directory")
+	}
+	return u.HomeDir, nil
 }
+
+// lookupAccount is the account database lookup by uid; a test seam.
+// LookupId, not Current: Current falls back to HOME when the lookup fails.
+var lookupAccount = func() (*user.User, error) { return user.LookupId(strconv.Itoa(os.Getuid())) }
 
 // UnitFor names the systemd unit and the launchd label for a home. The real
 // home gets the bare names; any other home gets them suffixed with a short

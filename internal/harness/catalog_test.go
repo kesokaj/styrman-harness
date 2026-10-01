@@ -640,6 +640,13 @@ func TestRefreshCatalogScript(t *testing.T) {
 		// through `..` and a symlink (security review of the v2.1.0 gate).
 		{filepath.Join(repo, "skills") + "/..", "is not a catalog directory"},
 		{repoLink, "is not a catalog directory"},
+		// `..` below a directory that does not exist cannot be resolved, and
+		// `mkdir -p` would later make it real: the home directory, the
+		// checkout or / reached that way (code review of 7dd0645..f62513b).
+		{fakeHome + "/no-such-dir/..", "below a directory that does not exist"},
+		{repo + "/no-such-dir/..", "below a directory that does not exist"},
+		{"/no-such-dir-for-this-test/..", "below a directory that does not exist"},
+		{fakeHome + "/no-such-dir/./catalog", "below a directory that does not exist"},
 	} {
 		cmd := exec.Command("bash", script, "--dest", c.dest, "--work", work, pinA, pinG)
 		cmd.Dir = tmp
@@ -722,6 +729,16 @@ func TestRefreshCatalogScript(t *testing.T) {
 	refuse("name with a space", `(--exclude bad\ name)`, map[string]string{"skills/cloud/bad name/SKILL.md": skill("bad-name", "description: a directory name with a space\n")}, nil, "bad name")
 	refuse("uppercase name", `(--exclude Loud)`, map[string]string{"skills/cloud/Loud/SKILL.md": skill("loud", "description: a directory name with a capital\n")}, nil, "Loud")
 	refuse("shell characters in a name", `(--exclude a\$\(id\))`, map[string]string{"skills/cloud/a$(id)/SKILL.md": skill("a-id", "description: a directory name a shell would expand\n")}, nil, "a$(id)")
+	// The refusal prints an upstream name only shell-quoted: a raw escape
+	// sequence in a directory name must not reach the operator's terminal
+	// (security review of the v2.1.0 gate).
+	put(gskills, map[string]string{"skills/cloud/a\x1b[31mb/SKILL.md": skill("a-b", "description: a directory name with a terminal escape\n")})
+	escPin := commit(gskills)
+	if out, code := run(pinA, escPin); code != 1 || strings.Contains(out, "\x1b") || !strings.Contains(out, "not a plain skill name") {
+		t.Errorf("a name with an escape sequence: want exit 1 and no raw escape in the message, got exit %d\n%q", code, out)
+	}
+	git(gskills, "reset", "-q", "--hard", pinG)
+	git(gskills, "clean", "-qfd")
 	// An excluded name is one name: excluding "delta epsilon" must not also
 	// exclude the entries delta and epsilon.
 	put(gskills, map[string]string{"skills/cloud/delta epsilon/SKILL.md": skill("delta-epsilon", "description: two entry names with a space between\n")})

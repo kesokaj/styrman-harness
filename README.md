@@ -276,7 +276,7 @@ agents/      subagents in Claude Code format — the single source; Antigravity'
 skills/      skills, each a directory with SKILL.md (+ references/, assets/); `feature` and `bug` are the work protocols and load themselves; `review` is the review command on both CLIs
 commands/    markdown prompts invoked as /name (empty; prefer skills)
 rules/       extra always-on or path-scoped rules (empty)
-cmd/sh-agent  the binary; internal/harness is the installer's logic and tests; internal/search the search index (`sh-agent search`, `sh-agent index`)
+cmd/sh-agent  the binary; internal/harness is the installer's logic and tests; internal/search the search index (`sh-agent search`, `sh-agent index`); internal/memory the project memory store (`sh-agent memory`); internal/dream the nightly dreamer (`sh-agent dream`)
 .agents/     this repo's own trail (docs/, incl. bugs/INDEX.md), scratch/ (gitignored), and a skills -> ../skills symlink for the skills CLI
 ```
 
@@ -284,10 +284,10 @@ cmd/sh-agent  the binary; internal/harness is the installer's logic and tests; i
 
 ```bash
 gofmt -l cmd internal && go vet ./... && go test -race ./...   # gofmt takes the source dirs: unlike the Go tool it walks .agents/scratch
-# Two size pins in internal/harness/size_test.go are part of `go test ./...` above and are the checks a change to
-# context/*.md or rules/*.md must pass both size pins (-run TestRenderedContext): TestRenderedContextUnderTarget pins the hand-written context under 15,000 bytes (the generated skill inventory does not count); TestRenderedContextFitsAntigravityBlock renders the real checkout and pins it
-# under 22,000 bytes, inside Antigravity's 24,000-byte global rules block (REQUIREMENTS § Known limits, ADR-035);
-# TestRenderedContextUnderTarget pins it under 15,000, the harness's own ceiling (goal 14,500)
+# Two size pins in internal/harness/size_test.go run inside `go test ./...` above and are what a change to context/*.md
+# or rules/*.md must pass (-run TestRenderedContext): TestRenderedContextUnderTarget pins the hand-written context under
+# 15,000 bytes, the harness's own ceiling (the generated skill inventory does not count); TestRenderedContextFitsAntigravityBlock
+# renders the real checkout, inventory included, and pins it under 22,000 bytes, inside Antigravity's 24,000-byte global rules block (REQUIREMENTS § Known limits, ADR-035)
 # govulncheck: two known, unreachable advisories (GO-2026-5024 in golang.org/x/sys via the SQLite driver; on a Go before 1.25.12, GO-2026-4970 in os.Root.Open, guarded by an Lstat); an older Go also reports two stdlib advisories, fixed by a newer Go on the machine, never a pin here (ADR-029, ADR-045a)
 go run ./cmd/sh-agent install --home .agents/scratch/home   # never test against your real $HOME; scratch lives in the repo, never /tmp
 ```

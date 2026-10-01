@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -347,26 +349,79 @@ func TestCatalogWriteModeNeedsCatalogDir(t *testing.T) {
 	}
 }
 
-// earlyExitPipe matches a pipe into a consumer that stops reading before its
-// producer is done: `head`, `grep -q`, `grep -m`, `sed …q`, by name or by path.
-var earlyExitPipe = regexp.MustCompile(`\|\s*(\S*/)?(head\b|grep\s+(-\S+\s+)*-[a-zA-Z]*[qm]|sed\b[^|]*[0-9;]q\b)`)
+// earlyExitConsumer matches the start of a pipeline stage that stops reading
+// before its producer is done: `head`, `grep -q/-m/-l` (short or long form),
+// a `sed` script ending in `q`, an `awk` program with `exit`, `read`; by name
+// or by path.
+var earlyExitConsumer = regexp.MustCompile(`^&?\s*(\S*/)?(head\b|grep\b.*(\s-[a-zA-Z]*[qml]|\s--(quiet|silent|max-count|files-with-matches)\b)|sed\b.*q['"]?(\s|\)|$)|awk\b.*\bexit\b|read\b)`)
 
-// earlyExitPipeProblem is the first line of a shell script that pipes into
-// such a consumer without a guard. Under `set -o pipefail` the producer is
-// killed by SIGPIPE once its output outgrows a pipe and the pipeline's status
-// is 141: `set -e` ends the script with no message, and an `||` or an `if`
-// on the pipeline takes the wrong branch (BUG-155, BUG-157; BUG-138 and
+// pipeStages cuts one logical shell line at its unquoted single pipes and
+// returns what follows each: `||`, and a `|` inside quotes (an alternation in
+// a pattern), are not pipes.
+func pipeStages(line string) []string {
+	var stages []string
+	var quote byte
+	start := -1
+	for i := 0; i < len(line); i++ {
+		c := line[i]
+		switch {
+		case quote != 0:
+			if c == quote {
+				quote = 0
+			} else if c == '\\' && quote == '"' {
+				i++
+			}
+		case c == '\\':
+			i++
+		case c == '\'' || c == '"':
+			quote = c
+		case c == '|':
+			if i+1 < len(line) && line[i+1] == '|' {
+				if start >= 0 {
+					stages = append(stages, line[start:i])
+					start = -1
+				}
+				i++
+				continue
+			}
+			if start >= 0 {
+				stages = append(stages, line[start:i])
+			}
+			start = i + 1
+		}
+	}
+	if start >= 0 {
+		stages = append(stages, line[start:])
+	}
+	return stages
+}
+
+// earlyExitPipeProblem is the first logical line of a shell script that pipes
+// into such a consumer without a guard. Under `set -o pipefail` the producer
+// is killed by SIGPIPE once its output outgrows a pipe and the pipeline's
+// status is 141: `set -e` ends the script with no message, and an `||` or an
+// `if` on the pipeline takes the wrong branch (BUG-155, BUG-157; BUG-138 and
 // BUG-148 are the same family). A producer stops itself instead (`find
-// -quit`, `awk '{…; exit}'`), a test reads a here-string or asks git
-// directly; a line that only prints an excerpt ends `|| true`.
+// -quit`, `awk '{…; exit}'` reading a file), a test reads a here-string or
+// asks git directly; a line that only prints an excerpt ends `|| true`.
+//
+// It is a static check with limits, in the refusing direction and the
+// passing one: a `case` label spelled like a consumer (`a|head)`) is refused,
+// and a consumer reached through a function or a variable is not seen.
 func earlyExitPipeProblem(script string) string {
+	// One logical line: a backslash continuation, and a line ending in a
+	// pipe, continue on the next.
+	script = strings.ReplaceAll(script, "\\\n", " ")
+	script = regexp.MustCompile(`([^|])\|[ \t]*\n`).ReplaceAllString(script, "$1| ")
 	for _, l := range strings.Split(script, "\n") {
 		t := strings.TrimSpace(l)
-		if strings.HasPrefix(t, "#") || !earlyExitPipe.MatchString(t) {
+		if strings.HasPrefix(t, "#") || strings.HasSuffix(t, "|| true") {
 			continue
 		}
-		if !strings.HasSuffix(t, "|| true") {
-			return t
+		for _, stage := range pipeStages(t) {
+			if earlyExitConsumer.MatchString(stage) {
+				return t
+			}
 		}
 	}
 	return ""
@@ -381,16 +436,43 @@ func TestScriptsHaveNoEarlyExitPipe(t *testing.T) {
 		"git log --format=%h | grep -q -- \"^$sha\" || exit 2\n",
 		"printf '%s\\n' \"$line\" | grep -q $ci -F -- \"$w\" || keep=0\n",
 		"if producer | grep -m1 x; then :; fi\n",
+		"if producer | grep --quiet x; then :; fi\n",
+		"if producer | grep -e x -q; then :; fi\n",
+		"n=$(producer | grep --max-count=1 x)\n",
+		"f=$(producer | grep -l x)\n",
 		"first=$(producer | sed 1q)\n",
+		"first=$(producer | sed q)\n",
 		"first=$(producer | sed -n '1p;q')\n",
+		"first=$(producer | sed '/re/q')\n",
+		"first=$(producer | awk '{print; exit}')\n",
+		"producer | read first\n",
+		"producer |& head -1\n",
 		"bad=$(find . -print | /usr/bin/head -1)\n",
+		"bad=$(find . -print |\n  head -1)\n",
+		"bad=$(find . -print \\\n  | head -1)\n",
 	} {
 		if earlyExitPipeProblem(bad) == "" {
-			t.Fatalf("the check passes %q", bad)
+			t.Errorf("the check passes %q", bad)
 		}
 	}
-	if got := earlyExitPipeProblem("# never `| head -1`\ngrep x f | head -20 >&2 || true\nbad=$(find . -print -quit)\ngrep -q x <<< \"$line\"\nsort f | grep -v x\nprintf x | sed 's/q/z/'\nsed -n 's/^date: //p' f | sort\n"); got != "" {
-		t.Fatalf("the check refuses a guarded, commented or whole-input line: %q", got)
+	for _, good := range []string{
+		"# never `| head -1`\n",
+		"grep x f | head -20 >&2 || true\n",
+		"bad=$(find . -print -quit)\n",
+		"grep -q x <<< \"$line\"\n",
+		"sort f | grep -v x\n",
+		"printf x | sed 's/q/z/'\n",
+		"sed -n 's/^date: //p' f | sort\n",
+		"[ -f x ] || head -1 f\n",
+		"grep -E 'write|read|head' f\n",
+		"grep -E \"quiet|head -1\" f | sort\n",
+		"producer | while read -r x; do :; done\n",
+		"d=$(awk '/^date: /{print; exit}' f)\n",
+		"producer | awk '{print $1}' | sort\n",
+	} {
+		if got := earlyExitPipeProblem(good); got != "" {
+			t.Errorf("the check refuses %q", good)
+		}
 	}
 	root, err := filepath.Abs("../..")
 	if err != nil {
@@ -1060,6 +1142,62 @@ func TestRefreshCatalogScript(t *testing.T) {
 			if b, err := os.ReadFile(f); err == nil && strings.Contains(string(b), "SECRETTRACE") {
 				t.Errorf("%s holds the override's value: the script's git calls ran with the caller's tracing on", filepath.Base(f))
 			}
+		}
+		// A trace target can also come from git's configuration, where no
+		// environment variable of the caller's names it: the script's own
+		// GIT_TRACE2* settings must win over it.
+		cfgHome := filepath.Join(tmp, "trace-home")
+		cfgTrace := filepath.Join(tmp, "git-trace2-config.log")
+		if err := os.MkdirAll(cfgHome, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(cfgHome, ".gitconfig"), []byte("[trace2]\n\teventTarget = "+cfgTrace+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		cmd = exec.Command("bash", script, "--dest", filepath.Join(tmp, "dest-t2"), "--work", filepath.Join(tmp, "work-t2"), pinA, pinG)
+		cmd.Dir = tmp
+		cmd.Env = fixtureEnv("HOME="+cfgHome, "CATALOG_AGENTS_CLI_REPO="+secretPath, "CATALOG_GOOGLE_SKILLS_REPO="+gskills, "CATALOG_DIR=", "CATALOG_WRITE=")
+		out, err = cmd.CombinedOutput()
+		if err == nil || !strings.Contains(string(out), "cannot clone the agents-cli source") {
+			t.Errorf("a run under a trace2 target in git's config: want the role-named refusal, got err %v\n%s", err, out)
+		}
+		if b, err := os.ReadFile(cfgTrace); err == nil && strings.Contains(string(b), "SECRETTRACE") {
+			t.Errorf("%s holds the override's value: a trace2 target from git's config was left on", filepath.Base(cfgTrace))
+		}
+		// git asks for a credential through an askpass program before it
+		// tries the terminal, and hands it a prompt that names the URL: an
+		// https source that answers 401 must not reach one (security review
+		// of a224329..01255bc).
+		srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("WWW-Authenticate", `Basic realm="fixture"`)
+			http.Error(w, "credentials required", http.StatusUnauthorized)
+		}))
+		defer srv.Close()
+		askLog := filepath.Join(tmp, "askpass.log")
+		askStub := filepath.Join(tmp, "askpass.sh")
+		if err := os.WriteFile(askStub, []byte("#!/bin/sh\necho \"$*\" >> '"+askLog+"'\necho x\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		cmd = exec.Command("bash", script, "--dest", filepath.Join(tmp, "dest-a"), "--work", filepath.Join(tmp, "work-a"), pinA, pinG)
+		cmd.Dir = tmp
+		cmd.Env = fixtureEnv("HOME="+fakeHome, "CATALOG_AGENTS_CLI_REPO="+srv.URL+"/SECRETASK", "CATALOG_GOOGLE_SKILLS_REPO="+gskills, "CATALOG_DIR=", "CATALOG_WRITE=", "GIT_SSL_NO_VERIFY=1", "GIT_ASKPASS="+askStub, "SSH_ASKPASS="+askStub)
+		out, err = cmd.CombinedOutput()
+		if err == nil || !strings.Contains(string(out), "cannot clone the agents-cli source") || strings.Contains(string(out), "SECRETASK") {
+			t.Errorf("an https source that wants credentials: want the role-named refusal and no value, got err %v\n%s", err, out)
+		}
+		if b, err := os.ReadFile(askLog); err == nil {
+			t.Errorf("git ran the caller's askpass program for the script's clone:\n%s", b)
+		}
+		// GIT_CURL_VERBOSE is on whenever it is set, whatever its value, and
+		// what it prints goes where the calls' output goes (discarded), so
+		// no run shows the difference: the script's text is pinned instead.
+		// It removes the variable and never assigns it.
+		text, err := os.ReadFile(script)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(text), "GIT_CURL_VERBOSE=") || !strings.Contains(string(text), "unset GIT_CURL_VERBOSE") {
+			t.Error("the script assigns GIT_CURL_VERBOSE or does not unset it: git turns curl's trace on when the variable is set to anything, 0 included")
 		}
 	}
 	// The same on the path every later refresh takes: a work directory that

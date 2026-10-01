@@ -24,3 +24,6 @@ Under `pipefail` a pipeline into a consumer that exits early is wrong in a condi
 
 ## Related
 BUG-155 (same class, the silent form; its test was widened here), BUG-148, BUG-138 (same family).
+
+## Addendum 2026-10-01
+The fix (`git merge-base --is-ancestor <value> HEAD`) accepted any revision: `HEAD`, a branch or tag name, `@`, `:/text` passed on every clone, so the assertion proved nothing for such a value (code review and security read of a224329..01255bc, low). Now the value must match `^[0-9a-f]{7,40}$` before git sees it, and git gets `--end-of-options "<sha>^{commit}"`. Checked by hand by the main agent on a clone of this repository: the 7-digit and the 12-digit SHA of the head accepted; `HEAD`, `main`, `abcd`, `--all` refused by the shape check; `deadbeef1` refused as not in the log; an empty value skips the assertion as before. No Go test runs the preamble; the static pipe check is its only test, and that is said in the gate's verifier log.

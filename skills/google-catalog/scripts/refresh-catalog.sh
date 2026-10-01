@@ -39,8 +39,9 @@
 # variables replace the source repositories, for the test's local fixtures:
 # CATALOG_AGENTS_CLI_REPO and CATALOG_GOOGLE_SKILLS_REPO, each an https:// URL
 # (with no user information or query string in it) or an absolute path,
-# nothing else. No message of the script shows such a value, git's own output,
-# tracing and terminal prompt are off for its calls, and the manifest records
+# nothing else. No message of the script shows such a value, git's own output
+# and tracing are off for its calls and git does not prompt, on the terminal
+# or through an askpass program, and the manifest records
 # the upstream repositories' names, never an override. git itself keeps the
 # value in the work clones, and a run that used an override says so when it
 # ends, whether it succeeded or failed. While git runs, the value is one of
@@ -51,11 +52,19 @@
 set -euo pipefail
 
 # git has channels that no redirect of its output covers: a trace target (from
-# the caller's environment or git config) records a clone's arguments, and the
-# credential prompt opens the terminal and shows the URL. Both are off for
-# every git call below; a credential belongs in a helper.
-export GIT_TERMINAL_PROMPT=0 GIT_TRACE=0 GIT_TRACE2=0 GIT_TRACE2_EVENT=0 GIT_TRACE2_PERF=0 GIT_CURL_VERBOSE=0
-while IFS= read -r v; do export "$v=0"; done < <(compgen -e | grep '^GIT_TRACE' || true)
+# the caller's environment or git config) records a clone's arguments, and a
+# credential prompt, on the terminal or through an askpass program, shows the
+# URL. All are off for every git call below; a credential belongs in a
+# helper, which still runs. An empty GIT_ASKPASS also stops git falling back
+# to core.askPass and SSH_ASKPASS. The three TRACE2 targets are set to 0
+# because git config can name them with no variable of the caller's; every
+# other GIT_TRACE* variable the caller exports is zeroed by the loop, except
+# GIT_TRACE_REDACT, where 0 would switch redaction off; GIT_CURL_VERBOSE is
+# removed, never zeroed: set to anything, 0 included, it turns curl's trace on.
+export GIT_TERMINAL_PROMPT=0 GIT_ASKPASS= GIT_TRACE2=0 GIT_TRACE2_EVENT=0 GIT_TRACE2_PERF=0
+unset GIT_CURL_VERBOSE
+while IFS= read -r v; do export "$v=0"; done < <(compgen -e | grep '^GIT_TRACE' | grep -v '^GIT_TRACE_REDACT$' || true)
+export GIT_TRACE_REDACT=1
 
 usage() { sed -n '2,6p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; }
 fail() { echo "refresh-catalog: $*" >&2; exit 1; }

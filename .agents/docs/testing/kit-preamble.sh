@@ -11,7 +11,8 @@
 #   KIT_HOME           the sandbox home the run uses (required; never the real home)
 #   KIT_ASSERT_GREP    newline-separated `file:pattern` lines, each relative to
 #                      KIT_CLONE; every pattern must match its file (optional)
-#   KIT_ASSERT_COMMIT  one short SHA that must be in the clone's `git log` (optional)
+#   KIT_ASSERT_COMMIT  one commit SHA (7 to 40 hex digits, never a ref name)
+#                      that must be in the clone's history (optional)
 #   KIT_BIN            the sh-agent build to wrap (default: a fresh `go build` of the
 #                      harness checkout this file lives in, run from any cwd)
 # Effects: asserts the fixture, refuses a clone that sits inside another git
@@ -39,7 +40,10 @@ if [ -n "${KIT_ASSERT_COMMIT:-}" ]; then
   # Asked of git directly, never `git log | grep -q`: under pipefail grep's
   # early exit kills git log on a long history and the status is 141, which
   # refused a commit that was there (BUG-157).
-  git -C "$KIT_CLONE" merge-base --is-ancestor "$KIT_ASSERT_COMMIT" HEAD 2>/dev/null || { echo "kit: commit $KIT_ASSERT_COMMIT not in the clone's log" >&2; exit 2; }
+  # A SHA, nothing else: `HEAD`, a branch or a tag name would be an ancestor
+  # of HEAD whatever the fixture holds, and the assertion would prove nothing.
+  [[ "$KIT_ASSERT_COMMIT" =~ ^[0-9a-f]{7,40}$ ]] || { echo "kit: KIT_ASSERT_COMMIT must be a commit SHA of 7 to 40 hex digits, got '$KIT_ASSERT_COMMIT'" >&2; exit 2; }
+  git -C "$KIT_CLONE" merge-base --is-ancestor --end-of-options "${KIT_ASSERT_COMMIT}^{commit}" HEAD 2>/dev/null || { echo "kit: commit $KIT_ASSERT_COMMIT not in the clone's log" >&2; exit 2; }
 fi
 # The real ~/.config/sh-agent before and after: a run that writes there fails
 # the kit. The fingerprint is `ls -lR` (names, sizes, mtimes), so an appended

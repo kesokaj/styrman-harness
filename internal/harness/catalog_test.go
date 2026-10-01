@@ -804,14 +804,33 @@ func TestRefreshCatalogScript(t *testing.T) {
 	git(gskills, "reset", "-q", "--hard", pinG)
 	git(gskills, "clean", "-qfd")
 	// The same for a path inside an entry: the dotfile, symlink and Go-file
-	// refusals print the path shell-quoted.
-	put(gskills, map[string]string{"skills/cloud/delta/.x\x1b[31m": "a dotfile whose name holds an escape\n"})
-	escPin2 := commit(gskills)
-	if out, code := run(pinA, escPin2); code != 1 || strings.Contains(out, "\x1b") || !strings.Contains(out, "holds a dotfile") {
-		t.Errorf("a nested path with an escape sequence: want exit 1 and no raw escape in the message, got exit %d\n%q", code, out)
+	// refusals print the path shell-quoted. One fixture per message: each is
+	// its own line in the script (the gate's verifier removed the quoting
+	// from one and nothing failed).
+	for _, c := range []struct {
+		label, want string
+		make        func()
+	}{
+		{"dotfile", "holds a dotfile", func() {
+			put(gskills, map[string]string{"skills/cloud/delta/.x\x1b[31m": "a dotfile whose name holds an escape\n"})
+		}},
+		{"Go file", "holds a Go file", func() {
+			put(gskills, map[string]string{"skills/cloud/delta/a\x1b[31m.go": "package main\n"})
+		}},
+		{"symlink", "holds a symlink", func() {
+			if err := os.Symlink("SKILL.md", filepath.Join(gskills, "skills/cloud/delta/l\x1b[31mnk")); err != nil {
+				t.Skip("no symlinks here")
+			}
+		}},
+	} {
+		c.make()
+		pin := commit(gskills)
+		if out, code := run(pinA, pin); code != 1 || strings.Contains(out, "\x1b") || !strings.Contains(out, c.want) {
+			t.Errorf("a nested %s path with an escape sequence: want exit 1, %q and no raw escape in the message, got exit %d\n%q", c.label, c.want, code, out)
+		}
+		git(gskills, "reset", "-q", "--hard", pinG)
+		git(gskills, "clean", "-qfd")
 	}
-	git(gskills, "reset", "-q", "--hard", pinG)
-	git(gskills, "clean", "-qfd")
 	// An excluded name is one name: excluding "delta epsilon" must not also
 	// exclude the entries delta and epsilon.
 	put(gskills, map[string]string{"skills/cloud/delta epsilon/SKILL.md": skill("delta-epsilon", "description: two entry names with a space between\n")})

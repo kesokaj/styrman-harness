@@ -4,6 +4,8 @@
 #   bash skills/google-catalog/scripts/refresh-catalog.sh [--dest <dir>] [--work <dir>]
 #        [--exclude <entry>]... <agents-cli pin> <google-skills pin>
 #
+# A pin is a full 40-digit commit id, never a short one, a tag or a branch.
+#
 # Run from the harness checkout, never from a session in another project. It
 # clones both repositories in full (so any pin resolves) into the work
 # directory, builds the catalog there, and only then replaces the entries under
@@ -66,7 +68,7 @@ unset GIT_CURL_VERBOSE
 while IFS= read -r v; do export "$v=0"; done < <(compgen -e | grep '^GIT_TRACE' | grep -v '^GIT_TRACE_REDACT$' || true)
 export GIT_TRACE_REDACT=1
 
-usage() { sed -n '2,6p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; }
+usage() { sed -n '2,7p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; }
 fail() { echo "refresh-catalog: $*" >&2; exit 1; }
 # git keeps a clone's source in its config, FETCH_HEAD and reflogs: with an
 # override, that is the override's value, on disk under the work directory
@@ -167,10 +169,15 @@ if [ -d "$work" ] && [ -n "$(ls -A "$work")" ] && [ ! -f "$work/.refresh-catalog
 fi
 pin_a=$1
 pin_g=$2
+# A pin is the commit's full id. git checks a tag or branch named like a
+# shorter one out before the abbreviated id, and nothing after the checkout
+# can tell a commit that was made to share the prefix: whoever names refs at
+# the source would choose what a short pin vendors.
 for pin in "$pin_a" "$pin_g"; do
-  case "$pin" in
-    *[!0-9a-f]* | "" | ? | ?? | ??? | ???? | ????? | ??????) fail "a pin must be a commit id (7 to 40 hex digits), got: $pin" ;;
-  esac
+  case "$pin" in *[!0-9a-f]*) pin_shape=bad ;; *) pin_shape=ok ;; esac
+  if [ "$pin_shape" = bad ] || [ "${#pin}" -ne 40 ]; then
+    fail "a pin must be a full commit id (40 hex digits), got: $pin"
+  fi
 done
 # The upstream repositories, as the manifest names them. An override changes
 # where the script fetches from, never what the manifest records: the pin
@@ -225,12 +232,6 @@ fetch() { # <clone name> <url> <pin>: a full clone, reused; checked out at the p
       fail "cannot clone the $1 source (git's own message is not shown: it repeats the source's value; run the git clone yourself to see it)"
   fi
   git -C "$dir" -c advice.detachedHead=false checkout -q --detach "$3" 2>/dev/null || fail "pin $3 does not resolve in the $1 source"
-  # git takes a tag or branch named like the pin before an abbreviated commit
-  # id: whoever names refs at the source would choose what a short pin vendors.
-  case "$(git -C "$dir" rev-parse HEAD)" in
-    "$3"*) ;;
-    *) fail "pin $3 names a ref, not a commit, in the $1 source: pass the commit's own id" ;;
-  esac
 }
 if [ "$url_a" != "$upstream_a" ] || [ "$url_g" != "$upstream_g" ]; then on_disk=1; fi
 fetch agents-cli "$url_a" "$pin_a"

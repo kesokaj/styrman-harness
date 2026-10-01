@@ -24,3 +24,6 @@ A script that every kit sources gets a behaviour test under a temporary home bef
 
 ## Related
 BUG-155, BUG-157 (pipefail family: silent exit, wrong branch, and here a failing producer), BUG-107, BUG-123 (the check this fingerprint serves).
+
+## Addendum 2026-10-01
+The fingerprint as first fixed did not follow symlinks: with `~/.config/sh-agent` a symlink to a directory, or a file in it a symlink, a write left it unchanged (code review and security read of 4487a7a..5bbd789, low; probed by both). Now `find -L` in both calls. `TestKitPreambleAssertsCommit` has the three cases: a symlinked directory left alone passes; a new file through the link fails the kit; an append to a symlinked file fails the kit (that last one was unseen before the fix). The preamble's comment now also says what the fingerprint does not see: a rewrite with the same bytes, a `touch`, a `chmod` (the earlier GNU `ls -lR` listing saw those on Linux), so the claim "a run that writes there fails the kit" was too wide for the new one. The Fix section's "covering names and contents" is true of names and contents only (names and contents; see the addendum).

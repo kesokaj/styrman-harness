@@ -54,10 +54,11 @@ if [ -n "${KIT_ASSERT_COMMIT:-}" ]; then
   esac
   git -C "$KIT_CLONE" merge-base --is-ancestor "$kit_full" HEAD 2>/dev/null || { echo "kit: commit $KIT_ASSERT_COMMIT not in the clone's log" >&2; exit 2; }
 fi
-# The real ~/.config/sh-agent before and after: a run that writes there fails
-# the kit. The fingerprint covers names and contents, so an appended line to
-# an existing file changes it; a names-only listing did not (docs-lens review
-# 2026-10-01).
+# The real ~/.config/sh-agent before and after: a run that changes a name or
+# a file's contents there fails the kit. The fingerprint covers names and
+# contents, so an appended line to an existing file changes it; a names-only
+# listing did not (docs-lens review 2026-10-01). It does not see a rewrite
+# with the same bytes, a `touch` or a `chmod`.
 # The real home is remembered here: a kit overrides HOME for the CLI it runs,
 # and the exit check must still look at the operator's own directory.
 kit_real_config="$HOME/.config/sh-agent"
@@ -66,10 +67,12 @@ kit_real_config="$HOME/.config/sh-agent"
 # The fingerprint is every path plus a checksum of every file, by tools macOS
 # has too: `ls --time-style` and `md5sum` are GNU's, and without them the
 # fingerprint was the same empty value before and after, proving nothing.
-kit_list_real_config() { { ls -la "$kit_real_config" 2>/dev/null || true; } | sed 's/^/  /'; }
+kit_list_real_config() { { ls -la "$kit_real_config/" 2>/dev/null || true; } | sed 's/^/  /'; }
 kit_fingerprint() {
-  { find "$kit_real_config" -print 2>/dev/null || true
-    find "$kit_real_config" -type f -exec cksum {} + 2>/dev/null || true; } | LC_ALL=C sort | cksum | cut -d' ' -f1
+  # -L: the directory, or a file in it, may be a symlink (a dotfiles setup);
+  # find would otherwise stop at the link and never read what it points at.
+  { find -L "$kit_real_config" -print 2>/dev/null || true
+    find -L "$kit_real_config" -type f -exec cksum {} + 2>/dev/null || true; } | LC_ALL=C sort | cksum | cut -d' ' -f1
 }
 echo "kit: real $kit_real_config before the run:"; kit_list_real_config
 kit_before=$(kit_fingerprint)

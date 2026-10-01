@@ -352,9 +352,10 @@ func TestCatalogWriteModeNeedsCatalogDir(t *testing.T) {
 
 // earlyExitConsumer matches the start of a pipeline stage that stops reading
 // before its producer is done: `head`, `grep -q/-m/-l` (short or long form),
-// a `sed` script with a `q` command, an `awk` program with `exit`, `read`;
-// by name or by path.
-var earlyExitConsumer = regexp.MustCompile(`^&?\s*(\S*/)?(head\b|grep\b.*(\s-[a-zA-Z]*[qml]|\s--(quiet|silent|max-count|files-with-matches)\b)|sed\b.*[0-9;{\s/$'"]q([}'";\s)]|$)|awk\b.*\bexit\b|read\b)`)
+// a `sed` script with a `q` or `Q` command (after an address, a `!`, a flag,
+// a `;` or a brace, with or without an exit code), an `awk` program with
+// `exit`, `read`; by name or by path.
+var earlyExitConsumer = regexp.MustCompile(`^&?\s*(\S*/)?(head\b|grep\b.*(\s-[a-zA-Z]*[qml]|\s--(quiet|silent|max-count|files-with-matches)\b)|sed\b.*[^a-z_][qQ][0-9]*([}'";\s)]|$)|awk\b.*\bexit\b|read\b)`)
 
 // pipeStages cuts one logical shell line at its single pipes and returns what
 // follows each. Not a pipe: `||`, an escaped `\|`, a `|` inside single
@@ -489,6 +490,13 @@ func TestScriptsHaveNoEarlyExitPipe(t *testing.T) {
 		"v=\"$(find . -print | head -1)\"\n",
 		"[ -n \"$(producer | grep -q x)\" ] || exit 1\n",
 		"first=$(producer | sed -n '1{p;q}')\n",
+		"producer | sed '/^#/!q'\n",
+		"producer | sed '/x/Iq'\n",
+		"producer | sed -n '/x/Mq'\n",
+		"producer | sed '\\%x%q'\n",
+		"producer | sed '/a/,/b/!q'\n",
+		"producer | sed 1Q\n",
+		"producer | sed '/x/q5'\n",
 		"echo \"n: $(producer | (cat; true) | head -1) done\"\n",
 	} {
 		if earlyExitPipeProblem(bad) == "" {
@@ -1366,13 +1374,17 @@ func TestRefreshCatalogScript(t *testing.T) {
 	if out, code := run(pinA, "0000000000000000000000000000000000000000"); code != 1 || !strings.Contains(out, "does not resolve in the google-skills source") || snapshot() != good {
 		t.Errorf("unresolvable pin: want exit 1 and an untouched destination, got exit %d\n%s", code, out)
 	}
-	// A pin that is the name of a tag at the source is refused: git checks a
-	// ref of that name out before an abbreviated commit id, so whoever names
-	// refs there would choose the content (security review of
-	// 01255bc..4487a7a).
+	// A pin is a full commit id. git checks a tag or branch named like a
+	// shorter one out before the abbreviated id, and a prefix check after the
+	// checkout cannot tell a commit made to share the prefix: whoever names
+	// refs at the source would choose the content (security reviews of
+	// 01255bc..4487a7a and 4487a7a..5bbd789). Both shapes are refused before
+	// any clone: a tag named in hex digits, and the real commit's short id.
 	git(gskills, "tag", "20261001", pinG)
-	if out, code := run(pinA, "20261001"); code != 1 || !strings.Contains(out, "names a ref, not a commit, in the google-skills source") || snapshot() != good {
-		t.Errorf("a pin naming a tag: want exit 1, the ref refusal and an untouched destination, got exit %d\n%s", code, out)
+	for _, short := range []string{"20261001", pinG[:7], pinG[:39]} {
+		if out, code := run(pinA, short); code != 1 || !strings.Contains(out, "a pin must be a full commit id (40 hex digits)") || snapshot() != good {
+			t.Errorf("a short pin %q: want exit 1, the shape refusal and an untouched destination, got exit %d\n%s", short, code, out)
+		}
 	}
 	git(gskills, "tag", "-d", "20261001")
 	refuse("no frontmatter", "bad", map[string]string{"skills/cloud/bad/SKILL.md": "no frontmatter here\n"}, nil, "bad")
@@ -1587,5 +1599,32 @@ func TestKitPreambleAssertsCommit(t *testing.T) {
 		if code, out := runThen("", then); code != 1 || !strings.Contains(out, "changed during the run") {
 			t.Errorf("a run that writes the real config (%s): want exit 1 and the kit's FAIL line, got exit %d\n%s", name, code, out)
 		}
+	}
+	// The same when ~/.config/sh-agent is a symlink to a directory (a
+	// dotfiles setup): `find` without -H stops at the link, and the
+	// fingerprint was one constant line.
+	real := filepath.Join(tmp, "dotfiles-sh-agent")
+	if err := os.Rename(conf, real); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(real, conf); err != nil {
+		t.Skip("no symlinks here")
+	}
+	if code, out := runThen("", ":"); code != 0 {
+		t.Errorf("a symlinked config left alone: want exit 0, got %d\n%s", code, out)
+	}
+	if code, out := runThen("", `: > "$HOME/.config/sh-agent/through-the-link"`); code != 1 || !strings.Contains(out, "changed during the run") {
+		t.Errorf("a write through a symlinked config directory: want exit 1 and the kit's FAIL line, got exit %d\n%s", code, out)
+	}
+	// And a file in it that is itself a symlink: its target's content counts.
+	target := filepath.Join(tmp, "dotfiles-feedback.jsonl")
+	if err := os.WriteFile(target, []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(real, "linked.jsonl")); err != nil {
+		t.Fatal(err)
+	}
+	if code, out := runThen("", `printf '{}\n' >> "$HOME/.config/sh-agent/linked.jsonl"`); code != 1 || !strings.Contains(out, "changed during the run") {
+		t.Errorf("an append to a symlinked file in the real config: want exit 1 and the kit's FAIL line, got exit %d\n%s", code, out)
 	}
 }

@@ -290,6 +290,25 @@ func OtherSystemTimerFiles(home, goos string) []string {
 	return found
 }
 
+// TimerInstalledHere reports whether a unit of this home, for goos, is on
+// disk: what RemoveTimer(home, goos) would remove. TimerInstalled counts the
+// other system's files too, which a removal here never touches.
+func TimerInstalledHere(home, goos string) bool {
+	var files []string
+	switch goos {
+	case "linux":
+		files = []string{linuxTimerPath(home), linuxServicePath(home)}
+	case "darwin":
+		files = []string{macPlistPath(home)}
+	}
+	for _, p := range files {
+		if _, err := os.Lstat(p); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
 // shellQuote puts a path in single quotes for a command the operator may
 // paste: a space, a `$` or a quote in a home path must not change the command.
 func shellQuote(s string) string {

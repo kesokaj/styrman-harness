@@ -79,7 +79,20 @@ func Parse(front string) Frontmatter { return parseEntries(entries(front)) }
 // installer's form, so a file is read once and a value a strict YAML parser
 // would read differently is refused before it is used.
 func ParseStrict(front string) (Frontmatter, error) {
+	// Two shapes hide a key from the grammar below while a YAML reader still
+	// reads it; both are refused before anything is parsed.
+	if strings.ContainsAny(strings.ReplaceAll(front, "\r\n", "\n"), "\r\u0085\u2028\u2029") {
+		return nil, errors.New("frontmatter holds a line break that is not a newline (a lone carriage return, U+0085, U+2028 or U+2029): a YAML reader starts a new line there, and a key after it would not be checked, so the block is refused")
+	}
+	if l, bad := indentedBeforeKey(front); bad {
+		return nil, fmt.Errorf("frontmatter line %q is indented before any key: a YAML reader takes an indented block for the top-level map, whose keys would not be checked here, so it is refused", l)
+	}
 	if l, bad := unreadLine(front); bad {
+		// A `---` inside the block is a fence that Split did not take for
+		// one (two carriage returns, a trailing space): say that, not "key".
+		if strings.HasPrefix(strings.TrimSpace(l), "---") {
+			return nil, fmt.Errorf("frontmatter holds a `---` line that is not a fence (%q, as read): a fence is exactly --- on its own line, with at most one carriage return; what follows it would not be checked, so the block is refused", l)
+		}
 		return nil, fmt.Errorf("frontmatter line %q is not a plain `key: value` line: a quoted or spaced key is a key to a YAML parser and would be skipped here, so it is refused", l)
 	}
 	es := entries(front)
@@ -96,13 +109,33 @@ func ParseStrict(front string) (Frontmatter, error) {
 // (security review 2026-10-01).
 func unreadLine(front string) (string, bool) {
 	for _, l := range strings.Split(front, "\n") {
-		l = strings.TrimRight(l, "\r")
+		// One carriage return is the line ending; a second one is content,
+		// and is shown as such in the refusal.
+		l = strings.TrimSuffix(l, "\r")
 		if l == "" || l[0] == ' ' || l[0] == '\t' || l[0] == '#' || l == "-" || strings.HasPrefix(l, "- ") {
 			continue
 		}
 		if !keyLine.MatchString(l) {
 			return l, true
 		}
+	}
+	return "", false
+}
+
+// indentedBeforeKey is the first indented line that no key line precedes.
+// An indented line is a continuation of the key above it; with no key above,
+// it is the start of a block a YAML reader reads as the top-level map, one
+// level in, and unreadLine would skip every line of it.
+func indentedBeforeKey(front string) (string, bool) {
+	for _, l := range strings.Split(front, "\n") {
+		l = strings.TrimSuffix(l, "\r")
+		if strings.TrimSpace(l) == "" || l[0] == '#' {
+			continue
+		}
+		if l[0] == ' ' || l[0] == '\t' {
+			return l, true
+		}
+		return "", false // the first content line starts at column 0
 	}
 	return "", false
 }

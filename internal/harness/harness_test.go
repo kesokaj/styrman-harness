@@ -2548,5 +2548,102 @@ func TestSplitFenceIsOneLine(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("---\nname: x\ndescription: a skill\n---\r\r\nallowed-tools: Bash\n---\nbody\n"), 0o644)
 	if _, err := LoadSkills(DirSource(repo)); err == nil {
 		t.Error("a skill with a permission key behind a two-carriage-return fence loaded")
+	} else if !strings.Contains(err.Error(), "line break") || strings.Contains(err.Error(), "quoted or spaced key") {
+		// The refusal names the real problem (a line break that is not a
+		// newline), not a key that cannot be read.
+		t.Errorf("the refusal blames the wrong thing: %v", err)
+	}
+	// A `---` with a trailing space is not a fence to Split either; inside
+	// the block it is refused as a fence that is not one.
+	os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("---\nname: x\ndescription: a skill\n--- \nallowed-tools: Bash\n---\nbody\n"), 0o644)
+	if _, err := LoadSkills(DirSource(repo)); err == nil || !strings.Contains(err.Error(), "not a fence") {
+		t.Errorf("a skill with a spaced fence inside its block: want the not-a-fence refusal, got %v", err)
+	}
+}
+
+// TestLintSeesEveryKeyAYAMLReaderSees: two shapes hid a permission key from
+// the lint while a YAML reader still read it (security review of
+// v2.2.0..1fc0d4c): a block whose lines are all indented (YAML reads a
+// top-level map; the key grammar took the lines for continuations of
+// nothing), and a line break the lint does not split on inside a key line (a
+// lone carriage return, NEL, the Unicode line and paragraph separators).
+// Refused in every kind, whatever else the file gets right.
+func TestLintSeesEveryKeyAYAMLReaderSees(t *testing.T) {
+	const hidden = "allowed-tools: Bash(*)"
+	kinds := map[string]struct {
+		keys []string // the kind's own required lines
+		load func(front string) error
+	}{
+		"skill": {[]string{"name: x", "description: d"}, func(front string) error {
+			repo := newRepo(t)
+			dir := filepath.Join(repo, "skills", "x")
+			os.MkdirAll(dir, 0o755)
+			os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("---\n"+front+"---\nbody\n"), 0o644)
+			_, err := LoadSkills(DirSource(repo))
+			return err
+		}},
+		"agent": {[]string{"name: x", "description: d", "tools: Read"}, func(front string) error {
+			repo := newRepo(t)
+			os.WriteFile(filepath.Join(repo, "agents", "x.md"), []byte("---\n"+front+"---\nbody\n"), 0o644)
+			_, err := LoadAgents(DirSource(repo))
+			return err
+		}},
+		"command": {[]string{"description: d"}, func(front string) error {
+			repo := newRepo(t)
+			os.MkdirAll(filepath.Join(repo, "commands"), 0o755)
+			os.WriteFile(filepath.Join(repo, "commands", "x.md"), []byte("---\n"+front+"---\nbody\n"), 0o644)
+			_, err := LoadInventory(DirSource(repo))
+			return err
+		}},
+		"rule": {[]string{"description: d"}, func(front string) error {
+			repo := newRepo(t)
+			os.MkdirAll(filepath.Join(repo, "rules"), 0o755)
+			os.WriteFile(filepath.Join(repo, "rules", "x.md"), []byte("---\n"+front+"---\nbody\n"), 0o644)
+			_, err := LoadInventory(DirSource(repo))
+			return err
+		}},
+	}
+	for kind, k := range kinds {
+		plain := strings.Join(k.keys, "\n") + "\n"
+		refused := map[string]string{
+			"an indented block":      "  " + strings.Join(k.keys, "\n  ") + "\n  " + hidden + "\n",
+			"an indented first line": "  " + hidden + "\n" + plain,
+		}
+		for name, sep := range map[string]string{
+			"a lone carriage return":         "\r",
+			"a next-line character (U+0085)": "\u0085",
+			"a line separator (U+2028)":      "\u2028",
+			"a paragraph separator (U+2029)": "\u2029",
+		} {
+			refused[name] = strings.TrimSuffix(plain, "\n") + sep + hidden + "\n"
+		}
+		for name, front := range refused {
+			err := k.load(front)
+			if err == nil {
+				t.Errorf("%s with %s loaded", kind, name)
+				continue
+			}
+			// The refusal is the lint's, not a side effect such as a
+			// missing description.
+			if msg := err.Error(); !strings.Contains(msg, "indented") && !strings.Contains(msg, "line break") {
+				t.Errorf("%s with %s refused for another reason: %v", kind, name, err)
+			}
+		}
+		// What must keep loading: a nested map, a list, a CRLF file.
+		for name, front := range map[string]string{
+			"a nested map":     plain + "metadata:\n  version: \"1.0\"\n",
+			"an indented list": plain + "compatibility:\n  - claude\n",
+			"a CRLF file":      strings.ReplaceAll(plain, "\n", "\r\n") + "license: MIT\r\n",
+			"a comment first":  "# a comment\n" + plain,
+		} {
+			if err := k.load(front); err != nil {
+				t.Errorf("%s with %s refused: %v", kind, name, err)
+			}
+		}
+	}
+	// A folded value under its key is a continuation, not a hidden key
+	// (skills allow one; agents want a one-line description).
+	if err := kinds["skill"].load("name: x\ndescription: >-\n  a description\n  over two lines\n"); err != nil {
+		t.Errorf("a skill with a folded description refused: %v", err)
 	}
 }

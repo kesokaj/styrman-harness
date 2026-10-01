@@ -793,6 +793,14 @@ func TestPrintableDropsLineAndDirectionControls(t *testing.T) {
 		"a\u061cb":               "a?b",
 		"\ufeffstart":            "?start",
 		"soft\u00adhyphen":       "soft?hyphen",
+		// Default-ignorable characters outside the format class: variation
+		// selectors, the combining grapheme joiner, the Hangul fillers. An
+		// ordinary combining accent stays.
+		"a\ufe0fb":        "a?b",
+		"a\U000e0101b":    "a?b",
+		"a\u034fb":        "a?b",
+		"a\u3164b\u115fc": "a?b?c",
+		"e\u0301":         "e\u0301",
 	} {
 		if got := printable(in); got != want {
 			t.Errorf("printable(%q) = %q, want %q", in, got, want)

@@ -233,6 +233,7 @@ func TestTimerOfAnotherSystemIsNamed(t *testing.T) {
 		{"uninstall", "--home", home},
 		{"uninstall", "--dry-run", "--home", home},
 		{"dream", "--remove-timer", "--home", home},
+		{"dream", "--remove-timer", "--dry-run", "--home", home},
 	} {
 		var out bytes.Buffer
 		if err := run(args, &out); err != nil {
@@ -241,6 +242,14 @@ func TestTimerOfAnotherSystemIsNamed(t *testing.T) {
 		got := out.String()
 		if !strings.Contains(got, other) || !strings.Contains(got, "for another system") {
 			t.Errorf("%v does not name the other system's unit file:\n%s", args, got)
+		}
+		// uninstall has nothing of this system to remove here, so its dry run
+		// must not announce a removal either.
+		if args[0] == "dream" && strings.Contains(got, "installed now: true") {
+			t.Errorf("%v says a timer of this system is installed:\n%s", args, got)
+		}
+		if args[0] == "uninstall" && strings.Contains(got, "would remove the dream timer") {
+			t.Errorf("%v announces a removal it would not make:\n%s", args, got)
 		}
 		if strings.Contains(got, "removed the dream timer") || strings.Contains(got, "dream timer removed") {
 			t.Errorf("%v claims a removal:\n%s", args, got)

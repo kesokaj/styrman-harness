@@ -610,8 +610,11 @@ func matchOffset(body, snip string) int {
 	return 0
 }
 
-// printable replaces control characters (C0, DEL, C1) with '?', so indexed
-// text cannot drive the terminal the answer is printed to (security review,
+// printable replaces control characters (C0, DEL, C1), Unicode's format
+// characters, line separators and paragraph separators (classes Cf, Zl, Zp)
+// and its other default-ignorable characters (variation selectors, fillers)
+// with '?', so indexed text cannot drive the terminal the answer is printed
+// to, forge a line of it, or carry text nobody sees (BUG-152; security review,
 // finding 4). Tabs and newlines become '?' too, except in snippets, whose
 // callers fold whitespace to single spaces first.
 func printable(s string) string {
@@ -624,6 +627,12 @@ func printable(s string) string {
 		// members: direction marks and overrides reorder what a terminal
 		// shows, and zero-width and tag characters spell text nobody sees.
 		if unicode.Is(unicode.Zl, r) || unicode.Is(unicode.Zp, r) || unicode.Is(unicode.Cf, r) {
+			return '?'
+		}
+		// And what Unicode itself calls ignorable outside that class: the
+		// variation selectors, the combining grapheme joiner, the fillers.
+		// By property, not by a list: an ordinary combining accent stays.
+		if unicode.Is(unicode.Variation_Selector, r) || unicode.Is(unicode.Other_Default_Ignorable_Code_Point, r) {
 			return '?'
 		}
 		return r

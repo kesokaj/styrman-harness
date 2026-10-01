@@ -648,6 +648,12 @@ func TestRefreshCatalogScript(t *testing.T) {
 	if !strings.Contains(out, "next: git add") {
 		t.Errorf("the script does not say what to run next:\n%s", out)
 	}
+	// With an override the script says where the value stays on disk: git
+	// keeps it in the work clones' config and logs (security review of
+	// v2.2.0..1fc0d4c).
+	if !strings.Contains(out, "delete that directory if the value is sensitive") {
+		t.Errorf("the script does not say an override's value stays in the work directory:\n%s", out)
+	}
 	good := snapshot()
 	if out, code := run(pinA, pinG); code != 0 || snapshot() != good {
 		t.Fatalf("a second run at the same pins changed the catalog (exit %d)\n%s", code, out)

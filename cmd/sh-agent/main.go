@@ -295,7 +295,7 @@ func runUninstall(c *ctx) error {
 	// The dream timer is not in the manifest (the next install would delete
 	// it as stale); uninstall removes it by R4's dream clause, also when no
 	// manifest is left, and a dry run only says so.
-	if dream.TimerInstalled(c.home) {
+	if dream.TimerInstalledHere(c.home, runtime.GOOS) {
 		if c.dryRun {
 			fmt.Fprintln(c.out, "[dry-run] would remove the dream timer")
 		} else if removed, err := dream.RemoveTimer(c.home, runtime.GOOS); err != nil {
@@ -354,9 +354,12 @@ func runDream(c *ctx) error {
 		if c.removeTimer {
 			what = "remove the nightly dream timer"
 		}
-		fmt.Fprintln(c.out, "[dry-run] would "+what+"; installed now: "+strconv.FormatBool(dream.TimerInstalled(c.home)))
+		fmt.Fprintln(c.out, "[dry-run] would "+what+"; installed now: "+strconv.FormatBool(dream.TimerInstalledHere(c.home, runtime.GOOS)))
 		if notice := dream.LegacyTimerNotice(c.home, runtime.GOOS); c.removeTimer && notice != "" {
 			fmt.Fprintln(c.out, notice)
+		}
+		if c.removeTimer {
+			otherSystemTimerNote(c)
 		}
 	case c.installTimer:
 		err = dream.InstallTimer(c.home, os.Getenv("PATH"), runtime.GOOS)

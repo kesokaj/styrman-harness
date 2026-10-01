@@ -150,8 +150,8 @@ for v in CATALOG_AGENTS_CLI_REPO CATALOG_GOOGLE_SKILLS_REPO; do
   case "$val" in
     "" | /*) ;;
     https://*)
-      # No user information in the URL: the value is written into MANIFEST.md,
-      # which is committed. It is not echoed here either.
+      # No user information in the URL: a credential belongs in a helper,
+      # and no message here ever shows the value.
       host=${val#https://}
       case "${host%%/*}" in
         *@*) fail "$v must be an https:// URL or an absolute path without credentials in it ; use a credential helper" ;;
@@ -357,3 +357,8 @@ removed=${removed% }; echo "removed: ${removed:-none}"
 ex=$(printf '%s\n' "$excludes" | sed '/^$/d' | sort -u | tr '\n' ' ')
 echo "excluded: ${ex:-none}"
 echo "next: git add skills/google-catalog && go test ./..."
+# git keeps a clone's source in its config, FETCH_HEAD and reflogs: with an
+# override, that is the override's value, on disk under the work directory.
+if [ -n "$via" ]; then
+  echo "note: a source override was used; git keeps its value in the work clones under $work: delete that directory if the value is sensitive"
+fi

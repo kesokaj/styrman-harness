@@ -137,7 +137,7 @@ resource "google_project_iam_member" "run_sql_client" {
 }
 ```
 
-- A `google_sql_user` password lands in state: prefer IAM database authentication (`database_flags { name = "cloudsql.iam_authentication", value = "on" }`, a `google_sql_user` of `type = "CLOUD_IAM_SERVICE_ACCOUNT"` for the runtime SA).
+- A `google_sql_user` password lands in state: prefer IAM database authentication (`database_flags { name = "cloudsql.iam_authentication", value = "on" }`, one `google_sql_user` of `type = "CLOUD_IAM_SERVICE_ACCOUNT"` per service account — the runtime SA and the migrate SA — with no password anywhere; the grants are the `data-gcp` skill's § Roles recipe).
 - Private IP instead of public: `ip_configuration { ipv4_enabled = false  private_network = <vpc self_link> }` plus the service's `vpc_access` block below.
 - https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/sql_database_instance ; versions: https://docs.cloud.google.com/sql/docs/postgres/db-versions
 
@@ -226,8 +226,9 @@ resource "google_cloud_run_v2_service" "app" {
 
 # Public, the IAM form (blocked where constraints/iam.allowedPolicyMemberDomains is enforced):
 # the same resource with member = "allUsers" — only when deploy/gcp.md says Public: yes, and then
-# every route the scheduler calls (/tick below) verifies the OIDC token itself — signature, audience, AND that
-# `email` is the scheduler SA and `email_verified` is true (idtoken.Validate alone accepts any SA's token for this URL).
+# every route the scheduler calls (/tick below) verifies the OIDC token itself — signature, audience, the issuer
+# (accounts.google.com), AND that `email` is the scheduler SA and `email_verified` is true (idtoken.Validate alone
+# accepts any SA's token for this URL and never compares the issuer).
 ```
 
 `google_project_iam_member` with `roles/run.invoker` would grant every service in the project; keep project-level bindings for project-scoped roles. Never mix an authoritative `_iam_policy` with `_iam_member` on one resource. https://docs.cloud.google.com/run/docs/authenticating/public ; https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/cloud_run_v2_service_iam
@@ -267,8 +268,8 @@ resource "google_cloud_run_v2_job" "migrate" {
         image = "${var.region}-docker.pkg.dev/${var.project}/${var.repo}/${var.app}:${var.git_sha}"
         args  = ["migrate"]
         env {
-          name = "DATABASE_URL" # the same DSN as the service: migrations run as the schema-owning `app` role
-          value_source {        # (a separate owner role is a project decision: service.md § Database item 3)
+          name = "DATABASE_URL" # the same DSN as the service: one role, `app`, owns the schema (the password path)
+          value_source {        # (the owner/runtime split is IAM database authentication: data-gcp skill § Roles)
             secret_key_ref {
               secret  = google_secret_manager_secret.db_url.secret_id
               version = google_secret_manager_secret_version.db_url.version
@@ -316,9 +317,9 @@ resource "google_cloud_scheduler_job" "tick" {
       service_account_email = google_service_account.scheduler.email
       audience              = google_cloud_run_v2_service.app.uri # Google: the full URL of the service
       # Cloud Run checks this token only while invoker IAM is enforced. On a public service the /tick handler
-      # validates it: idtoken.Validate with this audience, then payload.Claims["email"] == this SA's email and
-      # email_verified == true — any service account anywhere can mint a token for a public URL, so the
-      # audience check alone proves nothing about the caller.
+      # validates it: idtoken.Validate with this audience, then the issuer (accounts.google.com, which Validate
+      # never compares), then payload.Claims["email"] == this SA's email and email_verified == true — any service
+      # account anywhere can mint a token for a public URL, so the audience check alone proves nothing about the caller.
     }
   }
 }

@@ -1,35 +1,44 @@
-# Requirements
+# Requirements — <project>
 
-<!-- Non-negotiable project requirements. Read before every task. -->
-<!-- Never modify without explicit user approval. -->
-<!-- Use tables to quantify targets — vague requirements are useless. -->
+<!-- Read before every significant change. Immutable without the user's explicit approval of the exact text:
+     propose the edit → approval → ADR → REQUIREMENTS.md and ROADMAP.md in one commit (global context § Hard rules).
+     One sentence per item, each with a provenance line: who asked, when, and where the requirement is enforced
+     (a test, a rule, a guide). The `requirements` skill elicits and traces these; it never writes "approved" itself. -->
 
-## Critical Requirements
+## Must — non-negotiable
 
-1. <!-- Requirement 1: e.g., "All API endpoints must require authentication" -->
-2. <!-- Requirement 2: e.g., "Must support ARM and AMD64 container builds" -->
+<!-- The project is wrong without these. Numbered R1…; a later edit keeps the numbers (a struck item stays as "R3 — struck <date>: <why>"). -->
 
-## Constraints
+- **R1** — <one sentence>.
+  <!-- provenance: <who>, <date>; enforced by: <test | rule | guide path> -->
+- **R2** — <one sentence>.
+  <!-- provenance: …; enforced by: … -->
 
-- <!-- Constraint 1: e.g., "No external dependencies beyond stdlib + approved list" -->
-- <!-- Constraint 2: e.g., "Must deploy to Cloud Run on GCP" -->
+## Should — expected unless a decision says otherwise
 
-## Out of Scope
+<!-- S1…: a deviation needs a D-row in the active plan, not an ADR. -->
 
-- <!-- What this project explicitly does NOT do -->
+- **S1** — <one sentence>.
+  <!-- provenance: …; enforced by: … -->
 
----
+## Could — welcome when cheap
 
-## Scale Targets (a service only — delete this section and the next for a CLI, a library or a tool)
+<!-- C1…: nobody blocks on these; a plan may take one as a Follow-up. -->
 
-| Metric | Target | Notes |
-|---|---|---|
-| <!-- e.g., Concurrent users --> | <!-- e.g., 10,000 --> | <!-- Context --> |
+- **C1** — <one sentence>.
 
----
+## Non-goals
 
-## Latency SLA
+<!-- What this project deliberately does not do, one line each, so nobody adds it by accident. -->
 
-| Metric | Target | Hard Limit |
-|---|---|---|
-| <!-- e.g., API response (p99) --> | <!-- e.g., < 50ms --> | <!-- e.g., < 200ms --> |
+- <one line>.
+
+## Known limits
+
+<!-- Facts about the environment or the platform the project lives with (a size cap, a rate limit, a CLI quirk), each with its source. -->
+
+- <one line> — <source>.
+
+<!-- Targets a service must meet (concurrency, p99 latency, data volume) are Must or Should items like any other,
+     one sentence each with the number in it and the test or dashboard that measures it as "enforced by";
+     a table is added only when there are five or more. A CLI, a library or a tool has none. -->

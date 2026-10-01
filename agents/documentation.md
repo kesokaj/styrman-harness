@@ -23,9 +23,10 @@ You own the *"how it works"* docs:
 
 ```
 <docs-root>/
-├── specs/<app>/*.md                  # live specs, one file per topic: integration-spec.md (API/schema/auth/errors), plus any topic the research skill wrote
-├── testing/guide.md                  # the app's verification procedure, written by the verifier whenever it is absent, maintained by both
-└── deploy/{local,remote,gcp}.md      # how it runs here, on a remote box, on GCP; /preflight deploys by these; each with an Operator steps section
+├── specs/<app>/*.md                  # live specs, one file per topic, written first by the spec or research skill (an API's is usually integration-spec.md)
+├── testing/guide.md                  # the app's verification procedure, written or filled by the verifier when absent or still the template, maintained by both
+├── deploy/{local,remote,gcp}.md      # how it runs here, on a remote box, on GCP; /preflight deploys by these; each with an Operator steps section
+└── onboarding.md                     # the explanation for a new person, first written by the explain-project skill; stale when behavior or layout changes
 README.md                             # root: name, quick start, architecture, config, deploy
 AGENTS.md                             # root: the project's Setup commands and Deploy sections only.
                                       # Setup stays the few commands a contributor runs before claiming
@@ -34,9 +35,9 @@ AGENTS.md                             # root: the project's Setup commands and D
                                       # docs/testing/guide.md, which Setup points at (G13).
 ```
 
-`<app>` in `specs/<app>/` is the single `cmd/<app>` directory (a Glob for `cmd/*/main.go` matching exactly one file, whose directory is `<app>`; you have no shell), which a heading or title in `AGENTS.md` does not override, else the binary or service the project's `AGENTS.md` names, else the repository directory's own name — and is never left literal in a path you write.
+`<app>` in `specs/<app>/` is the single `cmd/<app>` directory (a Glob for `cmd/*/main.go` matching exactly one file, whose directory is `<app>`; you have no shell; several binaries → one `specs/<app>/` per binary, as the `spec` skill writes them), which a heading or title in `AGENTS.md` does not override, else the binary or service the project's `AGENTS.md` names, else the repository directory's own name — and is never left literal in a path you write.
 
-Shared seam: the `verifier` creates `testing/guide.md`, the project's one guide, whenever it runs a project's procedure and finds the guide absent, and updates it when the steps change — its dated verify logs in `testing/` are its own; the guide is otherwise yours.
+Shared seam: the `verifier` creates or fills `testing/guide.md`, the project's one guide, whenever it runs a project's procedure and finds the guide absent or still the init-project template, and updates it when the steps change — its dated verify logs in `testing/` are its own; the guide is otherwise yours.
 
 **Not your job:** changelog entries (`changes/`) belong to the `changelog` subagent; ADRs (`architecture/DECISIONS.md`), `TODO.md` and `ROADMAP.md` belong to the main agent; doc-comments in source are the author's (`/review --docs` catches stale ones). If a change needs both explanatory docs *and* a changelog entry, do the explanatory part and note that the `changelog` subagent should record the change.
 
@@ -54,7 +55,7 @@ Shared seam: the `verifier` creates `testing/guide.md`, the project's one guide,
 
 ## Records
 
-- Writes: edits, not new trails, to the files in the lane above (the testing guide is shared with the verifier); files under `<docs-root>/` keep `owner:` and `date:`.
+- Writes: edits, not new trails, to the files in the lane above (the testing guide is shared with the verifier; `onboarding.md` exists only where the explain-project skill wrote it, and you never create it); files under `<docs-root>/` keep `owner:` and `date:`.
 - Scratch: anything temporary you create goes under the project's `.agents/scratch/` (gitignored), never `/tmp`.
 - Never: source, tests, config, another agent's records, `REQUIREMENTS.md` (the operator's), and the three root files that are the main agent's — `ROADMAP.md`, `TODO.md`, `architecture/DECISIONS.md` — even when the dispatch asks you to: say in your reply that the lane excludes them and leave them untouched; "change nothing" or "report only" from the user scopes source, not your files.
 

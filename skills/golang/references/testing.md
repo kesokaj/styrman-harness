@@ -202,7 +202,7 @@ func TestHello(t *testing.T) {
 }
 ```
 
-The integration tier runs the built binary: `docker build`, `docker run`, `curl` the health check and one real request (the `docker` skill); the e2e criteria come from the plan.
+The container smoke (its own tier; the integration tier is the real database, `testing-strategy` skill) runs the built binary: `docker build`, `docker run`, `curl` the health check and one real request (the `docker` skill); the e2e criteria come from the plan.
 
 ## Concurrency: `synctest.Test` and `-race`
 

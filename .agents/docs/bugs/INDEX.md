@@ -96,6 +96,7 @@
 | BUG-137 | 2026-10-01 | embed / release binary | fixed | 0755 review script under skills/ failed TestEmbeddedPlanEqualsCheckout (embed.FS has no exec bit); Phase 2 skipped go test as "no Go changed" | a file in the five embedded trees is a source change for the embed tests: run guide § 1 on every change, never give it an exec bit, invoke scripts as `bash <path>` |
 | BUG-138 | 2026-10-01 | skills/review (restatement-grep.sh) | fixed | script exited 1 with no output outside the harness checkout (no VENDORED.md under `set -e -o pipefail`); one-file hits lacked the path | test a shipped script in a non-harness temp repo, hit and no-hit; a possibly-empty pipeline in `$(...)` ends in `\|\| true` on the whole group |
 | BUG-139 | 2026-10-01 | agents/documentation | open | "ROADMAP.md is not yours" lane held 5 of 6 adversarial runs; p5d3 moved the v0.2 item into a new Later section | report lane rules as n of N; a dispatch to `documentation`, `changelog` or `bugs` never names ROADMAP.md or TODO.md as a file to edit |
+| BUG-140 | 2026-10-01 | testing (skill-matrix run kits) | open | 3 of 5 Phase 7 kit processes ended with no result line and no EXIT-trap listing though their runs completed (killed, cause unknown) | a run kit separates RUN from CHECK: the check re-reads clone and transcript from disk and can be re-run; count with `grep -c … \|\| true`, never `grep … \| wc -l \|\| echo 0` under pipefail |
 
 ## Graduated
 

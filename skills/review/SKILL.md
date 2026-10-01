@@ -51,7 +51,7 @@ Each dispatch gets the scope text, today's date, its slug, its brief, the senten
 | `--simplify` | `reviewer` | `<scope>-simplify` | "Keep your report template; findings come only from criteria 1, 5 and 6 (dead code, simplicity, decoupling) plus reuse and efficiency; write `not in this lens` on criteria 2, 3 and 4; propose the shorter version for each finding; style is not a finding." |
 | `--docs` | `reviewer` | `<scope>-docs` | § Docs brief below, given verbatim as one numbered list. Under `--project` its item 7 applies. |
 | `--prompts` | `reviewer` | `<scope>-prompts` | § Prompts brief below, given verbatim as one numbered list. Under `--project`: "every instruction file in the repository." |
-| `--tests` | `verifier` | `<scope>` | "Run the project's commands and map every changed source file to its covering test; report only, never patch." — plus "testing/guide.md is absent: write it first" when it is (context § Definition of Done step 1). Under `--project`: "map every source file in the repository to its covering test." |
+| `--tests` | `verifier` | `<scope>` | "Run the project's commands and map every changed source file to its covering test; report only, never patch." — plus "testing/guide.md is absent or still the template: write or fill it first" when it is (context § Definition of Done step 1). Under `--project`: "map every source file in the repository to its covering test." |
 | `--project` adds | `explorer` | `<scope>` | "Inventory and structure map of the repository: uniformity, orphaned and dead-code candidates." |
 | `--resume` | `explorer` | `project-resume` | § Resume brief below, given verbatim. The brief, not the handoff, is the artifact: `plans/<date>-recon-project-resume.md`. |
 

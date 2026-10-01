@@ -255,6 +255,19 @@ git add skills/find-skills skills-lock.json && git commit -m "skill: find-skills
 
 Record third-party provenance in `skills/VENDORED.md`. A skill you already installed globally with `npx skills add -g` can be pulled in with `sh-agent adopt <name>`.
 
+## Skills
+
+`sh-agent list` prints every skill with its description; this is the map by purpose (the names are the `/name` commands on both CLIs).
+
+| Group | Skills |
+|---|---|
+| Work protocols | `feature` (design before code, plan file, cold-reader check, phases), `bug` (diagnose, failing test first, smallest fix, record), `review` (one review command, lenses `--code --security --simplify --docs --prompts --tests --all`, trail lens `--resume`), `review-standards` (what the reviewer checks: six criteria, mutation protocol, code-shape rules), `preflight` (the release gate and deploy path) |
+| Project shape | `init-project` (scaffold or update a project's trail, templates under its `assets/`), `requirements` (elicit and record `REQUIREMENTS.md`, tiered, approved by the user), `spec` (a spec per topic under `docs/specs/<app>/`), `testing-strategy` (tiers, fixtures, the testing guide), `explain-project` (`docs/onboarding.md` for a person new to the code), `research` (a cited brief, written as a spec), `handoff` (the session's checkpoint for the next reader) |
+| Learning loop | `feedback-log`, `project-memory`, `retro`, `distill`, `dream` |
+| Code | `golang`, `typescript`, `frontend` (TanStack Start + Tailwind 4), `bash`, `json-api-style` (the Google AIPs), `docker`, `mermaid-syntax` |
+| Google Cloud | `gcloud-setup` (auth, ADC, project), `cloud-run-deploy` (image, canary, verify, rollback), `terraform` (GCP resources in HCL), `operate-gcp` (logs, alerts, rollback, incidents, dependency cadence), `data-gcp` (Cloud SQL Postgres, migrations, connections), `api-auth-gcp` (IAP, ID tokens, service-to-service), `gke-basics` (the one fork kept under its upstream name) |
+| Vendored verbatim | `grilling`, `codebase-design`, `find-skills` — provenance in `skills/VENDORED.md` |
+
 ## Layout
 
 ```

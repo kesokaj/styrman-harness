@@ -43,7 +43,7 @@ In: … / Out: … / Follow-ups noted, not built: …
 <files, packages, routes, tables, external services; the recon brief when Step 1 dispatched one>
 
 ## Interfaces
-<function signatures, request/response shapes, schema changes, config keys — concrete enough that two implementers converge>
+<function signatures, request/response shapes, schema changes, config keys — concrete enough that two implementers converge; when a spec exists (`spec` skill), its path instead of a restatement>
 
 ## Failure modes
 <what the user sees when each part fails; what the API returns>

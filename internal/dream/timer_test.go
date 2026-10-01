@@ -3,6 +3,7 @@ package dream
 import (
 	"errors"
 	"os"
+	"os/user"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -272,5 +273,35 @@ func TestUnitNamesPerHome(t *testing.T) {
 	}
 	if u, _ := UnitFor(link); u != "sh-agent-dream" {
 		t.Errorf("symlinked real home got %s", u)
+	}
+}
+
+// TestUnitForIgnoresHomeOverride: a sandbox run sets HOME to its own
+// directory and passes that directory as --home. The service manager is the
+// user's, not the sandbox's, so that home is not the real one and must not get
+// the bare unit names (security review of the v2.1.0 gate: with HOME as the
+// yardstick, a sandbox --remove-timer reached the operator's real timer).
+func TestUnitForIgnoresHomeOverride(t *testing.T) {
+	sandbox := t.TempDir()
+	t.Setenv("HOME", sandbox)
+	// The yardstick is the platform's own account lookup, not the function
+	// under test: where that lookup falls back to HOME (a pure-Go build on
+	// macOS), there is nothing to tell apart.
+	u, err := user.Current()
+	if err != nil || u.HomeDir == "" || filepath.Clean(u.HomeDir) == filepath.Clean(sandbox) {
+		t.Skipf("this platform resolves the account's home from HOME (%v): nothing to tell apart", err)
+	}
+	unit, plist := UnitFor(sandbox)
+	if unit == unitName || plist == plistName {
+		t.Errorf("a HOME override got the real home's unit names: %s, %s", unit, plist)
+	}
+}
+
+// TestRenderSystemdEscapesDollar: systemd expands $VAR and ${VAR} in
+// ExecStart, inside quotes too; $$ is a literal dollar sign.
+func TestRenderSystemdEscapesDollar(t *testing.T) {
+	service, _ := renderSystemd("/h/a$b/sh-agent", "/h/${X}", "/p")
+	if !strings.Contains(service, `ExecStart="/h/a$$b/sh-agent" dream --all --home "/h/$${X}"`) {
+		t.Errorf("a $ in ExecStart was not escaped:\n%s", service)
 	}
 }

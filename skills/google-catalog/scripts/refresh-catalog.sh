@@ -22,6 +22,12 @@
 # name, a path git ignores — is caught by the suite it tells you to run next
 # (TestCatalogInstallsClean, TestEmbedHoldsOnlyTrackedFiles).
 #
+# The destination is replaced only when it is a catalog: an empty --dest or
+# --work, /, the home directory, the checkout and an ancestor of either are
+# refused, as is a non-empty destination without CHECKSUMS; the swap removes
+# only the directories that file names. The manifest's "## Excluded" and
+# "## Notes" sections are kept byte for byte.
+#
 # INDEX.md and CHECKSUMS are written by the Go tests in write mode, so the
 # index is derived by the installer's own frontmatter parser.
 #
@@ -38,12 +44,14 @@ script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 repo=$(cd "$script_dir/../../.." && pwd)
 dest="$repo/skills/google-catalog/catalog"
 work="$repo/.agents/scratch/catalog-refresh"
+# One excluded name per line: a name is compared whole, so one with a space
+# never excludes each of its words.
 excludes=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --dest) dest=$2; shift 2 ;;
     --work) work=$2; shift 2 ;;
-    --exclude) excludes="$excludes $2"; shift 2 ;;
+    --exclude) excludes="$excludes"$'\n'"$2"; shift 2 ;;
     --) shift; break ;;
     -*) usage; exit 2 ;;
     *) break ;;
@@ -56,14 +64,25 @@ done
 abs() { case "$1" in /*) printf '%s\n' "$1" ;; *) printf '%s/%s\n' "$PWD" "$1" ;; esac; }
 dest=$(abs "$dest")
 work=$(abs "$work")
+# One spelling per place before the guard compares anything: `..` and
+# symlinks resolved, through the path itself or, when it does not exist yet,
+# through its parent (security review of the v2.1.0 gate).
+phys() {
+  if [ -d "$1" ]; then (cd -P "$1" && pwd -P)
+  elif [ -d "$(dirname "$1")" ]; then printf '%s/%s\n' "$(cd -P "$(dirname "$1")" && pwd -P)" "$(basename "$1")"
+  else printf '%s\n' "$1"; fi
+}
+dest=$(phys "$dest")
+repo_phys=$(phys "$repo")
+home_phys=$(phys "$HOME")
 # The swap below deletes directories under --dest, so --dest is never a place
 # that holds anything else: not /, the home directory, the checkout, or an
 # ancestor of either (security review S1).
 case "${dest%/}/" in
-  / | "${HOME%/}/" | "${repo%/}/") fail "--dest $dest is not a catalog directory" ;;
+  / | "${home_phys%/}/" | "${repo_phys%/}/") fail "--dest $dest is not a catalog directory" ;;
 esac
-case "${repo%/}/" in "${dest%/}/"*) fail "--dest $dest contains the checkout" ;; esac
-case "${HOME%/}/" in "${dest%/}/"*) fail "--dest $dest contains the home directory" ;; esac
+case "${repo_phys%/}/" in "${dest%/}/"*) fail "--dest $dest contains the checkout" ;; esac
+case "${home_phys%/}/" in "${dest%/}/"*) fail "--dest $dest contains the home directory" ;; esac
 if [ -d "$dest" ] && [ -n "$(ls -A "$dest")" ] && [ ! -f "$dest/CHECKSUMS" ]; then
   fail "--dest $dest is not empty and has no CHECKSUMS: not a catalog, nothing is replaced there"
 fi
@@ -102,9 +121,9 @@ full_g=$(git -C "$work/google-skills" rev-parse HEAD)
 # Entries the security review excluded stay excluded: the manifest's list is
 # merged into --exclude, so a refresh cannot bring one back by forgetting a flag.
 if [ -f "$dest/MANIFEST.md" ]; then
-  for name in $(sed -n '/^## Excluded/,/^## Notes/p' "$dest/MANIFEST.md" | sed -n 's/^- `\([^`]*\)`.*/\1/p'); do
-    excludes="$excludes $name"
-  done
+  while IFS= read -r name; do
+    excludes="$excludes"$'\n'"$name"
+  done < <(sed -n '/^## Excluded/,/^## Notes/p' "$dest/MANIFEST.md" | sed -n 's/^- `\([^`]*\)`.*/\1/p')
 fi
 
 build="$work/build"
@@ -112,7 +131,7 @@ rm -rf "$build"
 mkdir -p "$build"
 origins="$work/origins.txt"
 : > "$origins"
-excluded() { case " $excludes " in *" $1 "*) return 0 ;; esac; return 1; }
+excluded() { case $'\n'"$excludes"$'\n' in *$'\n'"$1"$'\n'*) return 0 ;; esac; return 1; }
 
 while IFS='|' read -r label clone sub; do
   root="$work/$clone/$sub"
@@ -127,9 +146,10 @@ while IFS='|' read -r label clone sub; do
     # A skill name is lowercase letters, digits and hyphens: anything else
     # (a space, a capital, a glob character) would break the bookkeeping
     # below. Excluding it comes first, so one odd upstream directory never
-    # blocks every refresh.
+    # blocks every refresh. The hint is shell-quoted: the name is upstream's
+    # and the operator pastes the hint into a shell.
     case "$name" in
-      *[!a-z0-9-]* | -*) fail "entry \"$name\" ($label) is not a plain skill name (lowercase letters, digits, hyphens); the catalog cannot carry it (--exclude \"$name\")" ;;
+      *[!a-z0-9-]* | -*) fail "entry \"$name\" ($label) is not a plain skill name (lowercase letters, digits, hyphens); the catalog cannot carry it (--exclude $(printf '%q' "$name"))" ;;
     esac
     [ ! -L "${d%/}" ] || fail "entry $name ($label) is itself a symlink (--exclude $name)"
     [ -f "$d/SKILL.md" ] || fail "entry $name ($label) has no SKILL.md (--exclude $name)"
@@ -252,6 +272,6 @@ removed=$(comm -23 <(printf '%s\n' "$before") <(printf '%s\n' "$after") | tr '\n
 [ "$before" = "" ] && added="(first import: $(printf '%s\n' "$after" | wc -l | tr -d ' ') entries)"
 added=${added% }; echo "added: ${added:-none}"
 removed=${removed% }; echo "removed: ${removed:-none}"
-ex=$(printf '%s\n' $excludes | sort -u | tr '\n' ' ')
+ex=$(printf '%s\n' "$excludes" | sed '/^$/d' | sort -u | tr '\n' ' ')
 echo "excluded: ${ex:-none}"
 echo "next: git add skills/google-catalog && go test ./..."

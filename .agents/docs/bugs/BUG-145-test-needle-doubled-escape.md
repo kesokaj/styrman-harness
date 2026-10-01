@@ -11,13 +11,13 @@ area: internal/dream (collect_test.go, feedback redaction)
 `TestFeedbackRedactsEscapedSecret` (`internal/dream/collect_test.go`), the test for the dream's JSON-lines feedback redaction, PASSED with the fix reverted on its first must-fail control, so it proved nothing. After a needle change, a second control failed the other way: FAIL with the fix present.
 
 ## Repro
-Write a Go raw-string literal from a Python heredoc with `\\\\u0026`. It lands in the Go source as `\\u0026` (two backslashes), so the JSON line decodes to the literal text `&` instead of `&`. The escaped-secret shape under test never existed in the fixture. Separately, the first needle (an `AKIA...` key with `A`) was one the raw redaction already caught, so it could not show the gap even with a correct escape.
+Write a Go raw-string literal from a Python heredoc with `\\\\u0026`. It lands in the Go source as `\\u0026` (two backslashes), so the JSON line decodes to the literal text `\u0026` instead of `&`. The escaped-secret shape under test never existed in the fixture. Separately, the first needle (an `AKIA...` key with one letter written as a `\uXXXX` escape) was one the raw redaction already caught, so it could not show the gap even with a correct escape.
 
 ## Root cause
-A fixture meant to carry an escape went through two layers of string quoting (heredoc, then Go literal) and the written file was never checked for the escape itself. The global hard rule for exactly this ("after writing text meant to keep an escape, grep -n for the escape itself") was not followed. The needle was chosen from assumption, not from the gate's measured shape (`&sig=`), so the control had nothing to separate fixed from unfixed.
+A fixture meant to carry an escape went through two layers of string quoting (heredoc, then Go literal) and the written file was never checked for the escape itself. The global hard rule for exactly this ("after writing text meant to keep an escape, grep -n for the escape itself") was not followed. The needle was chosen from assumption, not from the gate's measured shape (`\u0026sig=`), so the control had nothing to separate fixed from unfixed.
 
 ## Fix
-The fixture line now reads `&sig=<32 hex>` with one backslash, checked with `grep -n 'u0026sig'`. The must-fail control now fails without the fix and the test passes with it. Files: `internal/dream/collect_test.go` (and `collect.go` for the redaction it covers), uncommitted at record time.
+The fixture line now reads `\u0026sig=<32 hex>` with one backslash, checked with `grep -n 'u0026sig'`. The must-fail control now fails without the fix and the test passes with it. Files: `internal/dream/collect_test.go` (and `collect.go` for the redaction it covers), uncommitted at record time.
 
 ## Prevention
 - A test that sets up an unusual condition proves the condition holds first: for an escape, `grep -n` the written file for the escape itself, as the hard rule says.

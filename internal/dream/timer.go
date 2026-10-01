@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -26,7 +27,22 @@ const (
 
 // userHomeDir is the real home; a test seam, since the tests' homes are
 // temporary directories that must count as the real one.
-var userHomeDir = os.UserHomeDir
+var userHomeDir = accountHome
+
+// accountHome is the home of the account the process runs as, from the
+// account database rather than from HOME: the user service manager belongs
+// to the account, and a sandbox run overrides HOME (the testing guide's kits
+// do), so HOME as the yardstick let a sandbox --remove-timer or uninstall
+// reach the operator's real timer (security review of the v2.1.0 gate).
+// Where the lookup itself falls back to HOME — a build without cgo on macOS,
+// whose accounts are not in /etc/passwd — this is HOME again: a known limit,
+// named in the dream spec.
+func accountHome() (string, error) {
+	if u, err := user.Current(); err == nil && u.HomeDir != "" {
+		return u.HomeDir, nil
+	}
+	return os.UserHomeDir()
+}
 
 // UnitFor names the systemd unit and the launchd label for a home. The real
 // home gets the bare names; any other home gets them suffixed with a short
@@ -61,6 +77,9 @@ func linuxServicePath(home string) string {
 func renderSystemd(bin, home, path string) (string, string) {
 	// systemd expands %-specifiers inside quotes too; %% is a literal %.
 	bin, home, path = strings.ReplaceAll(bin, "%", "%%"), strings.ReplaceAll(home, "%", "%%"), strings.ReplaceAll(path, "%", "%%")
+	// ExecStart also expands $VAR and ${VAR}, inside quotes too; $$ is a
+	// literal dollar sign. Environment= expands nothing, so path keeps its own.
+	bin, home = strings.ReplaceAll(bin, "$", "$$"), strings.ReplaceAll(home, "$", "$$")
 	service := fmt.Sprintf(`[Unit]
 Description=sh-agent dream: the nightly background dreamer (R3)
 

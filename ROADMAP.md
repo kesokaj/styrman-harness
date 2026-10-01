@@ -6,6 +6,4 @@ Last reviewed: 2026-10-01
 
 ## Now
 
-- Google skills catalog: 141 Google-published skills vendored behind one router skill — `.agents/docs/plans/2026-10-01-google-skills-catalog.md`
-
 ## Next

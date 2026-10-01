@@ -23,4 +23,4 @@ The unit name and label were package constants, chosen before `--home` existed a
 Anything a `--home`-scoped command touches OUTSIDE the home (a service manager's unit namespace, a PATH entry, a global cache) is named or keyed by the home as well, and its test asserts the name the manager receives, not only the files under the home.
 
 ## Related
-R6; BUG-107 and BUG-123 (the kits' real-config guards: same family, guarding files and config, not the manager); BUG-143 (same gate).
+R6; BUG-107 and BUG-123 (the kits' real-config guards: same family, guarding files and config, not the manager); BUG-143 (same gate); BUG-149 (a defect in this fix: the real home was read from `$HOME`).

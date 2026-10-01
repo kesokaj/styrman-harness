@@ -11,9 +11,9 @@ skill and never installed as skills themselves.
 
 | Skill | Source | Pin | License | Vendored | Update via |
 |-------|--------|-----|---------|----------|------------|
-| grilling | github.com/mattpocock/skills (`skills/productivity/grilling`) | 6654f6b | MIT | 2026-08-31 | `npx skills add mattpocock/skills -s grilling` |
-| codebase-design | github.com/mattpocock/skills (`skills/engineering/codebase-design`) | 6654f6b | MIT | 2026-08-31 | `npx skills add mattpocock/skills -s codebase-design` |
-| find-skills | github.com/vercel-labs/skills (`skills/find-skills`) | 435076e | MIT | 2026-08-31 | `npx skills add vercel-labs/skills -s find-skills` |
+| grilling | github.com/mattpocock/skills (`skills/productivity/grilling`) | 6654f6b | MIT | 2026-08-31 | `npx skills@<version> add mattpocock/skills -s grilling` |
+| codebase-design | github.com/mattpocock/skills (`skills/engineering/codebase-design`) | 6654f6b | MIT | 2026-08-31 | `npx skills@<version> add mattpocock/skills -s codebase-design` |
+| find-skills | github.com/vercel-labs/skills (`skills/find-skills`) | 435076e | MIT | 2026-08-31 | `npx skills@<version> add vercel-labs/skills -s find-skills` |
 | prompt-audit reference (one file, not a skill: `review-standards/references/prompt-audit/prompt-audit.md`, with `LICENSE.txt` beside it) | github.com/anthropics/skills (`skills/claude-api/shared/prompt-audit.md`) | 8a1541c (sha256:c33200da…1878f2) | Apache-2.0 | 2026-09-29 | `curl -sL https://raw.githubusercontent.com/anthropics/skills/<sha>/skills/claude-api/shared/prompt-audit.md`, then bump the pin and digest here |
 
 ## Apache-2.0 skills — forks, kept under their upstream names
@@ -47,8 +47,11 @@ published, and if that changes, add a `LICENSE` file for `gke-basics` before it 
 A catalog is vendored by its refresh script, never by hand and never by `npx skills add`: the
 script copies the entries byte for byte at the two pins (file modes aside: no executable bit),
 refuses what the harness cannot carry (a symlink, a Go file, a dotfile, a name in two source sets, an
-entry without frontmatter) until the operator passes `--exclude <entry>`, keeps every entry named
-under the manifest's `## Excluded` out, and writes `INDEX.md` and
+entry without frontmatter, a directory name that is not a plain skill name) until the operator passes
+`--exclude <entry>`, keeps every entry named under the manifest's `## Excluded` out and that section
+and `## Notes` byte for byte, replaces only a destination that is a catalog (never `/`, the home
+directory, the checkout or an ancestor of either; a non-empty destination must hold `CHECKSUMS`, and
+only the directories that file names are removed), and writes `INDEX.md` and
 `CHECKSUMS` through the Go tests, which then pin the tree both ways (`TestCatalogMatchesChecksums`,
 `TestCatalogIndexMatchesEntries`, `TestCatalogFilesAreCarryable`). Installed as global skills
 these skills push the harness's own out of both CLIs' skill lists

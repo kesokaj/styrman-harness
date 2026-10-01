@@ -693,3 +693,26 @@ func TestNoIndexMarkerSkipsTheDirectory(t *testing.T) {
 		t.Errorf("a root marker left %d entries in a prefixed view, first %s", len(entries), entries[0].path)
 	}
 }
+
+// TestNoIndexMarkerDeletedCountsNoMore: a tracked marker removed from the
+// work tree, before the removal is committed, already gives its directory
+// back to the index (code review round 3: the branch had no test).
+func TestNoIndexMarkerDeletedCountsNoMore(t *testing.T) {
+	root := newRepo(t)
+	home := t.TempDir()
+	writeFile(t, root, "docs/own.md", "the ocelot lives here\n")
+	writeFile(t, root, "vendor/data/.sh-agent-noindex", "")
+	writeFile(t, root, "vendor/data/entry.md", "an ocelot in vendored data\n")
+	commitAll(t, root, "add")
+	out := mustSearch(t, Options{Dir: root, Home: home, Words: []string{"ocelot"}})
+	if strings.Contains(out, "vendor/data/") {
+		t.Fatalf("the marked directory is in the index before the marker is removed:\n%s", out)
+	}
+	if err := os.Remove(filepath.Join(root, "vendor/data/.sh-agent-noindex")); err != nil {
+		t.Fatal(err)
+	}
+	out = mustSearch(t, Options{Dir: root, Home: home, Words: []string{"ocelot"}})
+	if !strings.Contains(out, "vendor/data/entry.md:") {
+		t.Errorf("a marker deleted from the work tree still hides its directory:\n%s", out)
+	}
+}

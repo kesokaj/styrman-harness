@@ -573,6 +573,22 @@ func TestRefreshCatalogScript(t *testing.T) {
 		t.Fatalf("a refresh over a catalog with a missing entry directory did not restore it (exit %d)\n%s", code, out)
 	}
 
+	// The swap removes what the old CHECKSUMS names and nothing else: a
+	// directory someone put beside the entries survives a refresh.
+	put(dest, map[string]string{"bystander/keep.txt": "kept\n"})
+	if out, code := run(pinA, pinG); code != 0 {
+		t.Fatalf("a refresh over a catalog with a bystander directory failed (exit %d)\n%s", code, out)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "bystander", "keep.txt")); err != nil {
+		t.Errorf("the swap removed a directory the old CHECKSUMS does not name: %v", err)
+	}
+	if err := os.RemoveAll(filepath.Join(dest, "bystander")); err != nil {
+		t.Fatal(err)
+	}
+	if snapshot() != good {
+		t.Fatal("the catalog is not the good one after the bystander fixture")
+	}
+
 	// The same loop's second way out: a CHECKSUMS that names no entry at all
 	// (an empty one) once made `grep /` end the pipeline the same way.
 	bare := filepath.Join(tmp, "bare-dest")
@@ -609,6 +625,10 @@ func TestRefreshCatalogScript(t *testing.T) {
 	// and an ancestor of either. HOME is a fixture directory here.
 	fakeHome := filepath.Join(tmp, "home", "user")
 	put(fakeHome, map[string]string{"keep.txt": "kept\n"})
+	repoLink := filepath.Join(tmp, "link-to-the-checkout")
+	if err := os.Symlink(repo, repoLink); err != nil {
+		repoLink = repo // no symlinks here: the case repeats the plain one
+	}
 	for _, c := range []struct{ dest, want string }{
 		{"/", "is not a catalog directory"},
 		{fakeHome, "is not a catalog directory"},
@@ -616,10 +636,18 @@ func TestRefreshCatalogScript(t *testing.T) {
 		{repo, "is not a catalog directory"},
 		{filepath.Dir(repo), "contains the checkout"},
 		{filepath.Dir(fakeHome), "contains the home directory"},
+		// Another spelling of the same place is the same place: a path
+		// through `..` and a symlink (security review of the v2.1.0 gate).
+		{filepath.Join(repo, "skills") + "/..", "is not a catalog directory"},
+		{repoLink, "is not a catalog directory"},
 	} {
 		cmd := exec.Command("bash", script, "--dest", c.dest, "--work", work, pinA, pinG)
 		cmd.Dir = tmp
-		cmd.Env = append(os.Environ(), "HOME="+fakeHome, "CATALOG_AGENTS_CLI_REPO="+agents, "CATALOG_GOOGLE_SKILLS_REPO="+gskills, "CATALOG_DIR=", "CATALOG_WRITE=")
+		// The sources name nothing: if the guard and the not-a-catalog check
+		// both regressed, the run stops at the clone and writes nowhere
+		// (code review round 3).
+		nowhere := filepath.Join(tmp, "no-such-repository")
+		cmd.Env = append(os.Environ(), "HOME="+fakeHome, "CATALOG_AGENTS_CLI_REPO="+nowhere, "CATALOG_GOOGLE_SKILLS_REPO="+nowhere, "CATALOG_DIR=", "CATALOG_WRITE=")
 		out, err := cmd.CombinedOutput()
 		if err == nil || !strings.Contains(string(out), c.want) {
 			t.Errorf("--dest %s: want a refusal saying %q, got err %v\n%s", c.dest, c.want, err, out)
@@ -689,11 +717,40 @@ func TestRefreshCatalogScript(t *testing.T) {
 	}, "gamma")
 	refuse("go.mod", "delta", map[string]string{"skills/cloud/delta/go.mod": "module x\n"}, nil, "")
 	refuse("go file", "epsilon", map[string]string{"skills/developers/epsilon/main.go": "package main\n"}, nil, "")
-	refuse("name with a space", `(--exclude "bad name")`, map[string]string{"skills/cloud/bad name/SKILL.md": skill("bad-name", "description: a directory name with a space\n")}, nil, "bad name")
-	refuse("uppercase name", `(--exclude "Loud")`, map[string]string{"skills/cloud/Loud/SKILL.md": skill("loud", "description: a directory name with a capital\n")}, nil, "Loud")
+	// The hint is printed shell-quoted: the name comes from upstream and the
+	// operator pastes the hint into a shell (code review round 3).
+	refuse("name with a space", `(--exclude bad\ name)`, map[string]string{"skills/cloud/bad name/SKILL.md": skill("bad-name", "description: a directory name with a space\n")}, nil, "bad name")
+	refuse("uppercase name", `(--exclude Loud)`, map[string]string{"skills/cloud/Loud/SKILL.md": skill("loud", "description: a directory name with a capital\n")}, nil, "Loud")
+	refuse("shell characters in a name", `(--exclude a\$\(id\))`, map[string]string{"skills/cloud/a$(id)/SKILL.md": skill("a-id", "description: a directory name a shell would expand\n")}, nil, "a$(id)")
+	// An excluded name is one name: excluding "delta epsilon" must not also
+	// exclude the entries delta and epsilon.
+	put(gskills, map[string]string{"skills/cloud/delta epsilon/SKILL.md": skill("delta-epsilon", "description: two entry names with a space between\n")})
+	wordsPin := commit(gskills)
+	if out, code := run("--exclude", "delta epsilon", pinA, wordsPin); code != 0 {
+		t.Errorf("--exclude \"delta epsilon\" failed (exit %d)\n%s", code, out)
+	}
+	for _, name := range []string{"delta", "epsilon"} {
+		if _, err := os.Stat(filepath.Join(dest, name, "SKILL.md")); err != nil {
+			t.Errorf("excluding \"delta epsilon\" also excluded the entry %s", name)
+		}
+	}
+	git(gskills, "reset", "-q", "--hard", pinG)
+	git(gskills, "clean", "-qfd")
+	if out, code := run(pinA, pinG); code != 0 || snapshot() != good {
+		t.Fatalf("could not restore the good catalog after the two-word exclusion (exit %d)\n%s", code, out)
+	}
 	refuse("dotfile", "delta", map[string]string{"skills/cloud/delta/.gitattributes": "* export-ignore\n"}, nil, "")
 	refuse("symlinked entry", "zeta", nil, func() {
 		if err := os.Symlink("gamma", filepath.Join(gskills, "skills/cloud/zeta")); err != nil {
+			t.Skip("no symlinks here")
+		}
+	}, "")
+	refuse("symlinked source set", "leaves the clone through a symlink", nil, func() {
+		// skills/developers becomes a link to a directory elsewhere in the clone.
+		if err := os.Rename(filepath.Join(gskills, "skills/developers"), filepath.Join(gskills, "elsewhere")); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink("../elsewhere", filepath.Join(gskills, "skills/developers")); err != nil {
 			t.Skip("no symlinks here")
 		}
 	}, "")

@@ -74,13 +74,17 @@ phys() {
     rest="/$(basename "$p")$rest"
     p=$(dirname "$p")
   done
-  base=$(cd -P "$p" && pwd -P)
+  # A directory that cannot be entered resolves to nothing, and nothing plus
+  # the rest would be a path under /: the callers stop on this status
+  # (errexit does not reach into a command substitution).
+  base=$(cd -P "$p" 2>/dev/null && pwd -P) || return 1
   if [ -z "$rest" ]; then printf '%s\n' "$base"; else printf '%s%s\n' "${base%/}" "$rest"; fi
 }
-dest=$(phys "$dest")
-repo_phys=$(phys "$repo")
-home_phys=""
-if [ -n "${HOME:-}" ]; then home_phys=$(phys "$HOME"); fi
+dest=$(phys "$dest") || fail "cannot resolve --dest: a directory on its path cannot be entered"
+repo_phys=$(phys "$repo") || fail "cannot resolve the checkout's own path"
+# No HOME, no home-directory guard: stop rather than run without it.
+[ -n "${HOME:-}" ] || fail "HOME is not set: the destination guard compares --dest with the home directory"
+home_phys=$(phys "$HOME") || fail "cannot resolve the home directory"
 # After that, a `.` or `..` can only sit below a directory that does not
 # exist, where nothing can say what it names until `mkdir -p` makes it real:
 # refused, since it can name the home directory, the checkout or /.
@@ -94,10 +98,8 @@ case "${dest%/}/" in
   / | "${repo_phys%/}/") fail "--dest $dest is not a catalog directory" ;;
 esac
 case "${repo_phys%/}/" in "${dest%/}/"*) fail "--dest $dest contains the checkout" ;; esac
-if [ -n "$home_phys" ]; then
-  case "${dest%/}/" in "${home_phys%/}/") fail "--dest $dest is not a catalog directory" ;; esac
-  case "${home_phys%/}/" in "${dest%/}/"*) fail "--dest $dest contains the home directory" ;; esac
-fi
+case "${dest%/}/" in "${home_phys%/}/") fail "--dest $dest is not a catalog directory" ;; esac
+case "${home_phys%/}/" in "${dest%/}/"*) fail "--dest $dest contains the home directory" ;; esac
 if [ -d "$dest" ] && [ -n "$(ls -A "$dest")" ] && [ ! -f "$dest/CHECKSUMS" ]; then
   fail "--dest $dest is not empty and has no CHECKSUMS: not a catalog, nothing is replaced there"
 fi
@@ -172,11 +174,11 @@ while IFS='|' read -r label clone sub; do
     prev=$(awk -v n="$name" '$1 == n {print $2}' "$origins")
     [ -z "$prev" ] || fail "entry $name is in two source sets, $prev and $label (--exclude $name drops both)"
     bad=$(find "${d%/}" -type l -print | head -1)
-    [ -z "$bad" ] || fail "entry $name ($label) holds a symlink: ${bad#"$root"/} (--exclude $name)"
+    [ -z "$bad" ] || fail "entry $name ($label) holds a symlink: $(printf '%q' "${bad#"$root"/}") (--exclude $name)"
     bad=$(find "${d%/}" -type f \( -name go.mod -o -name go.sum -o -name '*.go' \) -print | head -1)
-    [ -z "$bad" ] || fail "entry $name ($label) holds a Go file the module would pick up: ${bad#"$root"/} (--exclude $name)"
+    [ -z "$bad" ] || fail "entry $name ($label) holds a Go file the module would pick up: $(printf '%q' "${bad#"$root"/}") (--exclude $name)"
     bad=$(find "${d%/}" -mindepth 1 -name '.*' -print | head -1)
-    [ -z "$bad" ] || fail "entry $name ($label) holds a dotfile that would change how git or a tool treats the subtree: ${bad#"$root"/} (--exclude $name)"
+    [ -z "$bad" ] || fail "entry $name ($label) holds a dotfile that would change how git or a tool treats the subtree: $(printf '%q' "${bad#"$root"/}") (--exclude $name)"
     mkdir -p "$build/$name"
     cp -R "${d%/}/." "$build/$name/"
     printf '%s %s\n' "$name" "$label" >> "$origins"

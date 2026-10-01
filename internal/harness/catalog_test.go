@@ -344,6 +344,40 @@ func TestCatalogWriteModeNeedsCatalogDir(t *testing.T) {
 	}
 }
 
+// TestCatalogNotesNeverAllowQuiet: the router does not follow an entry's
+// `--quiet` (step 4), and a note never relaxes the router. A note that names
+// the flag therefore says to leave it out, in one of three fixed phrases;
+// "only on read-only commands" or "after approval" is an exception the router
+// does not have (security reviews of the v2.1.0 gate: found three times as
+// instances, pinned here as a kind).
+func TestCatalogNotesNeverAllowQuiet(t *testing.T) {
+	if os.Getenv("CATALOG_WRITE") == "1" {
+		t.Skip("the refresh script's build directory has no notes yet")
+	}
+	data, err := os.ReadFile(filepath.Join(catalogDir(t), "MANIFEST.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, notes, ok := strings.Cut(string(data), "\n## Notes\n")
+	if !ok {
+		t.Fatal("MANIFEST.md has no ## Notes section")
+	}
+	seen := 0
+	for _, line := range strings.Split(notes, "\n") {
+		if !strings.HasPrefix(line, "- `") || !strings.Contains(line, "--quiet") {
+			continue
+		}
+		seen++
+		lower := strings.ToLower(line)
+		if !strings.Contains(lower, "no `--quiet`") && !strings.Contains(lower, "drop `--quiet`") && !strings.Contains(lower, "without `--quiet`") {
+			t.Errorf("a note names --quiet without saying to leave it out (no `--quiet`, drop `--quiet` or without `--quiet`):\n%s", line)
+		}
+	}
+	if seen == 0 {
+		t.Error("no note names --quiet: the test checks nothing (was the section renamed?)")
+	}
+}
+
 // TestCatalogInstallsClean: the install plan over the real checkout has no
 // refusal — a secret-shaped name or a symlink anywhere under skills/ fails it,
 // through the installer's own list rather than a second copy in the script.
@@ -663,6 +697,36 @@ func TestRefreshCatalogScript(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(fakeHome, "keep.txt")); err != nil {
 		t.Fatalf("the guard fixture's home directory was touched: %v", err)
 	}
+	// Two ways the guard itself could lose its footing (code review of
+	// 7dd0645..b4e3d79, round 2): a parent directory it cannot enter, which
+	// once resolved to a path under /, and no HOME to compare against.
+	guardRun := func(dest string, env []string) (string, error) {
+		cmd := exec.Command("bash", script, "--dest", dest, "--work", work, pinA, pinG)
+		cmd.Dir = tmp
+		nowhere := filepath.Join(tmp, "no-such-repository")
+		cmd.Env = append(env, "CATALOG_AGENTS_CLI_REPO="+nowhere, "CATALOG_GOOGLE_SKILLS_REPO="+nowhere, "CATALOG_DIR=", "CATALOG_WRITE=")
+		out, err := cmd.CombinedOutput()
+		return string(out), err
+	}
+	if os.Geteuid() != 0 {
+		locked := filepath.Join(tmp, "locked")
+		if err := os.Mkdir(locked, 0o000); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { os.Chmod(locked, 0o755) })
+		if out, err := guardRun(filepath.Join(locked, "x"), append(os.Environ(), "HOME="+fakeHome)); err == nil || !strings.Contains(out, "cannot resolve") {
+			t.Errorf("--dest below a directory that cannot be entered: want a refusal saying \"cannot resolve\", got err %v\n%s", err, out)
+		}
+	}
+	var noHome []string
+	for _, kv := range os.Environ() {
+		if !strings.HasPrefix(kv, "HOME=") {
+			noHome = append(noHome, kv)
+		}
+	}
+	if out, err := guardRun(filepath.Join(tmp, "dest-without-home"), noHome); err == nil || !strings.Contains(out, "HOME is not set") {
+		t.Errorf("no HOME: want a refusal saying \"HOME is not set\", got err %v\n%s", err, out)
+	}
 	if out, code := run(pinA, "main"); code == 0 || !strings.Contains(out, "commit id") {
 		t.Errorf("a pin that is not a commit id was accepted (exit %d)\n%s", code, out)
 	}
@@ -736,6 +800,15 @@ func TestRefreshCatalogScript(t *testing.T) {
 	escPin := commit(gskills)
 	if out, code := run(pinA, escPin); code != 1 || strings.Contains(out, "\x1b") || !strings.Contains(out, "not a plain skill name") {
 		t.Errorf("a name with an escape sequence: want exit 1 and no raw escape in the message, got exit %d\n%q", code, out)
+	}
+	git(gskills, "reset", "-q", "--hard", pinG)
+	git(gskills, "clean", "-qfd")
+	// The same for a path inside an entry: the dotfile, symlink and Go-file
+	// refusals print the path shell-quoted.
+	put(gskills, map[string]string{"skills/cloud/delta/.x\x1b[31m": "a dotfile whose name holds an escape\n"})
+	escPin2 := commit(gskills)
+	if out, code := run(pinA, escPin2); code != 1 || strings.Contains(out, "\x1b") || !strings.Contains(out, "holds a dotfile") {
+		t.Errorf("a nested path with an escape sequence: want exit 1 and no raw escape in the message, got exit %d\n%q", code, out)
 	}
 	git(gskills, "reset", "-q", "--hard", pinG)
 	git(gskills, "clean", "-qfd")

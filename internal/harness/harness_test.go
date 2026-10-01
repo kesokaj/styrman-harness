@@ -2498,6 +2498,16 @@ func TestLintRefusesUnreadableFrontmatterInDocs(t *testing.T) {
 			"a tab after the opening":     "---\t\ndescription: d\nhooks:\n  Stop: []\n---\nbody\n",
 			"an unterminated block":       "---\ndescription: d\nallowed-tools: Bash\nbody with no closing line\n",
 			"a carriage return and space": "--- \r\ndescription: d\nallowed-tools: Bash\n---\nbody\n",
+			// Spellings a lenient reader could still take for a fence
+			// (security review of v2.1.0..a62eb9d).
+			"a no-break space after":   "---\u00a0\ndescription: d\nallowed-tools: Bash\n---\nbody\n",
+			"a form feed after":        "---\f\ndescription: d\nallowed-tools: Bash\n---\nbody\n",
+			"an ideographic space":     "---\u3000\ndescription: d\nallowed-tools: Bash\n---\nbody\n",
+			"two byte-order marks":     "\ufeff\ufeff---\ndescription: d\nallowed-tools: Bash\n---\nbody\n",
+			"a leading blank line":     "\n---\ndescription: d\nallowed-tools: Bash\n---\nbody\n",
+			"a tag on the fence":       "---yaml\ndescription: d\nallowed-tools: Bash\n---\nbody\n",
+			"a comment on the fence":   "--- # c\ndescription: d\nallowed-tools: Bash\n---\nbody\n",
+			"a zero-width space first": "\u200b---\ndescription: d\nallowed-tools: Bash\n---\nbody\n",
 		} {
 			err := load(kind, text)
 			if err == nil || !strings.Contains(err.Error(), "frontmatter starts but cannot be read") {

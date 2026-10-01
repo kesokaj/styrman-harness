@@ -267,6 +267,12 @@ func RemoveTimer(home, goos string) (bool, error) {
 	return true, nil
 }
 
+// shellQuote puts a path in single quotes for a command the operator may
+// paste: a space, a `$` or a quote in a home path must not change the command.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
 // LegacyTimerFiles lists the bare-named unit files under a home whose own
 // unit name is suffixed: what v2.0.0 or earlier wrote there before names were
 // per home (BUG-144), or what a home of an account the database does not
@@ -277,15 +283,29 @@ func LegacyTimerFiles(home string) []string {
 	if unit, _ := UnitFor(home); unit == unitName {
 		return nil
 	}
+	real, realErr := userHomeDir()
 	var found []string
-	for _, p := range []string{
-		filepath.Join(home, ".config", "systemd", "user", unitName+".service"),
-		filepath.Join(home, ".config", "systemd", "user", unitName+".timer"),
-		filepath.Join(home, "Library", "LaunchAgents", plistName+".plist"),
+	for _, rel := range []string{
+		filepath.Join(".config", "systemd", "user", unitName+".service"),
+		filepath.Join(".config", "systemd", "user", unitName+".timer"),
+		filepath.Join("Library", "LaunchAgents", plistName+".plist"),
 	} {
-		if _, err := os.Lstat(p); err == nil {
-			found = append(found, p)
+		p := filepath.Join(home, rel)
+		if _, err := os.Lstat(p); err != nil {
+			continue
 		}
+		// A home that shares a directory with the real one through a link
+		// (a scratch home whose .config points at the real .config) sees the
+		// real home's own unit here: that file is not legacy, and the notice
+		// must never tell the operator to delete it.
+		if realErr == nil {
+			if ri, err := os.Stat(filepath.Join(real, rel)); err == nil {
+				if hi, err := os.Stat(p); err == nil && os.SameFile(ri, hi) {
+					continue
+				}
+			}
+		}
+		found = append(found, p)
 	}
 	return found
 }
@@ -310,11 +330,12 @@ func LegacyTimerNotice(home, goos string) string {
 		uid := strconv.Itoa(os.Getuid())
 		fmt.Fprintf(&b, "Check which file is loaded: launchctl print gui/%s/%s (its path line)\n", uid, plistName)
 		fmt.Fprintf(&b, "If it is one of the files above: launchctl bootout gui/%s <that plist>\n", uid)
-		b.WriteString("Then delete the files above.")
+		b.WriteString("Then delete the files above.\n")
 	} else {
 		fmt.Fprintf(&b, "Check which file is loaded: systemctl --user show -p FragmentPath %s.timer\n", unitName)
 		fmt.Fprintf(&b, "If it is one of the files above: systemctl --user disable --now %s.timer\n", unitName)
-		b.WriteString("Then delete the files above and run: systemctl --user daemon-reload")
+		b.WriteString("Then delete the files above and run: systemctl --user daemon-reload\n")
 	}
+	fmt.Fprintf(&b, "If this home should keep a nightly timer, install it again afterwards: sh-agent dream --install-timer --home %s", shellQuote(home))
 	return b.String()
 }

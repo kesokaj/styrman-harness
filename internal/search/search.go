@@ -430,7 +430,8 @@ func Search(o Options, out io.Writer) error {
 func (sc *scope) status() string {
 	s := fmt.Sprintf("index current: %d files, reconciled %d changed in %d ms", sc.files, sc.changed, sc.elapsed.Milliseconds())
 	if len(sc.leftOut) > 0 {
-		s += "; left out by " + noIndexMarker + ": " + strings.Join(sc.leftOut, ", ")
+		// The names are the project's own text: printable, like every hit.
+		s += "; left out by " + noIndexMarker + ": " + printable(strings.Join(sc.leftOut, ", "))
 	}
 	return s
 }

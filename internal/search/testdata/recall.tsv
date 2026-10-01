@@ -30,7 +30,7 @@ drift: every agent or skill that tells a subagent to write its report file befor
 drift: every living file that says temporary files belong in the project scratch folder and not in tmp	AGENTS.md,README.md,agents/bugs.md,agents/changelog.md,agents/documentation.md,agents/explorer.md,agents/reviewer.md,agents/security.md,agents/verifier.md,context/AGENTS.md
 refs ADR-040: records that mention ADR-040	.agents/docs/architecture/DECISIONS.md,REQUIREMENTS.md,.agents/docs/changes/2026-09-28-2010-unverified-flag.md,.agents/docs/changes/2026-09-28-2044-zip-accepts.md,.agents/docs/retros/2026-09-28-retro.md
 refs internal/harness/zip.go: bugs and plans that name internal/harness/zip.go	.agents/docs/plans/2026-09-28-signed-zip.md,.agents/docs/plans/2026-09-28-update-from-zip.md
-open bug: bugs that are still open	.agents/docs/bugs/BUG-139-documentation-agent-roadmap-lane-held-5-of-6.md,.agents/docs/bugs/BUG-140-matrix-kit-result-line-lost.md
+open bug: bugs that are still open	.agents/docs/bugs/BUG-139-documentation-agent-roadmap-lane-held-5-of-6.md
 drift: every file that says release tags are signed with ssh options on the command instead of changing git settings	.agents/docs/deploy/remote.md,AGENTS.md
 drift: every file that says to stage files one by one by name instead of adding everything	context/AGENTS.md,skills/handoff/SKILL.md,skills/preflight/SKILL.md,skills/retro/SKILL.md
 drift: every file that says commits carry no co-author trailer	README.md,cmd/sh-agent/main.go,context/AGENTS.md

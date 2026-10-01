@@ -372,7 +372,7 @@ func TestLegacyTimerFilesAreNamedNotRemoved(t *testing.T) {
 		t.Errorf("the service manager was called for a legacy unit:\n%s", c)
 	}
 	linux := LegacyTimerNotice(other, "linux")
-	for _, want := range []string{timerFile, "FragmentPath", "systemctl --user disable --now " + unitName + ".timer", "daemon-reload", "v2.0.0"} {
+	for _, want := range []string{timerFile, "FragmentPath", "systemctl --user disable --now " + unitName + ".timer", "daemon-reload", "v2.0.0", "sh-agent dream --install-timer --home '" + other + "'"} {
 		if !strings.Contains(linux, want) {
 			t.Errorf("the linux notice lacks %q:\n%s", want, linux)
 		}
@@ -383,12 +383,39 @@ func TestLegacyTimerFilesAreNamedNotRemoved(t *testing.T) {
 			t.Errorf("the darwin notice lacks %q:\n%s", want, darwin)
 		}
 	}
-	if got := StatusLine(other); !strings.HasSuffix(got, "; legacy timer files under "+other+": run sh-agent dream --remove-timer for the cleanup steps") {
+	// The advice is a dry run with this home named: the bare command would
+	// remove the timer of whatever home it defaults to, the real one included
+	// (code review of v2.1.0..a62eb9d).
+	if got := StatusLine(other); !strings.HasSuffix(got, "; legacy timer files under "+other+": sh-agent dream --remove-timer --dry-run --home '"+other+"' prints the cleanup steps") {
 		t.Errorf("StatusLine does not name the legacy files: %q", got)
+	}
+	// A scratch home that shares the real home's .config through a link sees
+	// the real home's own unit there: that is not legacy, and the notice must
+	// not tell the operator to delete it (security review of v2.1.0..a62eb9d).
+	write(t, filepath.Join(real, ".config", "systemd", "user", unitName+".service"), "x", fresh)
+	linked := t.TempDir()
+	if err := os.Symlink(filepath.Join(real, ".config"), filepath.Join(linked, ".config")); err == nil {
+		if got := LegacyTimerFiles(linked); len(got) != 0 {
+			t.Errorf("the real home's unit, seen through a linked .config, is called legacy: %v", got)
+		}
 	}
 	// The real home's bare-named unit is its own, never legacy.
 	write(t, filepath.Join(real, ".config", "systemd", "user", unitName+".timer"), "x", fresh)
 	if got := LegacyTimerFiles(real); len(got) != 0 || LegacyTimerNotice(real, "linux") != "" {
 		t.Errorf("the real home's own unit is called legacy: %v", got)
+	}
+}
+
+// TestShellQuote: a path printed inside a command the operator may paste.
+func TestShellQuote(t *testing.T) {
+	for in, want := range map[string]string{
+		"/home/u":      "'/home/u'",
+		"/h/a b":       "'/h/a b'",
+		"/h/$(id)":     "'/h/$(id)'",
+		"/h/it's here": `'/h/it'\''s here'`,
+	} {
+		if got := shellQuote(in); got != want {
+			t.Errorf("shellQuote(%q) = %s, want %s", in, got, want)
+		}
 	}
 }

@@ -753,6 +753,17 @@ func TestHeaderNamesLeftOutDirectories(t *testing.T) {
 	if strings.Contains(buf.String(), "left out") {
 		t.Errorf("--global: the header names one project's markers:\n%s", buf.String())
 	}
+	// A directory name is the project's own text: control characters in it
+	// must not reach the terminal or forge a line of output (code review of
+	// v2.1.0..a62eb9d).
+	writeFile(t, root, "ev\x1bil\nfake-hit.md:1/.sh-agent-noindex", "")
+	out = mustSearch(t, Options{Dir: root, Home: home, Words: []string{"ocelot"}})
+	if strings.Contains(out, "\x1b") || strings.Contains(out, "\nfake-hit.md:1/") || !strings.Contains(out, "ev?il?fake-hit.md:1/") {
+		t.Errorf("a marked directory's name reached the header raw:\n%q", out)
+	}
+	if err := os.RemoveAll(filepath.Join(root, "ev\x1bil\nfake-hit.md:1")); err != nil {
+		t.Fatal(err)
+	}
 	writeFile(t, root, ".sh-agent-noindex", "")
 	buf.Reset()
 	Search(Options{Dir: root, Home: home, Words: []string{"ocelot"}}, &buf) // no hit is an error here; the header is what matters

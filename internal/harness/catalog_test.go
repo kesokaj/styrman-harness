@@ -364,6 +364,9 @@ func TestCatalogNotesNeverAllowQuiet(t *testing.T) {
 		"- `x` — `--quiet` only on read-only commands.":                             true,
 		"- `x` — No `--quiet` once the operator approved the plan.":                 true,
 		"- `x` — it runs `gcloud compute ssh --quiet`.":                             true,
+		"- `x` — drop `--quiet` if the command changes state.":                      true,
+		"- `x` — No `--quiet` when the operator has not approved.":                  true,
+		"- `x` — drop `--quiet`, but keep it on read commands.":                     true,
 		"- `x` — pass `--project` on each command.":                                 false,
 	} {
 		if got := quietNoteProblem(line); (got != "") != bad {
@@ -434,7 +437,7 @@ func quietNoteProblem(line string) string {
 
 var (
 	quietClauseEnd = regexp.MustCompile(`;|\. `)
-	quietCarveOut  = regexp.MustCompile(`\b(except|unless|only|once|after)\b`)
+	quietCarveOut  = regexp.MustCompile(`\b(except|unless|only|once|after|if|when|but)\b`)
 )
 
 // TestCatalogInstallsClean: the install plan over the real checkout has no
@@ -850,7 +853,7 @@ func TestRefreshCatalogScript(t *testing.T) {
 	}
 	// The source overrides take an https URL or an absolute path, nothing
 	// else: git has transports that run a command (`ext::`).
-	for _, bad := range []string{"ext::sh -c id", "relative/path", "http://example.invalid/x", "file:///x"} {
+	for _, bad := range []string{"ext::sh -c id", "relative/path", "http://example.invalid/x", "file:///x", "https://user:token@example.invalid/x"} {
 		cmd := exec.Command("bash", script, "--dest", filepath.Join(tmp, "dest-o"), "--work", filepath.Join(tmp, "work-o"), pinA, pinG)
 		cmd.Dir = tmp
 		cmd.Env = fixtureEnv("HOME="+fakeHome, "CATALOG_AGENTS_CLI_REPO="+bad, "CATALOG_GOOGLE_SKILLS_REPO="+gskills, "CATALOG_DIR=", "CATALOG_WRITE=")

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode"
 )
 
 // Skill is one directory under skills/ holding a SKILL.md.
@@ -307,7 +308,7 @@ func LoadDocs(src Source, dirs ...string) ([]Doc, error) {
 			} else if opensFrontmatter(text) {
 				// Not "no frontmatter": a block that starts and cannot be
 				// read would deploy as written with its keys unchecked.
-				return nil, fmt.Errorf("%s: frontmatter starts but cannot be read (no closing ---, a byte-order mark, or spaces after the opening ---); a command or rule has a readable frontmatter block or none", shown)
+				return nil, fmt.Errorf("%s: frontmatter starts but cannot be read (the opening --- must be the very first line, alone on it, and a closing --- must follow); a command or rule has a readable frontmatter block or none", shown)
 			}
 			if desc == "" {
 				desc = firstLine(text)
@@ -407,13 +408,24 @@ func RenderInventoryCompact(inv Inventory) string {
 	return b.String()
 }
 
-// opensFrontmatter reports whether the first line is a frontmatter fence as
-// a YAML reader would take it: `---` after an optional byte-order mark, with
-// trailing spaces, tabs or a carriage return. Split wants the bare line.
+// opensFrontmatter reports whether the first non-blank line looks like a
+// frontmatter fence to any reader more lenient than Split: `---` after
+// byte-order marks, zero-width characters or blank lines, or followed by
+// spaces of any kind, a tag or a comment. Split wants the bare line first; a
+// file that is not that, yet looks like this, is refused rather than read as
+// "no frontmatter". Four dashes or more are a markdown rule, not a fence.
 func opensFrontmatter(text string) bool {
-	first, _, _ := strings.Cut(text, "\n")
-	first = strings.TrimPrefix(first, "\ufeff")
-	return strings.TrimRight(first, " \t\r") == "---"
+	invisible := func(r rune) bool {
+		return unicode.IsSpace(r) || r == '\ufeff' || r == '\u200b' || r == '\u200c' || r == '\u200d' || r == '\u2060'
+	}
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimFunc(line, invisible)
+		if line == "" {
+			continue
+		}
+		return strings.HasPrefix(line, "---") && !strings.HasPrefix(line, "----")
+	}
+	return false
 }
 
 // slashNote explains the `/name` marking, but only when some skill carries

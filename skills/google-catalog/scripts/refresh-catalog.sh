@@ -38,7 +38,7 @@
 # Needs git, go and (for the default sources) the network. Two environment
 # variables replace the source repositories, for the test's local fixtures:
 # CATALOG_AGENTS_CLI_REPO and CATALOG_GOOGLE_SKILLS_REPO, each an https:// URL
-# or an absolute path, nothing else. Relative --dest and --work are resolved
+# (with no user information in it) or an absolute path, nothing else. Relative --dest and --work are resolved
 # against the caller's directory.
 set -euo pipefail
 
@@ -124,7 +124,7 @@ esac
 case "${work%/}/" in "${dest%/}/"*) fail "--work $work and --dest $dest must not contain each other" ;; esac
 case "${dest%/}/" in "${work%/}/"*) fail "--work $work and --dest $dest must not contain each other" ;; esac
 if [ -d "$work" ] && [ -n "$(ls -A "$work")" ] && [ ! -f "$work/.refresh-catalog-work" ] && [ ! -f "$work/origins.txt" ]; then
-  fail "--work $work is not a work directory of this script (not empty, and neither .refresh-catalog-work nor origins.txt in it): it would be cloned into and its build directory removed"
+  fail "--work $work is not a work directory of this script (not empty, and neither .refresh-catalog-work nor origins.txt in it): it would be cloned into and its build directory removed; name an empty or new directory, or delete this one if it is a leftover of this script"
 fi
 pin_a=$1
 pin_g=$2
@@ -141,7 +141,14 @@ url_g=${CATALOG_GOOGLE_SKILLS_REPO:-https://github.com/google/skills}
 for v in CATALOG_AGENTS_CLI_REPO CATALOG_GOOGLE_SKILLS_REPO; do
   val=${!v:-}
   case "$val" in
-    "" | https://* | /*) ;;
+    "" | /*) ;;
+    https://*)
+      # No user information in the URL: the value is written into MANIFEST.md,
+      # which is committed. It is not echoed here either.
+      host=${val#https://}
+      case "${host%%/*}" in
+        *@*) fail "$v must be an https:// URL or an absolute path without credentials in it (the value goes into MANIFEST.md); use a credential helper" ;;
+      esac ;;
     *) fail "$v must be an https:// URL or an absolute path, got: $(printf '%q' "$val")" ;;
   esac
 done

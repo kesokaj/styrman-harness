@@ -194,7 +194,9 @@ func StatusLine(home string) string {
 	}
 	// Every branch below ends in timer, so the legacy note reaches them all.
 	if len(LegacyTimerFiles(home)) > 0 {
-		timer += "; legacy timer files under " + home + ": run sh-agent dream --remove-timer for the cleanup steps"
+		// A dry run, with this home named: the bare command removes the
+		// timer of the home it defaults to, which is the real one.
+		timer += "; legacy timer files under " + home + ": sh-agent dream --remove-timer --dry-run --home " + shellQuote(home) + " prints the cleanup steps"
 	}
 	st, err := readState(home)
 	if err != nil {

@@ -2608,6 +2608,14 @@ func TestLintSeesEveryKeyAYAMLReaderSees(t *testing.T) {
 		refused := map[string]string{
 			"an indented block":      "  " + strings.Join(k.keys, "\n  ") + "\n  " + hidden + "\n",
 			"an indented first line": "  " + hidden + "\n" + plain,
+			// A tab is no YAML indentation: a strict reader errors on the
+			// line, a lenient one nests it, an older one reads a top-level
+			// key (security review of 1fc0d4c..4165f81).
+			"a tab-indented first line":        "\t" + hidden + "\n" + plain,
+			"a tab-led key after a key":        plain + "\t" + hidden + "\n",
+			"a tab-led key after a nested map": plain + "metadata:\n  version: \"1.0\"\n\t" + hidden + "\n",
+			"a tab-led key after a list":       plain + "compatibility:\n  - claude\n\t" + hidden + "\n",
+			"a tab-led key after an empty key": plain + "metadata:\n\t" + hidden + "\n",
 		}
 		for name, sep := range map[string]string{
 			"a lone carriage return":         "\r",
@@ -2625,7 +2633,7 @@ func TestLintSeesEveryKeyAYAMLReaderSees(t *testing.T) {
 			}
 			// The refusal is the lint's, not a side effect such as a
 			// missing description.
-			if msg := err.Error(); !strings.Contains(msg, "indented") && !strings.Contains(msg, "line break") {
+			if msg := err.Error(); !strings.Contains(msg, "indented") && !strings.Contains(msg, "line break") && !strings.Contains(msg, "starts with a tab") {
 				t.Errorf("%s with %s refused for another reason: %v", kind, name, err)
 			}
 		}
@@ -2635,6 +2643,10 @@ func TestLintSeesEveryKeyAYAMLReaderSees(t *testing.T) {
 			"an indented list": plain + "compatibility:\n  - claude\n",
 			"a CRLF file":      strings.ReplaceAll(plain, "\n", "\r\n") + "license: MIT\r\n",
 			"a comment first":  "# a comment\n" + plain,
+			// A tab inside a value, and a line that is only a tab, are not
+			// tab indentation.
+			"a tab inside a value": plain + "license: MIT\tor Apache\n",
+			"a tab-only line":      plain + "\t\n" + "license: MIT\n",
 		} {
 			if err := k.load(front); err != nil {
 				t.Errorf("%s with %s refused: %v", kind, name, err)

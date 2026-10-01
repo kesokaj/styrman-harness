@@ -301,8 +301,8 @@ func runUninstall(c *ctx) error {
 		} else if removed, err := dream.RemoveTimer(c.home, runtime.GOOS); err != nil {
 			return err
 		} else if removed {
-			// Only when a unit of this home, for this system, was there:
-			// TimerInstalled also sees the other system's unit file.
+			// Said only when a unit was removed; the guard above already
+			// counts this system's unit alone (TimerInstalledHere).
 			fmt.Fprintln(c.out, "removed the dream timer")
 		}
 	}

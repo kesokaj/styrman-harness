@@ -857,6 +857,11 @@ func TestRefreshCatalogScript(t *testing.T) {
 	freshWork, freshDest := filepath.Join(tmp, "fresh-work"), filepath.Join(tmp, "fresh-dest")
 	if out, err := workRun(freshDest, freshWork, pinA, "0000000000000000000000000000000000000000"); err == nil || !strings.Contains(out, "does not resolve") {
 		t.Fatalf("a first run with a bad pin: want the pin refusal, got err %v\n%s", err, out)
+	} else if !strings.Contains(out, "delete that directory if the value is sensitive") {
+		// The clones are on disk by then, and with them the override's
+		// value: a run that fails says so too, not only one that succeeds
+		// (security review of 1fc0d4c..4165f81).
+		t.Errorf("a run that fails after the clone does not say an override's value stays in the work directory:\n%s", out)
 	}
 	if out, err := workRun(freshDest, freshWork, pinA, pinG); err != nil {
 		t.Errorf("the corrected run on the same --work was refused: %v\n%s", err, out)
@@ -880,6 +885,11 @@ func TestRefreshCatalogScript(t *testing.T) {
 		}
 		if strings.HasPrefix(bad, "https://") && !strings.Contains(string(out), "without credentials") {
 			t.Errorf("override with credentials: the refusal does not say why:\n%s", out)
+		}
+		// Refused before anything is cloned: nothing is on disk, and the
+		// note about the work directory would be false.
+		if strings.Contains(string(out), "delete that directory") {
+			t.Errorf("override %q: a refusal before any clone speaks of a value on disk:\n%s", bad, out)
 		}
 	}
 	if _, err := os.Stat(filepath.Join(tmp, "work-o")); err == nil {
@@ -908,6 +918,9 @@ func TestRefreshCatalogScript(t *testing.T) {
 		out, err := cmd.CombinedOutput()
 		if err == nil || !strings.Contains(string(out), "cannot fetch the agents-cli source") || strings.Contains(string(out), "SECRETFETCH") || strings.Contains(string(out), "fatal:") {
 			t.Errorf("a source that cannot be fetched: want it named by role, and neither its value nor git's own message in the output, got err %v\n%s", err, out)
+		}
+		if !strings.Contains(string(out), "delete that directory if the value is sensitive") {
+			t.Errorf("a failed fetch does not say an override's value stays in the work directory (remote set-url wrote it):\n%s", out)
 		}
 		if snapshot() != good {
 			t.Error("a failed fetch changed the destination")

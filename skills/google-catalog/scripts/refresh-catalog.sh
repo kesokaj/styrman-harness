@@ -45,7 +45,14 @@
 set -euo pipefail
 
 usage() { sed -n '2,6p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; }
-fail() { echo "refresh-catalog: $*" >&2; exit 1; }
+# git keeps a clone's source in its config, FETCH_HEAD and reflogs: with an
+# override, that is the override's value, on disk under the work directory
+# from the first clone or fetch on, whether the run then succeeds or fails.
+on_disk=""
+override_note() {
+  [ -z "$on_disk" ] || echo "note: a source override was used; git keeps its value in the work clones under $work: delete that directory if the value is sensitive"
+}
+fail() { echo "refresh-catalog: $*" >&2; override_note >&2; exit 1; }
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 repo=$(cd "$script_dir/../../.." && pwd)
@@ -188,6 +195,7 @@ fetch() { # <clone name> <url> <pin>: a full clone, reused; checked out at the p
   fi
   git -C "$dir" -c advice.detachedHead=false checkout -q --detach "$3" 2>/dev/null || fail "pin $3 does not resolve in the $1 source"
 }
+if [ "$url_a" != "$upstream_a" ] || [ "$url_g" != "$upstream_g" ]; then on_disk=1; fi
 fetch agents-cli "$url_a" "$pin_a"
 fetch google-skills "$url_g" "$pin_g"
 full_a=$(git -C "$work/agents-cli" rev-parse HEAD)
@@ -357,8 +365,4 @@ removed=${removed% }; echo "removed: ${removed:-none}"
 ex=$(printf '%s\n' "$excludes" | sed '/^$/d' | sort -u | tr '\n' ' ')
 echo "excluded: ${ex:-none}"
 echo "next: git add skills/google-catalog && go test ./..."
-# git keeps a clone's source in its config, FETCH_HEAD and reflogs: with an
-# override, that is the override's value, on disk under the work directory.
-if [ -n "$via" ]; then
-  echo "note: a source override was used; git keeps its value in the work clones under $work: delete that directory if the value is sensitive"
-fi
+override_note

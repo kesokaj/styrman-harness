@@ -56,7 +56,8 @@ that is its own (never `/`, the home directory or the checkout, never nested wit
 one that already holds files must carry the script's `.refresh-catalog-work` marker or an
 `origins.txt`), takes a source override only as an `https://` URL (no user information, no query string) or an
 absolute path, never shows or records such a value (the manifest names the upstream repositories; the
-pins identify the content), and writes
+pins identify the content) and says, whether the run succeeds or fails after the first clone, that git
+keeps the value in the work clones, and writes
 `INDEX.md` and
 `CHECKSUMS` through the Go tests, which then pin the tree both ways (`TestCatalogMatchesChecksums`,
 `TestCatalogIndexMatchesEntries`, `TestCatalogFilesAreCarryable`). Installed as global skills

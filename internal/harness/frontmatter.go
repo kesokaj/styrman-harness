@@ -79,10 +79,13 @@ func Parse(front string) Frontmatter { return parseEntries(entries(front)) }
 // installer's form, so a file is read once and a value a strict YAML parser
 // would read differently is refused before it is used.
 func ParseStrict(front string) (Frontmatter, error) {
-	// Two shapes hide a key from the grammar below while a YAML reader still
-	// reads it; both are refused before anything is parsed.
+	// Three shapes hide a key from the grammar below while a YAML reader
+	// still reads it, or may; each is refused before anything is parsed.
 	if strings.ContainsAny(strings.ReplaceAll(front, "\r\n", "\n"), "\r\u0085\u2028\u2029") {
 		return nil, errors.New("frontmatter holds a line break that is not a newline (a lone carriage return, U+0085, U+2028 or U+2029): a YAML reader starts a new line there, and a key after it would not be checked, so the block is refused")
+	}
+	if l, bad := tabLed(front); bad {
+		return nil, fmt.Errorf("frontmatter line %q starts with a tab: YAML has no tab indentation, and readers disagree about such a line (an error, a nested value, a top-level key), so a key on it would not be checked and the block is refused; indent with spaces", l)
 	}
 	if l, bad := indentedBeforeKey(front); bad {
 		return nil, fmt.Errorf("frontmatter line %q is indented before any key: a YAML reader takes an indented block for the top-level map, whose keys would not be checked here, so it is refused", l)
@@ -117,6 +120,20 @@ func unreadLine(front string) (string, bool) {
 		}
 		if !keyLine.MatchString(l) {
 			return l, true
+		}
+	}
+	return "", false
+}
+
+// tabLed is the first frontmatter line that starts with a tab and holds more
+// than white space. YAML has no tab indentation: a strict reader errors on
+// such a line, a lenient one nests it under the key above, and an older one
+// reads a key at the top level, while entries takes it for a continuation
+// and never checks it (security review of 1fc0d4c..4165f81).
+func tabLed(front string) (string, bool) {
+	for _, l := range strings.Split(front, "\n") {
+		if strings.HasPrefix(l, "\t") && strings.TrimSpace(l) != "" {
+			return strings.TrimSuffix(l, "\r"), true
 		}
 	}
 	return "", false

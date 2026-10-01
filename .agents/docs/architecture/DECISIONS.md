@@ -530,3 +530,17 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
 **Decision.** The dreamer's lines are olive, with the legend word **learn**; a third, dashed olive line runs from the dreamer to a new node, "the CLI's model provider", labelled "redacted prompt, no tools". Dashed because it leaves the machine and is not a harness path (rule 1, rule 4). No verb, place or path changes, so the delivery claim in `specs/sh-agent/delivery.md` § The model is untouched (rule 6).
 
 **Consequences.** `TestHarnessMap` still passes (no new verb named). The interactive page of the map is updated from the README when the operator next republishes it. Rule 3's "one commit with the code, the docs and the map": this ADR, the README map and the legend land in the Phase 3 commit.
+
+
+## ADR-048: REQUIREMENTS.md loses its provenance prose; R2 is the one home of the stub list; R10 names the spec section     (2026-10-01) — Accepted
+
+**Context.** Audit II found the requirements file carrying its own history (C12, C22, C4, C15 of `plans/2026-09-30-recon-audit-fix.md`): every amended rule ended in a parenthesis quoting the approval that made it, up to six quotes on R9; R2's list of where Claude Code cannot read `AGENTS.md` was restated in the context and the init-project skill and had drifted (the 2.1.281 Bedrock/Vertex/Foundry/telemetry change was in none of them); R7 called the store "auto memory" from before `sh-agent memory` existed; R10 said "in the spec" without naming one. The operator approved the four edits in intent on 2026-09-30 ("1 yes 2 yes 3 yes", D29) and the exact text on 2026-10-01, in their own turn: "Yes to the REQUIREMENTS diff, apply it with the ADR" (D29a). The diff is `plans/2026-10-01-requirements-edit-proposal.md`; it applied with no reject (`patch -p1`, 9 lines changed).
+
+**Decision.**
+- Every provenance parenthesis in `REQUIREMENTS.md` is reduced to its ADR references; the quotes live in those ADRs (ADR-030, 031, 033, 038, 039, 040, 041, 045, 047, 047a), which already carry them. This ADR carries the one quote for this change.
+- R2 is the one home of the list of setups that need the `@AGENTS.md` stub: Claude Code before 2.1.277, and before 2.1.281 on Bedrock, Vertex, Foundry or with telemetry disabled. `context/AGENTS.md` § Project layout and `skills/init-project/SKILL.md` point at R2 and restate nothing.
+- R7 names the store as written by `sh-agent memory` on both CLIs.
+- R10 names `.agents/docs/specs/sh-agent/memory-loop.md` § Known differences as where runtime-only differences are listed.
+- The Antigravity rules-block limit records what the vendor page said on 2026-09-30 (24,000 bytes per file plus a 20,000-token budget) and keeps the measured single block as the binding figure.
+
+**Consequences.** A future change to the stub list is one edit in R2; a future amendment of a rule adds an ADR reference, never a quote, to `REQUIREMENTS.md`. `ROADMAP.md` is unchanged by this ADR: it has no "Now" and no milestone this edit affects, which the hard rule's one-commit clause otherwise names. Read against the diff by the main agent (three files, 9 + 1 + this entry); below the reviewer threshold.

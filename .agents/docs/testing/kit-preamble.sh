@@ -43,17 +43,34 @@ if [ -n "${KIT_ASSERT_COMMIT:-}" ]; then
   # A SHA, nothing else: `HEAD`, a branch or a tag name would be an ancestor
   # of HEAD whatever the fixture holds, and the assertion would prove nothing.
   [[ "$KIT_ASSERT_COMMIT" =~ ^[0-9a-f]{7,40}$ ]] || { echo "kit: KIT_ASSERT_COMMIT must be a commit SHA of 7 to 40 hex digits, got '$KIT_ASSERT_COMMIT'" >&2; exit 2; }
-  git -C "$KIT_CLONE" merge-base --is-ancestor --end-of-options "${KIT_ASSERT_COMMIT}^{commit}" HEAD 2>/dev/null || { echo "kit: commit $KIT_ASSERT_COMMIT not in the clone's log" >&2; exit 2; }
+  # Resolved first, and the full id must start with the value: git takes a
+  # tag or branch whose name is hex digits (a date, `20261001`) before an
+  # abbreviated id, and such a ref would pass as "the commit".
+  kit_full=$(git -C "$KIT_CLONE" rev-parse --verify --quiet --end-of-options "${KIT_ASSERT_COMMIT}^{commit}" 2>/dev/null) || kit_full=""
+  case "$kit_full" in
+    "") echo "kit: commit $KIT_ASSERT_COMMIT not in the clone's log" >&2; exit 2 ;;
+    "$KIT_ASSERT_COMMIT"*) ;;
+    *) echo "kit: KIT_ASSERT_COMMIT must be a commit SHA: '$KIT_ASSERT_COMMIT' names a ref in the clone" >&2; exit 2 ;;
+  esac
+  git -C "$KIT_CLONE" merge-base --is-ancestor "$kit_full" HEAD 2>/dev/null || { echo "kit: commit $KIT_ASSERT_COMMIT not in the clone's log" >&2; exit 2; }
 fi
 # The real ~/.config/sh-agent before and after: a run that writes there fails
-# the kit. The fingerprint is `ls -lR` (names, sizes, mtimes), so an appended
-# line to an existing file changes it; a names-only listing did not (docs-lens
-# review 2026-10-01).
+# the kit. The fingerprint covers names and contents, so an appended line to
+# an existing file changes it; a names-only listing did not (docs-lens review
+# 2026-10-01).
 # The real home is remembered here: a kit overrides HOME for the CLI it runs,
 # and the exit check must still look at the operator's own directory.
 kit_real_config="$HOME/.config/sh-agent"
-kit_list_real_config() { ls -la "$kit_real_config" 2>/dev/null | sed 's/^/  /'; }
-kit_fingerprint() { ls -lR --time-style=full-iso "$kit_real_config" 2>/dev/null | md5sum | cut -c1-12; }
+# Both tolerate a home that has no such directory yet: under pipefail a
+# failing `ls` ended the preamble with status 2 and no message (BUG-158).
+# The fingerprint is every path plus a checksum of every file, by tools macOS
+# has too: `ls --time-style` and `md5sum` are GNU's, and without them the
+# fingerprint was the same empty value before and after, proving nothing.
+kit_list_real_config() { { ls -la "$kit_real_config" 2>/dev/null || true; } | sed 's/^/  /'; }
+kit_fingerprint() {
+  { find "$kit_real_config" -print 2>/dev/null || true
+    find "$kit_real_config" -type f -exec cksum {} + 2>/dev/null || true; } | LC_ALL=C sort | cksum | cut -d' ' -f1
+}
 echo "kit: real $kit_real_config before the run:"; kit_list_real_config
 kit_before=$(kit_fingerprint)
 kit_on_exit() {

@@ -45,7 +45,7 @@ published, and if that changes, add a `LICENSE` file for `gke-basics` before it 
 | google-catalog/catalog | github.com/google/agents-cli (`skills/`, `extensions/langchain/template/.agents/skills`) and github.com/google/skills (`skills/cloud`, `skills/developers`); entry counts per source, exclusions and per-entry security notes in `google-catalog/catalog/MANIFEST.md` | 2c39459 and d5d9052 | Apache-2.0 | 2026-10-01 | `bash skills/google-catalog/scripts/refresh-catalog.sh <agents-cli pin> <google-skills pin>`, then `git add skills/google-catalog && go test ./...` |
 
 A catalog is vendored by its refresh script, never by hand and never by `npx skills add`: the
-script copies the entries byte for byte at the two pins (file modes aside: no executable bit),
+script copies the entries byte for byte at the two pins (file modes aside: no executable bit; a pin that names a tag or branch at the source is refused, since git would check that ref out before a commit of the same abbreviated id),
 refuses what the harness cannot carry (a symlink, a Go file, a dotfile, a name in two source sets, an
 entry without frontmatter, a directory name that is not a plain skill name) until the operator passes
 `--exclude <entry>`, keeps every entry named under the manifest's `## Excluded` out and that section

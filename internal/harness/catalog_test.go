@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -351,48 +352,83 @@ func TestCatalogWriteModeNeedsCatalogDir(t *testing.T) {
 
 // earlyExitConsumer matches the start of a pipeline stage that stops reading
 // before its producer is done: `head`, `grep -q/-m/-l` (short or long form),
-// a `sed` script ending in `q`, an `awk` program with `exit`, `read`; by name
-// or by path.
-var earlyExitConsumer = regexp.MustCompile(`^&?\s*(\S*/)?(head\b|grep\b.*(\s-[a-zA-Z]*[qml]|\s--(quiet|silent|max-count|files-with-matches)\b)|sed\b.*q['"]?(\s|\)|$)|awk\b.*\bexit\b|read\b)`)
+// a `sed` script with a `q` command, an `awk` program with `exit`, `read`;
+// by name or by path.
+var earlyExitConsumer = regexp.MustCompile(`^&?\s*(\S*/)?(head\b|grep\b.*(\s-[a-zA-Z]*[qml]|\s--(quiet|silent|max-count|files-with-matches)\b)|sed\b.*[0-9;{\s/$'"]q([}'";\s)]|$)|awk\b.*\bexit\b|read\b)`)
 
-// pipeStages cuts one logical shell line at its unquoted single pipes and
-// returns what follows each: `||`, and a `|` inside quotes (an alternation in
-// a pattern), are not pipes.
+// pipeStages cuts one logical shell line at its single pipes and returns what
+// follows each. Not a pipe: `||`, an escaped `\|`, a `|` inside single
+// quotes, a `|` inside double quotes (an alternation in a pattern), anything
+// after an unquoted ` #`. A command substitution is code again, also inside
+// double quotes: `v="$(find . | head -1)"` has a pipe, and the stage it
+// starts ends at the substitution's closing parenthesis.
 func pipeStages(line string) []string {
 	var stages []string
-	var quote byte
+	var quote byte   // 0, '\'' or '"'
+	var saved []byte // the quote state each open `$(` returns to
+	var depth []int  // plain parentheses open inside each `$(`
 	start := -1
+	end := func(i int) {
+		if start >= 0 {
+			stages = append(stages, line[start:i])
+			start = -1
+		}
+	}
 	for i := 0; i < len(line); i++ {
 		c := line[i]
-		switch {
-		case quote != 0:
-			if c == quote {
+		if quote == '\'' {
+			if c == '\'' {
 				quote = 0
-			} else if c == '\\' && quote == '"' {
-				i++
 			}
-		case c == '\\':
+			continue
+		}
+		if c == '\\' {
 			i++
-		case c == '\'' || c == '"':
+			continue
+		}
+		if c == '$' && i+1 < len(line) && line[i+1] == '(' {
+			saved, depth, quote = append(saved, quote), append(depth, 0), 0
+			i++
+			continue
+		}
+		if quote == '"' {
+			if c == '"' {
+				quote = 0
+			}
+			continue
+		}
+		switch c {
+		case '\'', '"':
 			quote = c
-		case c == '|':
-			if i+1 < len(line) && line[i+1] == '|' {
-				if start >= 0 {
-					stages = append(stages, line[start:i])
-					start = -1
+		case '#':
+			if i == 0 || line[i-1] == ' ' || line[i-1] == '\t' {
+				end(len(line))
+				return stages
+			}
+		case '(':
+			if len(depth) > 0 {
+				depth[len(depth)-1]++
+			}
+		case ')':
+			if n := len(depth); n > 0 {
+				if depth[n-1] > 0 {
+					depth[n-1]--
+				} else {
+					end(i)
+					quote, saved, depth = saved[n-1], saved[:n-1], depth[:n-1]
 				}
+			}
+		case '|':
+			if i+1 < len(line) && line[i+1] == '|' {
+				end(i)
 				i++
 				continue
 			}
-			if start >= 0 {
-				stages = append(stages, line[start:i])
-			}
+			end(i)
 			start = i + 1
 		}
 	}
-	if start >= 0 {
-		stages = append(stages, line[start:])
-	}
+	end(len(line))
 	return stages
 }
 
@@ -450,6 +486,10 @@ func TestScriptsHaveNoEarlyExitPipe(t *testing.T) {
 		"bad=$(find . -print | /usr/bin/head -1)\n",
 		"bad=$(find . -print |\n  head -1)\n",
 		"bad=$(find . -print \\\n  | head -1)\n",
+		"v=\"$(find . -print | head -1)\"\n",
+		"[ -n \"$(producer | grep -q x)\" ] || exit 1\n",
+		"first=$(producer | sed -n '1{p;q}')\n",
+		"echo \"n: $(producer | (cat; true) | head -1) done\"\n",
 	} {
 		if earlyExitPipeProblem(bad) == "" {
 			t.Errorf("the check passes %q", bad)
@@ -469,6 +509,11 @@ func TestScriptsHaveNoEarlyExitPipe(t *testing.T) {
 		"producer | while read -r x; do :; done\n",
 		"d=$(awk '/^date: /{print; exit}' f)\n",
 		"producer | awk '{print $1}' | sort\n",
+		"echo a \\| head -1\n",
+		"x=1 # then | head -1\n",
+		"echo \"$(sort f | uniq)\" \"a|head\"\n",
+		"sed 's/a/b/' faq | sort\n",
+		"producer | sed 's/q/z/;s/x/q/' | sort\n",
 	} {
 		if got := earlyExitPipeProblem(good); got != "" {
 			t.Errorf("the check refuses %q", good)
@@ -1147,11 +1192,19 @@ func TestRefreshCatalogScript(t *testing.T) {
 		// environment variable of the caller's names it: the script's own
 		// GIT_TRACE2* settings must win over it.
 		cfgHome := filepath.Join(tmp, "trace-home")
-		cfgTrace := filepath.Join(tmp, "git-trace2-config.log")
+		cfgTraces := map[string]string{ // trace2 key: its file
+			"eventTarget":  filepath.Join(tmp, "git-trace2-config-event.log"),
+			"normalTarget": filepath.Join(tmp, "git-trace2-config-normal.log"),
+			"perfTarget":   filepath.Join(tmp, "git-trace2-config-perf.log"),
+		}
 		if err := os.MkdirAll(cfgHome, 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(cfgHome, ".gitconfig"), []byte("[trace2]\n\teventTarget = "+cfgTrace+"\n"), 0o644); err != nil {
+		cfg := "[trace2]\n"
+		for key, f := range cfgTraces {
+			cfg += "\t" + key + " = " + f + "\n"
+		}
+		if err := os.WriteFile(filepath.Join(cfgHome, ".gitconfig"), []byte(cfg), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		cmd = exec.Command("bash", script, "--dest", filepath.Join(tmp, "dest-t2"), "--work", filepath.Join(tmp, "work-t2"), pinA, pinG)
@@ -1161,14 +1214,18 @@ func TestRefreshCatalogScript(t *testing.T) {
 		if err == nil || !strings.Contains(string(out), "cannot clone the agents-cli source") {
 			t.Errorf("a run under a trace2 target in git's config: want the role-named refusal, got err %v\n%s", err, out)
 		}
-		if b, err := os.ReadFile(cfgTrace); err == nil && strings.Contains(string(b), "SECRETTRACE") {
-			t.Errorf("%s holds the override's value: a trace2 target from git's config was left on", filepath.Base(cfgTrace))
+		for key, f := range cfgTraces {
+			if b, err := os.ReadFile(f); err == nil && strings.Contains(string(b), "SECRETTRACE") {
+				t.Errorf("%s holds the override's value: trace2.%s from git's config was left on", filepath.Base(f), key)
+			}
 		}
 		// git asks for a credential through an askpass program before it
 		// tries the terminal, and hands it a prompt that names the URL: an
 		// https source that answers 401 must not reach one (security review
 		// of a224329..01255bc).
+		var asked atomic.Int32
 		srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			asked.Add(1)
 			w.Header().Set("WWW-Authenticate", `Basic realm="fixture"`)
 			http.Error(w, "credentials required", http.StatusUnauthorized)
 		}))
@@ -1180,13 +1237,19 @@ func TestRefreshCatalogScript(t *testing.T) {
 		}
 		cmd = exec.Command("bash", script, "--dest", filepath.Join(tmp, "dest-a"), "--work", filepath.Join(tmp, "work-a"), pinA, pinG)
 		cmd.Dir = tmp
-		cmd.Env = fixtureEnv("HOME="+fakeHome, "CATALOG_AGENTS_CLI_REPO="+srv.URL+"/SECRETASK", "CATALOG_GOOGLE_SKILLS_REPO="+gskills, "CATALOG_DIR=", "CATALOG_WRITE=", "GIT_SSL_NO_VERIFY=1", "GIT_ASKPASS="+askStub, "SSH_ASKPASS="+askStub)
+		cmd.Env = fixtureEnv("HOME="+fakeHome, "CATALOG_AGENTS_CLI_REPO="+srv.URL+"/SECRETASK", "CATALOG_GOOGLE_SKILLS_REPO="+gskills, "CATALOG_DIR=", "CATALOG_WRITE=", "GIT_SSL_NO_VERIFY=1", "GIT_ASKPASS="+askStub, "SSH_ASKPASS="+askStub,
+			"https_proxy=", "HTTPS_PROXY=", "ALL_PROXY=", "all_proxy=", "NO_PROXY=127.0.0.1", "no_proxy=127.0.0.1")
 		out, err = cmd.CombinedOutput()
 		if err == nil || !strings.Contains(string(out), "cannot clone the agents-cli source") || strings.Contains(string(out), "SECRETASK") {
 			t.Errorf("an https source that wants credentials: want the role-named refusal and no value, got err %v\n%s", err, out)
 		}
 		if b, err := os.ReadFile(askLog); err == nil {
 			t.Errorf("git ran the caller's askpass program for the script's clone:\n%s", b)
+		}
+		// The condition this case sets up: git did ask the server, and was
+		// told 401. Without that the stub staying silent proves nothing.
+		if asked.Load() == 0 {
+			t.Errorf("git never reached the https fixture (no https transport, or a proxy in the way): the askpass case tested nothing\n%s", out)
 		}
 		// GIT_CURL_VERBOSE is on whenever it is set, whatever its value, and
 		// what it prints goes where the calls' output goes (discarded), so
@@ -1303,6 +1366,15 @@ func TestRefreshCatalogScript(t *testing.T) {
 	if out, code := run(pinA, "0000000000000000000000000000000000000000"); code != 1 || !strings.Contains(out, "does not resolve in the google-skills source") || snapshot() != good {
 		t.Errorf("unresolvable pin: want exit 1 and an untouched destination, got exit %d\n%s", code, out)
 	}
+	// A pin that is the name of a tag at the source is refused: git checks a
+	// ref of that name out before an abbreviated commit id, so whoever names
+	// refs there would choose the content (security review of
+	// 01255bc..4487a7a).
+	git(gskills, "tag", "20261001", pinG)
+	if out, code := run(pinA, "20261001"); code != 1 || !strings.Contains(out, "names a ref, not a commit, in the google-skills source") || snapshot() != good {
+		t.Errorf("a pin naming a tag: want exit 1, the ref refusal and an untouched destination, got exit %d\n%s", code, out)
+	}
+	git(gskills, "tag", "-d", "20261001")
 	refuse("no frontmatter", "bad", map[string]string{"skills/cloud/bad/SKILL.md": "no frontmatter here\n"}, nil, "bad")
 	refuse("collision", "alpha", map[string]string{"skills/cloud/alpha/SKILL.md": skill("alpha", "description: a second alpha\n")}, nil, "")
 	refuse("symlink", "gamma", nil, func() {
@@ -1404,4 +1476,116 @@ func TestRefreshCatalogScript(t *testing.T) {
 			t.Skip("no symlinks here")
 		}
 	}, "")
+}
+
+// TestKitPreambleAssertsCommit runs the run kits' preamble, which until now
+// had only the static pipe check: KIT_ASSERT_COMMIT is a commit SHA in the
+// clone's history and nothing else. A ref name is in every clone's history,
+// so it would assert nothing (BUG-157 and its addendum).
+func TestKitPreambleAssertsCommit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("runs bash and git")
+	}
+	for _, tool := range []string{"bash", "git"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			t.Skipf("no %s on this machine", tool)
+		}
+	}
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	preamble := filepath.Join(root, ".agents", "docs", "testing", "kit-preamble.sh")
+	tmp := t.TempDir()
+	if out, err := exec.Command("git", "-C", tmp, "rev-parse", "--git-dir").CombinedOutput(); err == nil {
+		t.Skipf("the test's temporary directory is inside a git checkout (%s): the preamble refuses that by design", strings.TrimSpace(string(out)))
+	}
+	clone, home, kitHome := filepath.Join(tmp, "clone"), filepath.Join(tmp, "home"), filepath.Join(tmp, "kit-home")
+	for _, d := range []string{clone, home, kitHome} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	git := func(args ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", clone, "-c", "user.email=kit@example.invalid", "-c", "user.name=kit"}, args...)...)
+		cmd.Env = fixtureEnv("HOME=" + home)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	git("init", "-q")
+	git("commit", "-q", "--allow-empty", "-m", "first")
+	first := git("rev-parse", "HEAD")
+	git("commit", "-q", "--allow-empty", "-m", "second")
+	git("branch", "side", first)
+	// git resolves a ref of that name before an abbreviated commit id.
+	git("tag", "20261001", first)
+	// A commit that exists in the repository and is not in HEAD's history.
+	git("checkout", "-q", "-b", "other", first)
+	git("commit", "-q", "--allow-empty", "-m", "elsewhere")
+	elsewhere := git("rev-parse", "HEAD")
+	git("checkout", "-q", "-")
+	head := git("rev-parse", "HEAD")
+	runThen := func(value, then string) (int, string) {
+		cmd := exec.Command("bash", "-c", ". \"$1\"; "+then, "kit", preamble)
+		cmd.Env = fixtureEnv("HOME="+home, "KIT_CLONE="+clone, "KIT_HOME="+kitHome, "KIT_BIN=/bin/true", "KIT_ASSERT_COMMIT="+value)
+		out, err := cmd.CombinedOutput()
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
+			return ee.ExitCode(), string(out)
+		}
+		if err != nil {
+			t.Fatalf("running the preamble: %v\n%s", err, out)
+		}
+		return 0, string(out)
+	}
+	run := func(value string) (int, string) { return runThen(value, ":") }
+	for _, c := range []struct {
+		name, value string
+		want        int
+		say         string
+	}{
+		{"the head's full SHA", head, 0, ""},
+		{"the head's short SHA", head[:7], 0, ""},
+		{"an ancestor's SHA", first[:12], 0, ""},
+		{"no assertion", "", 0, ""},
+		{"a commit on another branch", elsewhere, 2, "not in the clone's log"},
+		{"a SHA no commit has", "deadbeef1", 2, "not in the clone's log"},
+		{"HEAD", "HEAD", 2, "must be a commit SHA"},
+		{"a branch name", "side", 2, "must be a commit SHA"},
+		{"a message search", ":/first", 2, "must be a commit SHA"},
+		{"an option", "--all", 2, "must be a commit SHA"},
+		{"six hex digits", head[:6], 2, "must be a commit SHA"},
+		{"a tag whose name is hex digits", "20261001", 2, "names a ref"},
+	} {
+		code, out := run(c.value)
+		if code != c.want || !strings.Contains(out, c.say) {
+			t.Errorf("%s (%q): want exit %d saying %q, got exit %d\n%s", c.name, c.value, c.want, c.say, code, out)
+		}
+	}
+	// The cases above ran in a home with no ~/.config/sh-agent at all, which
+	// once ended the preamble with status 2 and no message (BUG-158). With
+	// the directory there: a run that leaves it alone passes, and a run that
+	// appends to a file in it, or adds one, fails the kit.
+	conf := filepath.Join(home, ".config", "sh-agent")
+	if err := os.MkdirAll(conf, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(conf, "feedback.jsonl"), []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, out := runThen("", ":"); code != 0 {
+		t.Errorf("a run that leaves the real config alone: want exit 0, got %d\n%s", code, out)
+	}
+	for name, then := range map[string]string{
+		"an appended line": `printf '{}\n' >> "$HOME/.config/sh-agent/feedback.jsonl"`,
+		"a new file":       `: > "$HOME/.config/sh-agent/state.json"`,
+	} {
+		if code, out := runThen("", then); code != 1 || !strings.Contains(out, "changed during the run") {
+			t.Errorf("a run that writes the real config (%s): want exit 1 and the kit's FAIL line, got exit %d\n%s", name, code, out)
+		}
+	}
 }

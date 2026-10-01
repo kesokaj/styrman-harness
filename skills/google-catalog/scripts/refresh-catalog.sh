@@ -225,6 +225,12 @@ fetch() { # <clone name> <url> <pin>: a full clone, reused; checked out at the p
       fail "cannot clone the $1 source (git's own message is not shown: it repeats the source's value; run the git clone yourself to see it)"
   fi
   git -C "$dir" -c advice.detachedHead=false checkout -q --detach "$3" 2>/dev/null || fail "pin $3 does not resolve in the $1 source"
+  # git takes a tag or branch named like the pin before an abbreviated commit
+  # id: whoever names refs at the source would choose what a short pin vendors.
+  case "$(git -C "$dir" rev-parse HEAD)" in
+    "$3"*) ;;
+    *) fail "pin $3 names a ref, not a commit, in the $1 source: pass the commit's own id" ;;
+  esac
 }
 if [ "$url_a" != "$upstream_a" ] || [ "$url_g" != "$upstream_g" ]; then on_disk=1; fi
 fetch agents-cli "$url_a" "$pin_a"

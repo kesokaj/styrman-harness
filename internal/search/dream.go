@@ -57,11 +57,7 @@ func ListProjects(home string) ([]Project, error) {
 		return nil, err
 	}
 	defer os.RemoveAll(tmp)
-	cp, err := copyDB(filepath.Dir(path), filepath.Base(path), tmp)
-	if err != nil {
-		return nil, err
-	}
-	db, err := sql.Open("sqlite", roDSN(cp))
+	db, err := openCopy(filepath.Dir(path), filepath.Base(path), tmp)
 	if err != nil {
 		return nil, err
 	}
@@ -114,11 +110,7 @@ func AgyConversationText(home, root string, since time.Time) ([]AgyConversation,
 		}
 	}()
 
-	sum, err := copyDB(src, "conversation_summaries.db", tmp)
-	if err != nil {
-		return nil, err
-	}
-	db, err := sql.Open("sqlite", roDSN(sum))
+	db, err := openCopy(src, "conversation_summaries.db", tmp)
 	if err != nil {
 		return nil, err
 	}
@@ -200,14 +192,10 @@ func conversationText(src, id, tmp string) (string, error) {
 	if strings.ContainsAny(id, `/\`) || id == "" || id == "." || id == ".." {
 		return "", nil
 	}
-	path, err := copyDB(filepath.Join(src, "conversations"), id+".db", tmp)
+	db, err := openCopy(filepath.Join(src, "conversations"), id+".db", tmp)
 	if errors.Is(err, os.ErrNotExist) {
 		return "", nil
 	}
-	if err != nil {
-		return "", err
-	}
-	db, err := sql.Open("sqlite", roDSN(path))
 	if err != nil {
 		return "", err
 	}
@@ -249,7 +237,48 @@ func copyDB(dir, name, tmp string) (string, error) {
 	return filepath.Join(tmp, name), nil
 }
 
-func copyFile(from, to string) error {
+// copyRetryWait is the pause before a second copy of a database whose first
+// copy was torn; zero in tests.
+var copyRetryWait = time.Second
+
+// copyFile is a variable so a test can tear the first copy.
+var copyFile = copyFileImpl
+
+// openCopy copies name from dir into tmp, opens the copy read-only and
+// reads once, since sql.Open is lazy. A copy taken while its writer was
+// mid-checkpoint opens as NOTADB or CORRUPT: the three copies are removed
+// and, after copyRetryWait, copied and opened once more; a second failure
+// is returned. The live database is never opened (audit 2026-09-30, SD7).
+func openCopy(dir, name, tmp string) (*sql.DB, error) {
+	var err error
+	for attempt := 0; attempt < 2; attempt++ {
+		if attempt == 1 {
+			for _, suffix := range []string{"", "-wal", "-shm"} {
+				os.Remove(filepath.Join(tmp, name+suffix))
+			}
+			time.Sleep(copyRetryWait)
+		}
+		var cp string
+		if cp, err = copyDB(dir, name, tmp); err != nil {
+			return nil, err
+		}
+		var db *sql.DB
+		if db, err = sql.Open("sqlite", roDSN(cp)); err != nil {
+			return nil, err
+		}
+		var n int
+		if err = db.QueryRow(`SELECT count(*) FROM sqlite_master`).Scan(&n); err == nil {
+			return db, nil
+		}
+		db.Close()
+		if !isUnreadable(err) {
+			return nil, err
+		}
+	}
+	return nil, err
+}
+
+func copyFileImpl(from, to string) error {
 	in, err := os.Open(from)
 	if err != nil {
 		return err
@@ -327,15 +356,17 @@ func walk(msg []byte, depth int, out *[]string) bool {
 			}
 			field := msg[n : n+int(l)]
 			msg = msg[n+int(l):]
-			if text, ok := textField(field); ok {
-				if prose(text) {
-					leaves = append(leaves, text)
-				}
-				continue
-			}
+			// A field that parses as a whole message IS one: tried as text
+			// first, a string-only sub-message (a tool call's arguments)
+			// passed as prose with its key and length bytes glued in front,
+			// which the JSON guard cannot see (audit 2026-09-30, SD1).
 			var nested []string
 			if walk(field, depth+1, &nested) {
 				leaves = append(leaves, nested...)
+				continue
+			}
+			if text, ok := textField(field); ok && prose(text) {
+				leaves = append(leaves, text)
 			}
 		default: // groups and unknown wire types: not a message here
 			return false

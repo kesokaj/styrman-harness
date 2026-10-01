@@ -154,7 +154,7 @@ func (o Options) dryRun(projects []search.Project, st state) error {
 		}
 		fmt.Fprintf(o.Out, "[dry-run] %s: %s; %d bytes; would run: %s\n", p.Root, strings.Join(parts, ", "), len(c.Prompt), strings.Join(cli, " "))
 		for _, d := range c.Dropped {
-			fmt.Fprintf(o.Out, "[dry-run]   left out: %s\n", d)
+			fmt.Fprintf(o.Out, "[dry-run]   left out: %s\n", oneLine(d))
 		}
 		if o.Project != "" {
 			fmt.Fprintf(o.Out, "[dry-run] prompt:\n%s\n", c.Prompt)

@@ -132,6 +132,7 @@ go test -race ./internal/memory ./internal/dream ./internal/search ./cmd/sh-agen
 - The unit tests put fake `claude`, `agy`, `systemctl` and `launchctl` on PATH; nothing calls a real CLI or manager.
 - A real `sh-agent dream` run in development goes against a scratch `--home` (under `.agents/scratch/`) whose search.db indexes only fixture projects — never `--all` against the real home: a real run sends redacted project content and transcripts to a model provider.
 - The timer is verified by `systemd-analyze verify` on units rendered through a fake manager. The real `--install-timer` is the operator's step (R6).
+- Corpus measurement of the Antigravity reader (a change to `internal/search/dream.go`): `SH_AGENT_CORPUS=<dir of copied Antigravity conversation databases> go test ./internal/search -run TestAgyCorpusLeaves -count=1 -v` prints `corpus: N databases, L prose leaves kept, K with a tool-argument key`. K must be 0. The 2026-09-30 measurement over 95 databases was 971 and 0, before and after the reader change. The copies live under `.agents/scratch/` and are deleted after.
 - The kit is in `testing/2026-09-30-verify-parity-memory-dream-phase-4.md`.
 
 ## 4. Sandbox start of each CLI (change to `context/`, `agents/`, or `skills/`)

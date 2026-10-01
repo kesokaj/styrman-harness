@@ -72,7 +72,7 @@ Experience flows back the one way too: each place runs `sh-agent report`, which 
 sh-agent install && git commit -am "context: tweak" && git push
 # machine B
 sh-agent update            # fetch; refuse a dirty checkout; if behind: pull --ff-only; rebuild and reinstall
-sh-agent update --check    # only reports; exit 2 when behind; works on a dirty checkout
+sh-agent update --check    # only reports; exit 2 when behind, 0 when current; on a dirty checkout it prints the real run's refusal and exits 1 (so does --dry-run)
 ```
 
 `sh-agent update` finds the checkout from `$SH_AGENT_REPO`, then the working directory or any of its parents, then the path recorded at the last install, so it works from anywhere. It refuses a non-fast-forward pull; resolve that by hand in the checkout.
@@ -89,7 +89,7 @@ Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
 
 On a box where nobody edits the checkout the timer simply keeps it current; on a box where somebody does, it now declines instead of deploying their draft.
 
-The timer follows `main` by fast-forward: its trust root is whoever can push to this repository, exactly as a hand-typed `sh-agent update` is. That is the operator, on their own machines, and the accepted position (ADR-030). A box where that is not acceptable runs `sh-agent update --check` on the timer and updates by hand. What a tag delivers, and to which place: `specs/sh-agent/delivery.md` § The model.
+The timer follows `main` by fast-forward: its trust root is whoever can push to this repository, exactly as a hand-typed `sh-agent update` is. That is the operator, on their own machines, and the accepted position (ADR-030). A box where that is not acceptable runs `sh-agent update --check` on the timer and updates by hand (on a dirty checkout that run exits 1 with the refusal, not 2). What a tag delivers, and to which place: `specs/sh-agent/delivery.md` § The model.
 
 ## Releases — signed tags, as release markers
 

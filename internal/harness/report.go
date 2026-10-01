@@ -55,15 +55,51 @@ var prefixNeedles = []string{
 // case, because the common forms are GITHUB_TOKEN=, DB_PASSWORD: and
 // Authorization: Bearer (security review 2026-09-17, finding 1). Pattern is
 // the name recorded in report.json, never the matched text.
+// secretRe is the "secret assignment" needle, named so its accept function
+// can read its groups by name.
+var secretRe = regexp.MustCompile(`(?i)(?P<flag>--)?(?P<key>(?:pass(?:word|wd|phrase)?|pwd|secret|token|api[_-]?key)[a-z0-9_-]*)["']?\s*(?P<sep>[:=]|\s)\s*(?:"(?P<dq>[^"]*)"|'(?P<sq>[^']*)'|(?P<bare>\S*))`)
+
 var keywordNeedles = []struct {
 	pattern string
 	re      *regexp.Regexp
+	// accept, when set, judges a match by its submatches; a needle whose
+	// shape alone over-reaches (an assignment whose "value" is prose) gets
+	// one (audit 2026-09-30, IN1).
+	accept func(m []string) bool
 }{
-	{"secret assignment", regexp.MustCompile(`(?i)(password|passwd|secret|token|api[_-]?key)[a-z0-9_-]*["']?\s*[:=]`)},
-	{"bearer", regexp.MustCompile(`(?i)bearer\s+\S`)},
-	{"authorization", regexp.MustCompile(`(?i)authorization["']?\s*:\s*\S`)},
+	// One rule per kind (audit 2026-09-30, IN1; three review rounds of the
+	// fix): a key holding a word of the pass family (password, passwd,
+	// passphrase, pwd), secret, token or api key, followed by `:` or `=`,
+	// or by a space when the key is a `--flag`; the value is the rest of
+	// that token or the whole quoted string, on the same line. A quoted
+	// value is a secret whatever it holds. An unquoted one is a secret from
+	// four characters when the WHOLE key (not its first word) holds pass,
+	// pwd or secret (`password=correct`, `TOKEN_PASSWORD=letmein`,
+	// `--password letmein`), and from eight, or six with a digit, for a
+	// token or API key (`token=abc123`), since tokens are long by nature. A
+	// heading (`## Secrets: how`), a field name (`token: field`), a word
+	// followed by a space (`passwords are hard`) or a short word is prose.
+	// `token=abcdefg` and `secret = my passphrase` are the accepted
+	// under-redaction, pinned in the test.
+	{"secret assignment", secretRe, func(m []string) bool {
+		g := func(name string) string { return m[secretRe.SubexpIndex(name)] }
+		if strings.TrimSpace(g("sep")) == "" && g("flag") == "" {
+			return false // a word, not an assignment or a flag
+		}
+		if g("dq") != "" || g("sq") != "" {
+			return true
+		}
+		v := strings.TrimRight(g("bare"), `,;)`)
+		key := strings.ToLower(g("key"))
+		if strings.Contains(key, "pass") || strings.Contains(key, "pwd") || strings.Contains(key, "secret") {
+			return len(v) >= 4
+		}
+		return len(v) >= 8 || len(v) >= 6 && strings.ContainsAny(v, "0123456789")
+	}},
+	{"bearer", regexp.MustCompile(`(?i)bearer\s+\S`), nil},
+	{"authorization", regexp.MustCompile(`(?i)authorization["']?\s*:\s*\S`), nil},
 	// The user may be empty: redis://:pass@host.
-	{"url credentials", regexp.MustCompile(`://[^/\s:@]*:[^/\s@]+@`)},
+	{"url credentials", regexp.MustCompile(`://[^/\s:@]*:[^/\s@]+@`), nil},
 	// Token shapes whose prefix alone is too short to list above (a bare
 	// `sk-` or `hf_` sits inside ordinary words), pinned by the length and
 	// alphabet the vendor uses instead (security review 2026-09-30, finding
@@ -72,13 +108,13 @@ var keywordNeedles = []struct {
 	// inside a word and be missed (security check of the fix, finding 2);
 	// a word that happens to end in `sk-` before 32 alphanumerics is the
 	// accepted over-redaction.
-	{"jwt", regexp.MustCompile(`eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.`)},
+	{"jwt", regexp.MustCompile(`eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.`), nil},
 	// Stripe live and test keys: the prefix plus sixteen alphanumerics, so a
 	// name such as `task_test_helper` stays.
-	{"stripe key", regexp.MustCompile(`[sr]k_(live|test)_[A-Za-z0-9]{16,}`)},
-	{"openai key", regexp.MustCompile(`sk-[A-Za-z0-9]{32,}`)},
-	{"npm token", regexp.MustCompile(`npm_[A-Za-z0-9]{36}`)},
-	{"hugging face token", regexp.MustCompile(`hf_[A-Za-z0-9]{30,}`)},
+	{"stripe key", regexp.MustCompile(`[sr]k_(live|test)_[A-Za-z0-9]{16,}`), nil},
+	{"openai key", regexp.MustCompile(`sk-[A-Za-z0-9]{32,}`), nil},
+	{"npm token", regexp.MustCompile(`npm_[A-Za-z0-9]{36}`), nil},
+	{"hugging face token", regexp.MustCompile(`hf_[A-Za-z0-9]{30,}`), nil},
 	// A token as the whole userinfo, with an empty or no password: sixteen
 	// characters or more of anything up to the `@`, so a short username
 	// (`ssh://git@`) stays while an escaped or padded token goes. A long
@@ -87,20 +123,22 @@ var keywordNeedles = []struct {
 	// direction, accepted like `ASIAN` and pinned in the test. One rule per
 	// kind, not one per instance: the security rounds of 2026-09-30 found a
 	// shape past every instance listed, five times.
-	{"url token", regexp.MustCompile(`://[^/\s:@]{16,}:?@`)},
+	{"url token", regexp.MustCompile(`://[^/\s:@]{16,}:?@`), nil},
 	// Every Slack webhook host and path (services, workflows, triggers, a
 	// port, a gov domain), any case.
-	{"slack webhook", regexp.MustCompile(`(?i)hooks\.slack`)},
+	{"slack webhook", regexp.MustCompile(`(?i)hooks\.slack`), nil},
 	// The families the v1.14.0 gate named as not covered, one rule per kind
 	// (a JWT's payload may be as short as `e30`, an empty object).
-	{"jwt short", regexp.MustCompile(`eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*\.[A-Za-z0-9_-]{8,}`)},
-	{"google refresh token", regexp.MustCompile(`1//0[A-Za-z0-9_-]{20,}`)},
-	{"discord webhook", regexp.MustCompile(`(?i)discord(app)?\.com[:.]?[0-9]*/api(/v[0-9]+)?/webhooks/`)},
-	{"teams webhook", regexp.MustCompile(`(?i)webhook\.office\.com/|/webhookb2/|[?&]sig=[A-Za-z0-9%_-]{16,}`)},
-	{"sendgrid key", regexp.MustCompile(`SG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}`)},
-	{"azure account key", regexp.MustCompile(`(?i)(accountkey|sharedaccesskey|storage_key|access_key)=\S`)},
-	{"cookie header", regexp.MustCompile(`(?i)(set-)?cookie["']?\s*:\s*\S|(^|\s)(-b|--cookie)[ =]\S|document\.cookie\s*=`)},
-	{"vault token", regexp.MustCompile(`hv[sbr]\.[A-Za-z0-9_-]{20,}`)},
+	{"jwt short", regexp.MustCompile(`eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*\.[A-Za-z0-9_-]{8,}`), nil},
+	{"google refresh token", regexp.MustCompile(`1//0[A-Za-z0-9_-]{20,}`), nil},
+	{"discord webhook", regexp.MustCompile(`(?i)discord(app)?\.com[:.]?[0-9]*/api(/v[0-9]+)?/webhooks/`), nil},
+	{"teams webhook", regexp.MustCompile(`(?i)webhook\.office\.com/|/webhookb2/|[?&]sig=[A-Za-z0-9%_-]{16,}`), nil},
+	{"sendgrid key", regexp.MustCompile(`SG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}`), nil},
+	{"azure account key", regexp.MustCompile(`(?i)(accountkey|sharedaccesskey|storage_key|access_key)=\S`), nil},
+	// The -b/--cookie flag needs a name=value after it: `git checkout -b x`
+	// and `-bench . -b 3` are not cookies (audit 2026-09-30, IN1).
+	{"cookie header", regexp.MustCompile(`(?i)(set-)?cookie["']?\s*:\s*\S|(^|\s)(-b|--cookie)[ =]["']?\S+=\S|document\.cookie\s*=`), nil},
+	{"vault token", regexp.MustCompile(`hv[sbr]\.[A-Za-z0-9_-]{20,}`), nil},
 	// The seventh pass over this list (security check 2026-09-30) widened
 	// the rules above; a shape past them is a design question for the
 	// operator, never an eighth batch: the list is a safety net (delivery.md).
@@ -132,8 +170,16 @@ func needleIn(s string) (string, bool) {
 		}
 	}
 	for _, k := range keywordNeedles {
-		if k.re.MatchString(s) {
-			return k.pattern, true
+		if k.accept == nil {
+			if k.re.MatchString(s) {
+				return k.pattern, true
+			}
+			continue
+		}
+		for _, m := range k.re.FindAllStringSubmatch(s, -1) {
+			if k.accept(m) {
+				return k.pattern, true
+			}
 		}
 	}
 	return "", false

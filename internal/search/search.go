@@ -518,6 +518,7 @@ func isWordRune(r rune) bool {
 
 type hit struct {
 	project, path, oid string
+	id                 int64 // the chunk: what a hit IS, whatever line it prints
 	line               int
 	snippet            string
 }
@@ -528,9 +529,12 @@ func (sc *scope) find(o Options, q string, hits []hit, perFile map[string]int) (
 	if q == "" || len(hits) >= o.Limit {
 		return hits, nil
 	}
-	have := map[string]bool{}
+	// Keyed by chunk, never by line: the every-word round shifts a hit's
+	// line to its matched term, so the any-word round saw the same chunk
+	// at its first line as new and printed it twice (audit 2026-09-30, SD2).
+	have := map[int64]bool{}
 	for _, h := range hits {
-		have[fmt.Sprintf("%s\x00%s\x00%d", h.project, h.path, h.line)] = true
+		have[h.id] = true
 	}
 	first := len(hits)
 	// Snippets are made only for the hits that are printed, below.
@@ -554,9 +558,10 @@ func (sc *scope) find(o Options, q string, hits []hit, perFile map[string]int) (
 			return nil, err
 		}
 		key := h.project + "\x00" + h.path
-		if have[fmt.Sprintf("%s\x00%d", key, h.line)] || perFile[key] >= perFileCap || !sc.kindMatches(o, h.project, h.path) {
+		if have[id] || perFile[key] >= perFileCap || !sc.kindMatches(o, h.project, h.path) {
 			continue
 		}
+		h.id = id
 		perFile[key]++
 		hits = append(hits, h)
 		ids = append(ids, id)

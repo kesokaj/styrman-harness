@@ -31,8 +31,41 @@ func Install(src Source, home string, files []File, vendor string, dryRun bool, 
 
 	counts := map[string]int{}
 	var manifest []string
+	// On a failed write the manifest is saved once as (every old entry still
+	// on disk) ∪ (files written or seen so far), so nothing sh-agent wrote
+	// is left unlisted for uninstall (audit 2026-09-30, IN2).
+	saveOnError := func(werr error) error {
+		if dryRun {
+			return werr
+		}
+		listed := map[string]bool{}
+		for _, rel := range manifest {
+			listed[rel] = true
+		}
+		union := append([]string(nil), manifest...)
+		for _, rel := range old.Files {
+			if fi, err := os.Lstat(filepath.Join(home, rel)); err == nil && !listed[rel] && fi.Mode()&os.ModeSymlink == 0 && !underLink(home, rel) {
+				union = append(union, rel)
+			}
+		}
+		sort.Strings(union)
+		old.Files = union
+		if err := SaveState(home, old); err != nil {
+			return fmt.Errorf("%w (and the manifest could not be saved: %v)", werr, err)
+		}
+		return werr
+	}
 	for _, f := range files {
 		dest := filepath.Join(home, f.Rel)
+		// A symlinked destination, or one under a linked directory, is never
+		// read through, chmodded or replaced: it is the operator's, kept and
+		// left out of the manifest, so uninstall never removes it (audit
+		// 2026-09-30, IN3; security review of the fix).
+		if fi, err := os.Lstat(dest); err == nil && fi.Mode()&os.ModeSymlink != 0 || underLink(home, f.Rel) {
+			counts["kept"]++
+			fmt.Fprintf(out, "keep    ~/%s (a symlink; sh-agent never writes through a link)\n", f.Rel)
+			continue
+		}
 		existing, readErr := os.ReadFile(dest)
 		switch {
 		case f.KeepForeign && readErr == nil && !IsOurs(existing) && !bytes.Equal(existing, f.Data):
@@ -77,7 +110,7 @@ func Install(src Source, home string, files []File, vendor string, dryRun bool, 
 			}
 			if !dryRun {
 				if err := WriteAtomic(dest, f.Data, f.Mode); err != nil {
-					return fmt.Errorf("writing %s: %w", dest, err)
+					return saveOnError(fmt.Errorf("writing %s: %w", dest, err))
 				}
 			}
 			fmt.Fprintln(out, line)
@@ -97,7 +130,9 @@ func Install(src Source, home string, files []File, vendor string, dryRun bool, 
 			continue
 		}
 		dest := filepath.Join(home, rel)
-		if _, err := os.Lstat(dest); err != nil {
+		fi, err := os.Lstat(dest)
+		if err != nil || fi.Mode()&os.ModeSymlink != 0 || underLink(home, rel) {
+			// Gone, or the operator's link now: not sh-agent's to remove.
 			continue
 		}
 		counts["removed"]++
@@ -106,7 +141,9 @@ func Install(src Source, home string, files []File, vendor string, dryRun bool, 
 			continue
 		}
 		if err := os.Remove(dest); err != nil {
-			return fmt.Errorf("removing stale %s: %w", dest, err)
+			// The IN2 rule holds here too: the files written above stay
+			// listed (code review round 2, 2026-10-01).
+			return saveOnError(fmt.Errorf("removing stale %s: %w", dest, err))
 		}
 		pruneEmptyDirs(home, filepath.Dir(dest))
 	}
@@ -178,9 +215,12 @@ func Status(home string, files []File) (Report, error) {
 	planned := map[string]bool{}
 	for _, f := range files {
 		planned[f.Rel] = true
+		fi, lerr := os.Lstat(filepath.Join(home, f.Rel))
 		existing, err := os.ReadFile(filepath.Join(home, f.Rel))
 		state := "ok"
 		switch {
+		case lerr == nil && fi.Mode()&os.ModeSymlink != 0 || underLink(home, f.Rel):
+			state = "foreign" // the operator's link, or a file under one (IN3)
 		case errors.Is(err, os.ErrNotExist):
 			state = "missing"
 		case err != nil:
@@ -213,6 +253,9 @@ func Status(home string, files []File) (Report, error) {
 func Diff(home string, files []File, out io.Writer) error {
 	for _, f := range files {
 		dest := filepath.Join(home, f.Rel)
+		if fi, err := os.Lstat(dest); err == nil && fi.Mode()&os.ModeSymlink != 0 || underLink(home, f.Rel) {
+			continue // the operator's link, or a file under one, is compared by no one (IN3)
+		}
 		existing, err := os.ReadFile(dest)
 		if errors.Is(err, os.ErrNotExist) {
 			fmt.Fprintf(out, "missing ~/%s\n", f.Rel)
@@ -279,7 +322,14 @@ func Uninstall(home string, dryRun bool, out io.Writer) error {
 	removed := 0
 	for _, rel := range st.Files {
 		dest := filepath.Join(home, rel)
-		if _, err := os.Lstat(dest); err != nil {
+		fi, err := os.Lstat(dest)
+		if err != nil {
+			continue
+		}
+		if fi.Mode()&os.ModeSymlink != 0 || underLink(home, rel) {
+			// An old manifest may name a path that is the operator's link
+			// now, or sits under one: never sh-agent's to remove (IN3).
+			fmt.Fprintf(out, "keep    ~/%s (a symlink; sh-agent never writes through a link)\n", rel)
 			continue
 		}
 		removed++
@@ -352,6 +402,20 @@ func abandon(tmp *os.File, err error) error {
 		return fmt.Errorf("%w; temp file %s left behind: %v", err, tmp.Name(), rm)
 	}
 	return err
+}
+
+// underLink reports whether any directory between home and home/rel is a
+// symlink: a file under a linked directory is written, chmodded or removed
+// through the link otherwise (security review 2026-09-30 of IN3).
+func underLink(home, rel string) bool {
+	dir := filepath.Dir(rel)
+	for dir != "." && dir != "" && dir != string(filepath.Separator) {
+		if fi, err := os.Lstat(filepath.Join(home, dir)); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+			return true
+		}
+		dir = filepath.Dir(dir)
+	}
+	return false
 }
 
 // pruneEmptyDirs removes now-empty directories from dir upward, stopping at

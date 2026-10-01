@@ -624,3 +624,22 @@ func TestRefsPrefilterIsEquivalent(t *testing.T) {
 		t.Errorf("prefiltered parseRefs differs:\n got %v\nwant %v", got, want)
 	}
 }
+
+// TestNoDuplicateHitAcrossRounds: a chunk whose matched term is not on its
+// first line was printed twice, once by the every-word round (its line
+// shifted to the term) and once by the any-word round (the chunk's first
+// line), and counted twice against --limit and the per-file cap (audit of
+// 2026-09-30, SD2).
+func TestNoDuplicateHitAcrossRounds(t *testing.T) {
+	root := newRepo(t)
+	home := t.TempDir()
+	writeFile(t, root, "notes.md", "# notes\nline two\nline three\nline four\nzebra quokka here now\n")
+	commitAll(t, root, "add")
+	out := mustSearch(t, Options{Dir: root, Home: home, Words: []string{"zebra", "quokka"}})
+	if n := strings.Count(out, "notes.md:"); n != 1 {
+		t.Errorf("notes.md printed %d times, want 1:\n%s", n, out)
+	}
+	if !strings.HasPrefix(out, "search: 1 hits") || !strings.Contains(out, ", 1 with every word") {
+		t.Errorf("header counts the duplicate:\n%s", out)
+	}
+}

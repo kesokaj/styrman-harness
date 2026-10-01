@@ -82,7 +82,7 @@ func (o Options) realRun() error {
 		return &ExitError{2, "sh-agent dream: " + msg}
 	}
 
-	removeCopies(conf)
+	removeCopies(conf, o.Now())
 	prune(filepath.Join(conf, "dream-failed"), t0)
 	projects, err := o.targets()
 	if err != nil {
@@ -130,11 +130,16 @@ func (o Options) realRun() error {
 			logf(p.Root + " fail " + err.Error())
 			continue
 		}
-		resp, ok := parse(answer(argv[0], stdout))
-		if !ok {
+		text, aerr := answer(argv[0], stdout)
+		resp, ok := parse(text)
+		if aerr != nil || !ok {
 			failed++
 			o.keepFailure(conf, c, t0, stdout, stderr)
-			logf(p.Root + " fail invalid output")
+			reason := "invalid output"
+			if aerr != nil {
+				reason = aerr.Error()
+			}
+			logf(p.Root + " fail " + reason)
 			continue
 		}
 		if err := o.write(conf, c, resp, argv[0], t0); err != nil {
@@ -195,9 +200,9 @@ func call(argv []string, prompt, work string, env []string) (string, string, err
 // answer is the model's text: Claude Code prints it; Antigravity's
 // stream-json ends with a result event that carries it as "response". A
 // result that names denied actions is no answer.
-func answer(cli, stdout string) string {
+func answer(cli, stdout string) (string, error) {
 	if cli != "agy" {
-		return stdout
+		return stdout, nil
 	}
 	sc := bufio.NewScanner(strings.NewReader(stdout))
 	sc.Buffer(make([]byte, 64*1024), 16*1024*1024)
@@ -219,17 +224,22 @@ func answer(cli, stdout string) string {
 		// A tool step that ran, denied or not, means the answer was not
 		// tool-free: no answer (security review of the release range).
 		if ev.Event == "step_update" && ev.StepUpdate.StepType == "tool" {
-			return ""
+			return "", nil
 		}
 		if ev.Event != "result" {
 			continue
 		}
 		if ev.Result.Status != "SUCCESS" || len(ev.Result.DeniedActions) > 0 {
-			return ""
+			return "", nil
 		}
-		return ev.Result.Response
+		return ev.Result.Response, nil
 	}
-	return ""
+	if err := sc.Err(); err != nil {
+		// A line over the buffer stopped the scan silently and the failure
+		// read "invalid output" (audit 2026-09-30, SD11).
+		return "", fmt.Errorf("output line too long or unreadable: %w", err)
+	}
+	return "", nil
 }
 
 // agyHome is a private HOME for one run's Antigravity child: a copy of the
@@ -309,7 +319,7 @@ func withHome(env []string, home string) []string {
 // (security review 2026-09-30). A dry run takes no lock and makes copies
 // too, so only copies older than an hour, far past any live run's, are
 // removed (code review round 2).
-func removeCopies(conf string) {
+func removeCopies(conf string, now time.Time) {
 	entries, err := os.ReadDir(conf)
 	if err != nil {
 		return
@@ -319,7 +329,7 @@ func removeCopies(conf string) {
 		if !e.IsDir() || !(strings.HasPrefix(n, "dream-agy-") || strings.HasPrefix(n, "dream-projects-")) {
 			continue
 		}
-		if info, err := e.Info(); err == nil && time.Since(info.ModTime()) > time.Hour {
+		if info, err := e.Info(); err == nil && now.Sub(info.ModTime()) > time.Hour {
 			os.RemoveAll(filepath.Join(conf, n))
 		}
 	}
@@ -329,8 +339,10 @@ func removeCopies(conf string) {
 func parse(out string) (response, bool) {
 	for i := strings.IndexByte(out, '{'); i >= 0; {
 		var r response
+		// Unknown keys are ignored: one extra key from a chatty model made
+		// the answer invalid and the project retried nightly with the same
+		// prompt (audit 2026-09-30, SD5). The fields used are validated below.
 		dec := json.NewDecoder(strings.NewReader(out[i:]))
-		dec.DisallowUnknownFields()
 		if dec.Decode(&r) == nil && (r.Proposals != nil || r.Skills != nil) {
 			return r, true
 		}
@@ -424,8 +436,12 @@ func (o Options) render(dir, day string, c Collected, cli string, ps []proposal,
 		if p.Target == "harness" {
 			target = "harness"
 		}
+		// The text is indented four spaces, line by line: /retro reads the
+		// file by its `### N.` and `**Status:**` lines, and an unfenced
+		// text could open a queued section the model never proposed
+		// (audit 2026-09-30, SD3).
 		fmt.Fprintf(&b, "\n### %d. %s\n**Status:** queued\n**Target:** %s   **Kind:** %s   **File:** %s\n\n%s\n\nEvidence: %s\n",
-			i+1, o.line(p.Title), target, o.line(p.Kind), o.line(p.File), strings.TrimSpace(o.clean(p.Text)), o.line(p.Evidence))
+			i+1, o.line(p.Title), target, o.line(p.Kind), o.line(p.File), indent(strings.TrimSpace(o.clean(p.Text))), o.line(p.Evidence))
 	}
 	for _, e := range extra {
 		b.WriteString("\n" + e + "\n")
@@ -437,6 +453,12 @@ func (o Options) render(dir, day string, c Collected, cli string, ps []proposal,
 }
 
 func (o Options) clean(s string) string { return scrub(s, o.Home) }
+
+// indent prefixes every line of s with four spaces.
+func indent(s string) string {
+	s = strings.NewReplacer("\r\n", "\n", "\r", "\n").Replace(s)
+	return "    " + strings.ReplaceAll(s, "\n", "\n    ")
+}
 
 // line is a one-line field: scrubbed, and its line breaks folded, so a model's
 // title can never open a second **Status:** line or a fake section in the

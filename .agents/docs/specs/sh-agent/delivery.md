@@ -35,7 +35,7 @@ A **zip place** fetches nothing and holds no tag: the operator downloads the rep
 
 Three ways, and no fourth:
 
-1. **A checkout the operator owns**, kept current with `sh-agent update` (§ The model). This is the normal path.
+1. **A checkout the operator owns**, kept current with `sh-agent update` (§ The model). This is the normal path. The dirty-checkout refusal runs before the `--check` and `--dry-run` returns: on a checkout with uncommitted changes both print the real run's refusal and exit 1; a clean one exits 2 when behind and 0 when current.
 2. **A release binary**, installed with `sh-agent install` and moved forward by `sh-agent update` (§ The model). One downloaded file carrying `context/`, `skills/`, `agents/`, `commands/` and `rules/` inside it, for a place that only USES the harness: the operator wanted no `.agents/docs` trail of this repository sitting beside their other projects, where a session opened there could mistake it for the project's own. What `update` does there is § The model. That place changes only when a release is cut (ADR-033).
 3. **A zip place**, moved forward by the operator repeating a download and `sh-agent update --from-zip <file>` (§ The model). For a machine that can hold neither the operator's SSH key nor run `gh` — a corporate workstation, say — and so can reach neither of the other two (ADR-038).
 

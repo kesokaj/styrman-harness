@@ -143,7 +143,17 @@ func TestReportRedactShapes(t *testing.T) {
 	// Accepted over-redaction of the url-token rule, pinned so a change to
 	// it is deliberate: a username of sixteen or more characters, and a
 	// pathless URL whose line holds an unrelated `@` later on.
-	for _, over := range []string{"ssh://first.lastname.long@bitbucket.org/x", `["https://app.example.com","ops@example.com"]`} {
+	// The teams-webhook rule's `?sig=` also matches an Azure SAS signature,
+	// a real secret kind, so a docs URL carrying one goes too: pinned.
+	for _, over := range []string{"ssh://first.lastname.long@bitbucket.org/x", `["https://app.example.com","ops@example.com"]`, "https://example.com/report?sig=abcdefghijklmnopqrst",
+		// Short secrets the value rule keeps redacting (security review of
+		// the fix, 2026-09-30): a quoted value whatever it holds, a password
+		// of four characters or more, and the prose-shaped `passwords: rotate`.
+		`DB_PASSWORD="correct horse battery staple"`, "password: letmein", `api_key: "AbCdEf"`, "password=correct", "passwords: rotate them yearly",
+		// The whole key decides the threshold, not its first word.
+		"TOKEN_PASSWORD=letmein", "api_key_password: letmein", "API_KEY_SECRET: letmein",
+		// The pass family as one kind, and the flag form (security review round 3).
+		"DB_PASS=letmein", "MYSQL_PWD=letmein", "PASSPHRASE: letmein", "run it with --password letmein now"} {
 		if _, recs := redactLines("f", []byte(over+"\n"), false); len(recs) != 1 {
 			t.Errorf("%q: over-redaction is the pinned behaviour, got %+v", over, recs)
 		}
@@ -159,6 +169,15 @@ func TestReportRedactShapes(t *testing.T) {
 		"cookies are set per host", "1/2 of the users", "hvs is the Vault token prefix",
 		"see webhook.office.com for the docs", "the AccountKey field is required",
 		"a signature is 7 chars", "the access key is rotated", "discord.com/api/v10/users/1",
+		// Ordinary prose the audit of 2026-09-30 (IN1) found redacted: a
+		// branch flag, a heading, a field name, a short value.
+		"git checkout -b feature/x", "-b is the branch flag", "go test -bench . -b 3",
+		"## Secrets: how they reach Cloud Run", "see the token: field in the schema",
+		"token: short", "- [ ] tokens: budget the context", "pwd prints the directory", "a passphrase protects the key",
+		// Accepted under-redaction of the value rule, pinned so a change to
+		// it is deliberate: a seven-letter token with no digit, and a
+		// two-letter unquoted word after `secret =`.
+		"token=abcdefg", "secret = my passphrase",
 	} {
 		// "ASIAN" contains the ASIA prefix: accepted over-redaction, pinned
 		// here so a change to it is deliberate.

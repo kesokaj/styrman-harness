@@ -82,6 +82,20 @@ func TestDreamVerb(t *testing.T) {
 	if err := run([]string{"dream", "--project", t.TempDir(), "--dry-run", "--home", home}, &out); !errors.As(err, &code) || code != 2 {
 		t.Errorf("--project outside a checkout: %v, want exit 2", err)
 	}
+	// Usage refusals exit 2 and say why on the writer the caller gave, not
+	// on a stream the caller cannot read (audit of 2026-09-30, IN12, IN13).
+	out.Reset()
+	if err := run([]string{"dream", "--install-timer", "--remove-timer", "--home", home}, &out); !errors.As(err, &code) || code != 2 {
+		t.Errorf("both timer flags: %v, want exit 2", err)
+	}
+	if !strings.Contains(out.String(), "not both") {
+		t.Errorf("the refusal is not on the writer: %q", out.String())
+	}
+	out.Reset()
+	run([]string{"dream", "--home", home}, &out)
+	if !strings.Contains(out.String(), "sh-agent dream") {
+		t.Errorf("a bare dream's usage message is not on the writer: %q", out.String())
+	}
 }
 
 // TestUninstallDryRunLeavesTheTimer: a dry run names the timer and runs no

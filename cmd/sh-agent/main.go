@@ -14,7 +14,8 @@
 //	sh-agent report [--dry-run]      send this machine's learning-loop files and metrics to the feedback repo, keeping nothing
 //	sh-agent search <words>          ranked search of this checkout's files and trail, reconciled against git first
 //	sh-agent index [--rebuild]       reconcile (or rebuild) the search index and print its counts
-//	sh-agent dream --all|--project DIR  propose rules and skills from every project's memory, trail, feedback and transcripts
+//	sh-agent dream --all|--project DIR [--dry-run]  propose rules and skills from every project's memory, trail, feedback and transcripts
+//	sh-agent dream --install-timer|--remove-timer [--dry-run]  install or remove the nightly timer
 //	sh-agent memory add|show         write one memory (body on stdin) or print the index of this project's .agents/memory/
 //	sh-agent version
 package main
@@ -61,7 +62,7 @@ Commands:
       --global searches the global search index (~/.config/sh-agent/search.db): ~/.config/sh-agent's logs and proposals and the .agents/docs trail of every harness-scaffolded checkout that has run search; --kind is one of bug adr plan change handoff review testing retro spec deploy trail code doc feedback proposal; --limit 1-50, default 10
   index [--global] [--rebuild]  reconcile the search index, or delete and rebuild it, and print its counts
   memory add --type T --name SLUG --description TEXT  save one memory, its body on stdin, into this project's .agents/memory/ and its MEMORY.md line (T: user, feedback, project or reference); every CLI writes memory this way (R10)
-  dream --install-timer | --remove-timer  install (systemd user timer on Linux, launchd agent on macOS) or remove the nightly "dream --all", run with the PATH of the installing shell; uninstall removes it too
+  dream --install-timer | --remove-timer [--dry-run]  install (systemd user timer on Linux, launchd agent on macOS) or remove the nightly "dream --all", run with the PATH of the installing shell; uninstall removes it too
   dream --all | --project DIR [--dry-run]  the background dreamer: for every indexed project (or one) that changed since its last dream, send its memory, new trail, feedback and both CLIs' transcripts, redacted, to a CLI with no tools, and write the proposals and draft skills it returns under ~/.config/sh-agent/proposals/dream/ (R3's exception; --vendor picks the CLI, default from the manifest)
   memory show             print this project's memory index, capped at what a session loads, plus a hint when Claude Code's native memory is still on here
   version                 print the build version
@@ -198,7 +199,10 @@ func run(args []string, out io.Writer) error {
 		}
 		switch {
 		case *installTimer && *removeTimer:
-			return errors.New("sh-agent dream: --install-timer or --remove-timer, not both")
+			// A usage error exits 2 like every other dream usage error, and
+			// says why on the caller's writer (audit 2026-09-30, IN12, IN13).
+			fmt.Fprintln(out, "sh-agent dream: --install-timer or --remove-timer, not both")
+			return exitCode(2)
 		case (*installTimer || *removeTimer) && *dryRun:
 			// A new side effect goes below the read-only mode (context § Hard
 			// rules): the dry run names what would change and calls nothing.
@@ -222,7 +226,7 @@ func run(args []string, out io.Writer) error {
 		}
 		var ee *dream.ExitError
 		if errors.As(err, &ee) {
-			fmt.Fprintln(os.Stderr, ee.Msg)
+			fmt.Fprintln(out, ee.Msg)
 			return exitCode(ee.Code)
 		}
 		return err
@@ -504,7 +508,7 @@ func memoryCmd(args []string, e memory.Entry, home, vendorFlag string, out io.Wr
 		text, err = memory.Show(wd, vendor != harness.VendorAntigravity)
 	}
 	if memory.IsRefusal(err) {
-		fmt.Fprintln(os.Stderr, "sh-agent memory:", err)
+		fmt.Fprintln(out, "sh-agent memory:", err) // on the caller's writer (audit 2026-09-30, IN13)
 		return exitCode(2)
 	}
 	if err != nil {
@@ -692,30 +696,31 @@ func update(repo, home string, checkOnly bool, homeFlag, vendorFlag string, out 
 	if err != nil {
 		return err
 	}
+	info := harness.Inspect(repo)
 	if behind == 0 {
-		fmt.Fprintf(out, "up to date with upstream (%s)\n", harness.Inspect(repo).Commit)
-		if checkOnly {
-			return nil
-		}
+		fmt.Fprintf(out, "up to date with upstream (%s)\n", info.Commit)
 	} else {
 		fmt.Fprintf(out, "behind upstream by %d commit(s)\n", behind)
-		if checkOnly {
-			return exitCode(2)
-		}
 	}
 	// A dirty checkout is never installed, on either path. `update` deploys
 	// the WORKING TREE, not the commit it just fetched, so uncommitted work
-	// reaches every vendor directory — which is R6 defeated. Pull already
-	// refused it on the behind path; the up-to-date path had no guard at all,
-	// and an hourly timer installed a session's half-finished edits into the
-	// operator's real home (BUG-046). `install` stays the deliberate way to
-	// deploy a dirty tree.
-	if info := harness.Inspect(repo); info.Dirty || info.StatusUnknown {
+	// reaches every vendor directory — which is R6 defeated (BUG-046).
+	// `install` stays the deliberate way to deploy a dirty tree. The check
+	// sits above the --check and --dry-run returns: a read-only mode that
+	// promised a pull the real run refuses was no check of it (audit
+	// 2026-09-30, IN4).
+	if info.Dirty || info.StatusUnknown {
 		what := "has uncommitted changes"
 		if info.StatusUnknown {
 			what = "could not be checked for uncommitted changes (git did not report its status)"
 		}
 		return fmt.Errorf("%s %s and `update` installs the working tree, not the fetched commit; commit or stash them, or run `sh-agent install` to deploy them deliberately", repo, what)
+	}
+	if checkOnly {
+		if behind == 0 {
+			return nil
+		}
+		return exitCode(2)
 	}
 	// Below every `--check` return: that mode reports and changes nothing
 	// (security review 2026-09-17, finding 2).
@@ -724,7 +729,7 @@ func update(repo, home string, checkOnly bool, homeFlag, vendorFlag string, out 
 		if err := harness.Pull(repo, out); err != nil {
 			return err
 		}
-		fmt.Fprintf(out, "pulled to %s\n", harness.Inspect(repo).Commit)
+		fmt.Fprintf(out, "pulled to %s\n", harness.Inspect(repo).Commit) // the tree moved: inspected again
 	}
 	args, err := installPassArgs(homeFlag, home, vendorFlag)
 	if err != nil {

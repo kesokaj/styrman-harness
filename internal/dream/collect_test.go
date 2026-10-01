@@ -433,3 +433,104 @@ func TestRunUsage(t *testing.T) {
 		t.Errorf("a usage error wrote %v", entries)
 	}
 }
+
+// TestSessionTextSkipsCommandOutput: Claude Code writes a slash command's
+// output as user-typed string content (`<local-command-stdout>`); that is
+// command output, not prose, and reached the prompt (audit of 2026-09-30,
+// SD10).
+func TestSessionTextSkipsCommandOutput(t *testing.T) {
+	f := newFixture(t)
+	line := func(text string) string {
+		b, _ := json.Marshal(map[string]any{"type": "user", "cwd": f.root, "timestamp": fresh.Format(time.RFC3339Nano),
+			"message": map[string]any{"role": "user", "content": text}})
+		return string(b) + "\n"
+	}
+	path := filepath.Join(f.home, ".claude", "projects", "-x", "s2.jsonl")
+	write(t, path, line("<local-command-stdout>token = SHOULDNOTSHOW</local-command-stdout>")+line("<command-message>init-project</command-message>")+
+		line("<task-notification><result>SUBAGENTRESULT</result></task-notification>")+line("<system-reminder>REMINDERTEXT</system-reminder>")+line("a real user line"), fresh)
+	c, err := collect(f.home, "claude", project(f), since, maxPrompt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, not := range []string{"SHOULDNOTSHOW", "<command-message>", "SUBAGENTRESULT", "REMINDERTEXT"} {
+		if strings.Contains(c.Prompt, not) {
+			t.Errorf("prompt carries command output %q", not)
+		}
+	}
+	if !strings.Contains(c.Prompt, "a real user line") {
+		t.Error("a real user line was dropped")
+	}
+}
+
+// TestTrailDateFromGit: "changed since the watermark" was the file's mtime,
+// so a clone or checkout marked the whole trail new and the size cap then
+// evicted the transcripts to keep old records (audit of 2026-09-30, SD4). A
+// tracked, unmodified trail file is dated by its newest commit; an untracked
+// or modified one by its mtime, as before.
+func TestTrailDateFromGit(t *testing.T) {
+	f := newFixture(t)
+	rel := filepath.Join(".agents", "docs", "bugs", "BUG-001-old.md")
+	write(t, filepath.Join(f.root, rel), "an old bug record\n", old)
+	run(t, f.root, "git", "-c", "user.email=t@t", "-c", "user.name=t", "add", rel)
+	cmd := exec.Command("git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "old")
+	cmd.Dir = f.root
+	stamp := old.Format(time.RFC3339)
+	cmd.Env = append(os.Environ(), "GIT_AUTHOR_DATE="+stamp, "GIT_COMMITTER_DATE="+stamp)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("commit: %v\n%s", err, out)
+	}
+	// A checkout or clone gives the file a fresh mtime.
+	if err := os.Chtimes(filepath.Join(f.root, rel), fresh, fresh); err != nil {
+		t.Fatal(err)
+	}
+	c, err := collect(f.home, "claude", project(f), since, maxPrompt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(c.Prompt, "an old bug record") {
+		t.Errorf("a trail file committed before the watermark was sent because its mtime is fresh:\n%s", labels(c))
+	}
+	// Modified after its commit: back to the mtime, so it is sent (the
+	// `git status` call must work; a misplaced global option made it fail
+	// silently — security review round 2, 2026-10-01).
+	write(t, filepath.Join(f.root, rel), "an old bug record, edited today\n", fresh)
+	c, err = collect(f.home, "claude", project(f), since, maxPrompt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(c.Prompt, "edited today") {
+		t.Errorf("a modified tracked record was not sent:\n%s", labels(c))
+	}
+}
+
+// TestTrailStatusArgs: the global options come before the verb (git rejects
+// them after it, and the status then silently found nothing modified), the
+// read holds no index lock, and no fsmonitor hook runs in the project at
+// 03:00 (security review rounds 2 and 3, 2026-10-01).
+func TestTrailStatusArgs(t *testing.T) {
+	got := strings.Join(trailStatusArgs("/r", ".agents/docs"), " ")
+	want := "--no-optional-locks -c core.fsmonitor=false -C /r status --porcelain --untracked-files=all -- .agents/docs"
+	if got != want {
+		t.Errorf("args = %q, want %q", got, want)
+	}
+	cmd := exec.Command("git", trailStatusArgs(t.TempDir(), ".")...)
+	if out, err := cmd.CombinedOutput(); err != nil && !strings.Contains(string(out), "not a git repository") {
+		t.Errorf("git rejected the arguments: %v\n%s", err, out)
+	}
+}
+
+// TestSessionTextSkipsMetaLines: a transcript line with isMeta is the harness
+// talking, never the user or the model (security review round 2, 2026-10-01).
+func TestSessionTextSkipsMetaLines(t *testing.T) {
+	f := newFixture(t)
+	b, _ := json.Marshal(map[string]any{"type": "user", "isMeta": true, "cwd": f.root, "timestamp": fresh.Format(time.RFC3339Nano),
+		"message": map[string]any{"role": "user", "content": "META CAVEAT TEXT that is long enough to count as prose"}})
+	write(t, filepath.Join(f.home, ".claude", "projects", "-x", "s3.jsonl"), string(b)+"\n", fresh)
+	c, err := collect(f.home, "claude", project(f), since, maxPrompt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(c.Prompt, "META CAVEAT") {
+		t.Error("a meta line reached the prompt")
+	}
+}

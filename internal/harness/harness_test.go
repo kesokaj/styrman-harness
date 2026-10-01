@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -1935,5 +1936,366 @@ func TestWriteAtomicClosesBeforeRename(t *testing.T) {
 	closeAt, renameAt := strings.Index(body, "tmp.Close()"), strings.Index(body, "os.Rename(")
 	if closeAt < 0 || renameAt < 0 || closeAt > renameAt {
 		t.Errorf("WriteAtomic must close the temp file before renaming it: close at %d, rename at %d", closeAt, renameAt)
+	}
+}
+
+// TestInstallMidFailureKeepsManifestComplete: files were written one by one
+// and the manifest saved only at the end, so a write that failed midway left
+// files on disk no manifest listed (audit of 2026-09-30, IN2). After a
+// failure the manifest is (every old entry still on disk) ∪ (written so far).
+func TestInstallMidFailureKeepsManifestComplete(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory modes")
+	}
+	repo := newRepo(t)
+	home := t.TempDir()
+	files, err := Plan(DirSource(repo), nil, VendorAll)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Install(DirSource(repo), home, files, VendorAll, false, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	old, _, _ := LoadState(home)
+	// A new skill that sorts before alpha, and a change to alpha whose
+	// directory is made unwritable: the new skill is written, alpha fails.
+	if err := os.MkdirAll(filepath.Join(repo, "skills", "aaa-new"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(repo, "skills", "aaa-new", "SKILL.md"), []byte("---\nname: aaa-new\ndescription: new\n---\nbody\n"), 0o644)
+	os.WriteFile(filepath.Join(repo, "skills", "alpha", "SKILL.md"), []byte("---\nname: alpha\ndescription: changed\n---\nnew body\n"), 0o644)
+	alphaDir := filepath.Join(home, ".claude", "skills", "alpha")
+	if err := os.Chmod(alphaDir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(alphaDir, 0o755) })
+	files, err = Plan(DirSource(repo), nil, VendorAll)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := Install(DirSource(repo), home, files, VendorAll, false, &out); err == nil {
+		t.Fatalf("install did not fail on the unwritable directory:\n%s", out.String())
+	}
+	st, _, err := LoadState(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed := map[string]bool{}
+	for _, rel := range st.Files {
+		listed[rel] = true
+	}
+	newRel := filepath.Join(".claude", "skills", "aaa-new", "SKILL.md")
+	if _, err := os.Stat(filepath.Join(home, newRel)); err != nil {
+		t.Fatalf("the new skill was not written before the failure: %v", err)
+	}
+	if !listed[newRel] {
+		t.Errorf("manifest lacks the file written before the failure: %s", newRel)
+	}
+	for _, rel := range old.Files {
+		if _, err := os.Lstat(filepath.Join(home, rel)); err == nil && !listed[rel] {
+			t.Errorf("manifest dropped an old entry still on disk: %s", rel)
+		}
+	}
+	os.Chmod(alphaDir, 0o755)
+	if err := Uninstall(home, false, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(filepath.Join(home, newRel)); !os.IsNotExist(err) {
+		t.Error("uninstall left the file written before the failure")
+	}
+}
+
+// deployedSkillFiles returns the planned .claude/skills paths, sorted.
+func deployedSkillFiles(files []File) []string {
+	var rels []string
+	for _, f := range files {
+		if strings.HasPrefix(f.Rel, filepath.Join(".claude", "skills")+string(filepath.Separator)) {
+			rels = append(rels, f.Rel)
+		}
+	}
+	sort.Strings(rels)
+	return rels
+}
+
+// TestInstallDoesNotFollowLinkedDest: the unchanged branch read, stat'ed
+// and chmodded the destination through a symlink, and a changed file's
+// rename replaced the link with a regular file (audit of 2026-09-30, IN3).
+// A linked destination is kept, never written through, and never enters the
+// manifest.
+func TestInstallDoesNotFollowLinkedDest(t *testing.T) {
+	repo := newRepo(t)
+	home := t.TempDir()
+	files, err := Plan(DirSource(repo), nil, VendorAll)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Install(DirSource(repo), home, files, VendorAll, false, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	rels := deployedSkillFiles(files)
+	if len(rels) < 2 {
+		t.Fatalf("fixture has %d deployed skill files, need 2", len(rels))
+	}
+	var planned = map[string]File{}
+	for _, f := range files {
+		planned[f.Rel] = f
+	}
+	targets := t.TempDir()
+	// Link 1: the target holds the planned bytes but a different mode.
+	same := filepath.Join(targets, "same")
+	os.WriteFile(same, planned[rels[0]].Data, 0o600)
+	// Link 2: the target holds other bytes.
+	other := filepath.Join(targets, "other")
+	os.WriteFile(other, []byte("the operator's own file\n"), 0o600)
+	for i, target := range []string{same, other} {
+		dest := filepath.Join(home, rels[i])
+		os.Remove(dest)
+		if err := os.Symlink(target, dest); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var out bytes.Buffer
+	if err := Install(DirSource(repo), home, files, VendorAll, false, &out); err != nil {
+		t.Fatalf("install: %v\n%s", err, out.String())
+	}
+	for i, target := range []string{same, other} {
+		dest := filepath.Join(home, rels[i])
+		if fi, err := os.Lstat(dest); err != nil || fi.Mode()&os.ModeSymlink == 0 {
+			t.Errorf("%s is no longer a symlink (err %v)", rels[i], err)
+		}
+		if fi, err := os.Stat(target); err != nil || fi.Mode().Perm() != 0o600 {
+			t.Errorf("the target of %s changed mode: %v", rels[i], fi.Mode())
+		}
+	}
+	if got, _ := os.ReadFile(other); string(got) != "the operator's own file\n" {
+		t.Errorf("the target of %s was written through: %q", rels[1], got)
+	}
+	if n := strings.Count(out.String(), "(a symlink; sh-agent never writes through a link)"); n != 2 {
+		t.Errorf("want two keep lines for links, got %d:\n%s", n, out.String())
+	}
+	st, _, _ := LoadState(home)
+	for _, rel := range st.Files {
+		if rel == rels[0] || rel == rels[1] {
+			t.Errorf("a linked destination entered the manifest: %s", rel)
+		}
+	}
+	// Status and Diff report a link as foreign, never as drift or a diff.
+	report, err := Status(home, files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Drift() {
+		t.Errorf("status reports drift for linked destinations: %+v", report.Counts)
+	}
+	if report.Counts["foreign"] < 2 {
+		t.Errorf("status counts %d foreign, want the two links", report.Counts["foreign"])
+	}
+	var diff bytes.Buffer
+	if err := Diff(home, files, &diff); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(diff.String(), rels[1]) {
+		t.Errorf("diff printed the linked destination:\n%s", diff.String())
+	}
+}
+
+// TestUninstallAndLinkedDirs: an old manifest may name a path that is the
+// operator's link now, or a file under a linked directory; neither is
+// removed, written or chmodded through (security review of IN3's fix).
+func TestUninstallAndLinkedDirs(t *testing.T) {
+	repo := newRepo(t)
+	home := t.TempDir()
+	files, err := Plan(DirSource(repo), nil, VendorAll)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Install(DirSource(repo), home, files, VendorAll, false, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	rels := deployedSkillFiles(files)
+	// The whole .claude/skills directory becomes the operator's link to a
+	// tree of their own; the manifest still lists every file under it.
+	skillsDir := filepath.Join(home, ".claude", "skills")
+	mine := filepath.Join(t.TempDir(), "mine")
+	if err := os.Rename(skillsDir, mine); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(mine, skillsDir); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.ReadFile(filepath.Join(mine, strings.TrimPrefix(rels[0], filepath.Join(".claude", "skills")+string(filepath.Separator))))
+	// A reinstall with a changed skill writes nothing through the link.
+	os.WriteFile(filepath.Join(repo, "skills", "alpha", "SKILL.md"), []byte("---\nname: alpha\ndescription: changed\n---\nnew body\n"), 0o644)
+	files, _ = Plan(DirSource(repo), nil, VendorAll)
+	var out bytes.Buffer
+	if err := Install(DirSource(repo), home, files, VendorAll, false, &out); err != nil {
+		t.Fatalf("install: %v\n%s", err, out.String())
+	}
+	after, _ := os.ReadFile(filepath.Join(mine, "alpha", "SKILL.md"))
+	if string(after) != string(before) {
+		t.Errorf("install wrote through the linked skills directory")
+	}
+	if !strings.Contains(out.String(), "keep    ~/"+rels[0]+" (a symlink; sh-agent never writes through a link)") {
+		t.Errorf("no keep line for a file under a linked directory:\n%s", out.String())
+	}
+	// Uninstall removes nothing under the link and keeps the link.
+	out.Reset()
+	if err := Uninstall(home, false, &out); err != nil {
+		t.Fatalf("uninstall: %v\n%s", err, out.String())
+	}
+	if fi, err := os.Lstat(skillsDir); err != nil || fi.Mode()&os.ModeSymlink == 0 {
+		t.Errorf("uninstall removed the operator's link (err %v)", err)
+	}
+	if _, err := os.Stat(filepath.Join(mine, "alpha", "SKILL.md")); err != nil {
+		t.Errorf("uninstall removed a file through the link: %v", err)
+	}
+}
+
+// TestUninstallSkipsLink: a manifest path that has become the operator's
+// link is kept by uninstall (security review round 2 of IN3: the guard at
+// the one line that answers it had no test).
+func TestUninstallSkipsLink(t *testing.T) {
+	repo := newRepo(t)
+	home := t.TempDir()
+	files, err := Plan(DirSource(repo), nil, VendorAll)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Install(DirSource(repo), home, files, VendorAll, false, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	rel := deployedSkillFiles(files)[0]
+	target := filepath.Join(t.TempDir(), "mine")
+	os.WriteFile(target, []byte("mine\n"), 0o600)
+	dest := filepath.Join(home, rel)
+	os.Remove(dest)
+	if err := os.Symlink(target, dest); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := Uninstall(home, false, &out); err != nil {
+		t.Fatalf("uninstall: %v\n%s", err, out.String())
+	}
+	if fi, err := os.Lstat(dest); err != nil || fi.Mode()&os.ModeSymlink == 0 {
+		t.Errorf("uninstall removed the operator's link at %s (err %v)", rel, err)
+	}
+	if !strings.Contains(out.String(), "keep    ~/"+rel) {
+		t.Errorf("no keep line:\n%s", out.String())
+	}
+}
+
+// TestUninstallSkipsFilesUnderLink: an old manifest lists files under a
+// directory that has since become the operator's link; uninstall removes
+// none of them through it (security review round 3: the underLink half of
+// the guard had no test of its own).
+func TestUninstallSkipsFilesUnderLink(t *testing.T) {
+	repo := newRepo(t)
+	home := t.TempDir()
+	files, err := Plan(DirSource(repo), nil, VendorAll)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Install(DirSource(repo), home, files, VendorAll, false, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	skillsDir := filepath.Join(home, ".claude", "skills")
+	mine := filepath.Join(t.TempDir(), "mine")
+	if err := os.Rename(skillsDir, mine); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(mine, skillsDir); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.ReadDir(filepath.Join(mine, "alpha"))
+	var out bytes.Buffer
+	if err := Uninstall(home, false, &out); err != nil {
+		t.Fatalf("uninstall: %v\n%s", err, out.String())
+	}
+	after, _ := os.ReadDir(filepath.Join(mine, "alpha"))
+	if len(after) != len(before) || len(before) == 0 {
+		t.Errorf("uninstall removed files through the linked directory: %d before, %d after", len(before), len(after))
+	}
+	if fi, err := os.Lstat(skillsDir); err != nil || fi.Mode()&os.ModeSymlink == 0 {
+		t.Errorf("uninstall removed the operator's link (err %v)", err)
+	}
+}
+
+// TestInstallResyncFailureKeepsManifest: the IN2 rule on the resync path: a
+// stale file that cannot be removed leaves the files written before it
+// listed (code review round 2, 2026-10-01).
+func TestInstallResyncFailureKeepsManifest(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory modes")
+	}
+	repo := newRepo(t)
+	home := t.TempDir()
+	files, err := Plan(DirSource(repo), nil, VendorAll)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Install(DirSource(repo), home, files, VendorAll, false, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	// beta leaves the repo (its deployed file becomes stale) and a new skill
+	// arrives (written before the resync); beta's directory is unremovable.
+	os.RemoveAll(filepath.Join(repo, "skills", "beta"))
+	os.MkdirAll(filepath.Join(repo, "skills", "aaa-new"), 0o755)
+	os.WriteFile(filepath.Join(repo, "skills", "aaa-new", "SKILL.md"), []byte("---\nname: aaa-new\ndescription: new\n---\nbody\n"), 0o644)
+	betaDir := filepath.Join(home, ".claude", "skills", "beta")
+	if err := os.Chmod(betaDir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(betaDir, 0o755) })
+	files, _ = Plan(DirSource(repo), nil, VendorAll)
+	var out bytes.Buffer
+	if err := Install(DirSource(repo), home, files, VendorAll, false, &out); err == nil {
+		t.Fatalf("install did not fail on the unremovable stale file:\n%s", out.String())
+	}
+	st, _, _ := LoadState(home)
+	newRel := filepath.Join(".claude", "skills", "aaa-new", "SKILL.md")
+	found := false
+	for _, rel := range st.Files {
+		found = found || rel == newRel
+	}
+	if !found {
+		t.Errorf("manifest lacks the file written before the failed resync: %s", newRel)
+	}
+}
+
+// TestResyncSkipsLink: the resync loop removed a path the old manifest named
+// even when it had become a symlink (audit of 2026-09-30, IN3).
+func TestResyncSkipsLink(t *testing.T) {
+	repo := newRepo(t)
+	home := t.TempDir()
+	files, err := Plan(DirSource(repo), nil, VendorAll)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Install(DirSource(repo), home, files, VendorAll, false, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	rel := deployedSkillFiles(files)[0]
+	skill := strings.Split(rel, string(filepath.Separator))[2]
+	target := filepath.Join(t.TempDir(), "mine")
+	os.WriteFile(target, []byte("mine\n"), 0o600)
+	dest := filepath.Join(home, rel)
+	os.Remove(dest)
+	if err := os.Symlink(target, dest); err != nil {
+		t.Fatal(err)
+	}
+	// The skill leaves the repo: the resync loop would remove its old path.
+	if err := os.RemoveAll(filepath.Join(repo, "skills", skill)); err != nil {
+		t.Fatal(err)
+	}
+	files, err = Plan(DirSource(repo), nil, VendorAll)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Install(DirSource(repo), home, files, VendorAll, false, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if fi, err := os.Lstat(dest); err != nil || fi.Mode()&os.ModeSymlink == 0 {
+		t.Errorf("the resync removed the operator's link at %s (err %v)", rel, err)
 	}
 }

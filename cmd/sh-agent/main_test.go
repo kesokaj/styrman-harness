@@ -895,6 +895,35 @@ func TestUpdateNeverInstallsDirtyTree(t *testing.T) {
 		}
 	})
 
+	// --check and --dry-run resolve the same guard as the real run: a dirty
+	// checkout is refused, exit 1, whether or not it is behind; a clean one
+	// keeps the documented exit 2 when behind (audit 2026-09-30, IN4).
+	t.Run("dirty and behind with --check refuses like the real run", func(t *testing.T) {
+		repo, marker := gitFixture(t)
+		behind(t, repo)
+		dirty(t, repo)
+		var out bytes.Buffer
+		err := update(repo, t.TempDir(), true, "", "", &out)
+		var code exitCode
+		if err == nil || errors.As(err, &code) || !strings.Contains(err.Error(), "uncommitted changes") {
+			t.Fatalf("--check on a dirty checkout must refuse with the real run's message, got %v", err)
+		}
+		if installed(marker) {
+			t.Error("a check installed something")
+		}
+	})
+
+	t.Run("clean and behind with --check exits 2", func(t *testing.T) {
+		repo, _ := gitFixture(t)
+		behind(t, repo)
+		var out bytes.Buffer
+		err := update(repo, t.TempDir(), true, "", "", &out)
+		var code exitCode
+		if !errors.As(err, &code) || code != 2 {
+			t.Fatalf("--check clean and behind: %v, want exit 2", err)
+		}
+	})
+
 	t.Run("clean and behind pulls then installs", func(t *testing.T) {
 		repo, marker := gitFixture(t)
 		before := harness.Inspect(repo).Commit
@@ -911,15 +940,19 @@ func TestUpdateNeverInstallsDirtyTree(t *testing.T) {
 		}
 	})
 
-	t.Run("--check reports on a dirty tree and installs nothing", func(t *testing.T) {
+	// Until 2026-09-30 --check reported "up to date" on a dirty tree and
+	// exited 0, a promise the real run refuses; a read-only mode resolves
+	// every guard the real run does (plan audit-fix D32, IN4).
+	t.Run("--check on a dirty tree refuses like the real run and installs nothing", func(t *testing.T) {
 		repo, marker := gitFixture(t)
 		dirty(t, repo)
 		var out bytes.Buffer
-		if err := update(repo, t.TempDir(), true, "", "", &out); err != nil {
-			t.Fatalf("--check only reports, it must not fail on a dirty tree: %v", err)
+		err := update(repo, t.TempDir(), true, "", "", &out)
+		if err == nil || !strings.Contains(err.Error(), "uncommitted changes") {
+			t.Fatalf("--check on a dirty tree must refuse with the real run's message, got %v", err)
 		}
 		if !strings.Contains(out.String(), "up to date") {
-			t.Errorf("--check should report the state, got %q", out.String())
+			t.Errorf("--check should still report the state first, got %q", out.String())
 		}
 		if installed(marker) {
 			t.Error("--check installs nothing")

@@ -18,16 +18,16 @@ Status: built 2026-09-30 (plan `plans/2026-09-30-parity-memory-dream.md`). R3's 
    - Claude Code transcript lines whose `cwd` is the root or under it, text parts only (`CLAUDE_CONFIG_DIR` honoured);
    - Antigravity conversations whose `workspace_uris` names the root, by `last_modified_time` (whole conversations, from copies of the databases; `internal/search/dream.go`).
 
-   Everything but memory and skills is taken only when newer than the watermark; a project's first dream reads the last 14 days. Only the user's (step_type 14) and the model's (15) Antigravity steps are read, never tool output; an Antigravity read error fails the project, so its watermark stays. A symlinked docs root or record directory is not followed and is named as left out.
-2. **Scrub**: every input passes `harness.Redact` (report's rules) and the home path becomes `~`; `project:` and "left out" lines are written with `~` for the home too.
+   Everything but memory and skills is taken only when newer than the watermark; a project's first dream reads the last 14 days. A tracked, unmodified trail record counts as changed at the time of its newest commit (`git log`), an untracked or modified file at its mtime. Claude Code lines that are `isMeta`, or whose user content starts with `<local-command`, `<command-`, `<task-notification` or `<system-reminder`, are not sent. A copy of an Antigravity database that is torn (the live one was being written) is copied and opened once more after a second; the live database is never opened. Only the user's (step_type 14) and the model's (15) Antigravity steps are read, never tool output; an Antigravity read error fails the project, so its watermark stays. A symlinked docs root or record directory is not followed and is named as left out.
+2. **Scrub**: an input's fence runs (`>>>`, `<<<`) and its label's newlines are escaped in the prompt; every input passes `harness.Redact` (report's rules) and the home path becomes `~`; `project:` and "left out" lines are written with `~` for the home too.
 3. **Cap**: at 256 KB. Transcripts are dropped oldest first, then trail, feedback, skills. A project whose memory alone passes the cap fails. The prompt names what was left out.
 4. **Ask**: one CLI call with NO tools, from the empty `~/.config/sh-agent/dream-work/`, 10-minute timeout, the child keeping sh-agent's own environment.
    - Claude Code (manifest vendor `claude` or `all`): `claude -p --tools "" --strict-mcp-config --setting-sources local --no-session-persistence --output-format text`, the prompt on stdin.
    - Antigravity (`antigravity`): `agy --input-format stream-json --output-format stream-json --mode plan -p ""`, the prompt on stdin as one stream-json message and the answer read from the final `result` event's `response`; a result naming `denied_actions` is no answer. agy has no no-tools flag: plan mode, a settings file that grants nothing and the prompt's opening warning (every tool call is refused and ends the run with no answer) keep it from calling one (D7b). It runs with a private HOME, `~/.config/sh-agent/dream-agy-home-*`, holding a copy of the operator's `antigravity-oauth-token` and `installation_id` (taken from `$HOME`, never `--home`) and that settings file; the directory is removed after the run. No login is exit 2 before any project.
 
    `--vendor` overrides the manifest.
-5. **Write**: the first `{…}` of the answer that decodes as `{"proposals":[…],"skills":[…]}`, scrubbed again.
-   - `proposals/dream/<date>-<project>.md`: project targets, each with `**Status:** queued`, plus the draft list.
+5. **Write**: the first `{…}` of the answer that decodes as `{"proposals":[…],"skills":[…]}`, scrubbed again. Unknown keys are ignored; the fields used are validated.
+   - `proposals/dream/<date>-<project>.md`: project targets, each with `**Status:** queued`, plus the draft list. Each proposal's text is indented by four spaces, so a model's text cannot open a `### N.` or `**Status:**` section that `/retro` parses.
    - `proposals/dream/harness/<date>-<project>.md`: harness targets.
    - `proposals/dream/drafts/<date>-<project>-<name>/SKILL.md`: each draft skill with a kebab-case name; an invalid name is listed as dropped.
 
@@ -66,11 +66,12 @@ Status: built 2026-09-30 (plan `plans/2026-09-30-parity-memory-dream.md`). R3's 
 
 | Situation | Behaviour |
 |---|---|
-| Any failure before the first project: usage, no CLI on PATH, no Antigravity login, an unreadable index | exit 2 with a run log line and `last_run.error`; `status` says `failed`. A usage error writes nothing |
+| Any failure before the first project: usage, no CLI on PATH, no Antigravity login, an unreadable index | exit 2 with a run log line and `last_run.error`; `status` says `failed`. A usage error writes nothing, exits 2 and prints its reason on stdout (not stderr) |
 | `dream-state.json` is corrupt | exit 2, and the file is NOT rewritten |
-| `--dry-run` with `--install-timer` or `--remove-timer` | writes nothing |
+| `--dry-run` with `--install-timer` or `--remove-timer` | both take `--dry-run`: writes nothing, calls no manager |
 | The CLI exits non-zero or times out | the project fails, its output goes to `dream-failed/`, its watermark stays; the others run; exit 1 |
 | The answer has no decodable JSON | the same, logged `fail invalid output` |
+| An agy stdout line over 16 MiB | the same, logged `fail output line too long or unreadable` |
 | The docs root or a record directory is a symlink | not followed; named as left out |
 | The store is a symlink, or git tracks it | memory is left out and named in the prompt and the proposal frontmatter; the rest is sent |
 | Memory alone over 256 KB | the project fails with `memory over cap` |

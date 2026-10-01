@@ -6,8 +6,8 @@ Operator's words (2026-09-30): "I want everything fixed, improved, optimized, ad
 
 ## Phases
 
-- [ ] Phase 0 — Research, plan, cold-reader check (research briefs under `plans/2026-09-30-research-audit-fix-*.md`)
-- [ ] Phase 1 — Code fixes under the bug skill: reader leaf order (SD1), duplicate hits (SD2), proposal forgery (SD3), over-redaction (IN1), install orphans (IN2), dry-run guard (IN4), the small verb defects (IN11–14), dream lows (SD4–SD11)
+- [x] Phase 0 — Research, plan, cold-reader check (2026-09-30, commit 4764c5f) (research briefs under `plans/2026-09-30-research-audit-fix-*.md`)
+- [x] Phase 1 — Code fixes under the bug skill (2026-10-01; BUG-124..136; 484 tests): reader leaf order (SD1), duplicate hits (SD2), proposal forgery (SD3), over-redaction (IN1), install orphans (IN2), dry-run guard (IN4), the small verb defects (IN11–14), dream lows (SD4–SD11)
 - [ ] Phase 2 — Trail and spec truth: delivery claim, spec drifts, handoff correction, stopped-review markers, BUG-122/123 graduation with mechanisms, stale plan closed, project § Testing
 - [ ] Phase 3 — Global context under budget and consistent; templates; REQUIREMENTS edits (operator approval) with ADR
 - [ ] Phase 4 — Agents: lanes, tools, derive, description test, behavioural runs

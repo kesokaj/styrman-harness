@@ -401,7 +401,7 @@ func Migrate(dsn string) error {
 
 ## Lint: golangci-lint v2
 
-Install the binary, not `go install` (the project documents that the latter is not guaranteed to work): `curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v2.14.0`. Run `golangci-lint run` and `golangci-lint fmt`; `golangci-lint config verify` checks the file. The minimal config for a stdlib-first service, `.golangci.yml` at the module root:
+Install the release binary, not `go install` (the project documents that the latter is not guaranteed to work), and never a script piped into `sh`: `gh release download v2.14.0 --repo golangci/golangci-lint -p 'golangci-lint-2.14.0-linux-amd64.tar.gz' -p 'golangci-lint-2.14.0-checksums.txt' && sha256sum -c --ignore-missing golangci-lint-2.14.0-checksums.txt && tar -xzf golangci-lint-2.14.0-linux-amd64.tar.gz --strip-components=1 -C "$(go env GOPATH)/bin" golangci-lint-2.14.0-linux-amd64/golangci-lint` (macOS: the `darwin-arm64` asset and `shasum -a 256 -c`). Run `golangci-lint run` and `golangci-lint fmt`; `golangci-lint config verify` checks the file. The minimal config for a stdlib-first service, `.golangci.yml` at the module root:
 
 ```yaml
 version: "2"

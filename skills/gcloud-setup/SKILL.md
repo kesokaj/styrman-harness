@@ -47,7 +47,7 @@ sudo apt-get update && sudo apt-get install google-cloud-cli
 The component manager is disabled in the apt package: extras are apt packages
 (`google-cloud-cli-kubectl`, …), not `gcloud components install`. The no-root path is the
 tarball: `curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-x86_64.tar.gz`,
-`tar -xzf` it, `./google-cloud-sdk/install.sh`, which keeps the component manager.
+check its SHA256 against the value printed on the install page (`sha256sum google-cloud-cli-linux-x86_64.tar.gz`) before `tar -xzf` and `./google-cloud-sdk/install.sh`, which keeps the component manager; the archive is fetched over TLS but carries no signature of its own.
 
 ### 2. Authenticate
 

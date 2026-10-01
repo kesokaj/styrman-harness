@@ -6,7 +6,6 @@ description: |
   or working with volumes and networking. Activate for any docker, docker-compose, container,
   or Dockerfile mention — even simple "build the container" requests.
   Do NOT use for Kubernetes orchestration (use gke-basics) or Terraform infrastructure (use terraform).
-allowed-tools: Bash
 ---
 
 # Docker & Container Development

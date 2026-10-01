@@ -1,13 +1,5 @@
 # TODO
 
-Items the active plan will consume. Empty when the work is done; anything the operator must do (other than a standing procedure the deploy guide records), or an idea worth keeping, goes in the newest handoff's Next Steps.
+Items the active plan will consume, consumed in the commit that ticks them. Empty (this title and note only) at every checkpoint: an action only the operator can take goes in the newest handoff's Next Steps, scheduled work in a plan file; neither this file nor ROADMAP.md is a parking lot for ideas.
 
 <!-- Format: - [ ] Description (added YYYY-MM-DD) -->
-
-## High Priority
-
-## Medium Priority
-
-## Low Priority
-
-## Ideas / Nice-to-Have

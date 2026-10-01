@@ -36,3 +36,15 @@ Status: built 2026-09-29 (plan `plans/2026-09-29-dreamer-memory-loop.md`); writi
 | Agent cut at its turn limit | a partial artifact with `Status: IN PROGRESS` (its early-write rule); the caller says so |
 | `git clean -fdx`, a fresh clone, a deleted checkout | the store is gone with them, like scratch; the migration moved the files, so there is no second copy — the operator's choice (ADR-043) |
 | `.agents` or `.agents/memory` is a symlink, or git tracks something under it | `/init-project` stops and reports; `sh-agent memory add` and `show` (exit 2), `/dream` and the `dreamer` refuse the store. With native memory off (R10) Claude Code no longer loads `MEMORY.md` itself, so the ADR-043 residue (a force-added upstream `MEMORY.md` loaded unchecked) is closed where `/init-project` has run; it stays in a project scaffolded before R10 until then |
+
+## Known differences (R10)
+
+What only a CLI's own runtime controls, and neither the context nor `sh-agent` can reach (REQUIREMENTS.md R10 points here):
+
+| Difference | Claude Code | Antigravity | Why it stays |
+|---|---|---|---|
+| `/goal` (an unattended run's pass condition) | documented command | none | a CLI feature; the context names it as Claude Code only |
+| Standing root-step permission | may also live in `.claude/settings.json`; the harness records it in `docs/deploy/local.md` § Operator steps, which both CLIs read | the deploy guide only | the guide is the vendor-neutral home (plan audit-fix C7) |
+| Project-level skills, agents, commands, rules | `.claude/*` symlinks into `.agents/*`, made by `/init-project` | reads `.agents/` natively where it does; check `/skills` and `/agents` | each CLI's discovery path is its own |
+| Subagent `effort` and `maxTurns` | honoured | dropped by `sh-agent install`'s derivation (no documented equivalent); the dispatcher names the budget in the dispatch text | the derived `agent.md` carries only keys the vendor documents (D5a) |
+| Native auto memory | switched off per project by `/init-project` (`autoMemoryEnabled: false`) | none to switch off | both CLIs write memory only through `sh-agent memory add` |

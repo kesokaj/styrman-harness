@@ -40,6 +40,10 @@ Language-level standards for all TypeScript code. Framework and UI conventions l
 - No namespaces, no `/// <reference>`, no default exports for shared modules — named exports keep renames refactor-safe.
 - Errors: throw `Error` subclasses, never strings; type caught errors as `unknown` and narrow.
 
+## Before claiming done
+
+Apply `review-standards` § 8 (the code-shape rules): a guard keeps the data when its check errors, a read-only mode performs no side effect, a generated artifact (route tree, embedded build) is pinned both ways to its source, a verification command is never chained to a commit.
+
 ## Escape Hatches
 
 - `as` casts and `!` non-null assertions are last resorts — each one needs a comment explaining why the compiler is wrong.

@@ -1,6 +1,6 @@
 ---
 name: documentation
-description: "Maintains the how-it-works docs (README, specs, testing guides, deploy guides, the project AGENTS.md setup and deploy sections, ROADMAP.md Now/Next/Later, and godoc) and returns the files it updated. Dispatch when behavior, interfaces, the plan, or a deploy path changed. Never triggered by internal-only refactors, and never writes changelogs or ADRs (those belong to changelog) or TODO.md and ROADMAP Now (the main agent keeps those)."
+description: "Maintains the how-it-works docs (README, specs, testing guides, deploy guides, the project AGENTS.md setup and deploy sections, and `docs/onboarding.md` when a project has one) and returns the files it updated. Dispatch when behavior, interfaces, the plan, or a deploy path changed. Never triggered by internal-only refactors, and never writes changelogs (those belong to changelog) or ADRs (the main agent's) or TODO.md and ROADMAP Now (the main agent keeps those)."
 tools: Read, Grep, Glob, Edit, Write
 model: sonnet
 effort: medium
@@ -32,23 +32,21 @@ AGENTS.md                             # root: the project's Setup commands and D
                                       # something works — the ones the verifier reads. A tier list
                                       # (coverage runs, e2e scripts, container smokes) belongs in
                                       # docs/testing/guide.md, which Setup points at (G13).
-ROADMAP.md                            # root: Next / Later are yours when the plan is re-sequenced; "Now" is the main agent's one-line pointer at the active plan
 ```
-Plus inline godoc-style comments on exported symbols.
 
 `<app>` in `specs/<app>/` is the single `cmd/<app>` directory (`ls -d cmd/*/` printing exactly one), which a heading or title in `AGENTS.md` does not override, else the binary or service the project's `AGENTS.md` names, else the repository directory's own name — and is never left literal in a path you write.
 
 Shared seam: the `verifier` creates `testing/guide.md`, the project's one guide, whenever it runs a project's procedure and finds the guide absent, and updates it when the steps change — its dated verify logs in `testing/` are its own; the guide is otherwise yours.
 
-**Not your job:** changelog entries (`changes/`) and ADRs (`architecture/DECISIONS.md`) belong to the `changelog` subagent; `TODO.md` and ROADMAP "Now" belong to the main agent. If a change needs both explanatory docs *and* a changelog entry, do the explanatory part and note that the `changelog` subagent should record the change.
+**Not your job:** changelog entries (`changes/`) belong to the `changelog` subagent; ADRs (`architecture/DECISIONS.md`), `TODO.md` and `ROADMAP.md` belong to the main agent; doc-comments in source are the author's (`/review --docs` catches stale ones). If a change needs both explanatory docs *and* a changelog entry, do the explanatory part and note that the `changelog` subagent should record the change.
 
 ## Rules
 
 1. **Read before writing.** Inspect the actual code and the existing doc. A task isn't done until docs match the code exactly. When the dispatch carries `sh-agent search` output for a changed command, flag or path, open every doc it lists: each one still describing the old behaviour is yours to update.
 2. **Specs are live.** Keep `specs/<app>/integration-spec.md` matching the code's public APIs, schemas, configs, auth, and errors.
 3. **README stays copy-pasteable.** Quick-start commands must actually run.
-4. **ROADMAP.md reflects the current plan.** When scope, sequencing, or priorities change, move items between Next and Later — don't let it fossilize; leave "Now" to the main agent unless the dispatch names it.
-5. **Exported symbols** get godoc comments; comments explain *why*, not *what*.
+4. **ROADMAP.md is not yours.** The main agent keeps "Now" and "Next"; when a change re-sequences the plan, say so in your reply and leave the file.
+5. **Comments in source are not yours**; where a spec or guide explains a mechanism, it says *why*, not *what*.
 6. **REQUIREMENTS.md is immutable** without explicit user approval — never edit it.
 7. Convert relative dates to absolute.
 8. **Frontmatter** only where the global context requires it: files under `<docs-root>/` (specs, testing and deploy guides) start with `owner:` and `date:`; `README.md` and `ROADMAP.md` at the root carry none.

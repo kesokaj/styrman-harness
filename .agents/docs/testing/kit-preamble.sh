@@ -3,7 +3,8 @@
 # from guide.md § 4 (`. .agents/docs/testing/kit-preamble.sh` at the top of the
 # kit script in scratch). A run proves its setup before its output counts
 # (BUG-087, 090, 091, 106, 107, 115, 116, 123): this file is that proof, in
-# one place, so a kit cannot skip a step by forgetting it.
+# one place, so a kit cannot skip a step by forgetting it. Sourced, never
+# executed, so its mode is 0644 like every other file under the docs root.
 #
 # Inputs (environment):
 #   KIT_CLONE          the fixture clone the CLI runs in (required)
@@ -41,13 +42,16 @@ fi
 # the kit. The fingerprint is `ls -lR` (names, sizes, mtimes), so an appended
 # line to an existing file changes it; a names-only listing did not (docs-lens
 # review 2026-10-01).
-kit_list_real_config() { ls -la "$HOME/.config/sh-agent" 2>/dev/null | sed 's/^/  /'; }
-kit_fingerprint() { ls -lR --time-style=full-iso "$HOME/.config/sh-agent" 2>/dev/null | md5sum | cut -c1-12; }
-echo "kit: real ~/.config/sh-agent before the run:"; kit_list_real_config
+# The real home is remembered here: a kit overrides HOME for the CLI it runs,
+# and the exit check must still look at the operator's own directory.
+kit_real_config="$HOME/.config/sh-agent"
+kit_list_real_config() { ls -la "$kit_real_config" 2>/dev/null | sed 's/^/  /'; }
+kit_fingerprint() { ls -lR --time-style=full-iso "$kit_real_config" 2>/dev/null | md5sum | cut -c1-12; }
+echo "kit: real $kit_real_config before the run:"; kit_list_real_config
 kit_before=$(kit_fingerprint)
 kit_on_exit() {
   local rc=$?
-  echo "kit: real ~/.config/sh-agent after the run:"; kit_list_real_config
+  echo "kit: real $kit_real_config after the run:"; kit_list_real_config
   if [ "$kit_before" != "$(kit_fingerprint)" ]; then
     echo "kit: FAIL the real ~/.config/sh-agent changed during the run (BUG-107, BUG-123); the run does not count" >&2
     exit 1

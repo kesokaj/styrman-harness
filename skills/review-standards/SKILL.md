@@ -40,6 +40,8 @@ Installers count as callers. A change that an installer, updater or converge ste
 - [ ] A source change whose generated counterpart (route tree, protobuf, `go generate` output, embedded build) is absent from the diff. A test that a generated or embedded artifact matches its source asserts BOTH directions — extra content is as much a defect as missing content — and an artifact built from the working tree rather than from git is pinned to what git tracks (`go:embed` can compile a gitignored `.env` into a release binary while every test stays green).
 - [ ] An assertion changed in an existing test traces to a behaviour change in the source diff; a suppression directive, skip, `.only` or lint-config exclusion the diff adds names its rule or condition and a reason other than making the check pass — otherwise it is a finding.
 
+**Silence is not evidence** (moved from the global context 2026-10-01): before trusting a monitor, watcher or filter that reports nothing, confirm it can emit at all; a green run is evidence only when it demonstrably hit the thing under test; a filter that fires is read before it counts, since a needle matches its own negation; a check is validated once in the must-pass and once in the must-fail state before its verdict is cited, and a test that sets up an unusual condition proves the condition HOLDS before it is trusted.
+
 ## 3. Standards conformance — the language skills are the authority
 
 - [ ] Go changes conform to the `golang` skill; TypeScript to the `typescript` skill; UI/TanStack Start work to the `frontend` skill. Cite the specific rule when flagging.
@@ -68,3 +70,21 @@ Installers count as callers. A change that an installer, updater or converge ste
 - [ ] Interfaces declared where they are consumed, sized to what the consumer needs — not exported wholesale from the implementing package.
 - [ ] No cross-package reach-ins: no importing another package's internals, no reaching through a struct to a third package's state, no test importing another package's unexported helpers.
 - [ ] Files independently editable: two engineers changing adjacent features should not collide in the same file; flag god-files and grab-bag `util` packages that force serialized edits.
+
+## 7. Restatements — a changed claim has every copy changed
+
+Moved from the global context on 2026-10-01: the two shapes that hide best.
+
+- [ ] A value joining a VOCABULARY (a signal, a status, a category) has every enumeration of it (schema, template, table, help text) changed in the same edit.
+- [ ] A CLAIM the diff reverses has every restatement of it found by one grep over its key words across every living file BEFORE the first review round, because each round otherwise finds only the copy the last fix pointed at. The `review` skill's `--docs` lens runs `scripts/restatement-grep.sh` for this; name the files it listed.
+- [ ] Claims of test COVERAGE name what is not covered; "covered" without the gap named is a finding.
+
+## 8. Code-shape rules — a review checks them, an author applies them before claiming done
+
+Moved from the global context on 2026-10-01. The `golang`, `typescript` and `bash` skills point here.
+
+- [ ] A guard in front of a destructive action keeps the data when its check ERRORS: `if err != nil` never falls through to the delete, and the test covers the case where the check itself cannot run.
+- [ ] When a command has a read-only mode (`--check`, `--dry-run`, "report only"), a new side effect goes BELOW that mode's early returns, and the test asserts the read-only mode does NOT perform it, not only that the normal mode does. The read-only mode also resolves every guard and path exactly as the real run does, or it is not a dry run of it: a path handed to a child process started with another working directory is made absolute before the handoff.
+- [ ] A test that a generated or embedded artifact matches its source asserts BOTH directions — extra content is as much a defect as missing content — and an artifact built from the working tree rather than from git is pinned to what git tracks.
+- [ ] A verification command is never piped into a filter inside a `&&` chain that leads to a commit: the chain then guards the filter's exit status, not the command's. Run the command bare, read its status, filter its captured output afterwards, and commit in its own call. Staging is a verification step too: `git add` by name from a path list regenerated right before it, read `git diff --cached --stat`, then commit in a separate call — never `add … ; commit`. (The graduation target of every "chained check and commit" bug record.)
+- [ ] A must-fail mutation cited as evidence COMPILED and a named test failed — a build failure is no evidence (the protocol is § 2).

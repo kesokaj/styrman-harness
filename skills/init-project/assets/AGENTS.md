@@ -39,7 +39,7 @@ go vet ./...
 
 ## Testing
 
-<!-- Project-specific testing instructions that supplement the global testing tiers. -->
+<!-- Project-specific testing instructions: the verification tiers the plan names and the commands behind them; the standing procedure is .agents/docs/testing/guide.md. -->
 <!-- For detailed guides, see .agents/docs/testing/ -->
 
 ## Deploy

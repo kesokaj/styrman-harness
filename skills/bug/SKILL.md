@@ -18,6 +18,8 @@ Two points always wait for the user: a missing repro when the bug is not obvious
 
 Typo in copy or a comment, dead-code removal, version bump, formatter-only diff, single-line config value: skip the ceremony, fix it, run the tests, Definition of Done steps 4 and 5. Everything else, including one-line code fixes, runs the full path — small diffs hide bugs well.
 
+**What counts as a failure** (every one gets a BUG number, moved from the global context 2026-10-01): a test failing for a reason other than the change under test, a fix that took more than one attempt, a regression, a failed build or deploy, an abandoned approach, a review finding that was a real defect, or the user correcting a mistake.
+
 ## Step 1: Problem note (in chat)
 
 ```

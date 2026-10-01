@@ -73,6 +73,17 @@ Rejected: <alternative> — <why>
 
 Point `ROADMAP.md` "Now" at the plan. For a small feature the plan can be short; the sections stay. Scope In holds what the request names and nothing the request did not ask for; an ambiguity in an interface — which shape a DELETE takes, where a parameter travels — is settled by ONE shape recorded as a D-row with the alternatives under `Rejected:`, never by building every candidate, and "the simplest reading" means the fewest surfaces, not the union of them; inputs that always travel together (a set of secret files, a host's five connection values) are ONE input — a directory with fixed names, one config file — never one flag each, so the bare command is the procedure. A task that adds or changes a command, flag, endpoint, config key or deploy step ends `— docs: <file>` and is ticked only when that file says so; other tasks carry no docs clause. A box that will not be done ends as `- [-] <task> — dropped: <why> | superseded by <plan § task> | moved to <handoff path> Next Steps (<date>)`; `[-]` is closed, never remaining work.
 
+**Structural decisions and ADRs.** A decision is structural when a later reader could not infer it from the code alone and reversing it would touch more than one surface: a delivery path, a storage shape, a dependency, a trust boundary, a vendor key the harness emits, a requirement's wording. Such a decision gets a D-row here AND an ADR, appended by the main agent to `<docs-root>/architecture/DECISIONS.md` before the code that depends on it, in this shape:
+
+```markdown
+## ADR-NNN: <Title>     (YYYY-MM-DD) — Accepted
+**Context:** what forced the decision.
+**Decision:** what was chosen.
+**Consequences:** trade-offs, follow-ups.
+```
+
+Number sequentially. To reverse an old decision, append a new ADR and mark the old one `Superseded by ADR-NNN` — never rewrite it. (The ADR was the `changelog` agent's until 2026-10-01; the decision-holder writes it now.)
+
 ## Step 3: Cold-reader check — no code until it passes
 
 Dispatch the `reviewer` agent with **only the plan file**, nothing from the conversation, and this brief:
@@ -87,7 +98,7 @@ For each phase, implement its tasks in order. For a task whose verify clause nam
 
 Between checkpoints the plan holds the state. At a stopping point inside a phase — a blocker, a long run, the context may compact, the session may end — append to the box you are on `— in progress: <where it stopped>; blocker: none | <what>`, and delete the note when you tick the box. Work found mid-phase is filed when found: a blocker is a new box above the task it blocks, ending `— found in: <task>`; something broken goes through the `bug` skill; deferrable work is one line under Scope's Follow-ups ending `found in: <task>`; a question only the user can decide is an `Open:` row under `## Decisions`, named in the Step 6 report. A decision the plan did not make — an interface detail, a scope edge, a workaround — gets a dated D-row before work continues; a structural one also gets an ADR.
 
-When the phase's tasks are ticked, run the project's full test command **as its own tool call, bare, and read its exit status** (never `test | tail && git commit`: that chain guards `tail`, and has shipped a red test). In a plan with two or more phases, a phase that changed source then gets a `verifier` dispatch over `<commit before the phase>..HEAD` (or the working tree), slug `<plan-slug>-phase-<N>`; its log is committed with the phase. Copy the evidence onto the phase's Checkpoint box from the log or the call, never from memory, and tick it only when the evidence meets its expect — a missed expectation leaves it unticked and the next phase closed. Then write the `changes/` entry for the phase (`changelog` agent or yourself), and commit and push as separate calls. That is the checkpoint. A new session resumes at the first unticked box.
+When the phase's tasks are ticked, run the project's full test command **as its own tool call, bare, and read its exit status** (never `test | tail && git commit`: that chain guards `tail`, and has shipped a red test). While a `verifier` dispatch is in flight the tree stays frozen — it reads the live working tree, so a tree that moves under it gives a PASS that belongs to no commit; a fix that cannot wait stops the run and re-dispatches after committing. In a plan with two or more phases, a phase that changed source then gets a `verifier` dispatch over `<commit before the phase>..HEAD` (or the working tree), slug `<plan-slug>-phase-<N>`; its log is committed with the phase. Copy the evidence onto the phase's Checkpoint box from the log or the call, never from memory, and tick it only when the evidence meets its expect — a missed expectation leaves it unticked and the next phase closed. Then write the `changes/` entry for the phase (`changelog` agent or yourself), and commit and push as separate calls. That is the checkpoint. A new session resumes at the first unticked box.
 
 Per-layer verification, typical Go + TanStack Start project: migration applied and schema inspected → package tests with `-race` → API hit with `curl` → UI driven in a real browser (golden path, one edge case) → container built and run locally (`docker build`, `docker run`, `curl /healthz`).
 

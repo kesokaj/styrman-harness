@@ -23,6 +23,8 @@ Write a structured handoff document summarising the current conversation so a fr
 
 Cross-repo work gets its handoff in the project that owns the next step; there is no global handoff location.
 
+When the context is compacted instead of handed off, preserve the active plan path, the modified files, the test commands and the open findings; afterwards re-read that plan and `git status` and restate status and next step before the next edit. A headless or print-mode run whose dispatched agent has not returned says so in its output and names the agent rather than ending quietly. The stamp in a handoff's file name is `date +%F-%H%M` run in the same tool call that writes the file, never typed. (Moved from the global context 2026-10-01.)
+
 ## Step 1: Scan the Session
 
 Read the conversation transcript and identify:
@@ -31,7 +33,7 @@ Read the conversation transcript and identify:
 2. **What got done** — Completed changes, files modified, commands run
 3. **What's still open** — the active plan's first unticked box with its in-progress note, then its Follow-ups and `Open:` rows, then unfinished work, known issues, blocked items
 4. **Key decisions** — the active plan's `## Decisions` rows first, then architecture choices, trade-offs made, rejected alternatives from the transcript
-5. **Corrections** — Only what the user actually corrected, each backed by a `~/.config/sh-agent/feedback.jsonl` entry (quote the user's words and the entry's timestamp). Anything the agent inferred is not a correction: it goes under `## Agent notes (unverified)`, never into Corrections — the Resume Protocol gives the newest handoff the win on conflict, so an inferred rule here silently outranks the global context
+5. **Corrections** — Only what the user actually corrected, each backed by a `~/.config/sh-agent/feedback.jsonl` entry (quote the user's words and the entry's timestamp). Anything the agent inferred is not a correction: it goes under `## Agent notes (unverified)`, never into Corrections — the Resume Protocol gives the newest handoff the win on conflict (only an open plan that postdates it outranks it), so an inferred rule here silently outranks the global context
 6. **Environment state** — Running processes, branches checked out, pending commits, dirty working tree
 
 ## Step 2: Identify Relevant Artifacts
@@ -61,7 +63,7 @@ The handoff records the remainder — it is never a substitute for rows already 
 
 1. Run `date +%F` and use that date everywhere below, and `date +%F-%H%M` for the handoff's file name (Step 5) — never a date from memory.
 2. If the session changed source files and no `changes/` entry covers those changes, dispatch the `changelog` agent **before** writing the handoff.
-3. Bring `ROADMAP.md` and `TODO.md` current yourself (Definition of Done step 4): both are empty (headers only) at every checkpoint, not just at Done — a ticked line is deleted in the commit that ticks it; while a plan is in progress "Now" names it and `TODO.md` holds only items the plan will consume. Anything the operator must do — other than a standing procedure the deploy guide already records (Step 4's Next Steps rule) — and any deferred idea worth keeping, goes in this handoff's Next Steps, not in those files. The dispatches above record; they do not own those two lines.
+3. Bring `ROADMAP.md` and `TODO.md` current yourself (Definition of Done step 4): `TODO.md` is empty at every checkpoint, not just at Done — a ticked line is deleted in the commit that ticks it, and between checkpoints it holds only items the active plan will consume; `ROADMAP.md` holds "Now" (the active plan, while one is open) and "Next" (at most three scheduled milestones). Anything the operator must do — other than a standing procedure the deploy guide already records (Step 4's Next Steps rule) — and any deferred idea worth keeping, goes in this handoff's Next Steps, not in those files. The dispatches above record; they do not own those two lines.
 4. Only then write the handoff (Step 4).
 
 ## Step 4: Write the Handoff Document
@@ -163,7 +165,7 @@ Reading side: the Resume Protocol in the global context tells every fresh sessio
 
 ### Cold-reader check — before the handoff counts as finished
 
-A handoff is done when a fresh reader can resume from it, not when it is saved. Run the Resume Protocol as that reader (yourself with the file only, or the `explorer` agent given the path and nothing else): AGENTS.md → TODO.md → this handoff → ROADMAP.md "Now" → the active plan's unticked boxes → the three newest `changes/` → `bugs/INDEX.md` → `sh-agent search --open`. Ask for six things: the status and single next step as the trail states them, any named file that does not exist, any contradiction between handoff, ROADMAP, TODO, and plan, any plan with an unticked box outside its fenced blocks that `ROADMAP.md` "Now" does not name (`sh-agent search --open --kind plan`; when search refuses, ``awk 'FNR==1{f=0} match($0,/^`{3,}/){n=RLENGTH; if(!f){f=n} else if(n==f && $0 ~ /^`+[[:space:]]*$/){f=0}; next} !f && /^- \[ \]/{print FILENAME; nextfile}' <docs-root>/plans/*.md``), any commit since the previous handoff that changed paths outside `<docs-root>` with no `changes/` entry covering it, and anything still left to guess. Fix what comes back at the source (plan, ROADMAP, TODO via the dispatches above) and in the handoff itself while it is still this session's; then report.
+A handoff is done when a fresh reader can resume from it, not when it is saved. Run the Resume Protocol as that reader (yourself with the file only, or the `explorer` agent given the path and nothing else): AGENTS.md → this handoff → ROADMAP.md "Now" → the active plan's unticked boxes → the three newest `changes/` → `bugs/INDEX.md` → TODO.md → `sh-agent search --open` → `sh-agent memory show` (an open plan that postdates this handoff outranks it). Ask for six things: the status and single next step as the trail states them, any named file that does not exist, any contradiction between handoff, ROADMAP, TODO, and plan, any plan with an unticked box outside its fenced blocks that `ROADMAP.md` "Now" does not name (`sh-agent search --open --kind plan`; when search refuses, ``awk 'FNR==1{f=0} match($0,/^`{3,}/){n=RLENGTH; if(!f){f=n} else if(n==f && $0 ~ /^`+[[:space:]]*$/){f=0}; next} !f && /^- \[ \]/{print FILENAME; nextfile}' <docs-root>/plans/*.md``), any commit since the previous handoff that changed paths outside `<docs-root>` with no `changes/` entry covering it, and anything still left to guess. Fix what comes back at the source (plan, ROADMAP, TODO via the dispatches above) and in the handoff itself while it is still this session's; then report.
 
 ## Step 6: Commit and push
 

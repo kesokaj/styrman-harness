@@ -47,3 +47,30 @@ func TestRenderedContextFitsAntigravityBlock(t *testing.T) {
 	}
 	t.Logf("Antigravity rules block is %d bytes (context %d, rules %d), budget %d", total, len(ctx), rules, renderedContextBudgetBytes)
 }
+
+// renderedContextTargetBytes is the harness's own ceiling for the rendered
+// context, under the Antigravity block pin above: the audit of 2026-09-30
+// found the context 94 bytes from that pin, so no rule could be added and no
+// rules/ file deployed (plan audit-fix, C1, D2b). Adherence tracks the number
+// of distinct instructions, not bytes, so the cut moved whole rules into the
+// skill or agent that acts on them. Goal 14,500; this test fails above 15,000.
+const renderedContextTargetBytes = 15000
+
+func TestRenderedContextUnderTarget(t *testing.T) {
+	src := DirSource(filepath.Join("..", ".."))
+	if _, err := fs.Stat(src.FS, "context/AGENTS.md"); err != nil {
+		t.Fatalf("this test reads the checkout at ../..: %v", err)
+	}
+	inv, err := LoadInventory(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, err := RenderContext(src, inv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ctx) > renderedContextTargetBytes {
+		t.Fatalf("rendered context is %d bytes, target %d (goal 14,500): move a whole rule into the skill or agent that acts on it, never shorten a sentence", len(ctx), renderedContextTargetBytes)
+	}
+	t.Logf("rendered context is %d bytes, target %d", len(ctx), renderedContextTargetBytes)
+}

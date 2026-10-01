@@ -6,6 +6,10 @@
 # restatement of a changed claim across the living files of the checkout, so a
 # review's --docs lens reads them before the first round, not one per round.
 #
+# Mode 0644 on purpose and always invoked as `bash <path>`: the harness is also
+# embedded in a release binary, and an embedded filesystem carries no exec bit
+# (the harness's embedded-plan test fails on a 0755 file).
+#
 # Usage: bash restatement-grep.sh [-i] [--all] [--] <word> [<word> ...]
 #   -i     case-insensitive
 #   --all  a line counts only when it holds every word (default: any word)

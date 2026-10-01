@@ -49,7 +49,7 @@ How to build, configure, and run this project on the machine in front of you. `/
 
 ## Operator steps
 
-<!-- What the operator does by hand on this target: standing procedures, never pending items (those live in the newest handoff). -->
+<!-- What the operator does by hand on this target: standing procedures, never pending items (those live in the newest handoff). A standing root-step permission ("the agent may run `sudo -n systemctl start docker` here when asked") is recorded here, the vendor-neutral home the global context reads. -->
 
 ## Stop and clean up
 

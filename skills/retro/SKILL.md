@@ -29,6 +29,8 @@ At the end of any session where you detected **two or more** of the following:
 - The user said something like "no, always do X" or "we don't use Y"
 - You had to be told the same thing twice
 
+Also suggest it whenever `sh-agent status` shows more than 14 days since the last retro, and when a bug's prevention rule recurs (recurring prevention rules are retro input). `/dream` tidies the project's memory store; this skill reads it first (Step 1 § 7) and dispatches `dreamer` for what should become a rule, skill or procedure. When a session ends with both, `/retro` runs BEFORE `/handoff`, and one push covers both. Every retro and distill leaves one line in `~/.config/sh-agent/retros.jsonl` (a dream leaves none); a rule seen in two projects is promoted to the harness (Step 2's promotion check). (Moved from the global context 2026-10-01.)
+
 Suggest it naturally: *"I noticed a few corrections this session. Want me to run `/retro` to capture those?"* Do NOT suggest `/retro` if the session was smooth and correction-free.
 
 ## Step 1: Read the session and the feedback log

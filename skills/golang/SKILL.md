@@ -43,6 +43,10 @@ These rules apply to all Go code in this environment.
 - Standard library first. Every external dependency is justified in the change entry before it is added.
 - No assertion, mock, or DI library by default: `testing`, hand-written fakes, and constructors in `main()`.
 
+### Runtime data and code shape
+- A service's own RUNTIME data (a database, an upload directory) is not scratch and not source: its default path comes from a flag or an environment variable with a default outside the repository, and a default inside it that cannot be avoided is gitignored in the same change. A plain `go run` must never dirty the tree.
+- Before claiming done, apply `review-standards` § 8: a guard keeps the data when its check errors, a read-only mode resolves every guard and path the real run does, an embedded artifact is pinned both ways to what git tracks, a verification command is never chained to a commit.
+
 ## Reference Library
 
 Each file is a set of sub-topics; read the one that matches the work before writing code.

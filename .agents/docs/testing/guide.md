@@ -8,7 +8,7 @@ The standing procedure for this repo. Written under the rule in `agents/verifier
 ("What to run"): the first run under a new project writes this guide; later runs cite
 it and record outcomes only. Update this file in the same run that changes the steps.
 
-## 1. Go checks (every change; skip only when no `.go` file is in the diff — say so)
+## 1. Go checks (every change, including one that touches only `context/`, `skills/`, `agents/`, `commands/` or `rules/`: the root package's embed tests compare those trees with the binary's embedded copy, so a new file or mode there fails here, BUG-137)
 
 ```bash
 gofmt -l cmd internal     # must print nothing; NOT `gofmt -l .` — it walks .agents/scratch,
@@ -22,9 +22,10 @@ go test -race ./...
 ```bash
 go run ./cmd/sh-agent list      # sanity: every skill and agent parses; its section headers print the counts
 go run ./cmd/sh-agent render | wc -l   # rendered context/AGENTS.md must stay under 100 lines
-go test ./internal/harness/... -run TestRenderedContextFitsAntigravityBlock -v   # a change to context/*.md
+go test ./internal/harness/... -run 'TestRenderedContextFitsAntigravityBlock|TestRenderedContextUnderTarget' -v   # a change to context/*.md
   # or rules/*.md must pass this: it renders the real checkout plus every rules/*.md and pins the
-  # result under 22,000 bytes, inside Antigravity's 24,000-byte global rules block (REQUIREMENTS §
+  # result under 22,000 bytes, inside Antigravity's 24,000-byte global rules block, and under 15,000 bytes,
+  # the harness's own ceiling (goal 14,500; plan audit-fix D2b) (REQUIREMENTS §
   # Known limits, ADR-035); already covered by `go test ./...` in § 1, named here explicitly
 ```
 

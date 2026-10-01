@@ -522,3 +522,11 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
   - the timer is kept out of the install manifest (the next `install` would delete it as stale), and `uninstall` removes it by the R4 clause.
 
 **Consequences:** The dream timer is neither a delivery path nor a report path; AGENTS.md rule 1's "no timer as the mechanism" keeps meaning delivery and report, and the implementing commit says so there. The cold-read residue the operator took as defaults is the plan's D21–D27.
+
+## ADR-049: The dreamer's lines on the map are their own colour, and its send to the model provider is drawn     (2026-10-01) — Accepted
+
+**Context.** The README map coloured the nightly dreamer's two lines amber ("report back"), though `AGENTS.md` rule 1 says the timer is neither a way in nor a way back; and the one thing the dreamer does send off the machine — a redacted prompt to the CLI's model provider — was not drawn (audit of 2026-09-30, C21; plan `2026-09-30-audit-fix.md` Phase 3). The operator approved the audit's fixes as a whole in their own turn on 2026-09-30 ("I want everything fixed, improved, optimized … Go with your recommendations on the ones you added a recommendation"); C21's recommendation was this change, so rule 3's approval is that turn.
+
+**Decision.** The dreamer's lines are olive, with the legend word **learn**; a third, dashed olive line runs from the dreamer to a new node, "the CLI's model provider", labelled "redacted prompt, no tools". Dashed because it leaves the machine and is not a harness path (rule 1, rule 4). No verb, place or path changes, so the delivery claim in `specs/sh-agent/delivery.md` § The model is untouched (rule 6).
+
+**Consequences.** `TestHarnessMap` still passes (no new verb named). The interactive page of the map is updated from the README when the operator next republishes it. Rule 3's "one commit with the code, the docs and the map": this ADR, the README map and the legend land in the Phase 3 commit.

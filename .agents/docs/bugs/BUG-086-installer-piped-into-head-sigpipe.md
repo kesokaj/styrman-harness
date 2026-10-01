@@ -2,7 +2,7 @@
 owner: bugs
 date: 2026-09-21
 id: BUG-086
-status: fixed
+status: graduated to review-standards § 8 (code-shape rules; the reviewer's criterion, and golang/typescript/bash point at it), 2026-10-01
 area: process / shell usage
 ---
 # BUG-086: installer piped into `head` was killed by SIGPIPE, leaving files with no manifest

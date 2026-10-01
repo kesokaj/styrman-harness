@@ -9,7 +9,7 @@ Operator's words (2026-09-30): "I want everything fixed, improved, optimized, ad
 - [x] Phase 0 — Research, plan, cold-reader check (2026-09-30, commit 4764c5f) (research briefs under `plans/2026-09-30-research-audit-fix-*.md`)
 - [x] Phase 1 — Code fixes under the bug skill (2026-10-01; BUG-124..136; 484 tests): reader leaf order (SD1), duplicate hits (SD2), proposal forgery (SD3), over-redaction (IN1), install orphans (IN2), dry-run guard (IN4), the small verb defects (IN11–14), dream lows (SD4–SD11)
 - [x] Phase 2 — Trail and spec truth (2026-10-01): delivery claim, spec drifts, handoff correction, stopped-review markers, BUG-122/123 graduation with mechanisms, stale plan closed, project § Testing
-- [ ] Phase 3 — Global context under budget and consistent; templates; REQUIREMENTS edits (operator approval) with ADR
+- [x] Phase 3 — Global context under budget and consistent; templates (2026-10-01; render 14,882; the REQUIREMENTS edit waits for the operator's yes to the diff shown in chat, `.agents/scratch/audit-fix/requirements.diff`)
 - [ ] Phase 4 — Agents: lanes, tools, derive, description test, behavioural runs
 - [ ] Phase 5 — Workflow skills: every WS finding; preflight and review fixes; `/review --resume` lens; size tiers
 - [ ] Phase 6 — Technical skills: golang, frontend, typescript, terraform-gcp, gke, cloud-run-deploy, docker, gcloud-setup, json-api-style, bash, mermaid; strikes; VENDORED rows; link-check test

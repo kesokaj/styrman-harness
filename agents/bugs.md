@@ -69,6 +69,10 @@ One main table, newest last, one row per bug, and below it a `## Graduated` tabl
 
 Keep each cell to one line; the record has the detail. When a fix lands later for an open bug, update its `status` in both files — that is the one allowed edit to a past record. When a dispatch says a bug's prevention rule graduated in this repository — into its `AGENTS.md`, its `context/AGENTS.md` where it has one, a `.agents/rules/` file, a skill, an agent definition or a test — move that bug's row from the main table to the `## Graduated` table at the bottom of `INDEX.md` (columns `| ID | Area | Graduated to |`), and leave the record file untouched. A rule promoted from a project to the harness leaves the project's row where it is.
 
+## Graduation
+
+A rule that recurs graduates into a mechanism — a test, a script a skill runs, an agent definition, a `.agents/rules/` file, the project's `AGENTS.md` — never into a longer paragraph. The commit that writes the mechanism dispatches you to move the matching rows to the Graduated table, naming the mechanism in "Graduated to"; a later move of that mechanism dispatches you again to repoint the rows.
+
 ## Rules
 
 - Record every dispatched failure, even small ones: the pattern shows up across records, not within one.

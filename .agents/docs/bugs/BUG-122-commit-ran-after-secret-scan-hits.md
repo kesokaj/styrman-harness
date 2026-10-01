@@ -2,7 +2,7 @@
 owner: bugs
 date: 2026-09-30
 id: BUG-122
-status: fixed
+status: graduated to review-standards § 8 (code-shape rules; the reviewer's criterion, and golang/typescript/bash point at it), 2026-10-01
 area: process (commit procedure)
 ---
 # BUG-122: a commit went through after a secret scan that reported hits

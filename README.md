@@ -54,19 +54,21 @@ flowchart LR
     retroHarness --> edit
     sessions -- "memory, trail, transcripts" --> dreamer
     dreamer -- "proposals/dream/" --> configDir
+    dreamer -. "redacted prompt, no tools" .-> provider[("the CLI's model provider")]
     linkStyle 0,1,5,6,7,8 stroke:#0B7A74,stroke-width:2px
     linkStyle 2,3,4 stroke:#8A3A78,stroke-width:2px
     linkStyle 9,10,11,12,13 stroke:#3B4FB8,stroke-width:2px
-    linkStyle 14,15,16,17,18,19,20,21,22 stroke:#A8660F,stroke-width:2px
+    linkStyle 14,15,16,17,18,19,20 stroke:#A8660F,stroke-width:2px
+    linkStyle 21,22,23 stroke:#5B7F1E,stroke-width:2px
 ```
 
-Teal is **update**, indigo **install**, amber **report back**, plum **release**. A dashed line is a gap: done by hand, or limited to one machine.
+Teal is **update**, indigo **install**, amber **report back**, plum **release**, olive **learn** (the nightly dreamer: on the machine, neither a way in nor a way back; its one dashed line is what it sends off the machine, a redacted prompt to the CLI's model provider, ADR-049). A dashed line is a gap: done by hand, or limited to one machine.
 
 - **Install:** clone `styrman-harness` with your own SSH key or `gh` login and run `go run ./cmd/sh-agent install`, or download a release's `sh-agent` binary with that credential and run `sh-agent install`, which installs the harness built into it (§ Install without cloning). Either way installed files go into `~/.claude` and `~/.gemini/config`, no repository is created, and the next session reads them. A machine that can reach neither downloads the repository zip by hand instead (§ Install from a zip (no SSH, no gh)).
 - **Update:** edit and push `main` in your checkout. At each place, when you decide, `sh-agent update` moves it forward — what that means for a checkout place, a binary-only place and a zip place is `.agents/docs/specs/sh-agent/delivery.md` § The model. Nothing pushes to a machine.
 - **Report back:** sessions log corrections and retros under `~/.config/sh-agent/`. Before each report, read what was added since the last one. `sh-agent report` sends a redacted copy and a metrics record to `styrman-harness-feedback` through a throwaway clone holding only this machine's own reports, removed after the push — no machine keeps a copy of any other's. Back at the harness, `/retro --harness` applies the proposals queued on that machine; other places' reports are read by hand.
 - **Release:** `/preflight vX.Y.Z` in your own turn gates, pushes an SSH-signed tag on `main`, and publishes that tag's binaries and a zip of its tree with checksums signed by the same key; what each kind of place does with it is `.agents/docs/specs/sh-agent/delivery.md` § The model.
-- **Dream** (amber too, on each place): once per machine, `sh-agent dream --install-timer` installs a user timer (systemd on Linux, launchd on macOS). Nightly it runs `sh-agent dream --all`: every indexed project that changed sends its memory, new trail, feedback and both CLIs' transcripts, redacted, to a CLI with no tools. The proposals and draft skills land in `~/.config/sh-agent/proposals/dream/`; `/retro` applies them, and `sh-agent report` carries the harness-target ones back. `--remove-timer` or `uninstall` removes it (R3's exception, `.agents/docs/specs/sh-agent/dream.md`).
+- **Dream** (olive, on each place): once per machine, `sh-agent dream --install-timer` installs a user timer (systemd on Linux, launchd on macOS). Nightly it runs `sh-agent dream --all`: every indexed project that changed sends its memory, new trail, feedback and both CLIs' transcripts, redacted, to a CLI with no tools. The proposals and draft skills land in `~/.config/sh-agent/proposals/dream/`; `/retro` applies them, and `sh-agent report` carries the harness-target ones back. `--remove-timer` or `uninstall` removes it (R3's exception, `.agents/docs/specs/sh-agent/dream.md`).
 
 ## Install
 
@@ -269,9 +271,10 @@ cmd/sh-agent  the binary; internal/harness is the installer's logic and tests; i
 
 ```bash
 gofmt -l cmd internal && go vet ./... && go test -race ./...   # gofmt takes the source dirs: unlike the Go tool it walks .agents/scratch
-# TestRenderedContextFitsAntigravityBlock (internal/harness/size_test.go) is part of `go test ./...` above and is
-# the check a change to context/*.md or rules/*.md must pass: it renders the real checkout and pins the result
-# under 22,000 bytes, inside Antigravity's 24,000-byte global rules block (REQUIREMENTS § Known limits, ADR-035)
+# Two size pins in internal/harness/size_test.go are part of `go test ./...` above and are the checks a change to
+# context/*.md or rules/*.md must pass: TestRenderedContextFitsAntigravityBlock renders the real checkout and pins it
+# under 22,000 bytes, inside Antigravity's 24,000-byte global rules block (REQUIREMENTS § Known limits, ADR-035);
+# TestRenderedContextUnderTarget pins it under 15,000, the harness's own ceiling (goal 14,500)
 # govulncheck: two known, unreachable advisories (GO-2026-5024 in golang.org/x/sys via the SQLite driver; on a Go before 1.25.12, GO-2026-4970 in os.Root.Open, guarded by an Lstat); an older Go also reports two stdlib advisories, fixed by a newer Go on the machine, never a pin here (ADR-029, ADR-045a)
 go run ./cmd/sh-agent install --home .agents/scratch/home   # never test against your real $HOME; scratch lives in the repo, never /tmp
 ```

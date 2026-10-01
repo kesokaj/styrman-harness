@@ -6,6 +6,4 @@ Last reviewed: 2026-10-01
 
 ## Now
 
-- Close the v2.1.0 gate's left items and add the `harness-audit` skill — `.agents/docs/plans/2026-10-01-gate-lows-and-harness-audit.md`
-
 ## Next

@@ -125,12 +125,15 @@ The `help` target above scans for `## comments` after target names. Always add `
 ```makefile
 DOCKER     := docker
 IMAGE_NAME := myapp
-IMAGE_TAG  := $(VERSION)
-# REGION, GCP_PROJECT and REPO_NAME are the operator's to supply — never a value
-# carried over from another project (`context/dev-setup.md`).
-REGION     ?= $(error set REGION, e.g. europe-north1)
 IMAGE_TAG  := $(shell git rev-parse --short HEAD)
-REGISTRY   := $(REGION)-docker.pkg.dev/$(GCP_PROJECT)/$(REPO_NAME)
+# REGION, GCP_PROJECT and REPO_NAME are the operator's to supply — never a value
+# carried over from another project (`context/dev-setup.md`). They are checked in the
+# target that needs them, not with `$(error)` at assignment: a top-level `$(error)` fires
+# while make parses the file, so even `make docker-build` or `make help` would fail.
+REGION      ?=
+GCP_PROJECT ?=
+REPO_NAME   ?=
+REGISTRY    = $(REGION)-docker.pkg.dev/$(GCP_PROJECT)/$(REPO_NAME)
 
 .PHONY: docker-build docker-push docker-run
 
@@ -138,10 +141,10 @@ docker-build:  ## Build the image natively, for local testing only
 	$(DOCKER) build -t $(IMAGE_NAME):$(IMAGE_TAG) .
 
 docker-build-amd64:  ## Build what ships to Google — an arm64 image fails on Cloud Run with `exec format error`
-	$(DOCKER) buildx build --platform linux/amd64 --load -t $(IMAGE_NAME):$(IMAGE_TAG) .
-	$(DOCKER) tag $(IMAGE_NAME):$(IMAGE_TAG) $(IMAGE_NAME):latest
+	$(DOCKER) buildx build --platform linux/amd64 --load -t $(IMAGE_NAME):$(IMAGE_TAG) .   # one SHA tag; the registry's tags are immutable, so no :latest alias
 
-docker-push:  ## Push to Artifact Registry
+docker-push:  ## Push to Artifact Registry (needs REGION, GCP_PROJECT, REPO_NAME)
+	@test -n "$(REGION)" -a -n "$(GCP_PROJECT)" -a -n "$(REPO_NAME)" || { echo "set REGION, GCP_PROJECT and REPO_NAME, e.g. make docker-push REGION=europe-north1 GCP_PROJECT=... REPO_NAME=..." >&2; exit 2; }
 	$(DOCKER) tag $(IMAGE_NAME):$(IMAGE_TAG) $(REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG)
 	$(DOCKER) push $(REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG)
 
@@ -213,9 +216,6 @@ endif
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# Generate Go mocks from interfaces
-mocks/%_mock.go: internal/%.go
-	mockgen -source=$< -destination=$@ -package=mocks
 ```
 
 ---

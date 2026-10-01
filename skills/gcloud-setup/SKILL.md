@@ -21,9 +21,9 @@ Quick-reference for configuring `gcloud` CLI authentication and project settings
 |---------|-----|
 | ADC not found | `gcloud auth application-default login` |
 | Project not set | `gcloud config set project PROJECT_ID` |
-| Permission denied | Check IAM roles in Cloud Console |
+| Permission denied (403 with an account listed) | `gcloud projects get-iam-policy PROJECT_ID --flatten='bindings[].members' --filter='bindings.members:ACCOUNT' --format='value(bindings.role)'` shows the roles the account holds; compare with the role the call needs |
 | Token expired | `gcloud auth application-default login` (re-run) |
-| Quota exceeded | Check quotas in Cloud Console |
+| Quota exceeded | `gcloud compute project-info describe --project PROJECT_ID --format='yaml(quotas)'` for Compute quotas; other APIs: `gcloud services quota list --service=SERVICE.googleapis.com --consumer=projects/PROJECT_ID` (check `--help` for the exact verb on the installed version) |
 | Wrong account | `gcloud auth login` (re-authenticate) |
 
 ## First-Time Setup
@@ -31,9 +31,23 @@ Quick-reference for configuring `gcloud` CLI authentication and project settings
 ### 1. Install gcloud CLI
 
 ```bash
-# macOS (Homebrew — recommended)
-brew install google-cloud-sdk
+# macOS (Homebrew cask; `google-cloud-sdk` is the former token)
+brew install --cask gcloud-cli
 ```
+
+Linux (Debian/Ubuntu), the apt package — a root step under the standing-permission rule
+(`context/dev-setup.md`), otherwise handed back with these exact commands:
+
+```bash
+curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
+echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list
+sudo apt-get update && sudo apt-get install google-cloud-cli
+```
+
+The component manager is disabled in the apt package: extras are apt packages
+(`google-cloud-cli-kubectl`, …), not `gcloud components install`. The no-root path is the
+tarball: `curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-x86_64.tar.gz`,
+`tar -xzf` it, `./google-cloud-sdk/install.sh`, which keeps the component manager.
 
 ### 2. Authenticate
 

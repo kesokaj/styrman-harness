@@ -18,13 +18,13 @@ Expert guidance for writing robust, maintainable, and secure shell scripts follo
 
 ## When NOT to Use
 
-- Application logic that belongs in Go, Python, or TypeScript
+- Application logic that belongs in Go or TypeScript
 - Terraform/IaC configuration (use the `terraform` skill)
 - CI/CD pipeline design beyond shell steps (use platform-specific docs)
 
 ## When to Stop Using Shell
 
-Shell is the right tool for glue scripts and automation. Switch to Go or Python when:
+Shell is the right tool for glue scripts and automation. Switch to Go when:
 
 - The script exceeds **~100 lines** of non-trivial control flow (conditionals, loops, data transformation)
 - **Performance matters** — shell is slow for anything compute-heavy

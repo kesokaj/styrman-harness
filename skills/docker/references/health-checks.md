@@ -25,7 +25,7 @@ The binary probes itself, so the check works on `distroless/static`:
 if len(os.Args) > 1 && os.Args[1] == "-healthcheck" {
     port := cmp.Or(os.Getenv("PORT"), "8080")
     resp, err := http.Get("http://127.0.0.1:" + port + "/healthz")
-    if err != nil || resp.StatusCode != http.StatusOK {
+    if err != nil || resp.StatusCode/100 != 2 { // any 2xx: the golang skill's /healthz answers 204
         os.Exit(1)
     }
     os.Exit(0)
@@ -37,9 +37,11 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD ["/app", "-healthcheck"]
 ```
 
-Cloud Run ignores `HEALTHCHECK`; it has its own HTTP startup and liveness probes
-(`gcloud run deploy --startup-probe httpGet.path=/healthz`), configured at deploy time.
-The Dockerfile line is for local Docker and compose.
+Cloud Run ignores `HEALTHCHECK`; it has its own HTTP startup and liveness probes,
+set at deploy time with the `--startup-probe httpGet.path=/healthz` flag the
+`cloud-run-deploy` skill puts on every deploy (and `--liveness-probe` the same way; a
+failed liveness probe SIGKILLs the container, which is why `/healthz` makes no
+downstream calls). The Dockerfile line is for local Docker and compose.
 
 ## 3. Compose `healthcheck` for the app service
 

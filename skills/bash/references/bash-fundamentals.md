@@ -40,8 +40,12 @@ set -euo pipefail
 # Description: Brief description of what this script does
 # Usage: ./script-name.sh [options] <arguments>
 
-readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
+# Assign first, then make read-only: `readonly X=$(cmd)` (like `local X=$(cmd)`) returns the
+# declaration's status, not the command's, so a failing `cd` goes unnoticed (ShellCheck SC2155).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
+SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
+readonly SCRIPT_NAME
 ```
 
 ---
@@ -415,8 +419,9 @@ fi
 result=$(command)      # Good
 result=`command`       # Avoid
 
-# Nested substitution
-result=$(echo $(date)) # Works with $()
+# Nested substitution: $() nests cleanly, but every level is still quoted — an
+# unquoted inner $(…) word-splits and globs its output (ShellCheck SC2046)
+real_dir="$(dirname "$(readlink -f "$0")")"
 ```
 
 ---
@@ -500,17 +505,24 @@ trap 'rm -rf "$temp_dir"' EXIT
 ### Basic Logging
 
 ```bash
-readonly LOG_FILE="/var/log/myapp.log"
+# Log to stderr by default; a file only when the caller asks for one (`--log-file PATH`
+# or LOG_FILE in the environment). A user script never writes under /var/log: that path
+# needs root and belongs to the system's own services.
+LOG_FILE="${LOG_FILE:-}"
 
 log() {
     local level="$1"
     shift
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$level] $*" | tee -a "$LOG_FILE"
+    local line
+    line="[$(date '+%Y-%m-%d %H:%M:%S')] [$level] $*"
+    printf '%s\n' "$line" >&2
+    [ -n "$LOG_FILE" ] && printf '%s\n' "$line" >> "$LOG_FILE"
+    return 0
 }
 
 log_info() { log "INFO" "$@"; }
-log_warn() { log "WARN" "$@" >&2; }
-log_error() { log "ERROR" "$@" >&2; }
+log_warn() { log "WARN" "$@"; }
+log_error() { log "ERROR" "$@"; }
 
 log_info "Starting process"
 log_error "Failed to connect"
@@ -631,8 +643,12 @@ set -euo pipefail
 # Usage: ./example.sh [options] <input_file>
 # =============================================================================
 
-readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
+# Assign first, then make read-only: `readonly X=$(cmd)` (like `local X=$(cmd)`) returns the
+# declaration's status, not the command's, so a failing `cd` goes unnoticed (ShellCheck SC2155).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
+SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
+readonly SCRIPT_NAME
 
 # Exit codes
 readonly EXIT_SUCCESS=0

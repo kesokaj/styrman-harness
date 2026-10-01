@@ -1,55 +1,61 @@
 ---
 name: json-api-style
-description: |
-  JSON API response and request design conventions. Use when designing JSON API payloads,
-  naming JSON properties, structuring error responses, or defining date/time formats in APIs.
-  Activate for: JSON property naming, API response structure, pagination design,
-  error object format, enum representation, null handling, camelCase conventions.
-  Do NOT use for: JSON parsing/serialization code, JSON Schema validation, or YAML/TOML config files.
+description: "JSON API request and response design on Google's API Improvement Proposals (AIP-140 names, 142 time, 126 enums, 158 pagination, 193 errors, 203 field behaviour) with the proto3 JSON mapping: lowerCamelCase keys, RFC 3339 timestamps, string enums, pageSize/pageToken/nextPageToken, the {error: {code, status, message, details}} shape. Use when designing JSON payloads, naming properties, structuring errors or pagination, defining time or enum formats, or reviewing an API contract. Do NOT use for JSON parsing or serialization code (golang, typescript), JSON Schema or OpenAPI authoring, or YAML/TOML config files."
 ---
 
 # JSON API Style
 
-Conventions for designing consistent, predictable JSON API request and response payloads. Based on the Google JSON Style Guide.
+Conventions for the JSON a Go service here accepts and returns, taken from Google's API Improvement Proposals (<https://google.aip.dev>) and the proto3 JSON mapping (<https://protobuf.dev/programming-guides/json/>). The AIPs are the current home of Google's API design; the 2012 JSON Style Guide (`apiVersion`/`data` envelope, `error.errors[].domain`) is gone from google.github.io and no API published since uses it.
 
-## When to Use
+## When to use
 
-- Designing JSON API response payloads
-- Naming properties in JSON objects
-- Structuring error responses
-- Defining date, time, or enum formats
-- Reviewing API contracts and specs
+- Designing a response or request payload, or a resource's field set
+- Naming JSON properties and choosing their types
+- Structuring errors, pagination, timestamps, enums
+- Reviewing an API contract or spec against these rules
 
-## When NOT to Use
+## When NOT to use
 
-- JSON parsing/serialization code (use language-specific skills)
-- JSON Schema or OpenAPI spec writing (use API spec docs)
-- YAML, TOML, or other config file formats
-- Frontend state management shapes
+- Serialization code: struct tags and decoders are the `golang` skill (its tags follow this skill: lowerCamelCase)
+- JSON Schema or OpenAPI authoring
+- YAML, TOML or other config formats; frontend state shapes
 
-## Core Rules
+## Core rules
 
-1. **Property names: `camelCase`** — always. Meaningful, no JavaScript reserved words.
-2. **Arrays get plural names**, scalars get singular: `"items": [...]`, `"name": "..."`.
-3. **Flat by default** — only nest into sub-objects when the grouping is semantically meaningful (e.g., an `address` object).
-4. **No comments in JSON** — JSON does not support comments.
-5. **Double quotes always** — for both property names and string values.
-6. **Drop optional nulls** — omit properties with `null` values unless the absence would be ambiguous.
-7. **Enums: always strings** — never integers. Strings survive schema evolution gracefully.
-8. **Dates: RFC 3339** — `"2024-11-06T16:34:41.000Z"`.
-9. **Durations: ISO 8601** — `"P1DT2H3M4.5S"` (1 day, 2 hours, 3 minutes, 4.5 seconds).
-10. **Latitude/Longitude: ISO 6709** — `"+48.8566+002.3522"`.
+1. **Keys are lowerCamelCase** (`pageSize`, `createTime`, `displayName`): the proto3 JSON mapping of the proto field names (AIP-140; proto spells them in lower snake form, JSON in lowerCamelCase). No prepositions in names (`reason`, not `reasonForChange`); booleans drop `is` (`enabled`, not `isEnabled`); a unit is a suffix (`distanceKm`, `timeoutSeconds`). A parser accepts the proto spelling too, but the service emits camelCase only.
+2. **Arrays are plural, scalars singular**: `"items": […]`, `"name": "…"`.
+3. **No envelope.** The resource IS the response body; a list response is `{"items": […], "nextPageToken": "…"}`; an error response is `{"error": {…}}` (rule 7). Never `apiVersion`, `data`, `context`, `method` wrappers.
+4. **Flat by default**; nest only a grouping that is a thing of its own (an `address`, a `money` value).
+5. **Timestamps are RFC 3339 UTC** with `Z` and 0, 3, 6 or 9 fractional digits, in fields named `*Time` (`createTime`, `updateTime`, `expireTime`; AIP-142); a calendar date is `{"year", "month", "day"}` or a `YYYY-MM-DD` string in a `*Date` field; a span is a duration string `"3.5s"` (`google.protobuf.Duration` form: seconds with up to nine fractional digits and the suffix `s`).
+6. **Enums are strings** in `UPPER_SNAKE_CASE`, the first value `*_UNSPECIFIED` (AIP-126): `"state": "ACTIVE"`. A set that changes often is a plain `string` field documented as such.
+7. **Errors follow AIP-193**: `{"error": {"code": 404, "status": "NOT_FOUND", "message": "…", "details": […]}}`, where `code` is the HTTP status, `status` the `google.rpc.Code` name, `message` a developer-facing sentence, and `details` carries typed objects: an `ErrorInfo` (`reason` in `UPPER_SNAKE_CASE`, `domain` = the service's name, `metadata` map) in every error response, `BadRequest.fieldViolations[]` for validation, `LocalizedMessage` for text shown to a user. Each detail type appears at most once.
+8. **Pagination follows AIP-158**: request `pageSize` (0 or absent means the server default, above the maximum is coerced, negative is `INVALID_ARGUMENT`) and `pageToken` (opaque); response `items` first, then `nextPageToken`, EMPTY or absent at the end of the collection (the only end signal), and optionally `totalSize`, which may be an estimate.
+9. **Field behaviour is stated** (AIP-203): every request field is one of required, optional, output-only (ignored on input: `name`, `createTime`), input-only, immutable or identifier, in the spec and in the handler's validation.
+10. **Omit, do not null.** An unset optional field is absent; `null` is written only where the API documents it as a distinct state. 64-bit integers are strings on the wire; `int32` and `double` are numbers; bytes are standard base64.
 
-## Reference Library
+## Go struct tags
 
-For detailed patterns, examples, reserved property names, and error object structure:
+```go
+type Order struct {
+	Name       string    `json:"name"`                 // "orders/123", output-only
+	DisplayName string   `json:"displayName"`
+	State      string    `json:"state"`                // "STATE_UNSPECIFIED" | "PENDING" | "PAID"
+	TotalCents int64     `json:"totalCents,string"`    // int64 travels as a string
+	CreateTime time.Time `json:"createTime,omitzero"`  // RFC 3339 by encoding/json; zero omitted
+}
 
-* **JSON API Conventions (property naming, error objects, pagination, reserved names)**
-  Read → `./references/json-api-conventions.md`
+type ListOrdersResponse struct {
+	Items         []Order `json:"items"`
+	NextPageToken string  `json:"nextPageToken,omitempty"`
+	TotalSize     int32   `json:"totalSize,omitempty"`
+}
+```
 
-> [!TIP]
-> When designing an API response, read the reference to check property naming conventions and the standard error object structure before writing code.
+## Reference
 
-## Further Reading
+`references/json-api-conventions.md`: the error shape with its detail types in full, pagination request and response end to end, naming rules and the reserved names (`name`, `etag`, `createTime`, `updateTime`, `displayName`, `labels`), value types and the 64-bit rule, worked examples.
 
-- [Google JSON Style Guide](https://google.github.io/styleguide/jsoncstyleguide.xml) — Google's internal JSON API conventions (used as the foundation for this skill)
+## Further reading
+
+- AIP index — <https://google.aip.dev> (140 names, 142 time, 126 enums, 158 pagination, 193 errors, 203 field behaviour)
+- proto3 JSON mapping — <https://protobuf.dev/programming-guides/json/>

@@ -105,7 +105,7 @@
 | BUG-019 | skills (hard rules) | `TestNoTmpInHarnessProse` (walks every non-vendored skill's `references/`, `commands/`, `rules/`) and the corrected reference files |
 | BUG-020 | skills/cloud-run-deploy | `skills/cloud-run-deploy/SKILL.md` description (defers to `/preflight`) |
 | BUG-021 | skills/distill | `skills/distill/SKILL.md` (defers to `skills/feedback/SKILL.md` entry shape) |
-| BUG-022 | skills/golang (references) | `skills/golang/references/golang-ecosystem.md` (registration scoped to public libraries) |
+| BUG-022 | skills/golang (references) | `skills/VENDORED.md` (opening paragraph: imported skill text checked for register/publish/telemetry steps) |
 | BUG-023 | skills/preflight | `skills/review-standards/SKILL.md` § 3 (every other restatement of a changed rule is changed with it) |
 | BUG-029 | testing (Phase 6 kit and staging scripts) | `context/AGENTS.md` § Hard rules, "Silence from your own instrumentation" bullet |
 | BUG-031 | context (headless runs) | `context/AGENTS.md` (a headless run waits for its dispatched agents) |

@@ -164,7 +164,7 @@ In v11, ALL node labels render as Markdown by default. Underscores in text becom
 
 ### 15. Configuration Limits (Secure Settings)
 
-`maxTextSize` (50,000) and `maxEdges` (500) are **secure settings** — CANNOT be set via frontmatter. Must use `mermaid.initialize()` in JavaScript.
+`maxTextSize` (50,000) and `maxEdges` (500) are **secure settings**: neither frontmatter `config:` nor a `%%{init: …}%%` directive can change them — only the host page's `mermaid.initialize()` in JavaScript. Every other option (theme, look, per-diagram config) is set in frontmatter `config:` (item 8), the current form that this skill uses throughout; `%%{init: {…}}%%` is the older directive form with the same keys, still accepted, and the one to recognise when reading someone else's diagram.
 
 ### 16. linkStyle Hex Color as Last Attribute Bug
 
@@ -183,7 +183,10 @@ Architecture node labels only support `[a-zA-Z0-9_ ]`. Hyphens and special chars
 ### Hand-Drawn Look
 
 ```mermaid
-%%{init: {"look": "handDrawn"}}%%
+---
+config:
+  look: handDrawn
+---
 flowchart LR
     A[Sketchy] --> B[Style]
 ```
@@ -196,13 +199,15 @@ sequenceDiagram
     A <<-->> B: Bidirectional dotted
 ```
 
-### Configuration Directive
+### Configuration (frontmatter)
 
 ```mermaid
-%%{init: {
-    "theme": "dark",
-    "flowchart": {"curve": "linear"}
-}}%%
+---
+config:
+  theme: dark
+  flowchart:
+    curve: linear
+---
 flowchart LR
     A --> B
 ```

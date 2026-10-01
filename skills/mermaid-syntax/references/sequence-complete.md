@@ -319,18 +319,18 @@ sequenceDiagram
 | `>` | `#gt;` |
 | newline | `<br/>` |
 
-## Configuration Directives
+## Configuration (frontmatter)
 
 ```mermaid
-%%{init: {
-    'sequence': {
-        'mirrorActors': false,
-        'showSequenceNumbers': true,
-        'actorFontSize': 14,
-        'messageFontSize': 12,
-        'noteMargin': 10
-    }
-}}%%
+---
+config:
+  sequence:
+    mirrorActors: false
+    showSequenceNumbers: true
+    actorFontSize: 14
+    messageFontSize: 12
+    noteMargin: 10
+---
 sequenceDiagram
     A->>B: Configured diagram
 ```

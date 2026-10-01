@@ -76,7 +76,7 @@ Installers count as callers. A change that an installer, updater or converge ste
 Moved from the global context on 2026-10-01: the two shapes that hide best.
 
 - [ ] A value joining a VOCABULARY (a signal, a status, a category) has every enumeration of it (schema, template, table, help text) changed in the same edit.
-- [ ] A CLAIM the diff reverses has every restatement of it found by one grep over its key words across every living file BEFORE the first review round, because each round otherwise finds only the copy the last fix pointed at. The `review` skill's `--docs` lens runs `scripts/restatement-grep.sh` for this; name the files it listed.
+- [ ] A CLAIM the diff reverses has every restatement of it found by one grep over its key words across every living file BEFORE the first review round, because each round otherwise finds only the copy the last fix pointed at. The `review` skill's `--docs` lens runs the `review` skill's `review/scripts/restatement-grep.sh` for this; name the files it listed.
 - [ ] Claims of test COVERAGE name what is not covered; "covered" without the gap named is a finding.
 
 ## 8. Code-shape rules — a review checks them, an author applies them before claiming done

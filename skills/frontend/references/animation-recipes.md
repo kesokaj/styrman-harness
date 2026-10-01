@@ -1,12 +1,14 @@
 # Animation Recipes
 
 Reference file for the frontend skill. Copy-paste-ready Motion patterns in TypeScript + TanStack Start.
-All patterns use `motion/react` and work identically in TanStack Start (which is React-based).
+All patterns use `motion/react` (Motion 13.4, 2026-09-29) and work identically in TanStack Start (which is React-based). Every color is a theme token utility (`theme-system.md`); the recipes never name a palette color.
 
 Import all Motion APIs from `"motion/react"`:
 ```tsx
-import { motion, AnimatePresence, useScroll, useTransform, useSpring, useReducedMotion, useMotionTemplate } from "motion/react"
+import { motion, AnimatePresence, useScroll, useTransform, useSpring, useReducedMotion, useMotionTemplate, type Variants } from "motion/react"
 ```
+
+A variants object declared on its own needs `satisfies Variants`: Motion 13 types `ease` as a four-number tuple, and without the contextual type TypeScript infers `number[]` and rejects it (measured with `tsc` 7.0.2, 2026-10-01). An inline `transition={{ … }}` prop is contextually typed already.
 
 ---
 
@@ -20,7 +22,7 @@ const containerVariants = {
   visible: {
     transition: { staggerChildren: 0.08, delayChildren: 0.1 },
   },
-}
+} satisfies Variants
 
 const itemVariants = {
   hidden: { opacity: 0, y: 20 },
@@ -29,15 +31,16 @@ const itemVariants = {
     y: 0,
     transition: { duration: 0.5, ease: [0.25, 0.4, 0.25, 1] },
   },
-}
+} satisfies Variants
 
 function HeroContent() {
   return (
     <motion.div variants={containerVariants} initial="hidden" animate="visible">
-      <motion.span variants={itemVariants} className="text-sm text-amber-400">Brand</motion.span>
-      <motion.h1 variants={itemVariants} className="text-5xl font-bold text-zinc-50">Ship faster.</motion.h1>
-      <motion.p variants={itemVariants} className="text-zinc-400">The command center for teams that build.</motion.p>
-      <motion.button variants={itemVariants} className="bg-amber-400 px-6 py-3 rounded-lg text-zinc-950">
+      <motion.span variants={itemVariants} className="text-sm text-accent">Brand</motion.span>
+      <motion.h1 variants={itemVariants} className="text-5xl font-bold text-fg-heading">Ship faster.</motion.h1>
+      <motion.p variants={itemVariants} className="text-fg-secondary">The command center for teams that build.</motion.p>
+      <motion.button variants={itemVariants} type="button"
+        className="rounded-lg bg-accent px-6 py-3 text-fg-inverse hover:bg-accent-hover">
         Get Started
       </motion.button>
     </motion.div>
@@ -52,6 +55,8 @@ function HeroContent() {
 Elements fade and slide up when they enter the viewport. Fire once with `viewport={{ once: true }}`.
 
 ```tsx
+import type { ReactNode } from "react"
+
 function ScrollReveal({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <motion.div
@@ -101,6 +106,8 @@ function StaggeredScrollReveal({ children }: { children: ReactNode }) {
 Background moves slower than foreground as you scroll. Uses `useScroll` with a target element and `useTransform` to map progress to Y offset.
 
 ```tsx
+import { useRef } from "react"
+
 function ParallaxSection() {
   const ref = useRef<HTMLDivElement>(null)
   const { scrollYProgress } = useScroll({
@@ -118,9 +125,9 @@ function ParallaxSection() {
         <img src="/bg.jpg" alt="" className="w-full h-[120%] object-cover" aria-hidden="true" />
       </motion.div>
 
-      {/* Foreground content — moves opposite */}
-      <motion.div style={{ y: fgY }} className="relative z-10 flex items-center justify-center h-full">
-        <h2 className="text-4xl font-bold text-white">Depth in motion</h2>
+      {/* Foreground content — moves opposite; the overlay token keeps the text readable on any image */}
+      <motion.div style={{ y: fgY }} className="relative z-10 flex items-center justify-center h-full bg-overlay">
+        <h2 className="text-4xl font-bold text-fg-inverse">Depth in motion</h2>
       </motion.div>
     </section>
   )
@@ -145,7 +152,8 @@ function ScrollProgressBar() {
   return (
     <motion.div
       style={{ scaleX, transformOrigin: "0%" }}
-      className="fixed top-0 left-0 right-0 z-[100] h-0.5 bg-amber-400"
+      className="fixed top-0 left-0 right-0 z-[100] h-0.5 bg-accent"
+      aria-hidden="true"
     />
   )
 }
@@ -163,8 +171,7 @@ function HoverCard({ children }: { children: ReactNode }) {
     <motion.div
       whileHover={{ y: -4, scale: 1.02 }}
       transition={{ type: "spring", stiffness: 300, damping: 20 }}
-      className="rounded-xl border border-zinc-800 bg-zinc-900 p-6
-        hover:shadow-lg hover:shadow-amber-400/5 transition-shadow"
+      className="rounded-xl border border-border bg-bg-secondary p-6 hover:shadow-lg transition-shadow"
     >
       {children}
     </motion.div>
@@ -176,10 +183,11 @@ function HoverCard({ children }: { children: ReactNode }) {
 
 ```tsx
 <motion.button
+  type="button"
   whileHover={{ scale: 1.03 }}
   whileTap={{ scale: 0.97 }}
   transition={{ type: "spring", stiffness: 400, damping: 15 }}
-  className="rounded-lg bg-amber-400 px-6 py-3 text-sm font-medium text-zinc-950"
+  className="rounded-lg bg-accent px-6 py-3 text-sm font-medium text-fg-inverse hover:bg-accent-hover"
 >
   Get Started
 </motion.button>
@@ -189,7 +197,7 @@ function HoverCard({ children }: { children: ReactNode }) {
 
 ## 6. Modal Enter/Exit
 
-Use `AnimatePresence` for exit animations. Backdrop fades, panel scales up.
+The animated fallback to the native `<dialog>` in `component-patterns.md` (which gets focus trap, Escape and the top layer for free). `AnimatePresence` for the exit animation: backdrop fades, panel scales up. This version owes Escape handling and focus management itself.
 
 ```tsx
 function AnimatedModal({ open, onClose, children }: {
@@ -206,7 +214,7 @@ function AnimatedModal({ open, onClose, children }: {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             onClick={onClose}
-            className="fixed inset-0 z-50 bg-black/70"
+            className="fixed inset-0 z-50 bg-overlay"
           />
           {/* Panel */}
           <motion.div
@@ -220,7 +228,7 @@ function AnimatedModal({ open, onClose, children }: {
               onClick={(e) => e.stopPropagation()}
               role="dialog"
               aria-modal="true"
-              className="w-full max-w-lg rounded-xl bg-zinc-900 p-6 shadow-2xl"
+              className="w-full max-w-lg rounded-xl bg-bg-secondary p-6 text-fg shadow-lg"
             >
               {children}
             </div>
@@ -236,25 +244,25 @@ function AnimatedModal({ open, onClose, children }: {
 
 ## 7. Sticky Header Blur
 
-Header starts transparent, gains blur and opacity as you scroll.
+Header starts transparent, gains blur and opacity as you scroll. The background is `--bg` mixed with transparency, so it follows the theme.
 
 ```tsx
 function StickyHeader() {
   const { scrollY } = useScroll()
-  const bgOpacity = useTransform(scrollY, [0, 100], [0, 0.85])
+  const alpha = useTransform(scrollY, [0, 100], [0, 85])     // percent
   const blur = useTransform(scrollY, [0, 100], [0, 12])
 
   return (
     <motion.header
       className="fixed top-0 inset-x-0 z-50"
       style={{
-        backgroundColor: useMotionTemplate`rgba(9,9,11,${bgOpacity})`,
+        backgroundColor: useMotionTemplate`color-mix(in oklab, var(--bg) ${alpha}%, transparent)`,
         backdropFilter: useMotionTemplate`blur(${blur}px)`,
       }}
     >
       <nav className="mx-auto max-w-7xl flex items-center justify-between px-6 py-4">
-        <span className="text-lg font-semibold text-zinc-50">Brand</span>
-        <button className="rounded-lg bg-amber-400 px-4 py-2 text-sm text-zinc-950">CTA</button>
+        <span className="text-lg font-semibold text-fg-heading">Brand</span>
+        <button type="button" className="rounded-lg bg-accent px-4 py-2 text-sm text-fg-inverse hover:bg-accent-hover">CTA</button>
       </nav>
     </motion.header>
   )
@@ -265,25 +273,24 @@ function StickyHeader() {
 
 ## 8. Reduced Motion Wrapper
 
-Wraps any animated component to respect `prefers-reduced-motion`. Disables entrance/scroll animations; simplifies hover effects.
+Wraps any animated component to respect `prefers-reduced-motion`. Disables entrance/scroll animations; `animate` still applies so the element reaches its final state.
 
 ```tsx
 import { useReducedMotion } from "motion/react"
+import type { ComponentProps } from "react"
 
 function SafeMotion({
   children,
   initial,
-  animate,
   whileInView,
   transition,
   ...rest
-}: React.ComponentProps<typeof motion.div>) {
+}: ComponentProps<typeof motion.div>) {
   const reduced = useReducedMotion()
 
   return (
     <motion.div
       initial={reduced ? false : initial}
-      animate={reduced ? animate : animate}
       whileInView={reduced ? undefined : whileInView}
       transition={reduced ? { duration: 0 } : transition}
       {...rest}

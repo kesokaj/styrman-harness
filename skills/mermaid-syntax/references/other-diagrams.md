@@ -104,7 +104,11 @@ pie showData
 ### Configuration
 
 ```mermaid
-%%{init: {"pie": {"textPosition": 0.5}}}%%
+---
+config:
+  pie:
+    textPosition: 0.5
+---
 pie
     title Sales by Region
     "North" : 30
@@ -157,7 +161,11 @@ gitGraph
 ### Branch Order
 
 ```mermaid
-%%{init: {"gitGraph": {"mainBranchOrder": 2}}}%%
+---
+config:
+  gitGraph:
+    mainBranchOrder: 2
+---
 gitGraph
     commit
     branch develop order: 1
@@ -169,7 +177,11 @@ gitGraph
 ### Bottom-to-Top (v11)
 
 ```mermaid
-%%{init: {"gitGraph": {"mainBranchOrder": 0}}}%%
+---
+config:
+  gitGraph:
+    mainBranchOrder: 0
+---
 gitGraph TB:
     commit
     branch develop
@@ -390,12 +402,12 @@ Source B,Target Z,25
 
 ---
 
-## Packet Diagram (v11)
+## Packet Diagram (v11; `packet` since 11.4 — `packet-beta` was the pre-release keyword)
 
 ### Basic Syntax
 
 ```mermaid
-packet-beta
+packet
     0-15: "Header"
     16-31: "Payload Length"
     32-47: "Sequence Number"
@@ -424,10 +436,15 @@ architecture-beta
 
 ## Common Configuration Options
 
+All options below go in the diagram's frontmatter `config:` block (the first line of the diagram is `---`); the secure settings `maxTextSize` and `maxEdges` cannot be set this way (SKILL.md item 15).
+
 ### Theme Selection
 
 ```mermaid
-%%{init: {"theme": "forest"}}%%
+---
+config:
+  theme: forest
+---
 ```
 
 Available themes: `default`, `forest`, `dark`, `neutral`, `base`
@@ -435,22 +452,22 @@ Available themes: `default`, `forest`, `dark`, `neutral`, `base`
 ### Font and Size
 
 ```mermaid
-%%{init: {
-    "themeVariables": {
-        "fontSize": "16px",
-        "fontFamily": "Arial"
-    }
-}}%%
+---
+config:
+  themeVariables:
+    fontSize: 16px
+    fontFamily: Arial
+---
 ```
 
 ### Diagram-Specific Config
 
 ```mermaid
-%%{init: {
-    "gantt": {
-        "titleTopMargin": 25,
-        "barHeight": 20,
-        "barGap": 4
-    }
-}}%%
+---
+config:
+  gantt:
+    titleTopMargin: 25
+    barHeight: 20
+    barGap: 4
+---
 ```

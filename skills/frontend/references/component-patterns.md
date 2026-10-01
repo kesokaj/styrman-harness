@@ -1,35 +1,35 @@
 # Component Patterns
 
-Reference file for the frontend skill. Read this when building interactive UI components in TanStack Start.
-All patterns use React and `motion/react` — they work identically in TanStack Start.
+Reference file for the frontend skill. Read this when building interactive UI components in TanStack Start (SPA mode: the Go API is the only backend; there are no server functions).
+Every class is a theme token utility (`theme-system.md`): `bg-bg`, `text-fg`, `bg-accent`, `outline-ring`. No palette colors, no raw hex, no inline `style` objects for colors.
 
 ## Navigation
 
 ### Sticky Header with Scroll-Aware Transparency
 
-The header overlays the hero and gains a blurred background on scroll. Avoids consuming viewport budget.
+The header overlays the hero and gains a blurred background on scroll. Avoids consuming viewport budget. The background is the `--bg` token with a scroll-linked alpha, so it follows the theme.
 
 ```tsx
 import { motion, useScroll, useTransform, useMotionTemplate } from "motion/react"
 
 function Header() {
   const { scrollY } = useScroll()
-  const bgOpacity = useTransform(scrollY, [0, 100], [0, 0.85])
+  const alpha = useTransform(scrollY, [0, 100], [0, 85])      // percent
   const blur = useTransform(scrollY, [0, 100], [0, 12])
 
   return (
     <motion.header
-      className="fixed top-0 inset-x-0 z-50 border-b border-white/5"
+      className="fixed top-0 inset-x-0 z-50 border-b border-border/50"
       style={{
-        backgroundColor: useMotionTemplate`rgba(9,9,11,${bgOpacity})`,
+        backgroundColor: useMotionTemplate`color-mix(in oklab, var(--bg) ${alpha}%, transparent)`,
         backdropFilter: useMotionTemplate`blur(${blur}px)`,
       }}
     >
       <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-        <a href="/" className="text-lg font-semibold text-zinc-50">Brand</a>
+        <a href="/" className="text-lg font-semibold text-fg-heading">Brand</a>
         <div className="hidden md:flex items-center gap-8">
-          <a href="#features" className="text-sm text-zinc-400 hover:text-zinc-50 transition-colors">Features</a>
-          <button className="rounded-lg bg-amber-400 px-4 py-2 text-sm font-medium text-zinc-950">
+          <a href="#features" className="text-sm text-fg-secondary hover:text-fg transition-colors">Features</a>
+          <button type="button" className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-fg-inverse hover:bg-accent-hover">
             Get Started
           </button>
         </div>
@@ -41,7 +41,7 @@ function Header() {
 
 ### Mobile Off-Canvas Navigation
 
-Slide-in panel with focus trapping, ESC to close, backdrop click to close.
+Slide-in panel: focus moves to the close button, ESC closes, backdrop click closes.
 
 ```tsx
 import { AnimatePresence, motion } from "motion/react"
@@ -60,21 +60,21 @@ function MobileNav() {
 
   return (
     <>
-      <button onClick={() => setOpen(true)} aria-label="Open menu" className="md:hidden p-2">☰</button>
+      <button type="button" onClick={() => setOpen(true)} aria-label="Open menu" className="md:hidden p-2 text-fg">☰</button>
       <AnimatePresence>
         {open && (
           <>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setOpen(false)} className="fixed inset-0 z-40 bg-black/60" aria-hidden="true" />
+              onClick={() => setOpen(false)} className="fixed inset-0 z-40 bg-overlay" aria-hidden="true" />
             <motion.nav initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="fixed right-0 top-0 bottom-0 z-50 w-72 bg-zinc-950 p-6"
+              className="fixed right-0 top-0 bottom-0 z-50 w-72 bg-bg-secondary p-6 shadow-lg"
               role="dialog" aria-modal="true" aria-label="Navigation">
-              <button ref={closeRef} onClick={() => setOpen(false)} aria-label="Close menu"
-                className="mb-8 p-2 text-zinc-400 hover:text-zinc-50">✕</button>
+              <button ref={closeRef} type="button" onClick={() => setOpen(false)} aria-label="Close menu"
+                className="mb-8 p-2 text-fg-secondary hover:text-fg">✕</button>
               <ul className="space-y-4">
-                <li><a href="#features" className="text-lg text-zinc-200">Features</a></li>
-                <li><a href="#pricing" className="text-lg text-zinc-200">Pricing</a></li>
+                <li><a href="#features" className="text-lg text-fg">Features</a></li>
+                <li><a href="#pricing" className="text-lg text-fg">Pricing</a></li>
               </ul>
             </motion.nav>
           </>
@@ -89,72 +89,62 @@ function MobileNav() {
 
 ## Modals & Dialogs
 
-Use React Portals or the native `<dialog>` element. Compound Component pattern for flexibility.
+**Default: native `<dialog>` with `showModal()`.** The browser gives the focus trap, Escape, `aria-modal`, inert background and the top layer (no `z-index` fights, no body-scroll hack beyond one CSS line). Compound components for the header, body and footer.
 
 ```tsx
-import { AnimatePresence, motion } from "motion/react"
-import { createPortal } from "react-dom"
-import { createContext, useContext, useEffect, type ReactNode } from "react"
+import { createContext, useContext, useEffect, useRef, type ReactNode } from "react"
 
-const ModalCtx = createContext<{ close: () => void }>({ close: () => {} })
+const DialogCtx = createContext<{ close: () => void }>({ close: () => {} })
 
-function Modal({ open, onClose, children }: { open: boolean; onClose: () => void; children: ReactNode }) {
+function Dialog({ open, onClose, title, children }: {
+  open: boolean; onClose: () => void; title: string; children: ReactNode
+}) {
+  const ref = useRef<HTMLDialogElement>(null)
+
   useEffect(() => {
-    if (open) document.body.style.overflow = "hidden"
-    return () => { document.body.style.overflow = "" }
+    const el = ref.current
+    if (!el) return
+    if (open && !el.open) el.showModal()
+    if (!open && el.open) el.close()
   }, [open])
 
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
-    if (open) document.addEventListener("keydown", h)
-    return () => document.removeEventListener("keydown", h)
-  }, [open, onClose])
-
-  return createPortal(
-    <AnimatePresence>
-      {open && (
-        <ModalCtx.Provider value={{ close: onClose }}>
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            onClick={onClose} className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center">
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }} onClick={(e) => e.stopPropagation()}
-              role="dialog" aria-modal="true"
-              className="relative w-full max-w-lg rounded-xl bg-zinc-900 p-6 shadow-2xl">
-              {children}
-            </motion.div>
-          </motion.div>
-        </ModalCtx.Provider>
-      )}
-    </AnimatePresence>,
-    document.body
-  )
-}
-
-function ModalHeader({ children }: { children: ReactNode }) {
-  const { close } = useContext(ModalCtx)
   return (
-    <div className="mb-4 flex items-center justify-between">
-      <h2 className="text-lg font-semibold text-zinc-50">{children}</h2>
-      <button onClick={close} aria-label="Close" className="text-zinc-400 hover:text-zinc-50">✕</button>
-    </div>
+    <dialog
+      ref={ref}
+      onClose={onClose}                                     // Escape and el.close() both land here
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}   // backdrop click
+      aria-labelledby="dialog-title"
+      className="m-auto w-full max-w-lg rounded-xl bg-bg-secondary p-6 text-fg shadow-lg
+        backdrop:bg-overlay open:flex open:flex-col"
+    >
+      <DialogCtx.Provider value={{ close: onClose }}>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 id="dialog-title" className="text-lg font-semibold text-fg-heading">{title}</h2>
+          <button type="button" onClick={onClose} aria-label="Close" className="text-fg-secondary hover:text-fg">✕</button>
+        </div>
+        {children}
+      </DialogCtx.Provider>
+    </dialog>
   )
 }
-Modal.Header = ModalHeader
-Modal.Body = ({ children }: { children: ReactNode }) => <div className="text-zinc-300">{children}</div>
-Modal.Footer = ({ children }: { children: ReactNode }) => <div className="mt-6 flex justify-end gap-3">{children}</div>
+
+Dialog.Body = ({ children }: { children: ReactNode }) => <div className="text-fg">{children}</div>
+Dialog.Footer = ({ children }: { children: ReactNode }) => <div className="mt-6 flex justify-end gap-3">{children}</div>
+export const useDialog = () => useContext(DialogCtx)
 ```
 
-Key rules:
-- Lock body scroll when open
-- ESC to close, backdrop click to close
-- `role="dialog"` and `aria-modal="true"`
-- Stop click propagation on the panel
+```css
+/* styles.css — one line keeps the page from scrolling behind a modal dialog */
+html:has(dialog[open]:modal) { overflow: hidden; }
+```
+
+**Animated fallback.** When the open/close animation matters more than the free semantics, the portal + `AnimatePresence` version in `animation-recipes.md` § 6 applies; it then owes the focus trap and Escape handling itself. Key rules either way: `role="dialog"` + `aria-modal="true"` (implicit on `<dialog>`), Escape closes, backdrop click closes, focus returns to the opener on close (`<dialog>` does this).
 
 ---
 
 ## Toast Notifications
 
-Context/Provider pattern for global access. Non-intrusive — use modals for critical errors.
+Context/Provider pattern for global access. Non-intrusive — use a dialog for critical errors. Color is a stripe plus an icon, the text stays `text-fg` (the semantic tokens fail 4.5:1 as light-mode text — `accessibility.md`).
 
 ```tsx
 import { AnimatePresence, motion } from "motion/react"
@@ -163,6 +153,10 @@ import { createContext, useCallback, useContext, useState, type ReactNode } from
 type Toast = { id: string; message: string; type: "success" | "error" | "info" }
 const ToastCtx = createContext<{ toast: (msg: string, type?: Toast["type"]) => void }>({ toast: () => {} })
 export const useToast = () => useContext(ToastCtx)
+
+const stripe: Record<Toast["type"], string> = {
+  success: "border-l-success", error: "border-l-error", info: "border-l-accent",
+}
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
@@ -175,15 +169,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastCtx.Provider value={{ toast }}>
       {children}
-      <div className="fixed bottom-6 right-6 z-[100] flex flex-col gap-2">
+      <div className="fixed bottom-6 right-6 z-[100] flex flex-col gap-2" role="status" aria-live="polite">
         <AnimatePresence>
           {toasts.map((t) => (
             <motion.div key={t.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className={`rounded-lg px-4 py-3 text-sm shadow-lg ${
-                t.type === "success" ? "bg-emerald-600 text-white" :
-                t.type === "error" ? "bg-red-600 text-white" : "bg-zinc-800 text-zinc-200"
-              }`}>{t.message}</motion.div>
+              className={`rounded-lg border border-border border-l-4 bg-bg-secondary px-4 py-3 text-sm text-fg shadow-lg ${stripe[t.type]}`}>
+              <span className="sr-only">{t.type}: </span>{t.message}
+            </motion.div>
           ))}
         </AnimatePresence>
       </div>
@@ -196,52 +189,71 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
 ## Forms
 
-Prefer React Hook Form + Zod for client-side forms. Use `register` (uncontrolled) to minimise re-renders.
-For forms that submit to server functions, pair with `createServerFn` for type-safe server-side handling.
+**Default: no form library.** React 19's `<form action={fn}>` calls `fn(formData)` in a transition, resets uncontrolled fields after EVERY action (an error too: re-fill them from the returned state with `defaultValue` when the input should survive) and needs no `preventDefault`; `useActionState` holds the result and the pending flag. Validation is the Go handler's job; the client shows what the API returns: an AIP-193 error body (the `json-api-style` skill) whose `error.details[]` holds a `google.rpc.BadRequest` with `fieldViolations[{field, description}]`. `FormData` is a valid `fetch` body or, as here, becomes JSON with `Object.fromEntries`.
 
 ```tsx
-import { useForm } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { z } from "zod"
+import { useActionState } from "react"
 
-const schema = z.object({
-  email: z.string().email("Enter a valid email"),
-  name: z.string().min(2, "Name is required"),
-})
-type FormData = z.infer<typeof schema>
+type FormState = { ok: true } | { ok: false; errors: Record<string, string> }
 
-function SignupForm() {
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
-    resolver: zodResolver(schema),
+type ApiError = {
+  error: { code: number; status: string; message: string; details?: Array<{ "@type": string; fieldViolations?: Array<{ field: string; description: string }> }> }
+}
+
+function fieldErrors(body: ApiError): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const d of body.error.details ?? []) for (const v of d.fieldViolations ?? []) out[v.field] = v.description
+  return Object.keys(out).length ? out : { _: body.error.message }   // no field violation: show the message once
+}
+
+async function signup(_prev: FormState, fd: FormData): Promise<FormState> {
+  const res = await fetch("/api/signup", {                   // src/lib/api.ts in a real app
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(Object.fromEntries(fd)),
   })
+  if (res.ok) return { ok: true }
+  const body = (await res.json().catch(() => null)) as ApiError | null        // a 502 page or a mux 404 is not JSON
+  return { ok: false, errors: body ? fieldErrors(body) : { _: `${res.status} ${res.statusText}` } }
+}
+
+export function SignupForm() {
+  const [state, submit, pending] = useActionState(signup, { ok: true })
+  const err = (f: string) => (state.ok ? undefined : state.errors[f])
 
   return (
-    <form onSubmit={handleSubmit(async (d) => fetch("/api/signup", { method: "POST", body: JSON.stringify(d) }))}
-      className="space-y-4" noValidate>
+    <form action={submit} noValidate className="space-y-4">
       <div>
-        <label htmlFor="name" className="block text-sm text-zinc-400 mb-1">Name</label>
-        <input id="name" {...register("name")}
-          className="w-full rounded-lg bg-zinc-800 px-4 py-2.5 text-zinc-50 border border-zinc-700
-            focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/20"
-          aria-invalid={errors.name ? "true" : undefined}
-          aria-describedby={errors.name ? "name-err" : undefined} />
-        {errors.name && <p id="name-err" role="alert" className="mt-1 text-sm text-red-400">{errors.name.message}</p>}
+        <label htmlFor="email" className="mb-1 block text-sm text-fg-secondary">Email</label>
+        <input id="email" name="email" type="email" required
+          aria-invalid={err("email") ? true : undefined}
+          aria-describedby={err("email") ? "email-err" : undefined}
+          className={`w-full rounded-lg border bg-bg-input px-4 py-2.5 text-fg
+            focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring
+            ${err("email") ? "border-error" : "border-border-input"}`} />
+        {err("email") && <p id="email-err" role="alert" className="mt-1 text-sm text-fg">{err("email")}</p>}
       </div>
-      <button type="submit" disabled={isSubmitting}
-        className="w-full rounded-lg bg-amber-400 py-2.5 text-sm font-medium text-zinc-950
-          hover:bg-amber-300 disabled:opacity-50 transition-colors">
-        {isSubmitting ? "Submitting…" : "Sign Up"}
+      {err("_") && <p role="alert" className="text-sm text-fg">{err("_")}</p>}   {/* no field named (401, 429, 500, a bare 400, a non-JSON reply): still shown */}
+      <button type="submit" disabled={pending}
+        className="w-full rounded-lg bg-accent py-2.5 text-sm font-medium text-fg-inverse
+          hover:bg-accent-hover disabled:opacity-50 transition-colors">
+        {pending ? "Submitting…" : "Sign up"}
       </button>
     </form>
   )
 }
 ```
 
+**When a library is justified** — multi-step forms, arrays of fields, cross-field rules, optimistic per-field errors — use `@tanstack/react-form` (same vendor as the router, headless, no resolver package): `useForm({ defaultValues, onSubmit: async ({ value }) => … })`, `<form.Field name="email">{(field) => <input value={field.state.value} onChange={(e) => field.handleChange(e.target.value)} />}</form.Field>`, `validators: { onChange: schema }` accepting any Standard Schema library. `react-hook-form` + `@hookform/resolvers` are two dependencies this stack does not need.
+
+**Zod 4**, only when a library needs a schema or the client validates something the server cannot: top-level formats — `z.email()`, `z.url()`, `z.uuid()` — not the deprecated `z.string().email()`; import from `"zod"`.
+
 Form rules:
-- Every input needs a visible `<label>` with `htmlFor`
-- Use `aria-invalid` and `aria-describedby` for error association
-- Show errors inline, not in toasts
-- Disable the submit button during submission
+- Every input needs a visible `<label>` with `htmlFor`.
+- Error association with `aria-invalid` and `aria-describedby`; the message is `text-fg` + `role="alert"`, the input gets `border-error`.
+- Show errors inline, not in toasts.
+- Disable the submit button while `pending`.
+- No `createServerFn`: SPA mode has no server functions; the Go API is the only backend (SKILL.md).
 
 ---
 
@@ -253,7 +265,7 @@ Prefer skeletons over spinners. They communicate structure and prevent layout sh
 
 ```tsx
 function Skeleton({ className }: { className?: string }) {
-  return <div className={`animate-pulse rounded-lg bg-zinc-800 ${className ?? ""}`} aria-hidden="true" />
+  return <div className={`animate-pulse rounded-lg bg-bg-tertiary ${className ?? ""}`} aria-hidden="true" />
 }
 
 function CardSkeleton() {
@@ -302,6 +314,8 @@ export const Route = createLazyFileRoute('/pricing')({
 ### Full-Bleed Section
 
 ```tsx
+import type { ReactNode } from "react"
+
 function FullBleedSection({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <section className={`w-full ${className ?? ""}`}>
@@ -321,8 +335,8 @@ function Feature({ title, description, imageSrc, imageAlt, reverse }: {
     <div className={`flex flex-col gap-8 py-16 md:flex-row md:items-center md:gap-16
       ${reverse ? "md:flex-row-reverse" : ""}`}>
       <div className="flex-1">
-        <h3 className="text-2xl font-semibold text-zinc-50">{title}</h3>
-        <p className="mt-3 text-zinc-400 leading-relaxed">{description}</p>
+        <h3 className="text-2xl font-semibold text-fg-heading">{title}</h3>
+        <p className="mt-3 text-fg-secondary leading-relaxed">{description}</p>
       </div>
       <div className="flex-1">
         <img src={imageSrc} alt={imageAlt} className="rounded-xl" width={600} height={400} loading="lazy" />
@@ -342,25 +356,25 @@ function ResponsiveTable({ headers, rows }: { headers: string[]; rows: string[][
     <>
       <table className="hidden w-full md:table">
         <thead>
-          <tr className="border-b border-zinc-800">
-            {headers.map((h) => <th key={h} className="py-3 text-left text-sm font-medium text-zinc-400">{h}</th>)}
+          <tr className="border-b border-border">
+            {headers.map((h) => <th key={h} scope="col" className="py-3 text-left text-sm font-medium text-fg-secondary">{h}</th>)}
           </tr>
         </thead>
         <tbody>
           {rows.map((row, i) => (
-            <tr key={i} className="border-b border-zinc-800/50">
-              {row.map((cell, j) => <td key={j} className="py-3 text-sm text-zinc-300">{cell}</td>)}
+            <tr key={i} className="border-b border-border/50">
+              {row.map((cell, j) => <td key={j} className="py-3 text-sm text-fg">{cell}</td>)}
             </tr>
           ))}
         </tbody>
       </table>
       <div className="space-y-4 md:hidden">
         {rows.map((row, i) => (
-          <div key={i} className="rounded-lg border border-zinc-800 p-4 space-y-2">
+          <div key={i} className="rounded-lg border border-border p-4 space-y-2">
             {row.map((cell, j) => (
               <div key={j} className="flex justify-between">
-                <span className="text-sm text-zinc-500">{headers[j]}</span>
-                <span className="text-sm text-zinc-200">{cell}</span>
+                <span className="text-sm text-fg-secondary">{headers[j]}</span>
+                <span className="text-sm text-fg">{cell}</span>
               </div>
             ))}
           </div>

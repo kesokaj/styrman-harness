@@ -1,393 +1,91 @@
 ---
 name: terraform
-description: Use when working with Terraform or OpenTofu - creating modules, writing tests, CI/CD pipelines, reviewing configurations, debugging state, or IaC architecture decisions. Do NOT use for Kubernetes pod management (use gke-basics), container building (use docker), or direct gcloud CLI calls (use gcloud-setup).
-license: Apache-2.0
-metadata:
-  author: Anton Babenko
-  version: 1.6.0
+description: "Terraform (or OpenTofu) for Google Cloud, applied from the operator's machine with no CI: Cloud Run v2 behind a dedicated service account, Artifact Registry, Secret Manager, Cloud SQL Postgres, Cloud Run jobs and Cloud Scheduler, state in a GCS bucket. Use when writing, reviewing or planning HCL for GCP, choosing a resource or an IAM binding, debugging state or a plan diff, or deciding what belongs in Terraform and what stays with gcloud. Do NOT use for building or pushing the image (use docker), a gcloud deploy, new revision or rollback (use cloud-run-deploy), GKE clusters or Kubernetes objects (use gke-basics), or gcloud login and ADC problems (use gcloud-setup)."
 ---
 
-# Terraform Skill
+# Terraform for Google Cloud
 
-Comprehensive Terraform and OpenTofu guidance covering testing, modules, CI/CD, and production patterns. Based on terraform-best-practices.com and enterprise experience.
+Infrastructure as code for the one cloud this stack uses, written and applied by the operator from their own machine. Every HCL block in this skill and its references comes from the `hashicorp/google` provider's own documentation page, cited under it; nothing here depends on a pipeline, a pre-commit hook or an MCP server.
 
-## When to Use This Skill
+**When NOT to use this skill:** the container image, its build and its push (`docker`); `gcloud run deploy`, traffic, a rollback (`cloud-run-deploy`); GKE clusters and Kubernetes manifests (`gke-basics`); `gcloud auth`, ADC and project configuration (`gcloud-setup`).
 
-**Activate this skill when:**
-- Creating new Terraform or OpenTofu configurations or modules
-- Setting up testing infrastructure for IaC code
-- Deciding between testing approaches (validate, plan, frameworks)
-- Structuring multi-environment deployments
-- Implementing CI/CD for infrastructure-as-code
-- Reviewing or refactoring existing Terraform/OpenTofu projects
-- Choosing between module patterns or state management approaches
+## When Terraform, when gcloud
 
-**Don't use this skill for:**
-- Kubernetes manifests or GKE configuration (use the `gke-basics` skill)
-- Non-Terraform IaC tools (Pulumi, AWS CDK, Crossplane)
-- CI/CD pipeline YAML unrelated to Terraform (use the `bash` skill)
-- Provider-specific API reference (link to provider docs instead)
+- Terraform when the deployment is more than one service, or when a resource must outlive any one deploy: the service account, the Artifact Registry repository, the secrets, the database, the scheduler. One root per app under `infra/`.
+- The image, the new revision and the rollback stay with `cloud-run-deploy`: the image tag is the git short SHA that skill produces, passed into Terraform as a variable, never computed in HCL.
+- `terraform plan` before every `apply`, and nothing is applied to Google unless the user asked for it in their own turn (`/preflight` is the deploy path; this skill is the HCL under it).
+- The project's recorded defaults (project ID, region, repository, service name, service account, public or not) live in `<docs-root>/deploy/gcp.md`; the state bucket's name is recorded there too.
 
-## Core Principles
-
-### 1. Code Structure Philosophy
-
-**Module Hierarchy:**
-
-| Type | When to Use | Scope |
-|------|-------------|-------|
-| **Resource Module** | Single logical group of connected resources | VPC + subnets, Security group + rules |
-| **Infrastructure Module** | Collection of resource modules for a purpose | Multiple resource modules in one region/account |
-| **Composition** | Complete infrastructure | Spans multiple regions/accounts |
-
-**Hierarchy:** Resource → Resource Module → Infrastructure Module → Composition
-
-**Directory Structure:**
-```
-environments/        # Environment-specific configurations
-├── prod/
-├── staging/
-└── dev/
-
-modules/            # Reusable modules
-├── networking/
-├── compute/
-└── data/
-
-examples/           # Module usage examples (also serve as tests)
-├── complete/
-└── minimal/
-```
-
-**Key principle from terraform-best-practices.com:**
-- Separate **environments** (prod, staging) from **modules** (reusable components)
-- Use **examples/** as both documentation and integration test fixtures
-- Keep modules small and focused (single responsibility)
-
-**For detailed module architecture, see:** [Code Patterns: Module Types & Hierarchy](references/code-patterns.md)
-
-### 2. Naming Conventions
-
-**Resources:**
-```hcl
-# Good: Descriptive, contextual
-resource "aws_instance" "web_server" { }
-resource "aws_s3_bucket" "application_logs" { }
-
-# Good: "this" for singleton resources (only one of that type)
-resource "aws_vpc" "this" { }
-resource "aws_security_group" "this" { }
-
-# Avoid: Generic names for non-singletons
-resource "aws_instance" "main" { }
-resource "aws_s3_bucket" "bucket" { }
-```
-
-**Singleton Resources:**
-
-Use `"this"` when your module creates only one resource of that type:
-
-✅ DO:
-```hcl
-resource "aws_vpc" "this" {}           # Module creates one VPC
-resource "aws_security_group" "this" {}  # Module creates one SG
-```
-
-❌ DON'T use "this" for multiple resources:
-```hcl
-resource "aws_subnet" "this" {}  # If creating multiple subnets
-```
-
-Use descriptive names when creating multiple resources of the same type.
-
-**Variables:**
-```hcl
-# Prefix with context when needed
-var.vpc_cidr_block          # Not just "cidr"
-var.database_instance_class # Not just "instance_class"
-```
-
-**Files:**
-- `main.tf` - Primary resources
-- `variables.tf` - Input variables
-- `outputs.tf` - Output values
-- `versions.tf` - Provider versions
-- `data.tf` - Data sources (optional)
-
-## Testing Strategy Framework
-
-### Decision Matrix: Which Testing Approach?
-
-| Your Situation | Recommended Approach | Tools | Cost |
-|----------------|---------------------|-------|------|
-| **Quick syntax check** | Static analysis | `terraform validate`, `fmt` | Free |
-| **Pre-commit validation** | Static + lint | `validate`, `tflint`, `trivy`, `checkov` | Free |
-| **Terraform 1.6+, simple logic** | Native test framework | Built-in `terraform test` | Free-Low |
-| **Pre-1.6, or Go expertise** | Integration testing | Terratest | Low-Med |
-| **Security/compliance focus** | Policy as code | OPA, Sentinel | Free |
-| **Cost-sensitive workflow** | Mock providers (1.7+) | Native tests + mocking | Free |
-| **Multi-cloud, complex** | Full integration | Terratest + real infra | Med-High |
-
-### Testing Pyramid for Infrastructure
+## Layout
 
 ```
-        /\
-       /  \          End-to-End Tests (Expensive)
-      /____\         - Full environment deployment
-     /      \        - Production-like setup
-    /________\
-   /          \      Integration Tests (Moderate)
-  /____________\     - Module testing in isolation
- /              \    - Real resources in test account
-/________________\   Static Analysis (Cheap)
-                     - validate, fmt, lint
-                     - Security scanning
+infra/
+├── versions.tf          # required_version, required_providers, backend "gcs"
+├── main.tf              # resources, in dependency order
+├── variables.tf         # project, region, app, repo, git_sha, secrets as sensitive
+├── outputs.tf           # service URI, SA email, repository name
+├── terraform.tfvars     # gitignored: a secret-shaped path (*.tfvars) stops a commit; secret VALUES never go here either — `TF_VAR_app_secret` from Secret Manager or a prompt at apply time
+└── .terraform.lock.hcl  # committed, locked for both platforms (below)
 ```
 
-### Native Test Best Practices (1.6+)
+`.terraform/`, `*.tfstate*`, `*.tfvars` and the plan file are ignored; the lock file is not. The plan file lives in `.agents/scratch/` because it holds every value, secrets included, in clear.
 
-**Before generating test code:**
+## Bootstrap, once per project
 
-1. **Validate schemas with Terraform MCP:**
+1. Enable the APIs the root uses, in HCL, so the dependency is recorded: `google_project_service` for `run.googleapis.com`, `artifactregistry.googleapis.com`, `secretmanager.googleapis.com`, `sqladmin.googleapis.com`, `cloudscheduler.googleapis.com`, `iam.googleapis.com` (`disable_on_destroy = false`; see [upgrades](references/upgrades.md)).
+2. Create the state bucket by hand, since the backend needs it before the first `init` (chicken and egg):
+   ```bash
+   gcloud storage buckets create gs://PROJECT-tfstate --location=REGION --uniform-bucket-level-access --public-access-prevention
+   gcloud storage buckets update gs://PROJECT-tfstate --versioning
    ```
-   Search provider docs → Get resource schema → Identify block types
-   ```
+   The name is a global namespace: a create that fails with "already exists" is a STOP, never a reuse — the existing bucket may be someone else's (then choose `PROJECT-tfstate-<random suffix>`). Locking needs nothing else: the GCS backend writes `<prefix>/<workspace>.tflock` into the same bucket and only the holder can delete it.
+3. `terraform init`, then `terraform providers lock -platform=linux_amd64 -platform=darwin_arm64` so the lock file covers the Linux box and the Apple Silicon Mac; rerun it after any provider bump and commit the result.
 
-2. **Choose correct command mode:**
-   - `command = plan` - Fast, for input validation
-   - `command = apply` - Required for computed values and set-type blocks
+## The standard app
 
-3. **Handle set-type blocks correctly:**
-   - Cannot index with `[0]`
-   - Use `for` expressions to iterate
-   - Or use `command = apply` to materialize
+The full blocks, each with its documentation URL, are in [references/resources-gcp.md](references/resources-gcp.md); a complete small root is in [assets/example/](assets/example/main.tf). The order is the dependency order:
 
-**Common patterns:**
-- S3 encryption rules: **set** (use for expressions)
-- Lifecycle transitions: **set** (use for expressions)
-- IAM policy statements: **set** (use for expressions)
+1. **Runtime service account** (`google_service_account`), one per app; its `member` attribute is what IAM bindings take.
+2. **Artifact Registry** repository (`format = "DOCKER"`) with a cleanup policy deleting untagged images.
+3. **Secret** (`google_secret_manager_secret`, `replication { auto {} }`) with a write-only version (`secret_data_wo` plus `secret_data_wo_version`, provider 8.x) so the value never lands in state, and `roles/secretmanager.secretAccessor` for the runtime SA on that one secret.
+4. **Cloud SQL Postgres** (`POSTGRES_18`, `edition = "ENTERPRISE"`), `roles/cloudsql.client` for the runtime SA at project level (the role is project-scoped).
+5. **Cloud Run v2 service** with the SA, the secret as an env `value_source`, the `/cloudsql` volume, and `vpc_access` with Direct VPC egress only when a private-IP target exists.
+6. **Invocation**: public via `invoker_iam_disabled = true` on the service (Google's recommended form), or IAM-gated via `google_cloud_run_v2_service_iam_member` for the one caller. `gcloud run deploy --allow-unauthenticated` reaches the same end by a different mechanism (an `allUsers` invoker binding); when the service is in HCL, Terraform owns the setting and `cloud-run-deploy` passes neither flag.
+7. **Migration job** (`google_cloud_run_v2_job`, `template { template { … } }`) running the same image with `args = ["migrate"]`.
+8. **Scheduler** (`google_cloud_scheduler_job`) calling the service with an `oidc_token` from its own SA, which holds `roles/run.invoker` on the service.
 
-**For detailed testing guides, see:**
-- **[Testing Frameworks Guide](references/testing-frameworks.md)** - Deep dive into static analysis, native tests, and Terratest
-- **[Quick Reference](references/quick-reference.md#testing-approach-selection)** - Decision flowchart and command cheat sheet
+## Rules
 
-## Code Structure Standards
+- `hashicorp/google` pinned `~> 8.0`; `google-beta` only when a Preview feature is named in the plan, since every GA resource is in `google`.
+- `deletion_protection` stays at its default (`true` on Cloud Run services and jobs and on Cloud SQL) in anything shared; `false` only in a throwaway environment, and said so in the plan.
+- A secret never appears in `secret_data`, in `--set-env-vars`, in a `google_sql_user` password, or in state: write-only versions, or create the secret in HCL and add versions with `gcloud secrets versions add`.
+- IAM by `_member` resources, never `_policy` (authoritative; wipes bindings made elsewhere) and never both on one resource. A project-level binding only for a project-scoped role such as `roles/cloudsql.client`; `roles/run.invoker` at project level would open every service.
+- Direct VPC egress (`vpc_access { network_interfaces {} }`) is the default when a private-IP target exists; a Serverless VPC Access connector only for the Cloud NAT cold-start case; no `vpc_access` at all without a private target.
+- Block order inside a resource: `count` or `for_each` first, then arguments, then `labels`, then `depends_on`, then `lifecycle`. `for_each` for a named set, `count` for a boolean toggle, never both on one resource (Terraform rejects it).
+- Backend blocks take literal values only; everything else comes through `variables.tf`.
+- Stdlib first applies here too: no community modules until the plain resources have been written once and found repetitive.
 
-### Resource Block Ordering
+## Verify before apply
 
-**Strict ordering for consistency:**
-1. `count` or `for_each` FIRST (blank line after)
-2. Other arguments
-3. `tags` as last real argument
-4. `depends_on` after tags (if needed)
-5. `lifecycle` at the very end (if needed)
+Run each bare and read its exit status (the global rule: never inside a chain that leads to a commit); the exact commands, exit codes and the `.tflint.hcl` are in [references/checks.md](references/checks.md):
 
-```hcl
-# ✅ GOOD - Correct ordering
-resource "aws_nat_gateway" "this" {
-  count = var.create_nat_gateway ? 1 : 0
+1. `terraform fmt -check -recursive`
+2. `terraform validate` (after `init`; `-backend=false` works offline)
+3. `terraform plan -detailed-exitcode -out=.agents/scratch/tfplan` — 0 nothing to do, 1 error, 2 a diff to read
+4. `tflint --init && tflint` with the google ruleset
+5. `trivy config --exit-code 1 .` (without `--exit-code 1` trivy exits 0 whatever it finds, and the status read below means nothing)
+6. `terraform apply .agents/scratch/tfplan`, then the project's smoke check from `deploy/gcp.md`
 
-  allocation_id = aws_eip.this[0].id
-  subnet_id     = aws_subnet.public[0].id
+The results go into the project's `testing/` log as the Definition of Done asks; a `plan` that exits 2 is read in full before the apply, and a diff the plan did not predict stops the run.
 
-  tags = {
-    Name = "${var.name}-nat"
-  }
+## Auth
 
-  depends_on = [aws_internet_gateway.this]
+`gcloud auth application-default login` is the credential: both the GCS backend and the provider read Application Default Credentials, so one login covers state and apply. `--impersonate-service-account` (or `impersonate_service_account` in the backend) is the step up once more than one human applies: a dedicated `terraform` SA narrows the operator's live roles and unifies the audit trail. Workload Identity Federation is for workloads outside Google Cloud and for CI; with neither there is nothing to federate. Service account keys are never created. A failed login, a missing ADC or a 403 is the `gcloud-setup` skill's problem.
 
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-```
+## Debugging state
 
-### Variable Block Ordering
-
-1. `description` (ALWAYS required)
-2. `type`
-3. `default`
-4. `validation`
-5. `nullable` (when setting to false)
-
-```hcl
-variable "environment" {
-  description = "Environment name for resource tagging"
-  type        = string
-  default     = "dev"
-
-  validation {
-    condition     = contains(["dev", "staging", "prod"], var.environment)
-    error_message = "Environment must be one of: dev, staging, prod."
-  }
-
-  nullable = false
-}
-```
-
-**For complete structure guidelines, see:** [Code Patterns: Block Ordering & Structure](references/code-patterns.md#block-ordering--structure)
-
-## Count vs For_Each: When to Use Each
-
-| Scenario | Use | Why |
-|----------|-----|-----|
-| Boolean condition (create or don't) | `count = condition ? 1 : 0` | Simple on/off toggle |
-| Simple numeric replication | `count = 3` | Fixed number of identical resources |
-| Items may be reordered/removed | `for_each = toset(list)` | Stable resource addresses |
-| Reference by key | `for_each = map` | Named access to resources |
-| Multiple named resources | `for_each` | Better maintainability |
-
-**Key rule:** If items can be reordered or removed from a list, use `for_each` — `count` uses numeric indices, so removing a middle item recreates all subsequent resources.
-
-**For code examples and migration guides, see:** [Code Patterns: Count vs For_Each](references/code-patterns.md#count-vs-for_each-deep-dive)
-
-## Locals for Dependency Management
-
-Use `locals` with `try()` to ensure correct resource deletion order — particularly useful for VPC configurations with secondary CIDR blocks. This hints the dependency graph without explicit `depends_on`.
-
-**For detailed examples, see:** [Code Patterns: Locals for Dependency Management](references/code-patterns.md#locals-for-dependency-management)
-
-## Module Development
-
-### Standard Module Structure
-
-```
-my-module/
-├── README.md           # Usage documentation
-├── main.tf             # Primary resources
-├── variables.tf        # Input variables with descriptions
-├── outputs.tf          # Output values
-├── versions.tf         # Provider version constraints
-├── examples/
-│   ├── minimal/        # Minimal working example
-│   └── complete/       # Full-featured example
-└── tests/              # Test files
-    └── module_test.tftest.hcl  # Or .go
-```
-
-### Best Practices Summary
-
-**Variables:**
-- ✅ Always include `description`
-- ✅ Use explicit `type` constraints
-- ✅ Provide sensible `default` values where appropriate
-- ✅ Add `validation` blocks for complex constraints
-- ✅ Use `sensitive = true` for secrets
-
-**Outputs:**
-- ✅ Always include `description`
-- ✅ Mark sensitive outputs with `sensitive = true`
-- ✅ Consider returning objects for related values
-- ✅ Document what consumers should do with each output
-
-**For detailed module patterns, see:**
-- **[Module Patterns Guide](references/module-patterns.md)** - Variable best practices, output design, ✅ DO vs ❌ DON'T patterns
-- **[Quick Reference](references/quick-reference.md#common-patterns)** - Resource naming, variable naming, file organization
-
-## CI/CD Integration
-
-### Recommended Workflow Stages
-
-1. **Validate** - Format check + syntax validation + linting
-2. **Test** - Run automated tests (native or Terratest)
-3. **Plan** - Generate and review execution plan
-4. **Apply** - Execute changes (with approvals for production)
-
-### Cost Optimization Strategy
-
-1. **Use mocking for PR validation** (free)
-2. **Run integration tests only on main branch** (controlled cost)
-3. **Implement auto-cleanup** (prevent orphaned resources)
-4. **Tag all test resources** (track spending)
-
-**For complete CI/CD templates, see:**
-- **[CI/CD Workflows Guide](references/ci-cd-workflows.md)** - GitHub Actions, GitLab CI, Atlantis integration, cost optimization
-- **[Quick Reference](references/quick-reference.md#troubleshooting-guide)** - Common CI/CD issues and solutions
-
-## Security & Compliance
-
-### Essential Security Checks
-
-```bash
-# Static security scanning
-trivy config .
-checkov -d .
-```
-
-### Common Issues to Avoid
-
-| ❌ Don't | ✅ Do |
-|----------|------|
-| Store secrets in variables | Use AWS Secrets Manager / Parameter Store |
-| Use default VPC | Create dedicated VPCs |
-| Skip encryption | Enable encryption at rest |
-| Open security groups to 0.0.0.0/0 | Use least-privilege security groups |
-
-**For detailed security guidance, see:** [Security & Compliance Guide](references/security-compliance.md)
-
-## Version Management
-
-### Version Constraint Syntax
-
-| Syntax | Meaning | Risk |
-|--------|---------|------|
-| `"5.0.0"` | Exact version | Inflexible |
-| `"~> 5.0"` | 5.0.x only (recommended) | Low |
-| `">= 5.0"` | Minimum version | Breaking changes possible |
-
-### Strategy by Component
-
-| Component | Strategy | Example |
-|-----------|----------|---------|
-| **Terraform** | Pin minor version | `required_version = "~> 1.9"` |
-| **Providers** | Pin major version | `version = "~> 5.0"` |
-| **Modules (prod)** | Pin exact version | `version = "5.1.2"` |
-| **Modules (dev)** | Allow patch updates | `version = "~> 5.1"` |
-
-**For detailed version management, see:** [Code Patterns: Version Management](references/code-patterns.md#version-management)
-
-## Modern Terraform Features (1.0+)
-
-| Feature | Version | Use Case |
-|---------|---------|----------|
-| `try()` function | 0.13+ | Safe fallbacks, replaces `element(concat())` |
-| `nullable = false` | 1.1+ | Prevent null values in variables |
-| `moved` blocks | 1.1+ | Refactor without destroy/recreate |
-| `optional()` with defaults | 1.3+ | Optional object attributes |
-| Native testing | 1.6+ | Built-in test framework |
-| Mock providers | 1.7+ | Cost-free unit testing |
-| Provider functions | 1.8+ | Provider-specific data transformation |
-| Cross-variable validation | 1.9+ | Validate relationships between variables |
-| Write-only arguments | 1.11+ | Secrets never stored in state |
-
-**For complete patterns and examples, see:** [Code Patterns: Modern Terraform Features](references/code-patterns.md#modern-terraform-features-10)
-
-## Version-Specific Guidance
-
-| Version Range | Testing Approach |
-|--------------|-----------------|
-| **Terraform 1.0–1.5** | Terratest only, static analysis, plan validation |
-| **Terraform 1.6+ / OpenTofu 1.6+** | Native `terraform test` / `tofu test` — migrate from external frameworks for simple tests |
-| **Terraform 1.7+ / OpenTofu 1.7+** | Mock providers for unit testing — reduce cost by mocking external dependencies |
-
-**Terraform vs OpenTofu:** Both are fully supported. For licensing, governance, and feature comparison, see [Quick Reference: Terraform vs OpenTofu](references/quick-reference.md#terraform-vs-opentofu-comparison).
-
-## Detailed Guides
-
-This skill uses **progressive disclosure** - essential information is in this main file, detailed guides are available when needed:
-
-📚 **Reference Files:**
-- **[Testing Frameworks](references/testing-frameworks.md)** - In-depth guide to static analysis, native tests, and Terratest
-- **[Module Patterns](references/module-patterns.md)** - Module structure, variable/output best practices, ✅ DO vs ❌ DON'T patterns
-- **[CI/CD Workflows](references/ci-cd-workflows.md)** - GitHub Actions, GitLab CI templates, cost optimization, automated cleanup
-- **[Security & Compliance](references/security-compliance.md)** - Trivy/Checkov integration, secrets management, compliance testing
-- **[Quick Reference](references/quick-reference.md)** - Command cheat sheets, decision flowcharts, troubleshooting guide
-
-**How to use:** When you need detailed information on a topic, reference the appropriate guide. The AI will load it on demand to provide comprehensive guidance.
-
-## License
-
-This skill is licensed under the **Apache License 2.0**. See the LICENSE file for full terms.
-
-**Copyright © 2026 Anton Babenko**
-
+- **Stuck lock**: the lock object is `<prefix>/<workspace>.tflock` in the state bucket. Confirm no run holds it (`gcloud storage ls gs://BUCKET/PREFIX/` and the operator's own terminals) before `terraform force-unlock <ID>`.
+- **Drift**: `terraform plan` shows it; a resource created outside Terraform is adopted with an `import` block (Terraform 1.5+, inside modules since 1.16) and a plan that then shows no change.
+- **Rename**: a `moved` block, never destroy and recreate.
+- **Leave a resource in place while dropping it from HCL**: a `removed` block, or `lifecycle { destroy = false }` (1.16).
+- **Provider major upgrade**: the checklist in [references/upgrades.md](references/upgrades.md); never bump the pin and apply in one step.

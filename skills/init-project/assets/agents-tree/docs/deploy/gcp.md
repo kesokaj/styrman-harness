@@ -24,11 +24,24 @@ Asked once, per the global context, never invented or copied from another projec
 
 ## Image
 
-`${REGION}-docker.pkg.dev/${PROJECT}/${REPO}/${SERVICE}:${GIT_SHA}` — built with `docker buildx build --platform linux/amd64 --load`, tagged with the short SHA; `latest` only as a convenience alias.
+`${REGION}-docker.pkg.dev/${PROJECT}/${REPO}/${SERVICE}:${GIT_SHA}` — built with `docker buildx build --platform linux/amd64 --load`, tagged with the short SHA and nothing else: the repository enforces immutable tags (`--immutable-tags` / `immutable_tags = true`), so a moving `latest` alias cannot exist.
+
+## Rollout and network
+
+Decided once, each with its reason; the `cloud-run-deploy` skill reads the first five rows (its § What `docs/deploy/gcp.md` records) and the `terraform` skill the last; a row not yet decided stays empty, never guessed.
+
+| Row | Value |
+|---|---|
+| Rollout | canary tag (`canary`), traffic slice (`10`), watch window, promote step (`--to-latest`) |
+| Ingress / IAP / VPC | `--ingress` value; `--iap` yes/no and who holds `roles/iap.httpsResourceAccessor`; `--network`/`--subnet`/`--vpc-egress` or none |
+| Cloud SQL | the `PROJECT:REGION:INSTANCE` for `--add-cloudsql-instances`, or none |
+| Probes and scale | startup probe path; `--min-instances`/`--max-instances`/`--concurrency` when set |
+| Secrets | `--set-secrets` names and pinned versions (names, never values) |
+| Terraform state | the GCS bucket (`PROJECT-tfstate` or its suffixed name) and prefix, or none when nothing is in HCL (the `terraform` skill) |
 
 ## Procedure
 
-Follow the `cloud-run-deploy` skill with the defaults above: local test build and smoke run, amd64 build, push, `gcloud run deploy`, verify. Project-specific flags (memory, concurrency, VPC, min instances) and the reason for each go here.
+Follow the `cloud-run-deploy` skill with the defaults and rows above: local test build and smoke run, amd64 build, push, `gcloud run deploy`, canary when the Rollout row says so, verify. The reason for every project-specific flag goes in the table above, not here.
 
 ## Secrets and configuration
 

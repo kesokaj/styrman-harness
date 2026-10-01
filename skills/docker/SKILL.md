@@ -47,7 +47,7 @@ Tagging, Artifact Registry, and the deploy itself live in `cloud-run-deploy`.
 
 ### 4. Smoke test before anything leaves the machine
 ```bash
-cid=$(docker run --rm -d -p 8080:8080 <app>:dev)
+cid=$(docker run --rm -d -p 127.0.0.1:8080:8080 <app>:dev)   # bind to loopback: the box's other interfaces see nothing
 docker ps --filter id=$cid --format '{{.Status}}'   # the container you started is the thing under test
 curl -fsS http://localhost:8080/healthz              # a reply from something else on :8080 is not evidence
 docker logs $cid; docker stop $cid
@@ -57,14 +57,25 @@ Probe the container you started, not whatever answers on the port: a stale conta
 ## Dockerfile: Go multi-stage
 
 ```dockerfile
-FROM golang:1.24 AS build
+# Stage 1 (only when web/ exists): the SPA, built where Node lives and nowhere else.
+FROM node:24-alpine AS web
+WORKDIR /src/web
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+COPY web/ ./
+RUN npm run build                        # vite build && tsc -b → dist/client (the frontend skill)
+
+# Stage 2: the Go binary; the tag is the go.mod go line's MAJOR.MINOR (go 1.27.1 → golang:1.27)
+FROM golang:<major.minor of the go.mod go line> AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
+COPY --from=web /src/web/dist/client ./web/dist/client   # embedded by web/embed.go at go build; omit without web/
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /app ./cmd/<app>
 
-FROM gcr.io/distroless/static-debian12
+# Stage 3: the runtime — no shell, no Node, one static binary
+FROM gcr.io/distroless/static-debian12@sha256:<digest>   # rule 1: distroless has no version tag; the digest is the pin
 COPY --from=build /app /app
 USER nonroot
 EXPOSE 8080
@@ -72,21 +83,26 @@ CMD ["/app"]
 ```
 
 **Key rules:**
-1. Pin the base images (`golang:1.24`, `distroless/static-debian12`), never `:latest`.
+1. Pin the base images, never `:latest`: the Go stage is `golang:<major.minor of the go.mod go line>` (read `go.mod`: `go 1.27.1` → `golang:1.27`, which tracks the current patch and its stdlib fixes; a three-part tag (major.minor.patch) freezes a patch with known advisories; a minor written in this skill goes stale; `cloud.google.com/go/cloudsqlconn` needs 1.26 or later), the runtime `gcr.io/distroless/static-debian12@sha256:<digest>` — distroless publishes no version tags, so a bare name is an implicit `:latest` and the digest is its only pin (`docker buildx imagetools inspect gcr.io/distroless/static-debian12` prints it; bump it deliberately). When the whole build must be reproducible byte for byte, pin the Go and Node images by digest too.
 2. `CGO_ENABLED=0` so the binary is static and runs on `distroless/static`; if cgo is
    unavoidable, switch to `distroless/base-debian12` and say why.
 3. Copy `go.mod`/`go.sum` and `go mod download` before the source, so the module layer caches.
-4. `.dockerignore` at minimum: `.git`, `.agents/scratch`, `.agents/memory`, `web/node_modules`, `*.env*`, `*.pem`, `*.key`.
-5. No secrets in any layer: no `COPY .env`, no build args carrying tokens. Secrets arrive at
-   runtime (Secret Manager on Cloud Run, `env_file` locally).
+4. `.dockerignore`: the one list is [First-Time Setup](references/setup.md) § Step 1; copy it, do not retype it.
+5. No secrets in any layer: no `COPY .env`, no build args carrying tokens. A secret the BUILD
+   needs (a private module proxy token) comes in through `RUN --mount=type=secret,id=netrc,target=/root/.netrc`
+   with `--secret id=netrc,src=$HOME/.netrc` on the build command: mounted for that `RUN` only,
+   never a layer. Everything else arrives at runtime (Secret Manager on Cloud Run, `env_file` locally).
 6. Health check through the app's `/healthz`. Distroless has no shell or curl, so the
    check is the binary itself (`/app -healthcheck`) or the platform's HTTP probe —
    see [Health Checks](references/health-checks.md).
 7. `USER nonroot` stays; bind a port above 1024 (`PORT`, default 8080).
 
-If the Go binary also serves the `web/` frontend, add a `node:<pinned>` build stage
-that produces the static bundle and `COPY --from=` it next to the binary; the runtime
-image stays distroless.
+If the Go binary also serves the `web/` frontend, the `node:24-alpine` stage above (the
+only Node image here) runs `npm ci && npm run build` in `web/`, and the Go stage copies
+`web/dist/client` into the build context BEFORE `go build`, because the frontend skill
+embeds that directory with `go:embed` at compile time; nothing is copied next to the
+binary, and the runtime image stays distroless. `web/dist/` is gitignored and in
+`.dockerignore` (the build makes it, the context never carries it), never committed.
 
 ## Docker Compose (local dependencies)
 
@@ -111,7 +127,7 @@ docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 | amd64 build slow on Apple Silicon | Expected: QEMU emulation. `CGO_ENABLED=0` keeps it a pure Go cross-compile in practice |
 | `no such file or directory` on start | Binary linked against cgo on `distroless/static` — set `CGO_ENABLED=0` or use `base-debian12` |
 | Port already in use | `lsof -i :<port>` then stop it or change `PORT` |
-| Container has no shell for debugging | Run the same binary in `golang:1.24` or use `docker cp` / logs; do not add a shell to the runtime image |
+| Container has no shell for debugging | Run the same binary in the `golang:<major.minor>` build image or use `docker cp` / logs; do not add a shell to the runtime image |
 | Compose DB keeps old schema | `docker compose down -v` before `up -d` |
 
 ## Reference Library

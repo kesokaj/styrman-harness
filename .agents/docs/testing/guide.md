@@ -153,10 +153,21 @@ A change that must hold on each kind of machine (R10: Claude Code only, Antigrav
 is checked in three sandbox homes, one per `sh-agent install --home <sb> --vendor claude|agy|all`,
 with `HOME=<sb>` for the whole run so every `sh-agent` call the agent makes lands there (BUG-107).
 Claude Code runs with `CLAUDE_CONFIG_DIR=<sb>/.claude` and a copy of `~/.claude/.credentials.json`
-in it; Antigravity with its token and a settings file written for the run (AGENTS.md § Testing).
+in it; Antigravity with its token and a settings file written for the run (§ Behavioural runs below).
 A vendor setting the session cannot write, such as a project's `.claude/settings.local.json`,
 reaches Claude Code through `claude -p --settings '<json>'` instead. Kit and first use:
 `testing/2026-09-30-verify-parity-memory-dream-phase-2.md`.
+
+### Behavioural runs (a change to `agents/*.md` or to a `context/` rule that changes what the main agent does)
+
+Moved here from `AGENTS.md` § Testing on 2026-10-01 (plan audit-fix, C17); the project file points at this section.
+
+- A change to `agents/*.md` gets a behavioural run: `claude -p --agents <json built from the working-tree file>` in a scratch clone of a small repository, several runs, with the agent's artifact carrying something only the new definition writes, so the run proves which definition ran. The dispatch text does NOT repeat the changed rule (the definition alone is under test); the prompt goes on stdin because `--allowedTools` is variadic and swallows a trailing argument; `--allowedTools` names the agent's tools or every call is refused at the permission gate and the run proves nothing; the tool-call order is read from the run's subagent transcript under `~/.claude/projects/`; the result is reported as n of N runs, never "works" (BUG-083). A change to `context/` that should change what the main agent does runs the same way with the new text given through `claude -p --append-system-prompt`.
+- The real home is never touched. A CLI started from a scratch `HOME` cannot authenticate (credentials live in the real home), so the CLI start of § 4 is the sandbox procedure or the real-home smoke checks of § 5, never `HOME=<scratch> claude -p`. A verification log states what it did not exercise; "complete" or "all skills" is said only after the full matrix in `skill-matrix.md` has run.
+- **Every kit sources `kit-preamble.sh` first** (`. .agents/docs/testing/kit-preamble.sh` at the top of the kit script built in scratch, with `KIT_CLONE`, `KIT_HOME` and, when the dispatch states fixture facts, `KIT_ASSERT_GREP` (newline-separated `file:pattern`) and `KIT_ASSERT_COMMIT` (one short SHA)). The preamble is the setup proof BUG-087, 090, 091, 106, 107, 115, 116 and 123 each asked for: it asserts every fixture fact before the CLI starts, refuses a clone whose parent is a git checkout (an ancestor `AGENTS.md` would load and an agent resolved the docs root upward into this repository's trail, BUG-106), lists the real `~/.config/sh-agent` before the run and again on exit, and FAILS the kit (exit 1) when it changed (a kit's own `--home` does not reach the agent's calls: `search` registered test clones in the real global index, BUG-107, and a `/distill` probe appended to the real feedback and retro logs, BUG-123), and puts a wrapper first on `PATH` that pins `--home "$KIT_HOME"` on every `sh-agent` call the agent makes.
+- A sandbox home for headless agy gets its own `~/.gemini/antigravity-cli/settings.json`, written for the run with the fewest grants the run needs (a `command(<name>)` grant allows every argument of that command) and the scratch clone as its only trusted workspace, and deleted by name with the copied token — never a copy of the real home's file, which approves every tool and trusts real checkouts; a run counts only when its stderr has no "auto-denied" line and its `cli.log` no "invalid allow entry" line.
+- The must-fail control for a change to `context/` runs in a project that does not contain the harness source, never in a clone of this repository, whose own `context/` carries the new text.
+- A headless probe of a working-tree skill passes `--setting-sources project,local`, or first shows the real home has no installed skill of that name: a user-level skill shadows the project link (plan `2026-09-29-dreamer-memory-loop.md` D15).
 
 ## 5. Real-home smoke checks (after any install into a real home)
 

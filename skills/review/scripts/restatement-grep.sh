@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# restatement-grep.sh — every living file that restates a claim.
+#
+# A behaviour change includes the text that describes it; a description that
+# outlives its behaviour reads as a guarantee. This script finds every
+# restatement of a changed claim across the living files of the checkout, so a
+# review's --docs lens reads them before the first round, not one per round.
+#
+# Usage: bash restatement-grep.sh [-i] [--all] [--] <word> [<word> ...]
+#   -i     case-insensitive
+#   --all  a line counts only when it holds every word (default: any word)
+#   --     ends the options; a word may start with `-` (`--append-system-prompt`)
+#          and any token after the first word is a word too
+# Output: path:line: text, one per hit, over the LIVING files: `git ls-files`
+# minus the records (`.agents/docs/{changes,handoffs,reviews,retros}/`,
+# `bugs/BUG-*`, dated `testing/20*` logs, `architecture/DECISIONS.md`) and
+# minus the vendored skills named in skills/VENDORED.md, which are never edited.
+# The testing guide, the skill matrix and the kit preamble ARE living files.
+# Tracked files only: a file created this session is invisible until it is
+# staged. Exit 0 with hits, 1 with none, 2 on usage.
+set -euo pipefail
+ci=""; all=0; words=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -i) [ ${#words[@]} -eq 0 ] && { ci="-i"; shift; continue; } ;;
+    --all) [ ${#words[@]} -eq 0 ] && { all=1; shift; continue; } ;;
+    --) shift; words+=("$@"); break ;;
+  esac
+  words+=("$1"); shift
+done
+[ ${#words[@]} -gt 0 ] || { echo "usage: bash restatement-grep.sh [-i] [--all] [--] <word> [<word> ...]" >&2; exit 2; }
+root=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "restatement-grep: not a git checkout" >&2; exit 2; }
+cd "$root"
+# The living files: everything git tracks except the records and the vendored skills.
+vendored=$( { grep -E '^\| [a-z0-9-]+ \|' skills/VENDORED.md 2>/dev/null || true; } | awk -F'|' '{gsub(/ /,"",$2); print $2}' | grep -v -E '^(Skill)$' | sed 's#^#^skills/#; s#$#/#' )
+mapfile -t files < <(git ls-files -z | tr '\0' '\n' \
+  | grep -v -E '^\.agents/docs/(changes|handoffs|reviews|retros)/|^\.agents/docs/bugs/BUG-|^\.agents/docs/testing/20[0-9][0-9]-|^\.agents/docs/architecture/DECISIONS\.md$' \
+  | { if [ -n "$vendored" ]; then grep -v -E "$(printf '%s\n' "$vendored" | paste -sd'|' -)"; else cat; fi; } || true)
+[ ${#files[@]} -gt 0 ] || exit 1
+hits=0
+if [ "$all" -eq 1 ]; then
+  # Every word on the line: chain one grep per word.
+  while IFS= read -r line; do
+    keep=1
+    for w in "${words[@]}"; do
+      printf '%s\n' "${line#*:*:}" | grep -q $ci -F -- "$w" || { keep=0; break; }
+    done
+    [ "$keep" -eq 1 ] && { printf '%s\n' "$line"; hits=$((hits+1)); }
+  done < <(grep -n $ci -F -- "${words[0]}" "${files[@]}" 2>/dev/null || true)
+else
+  pattern=$(printf '%s\n' "${words[@]}")
+  while IFS= read -r line; do
+    printf '%s\n' "$line"; hits=$((hits+1))
+  done < <(grep -n $ci -F -- "$pattern" "${files[@]}" 2>/dev/null || true)
+fi
+[ "$hits" -gt 0 ] && exit 0 || exit 1

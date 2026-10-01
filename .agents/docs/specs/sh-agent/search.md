@@ -43,7 +43,7 @@ The global file is named "the global search index", never "cross-project index":
 2. `git ls-files -s -z`: path and blob ID of every index entry.
 3. `git status --porcelain=v1 -z --untracked-files=all --no-renames`: modified and untracked paths (a rename is a deletion and an addition), each ID computed from the file's own bytes as a git blob ID (`git hash-object --stdin-paths` misreads names with a trailing CR or a leading quote); deleted paths leave.
 4. Everything derived from content (chunks, records, references) is stored once per blob ID, so a branch switch re-reads only content the index has never seen. Every query joins through the current path-to-blob view, which is what keeps another branch's content out of an answer.
-5. When nothing changed, no write lock is taken; the reconcile costs about 15 ms here. A blob no view references is deleted after 14 days unseen.
+5. When nothing changed, no write lock is taken; the reconcile costs about 15 ms here for the project index. `--global` reconciles every registered checkout's trail before answering (one `git ls-files` and `git status` per checkout, limited to its `.agents/docs`), so its cost grows with the number of registered checkouts and is not the 15 ms figure. A blob no view references is deleted after 14 days unseen.
 
 No watcher, no service, no hook (R3, R8).
 

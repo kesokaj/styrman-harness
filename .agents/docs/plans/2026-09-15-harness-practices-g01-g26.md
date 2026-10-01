@@ -479,11 +479,11 @@ land on the mechanism the previous round fixed, or a fix introduced that round's
 
 #### I-14a — skills/review-standards/SKILL.md
 ```old
-- [ ] Verdict is always "delete"
+- [-] Verdict is always "delete" — superseded by `skills/review-standards/SKILL.md` and the reviewer agent's six criteria (2026-10-01, plan audit-fix TR5)
 ```
 ```new
-- [ ] Leftover debug output and temporary scaffolding added for the change (prints, `console.log`, debug logs).
-- [ ] Verdict is always "delete"
+- [-] Leftover debug output and temporary scaffolding added for the change (prints, `console.log`, debug logs). — superseded by `skills/review-standards/SKILL.md` and the reviewer agent's six criteria (2026-10-01, plan audit-fix TR5)
+- [-] Verdict is always "delete" — superseded by `skills/review-standards/SKILL.md` and the reviewer agent's six criteria (2026-10-01, plan audit-fix TR5)
 ```
 
 #### I-14b — skills/review-standards/SKILL.md
@@ -492,9 +492,9 @@ it reports coverage that does not exist.
 ```
 ```new
 it reports coverage that does not exist.
-- [ ] A write that can fail halfway leaves no partial state; a check-then-act on a file or row is not a TOCTOU race; a fallback does not mask the error it replaces; empty, NaN, Unicode and timezone inputs are handled where the input allows them.
-- [ ] A source change whose generated counterpart (route tree, protobuf, `go generate` output, embedded build) is absent from the diff.
-- [ ] An assertion changed in an existing test traces to a behaviour change in the source diff; a suppression directive, skip, `.only` or lint-config exclusion the diff adds names its rule or condition and a reason other than making the check pass — otherwise it is a finding.
+- [-] A write that can fail halfway leaves no partial state; a check-then-act on a file or row is not a TOCTOU race; a fallback does not mask the error it replaces; empty, NaN, Unicode and timezone inputs are handled where the input allows them. — superseded by `skills/review-standards/SKILL.md` and the reviewer agent's six criteria (2026-10-01, plan audit-fix TR5)
+- [-] A source change whose generated counterpart (route tree, protobuf, `go generate` output, embedded build) is absent from the diff. — superseded by `skills/review-standards/SKILL.md` and the reviewer agent's six criteria (2026-10-01, plan audit-fix TR5)
+- [-] An assertion changed in an existing test traces to a behaviour change in the source diff; a suppression directive, skip, `.only` or lint-config exclusion the diff adds names its rule or condition and a reason other than making the check pass — otherwise it is a finding. — superseded by `skills/review-standards/SKILL.md` and the reviewer agent's six criteria (2026-10-01, plan audit-fix TR5)
 ```
 
 #### I-14c — skills/review-standards/SKILL.md
@@ -503,7 +503,7 @@ are verified as run, not re-litigated line-by-line.
 ```
 ```new
 are verified as run, not re-litigated line-by-line.
-- [ ] Comments, doc-comments, test names and spec rows that name behaviour the diff changed still describe it — the global context's describing-text rule; a stale one is a finding, not a comment request.
+- [-] Comments, doc-comments, test names and spec rows that name behaviour the diff changed still describe it — the global context's describing-text rule; a stale one is a finding, not a comment request. — superseded by `skills/review-standards/SKILL.md` and the reviewer agent's six criteria (2026-10-01, plan audit-fix TR5)
 ```
 
 ### I-15 — suppressions in the language files (G16)
@@ -514,7 +514,7 @@ no sleeps as synchronization — use channels or `testing/synctest`-style fakes.
 ```
 ```new
 no sleeps as synchronization — use channels or `testing/synctest`-style fakes.
-- [ ] `t.Skip` only behind a named prerequisite (`testing.Short()`, a missing binary) with a message; `//nolint:<linter> // <reason>` and `//lint:ignore <check> <reason>`, never bare.
+- [-] `t.Skip` only behind a named prerequisite (`testing.Short()`, a missing binary) with a message; `//nolint:<linter> // <reason>` and `//lint:ignore <check> <reason>`, never bare. — superseded by `skills/review-standards/SKILL.md` and the reviewer agent's six criteria (2026-10-01, plan audit-fix TR5)
 ```
 
 #### I-15b — skills/review-standards/references/typescript-review.md
@@ -523,7 +523,7 @@ cases for exported generics.
 ```
 ```new
 cases for exported generics.
-- [ ] No `it.only` or `describe.only`; `.skip` and `eslint-disable` carry a reason (`-- <reason>`).
+- [-] No `it.only` or `describe.only`; `.skip` and `eslint-disable` carry a reason (`-- <reason>`). — superseded by `skills/review-standards/SKILL.md` and the reviewer agent's six criteria (2026-10-01, plan audit-fix TR5)
 ```
 
 #### I-15c — skills/golang/SKILL.md

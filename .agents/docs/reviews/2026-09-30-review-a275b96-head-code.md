@@ -16,3 +16,7 @@ Candidate finding under verification: a nested message whose bytes are all print
 
 ## Not examined
 Everything not listed above (in progress).
+
+## Stopped
+
+Stopped by operator at 58bf00d (2026-09-30, "version later"); this review never reached a verdict and is void: it covers nothing. The range a275b96..HEAD is owed to the next `/preflight` (handoff 2026-09-30-2206). Marker added 2026-10-01 (plan audit-fix, TR4).

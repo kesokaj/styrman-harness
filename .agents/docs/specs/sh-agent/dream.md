@@ -31,7 +31,7 @@ Status: built 2026-09-30 (plan `plans/2026-09-30-parity-memory-dream.md`). R3's 
    - `proposals/dream/harness/<date>-<project>.md`: harness targets.
    - `proposals/dream/drafts/<date>-<project>-<name>/SKILL.md`: each draft skill with a kebab-case name; an invalid name is listed as dropped.
 
-   One-line fields (title, kind, file, evidence) have line breaks folded. Same-day reruns get `-2`, `-3`. Zero proposals write no file.
+   One-line fields (title, kind, file, evidence) have line breaks folded. Same-day reruns get `-2`, `-3`. A project with zero proposals writes no proposal file, unless a draft skill was written or dropped (an invalid name): then the file carries that note and nothing else.
 6. **Advance** the watermark to the run's start, only after a successful parse and write.
 
 **Known limit:** Claude Code runs with `--setting-sources local` from an empty directory, so a user-level `apiKeyHelper` or other settings-based authentication is not loaded. On such a machine the run fails, logged per project with its stderr kept in `dream-failed/`. A login (`claude` `/login`) works.

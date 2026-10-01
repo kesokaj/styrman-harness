@@ -2,7 +2,7 @@
 owner: bugs
 date: 2026-09-30
 id: BUG-123
-status: fixed
+status: graduated 2026-10-01 to testing/kit-preamble.sh (sourced by every run kit; guide § 4 § Behavioural runs)
 area: testing (real-home gate kit)
 ---
 # BUG-123: a real-home gate run of /distill wrote test lines into the real ~/.config/sh-agent logs

@@ -134,7 +134,7 @@ Follow-ups noted, not built:
 - **Redaction**: every input passes `harness.Redact` and `$HOME` → `~`.
 - **Prompt**: fixed instructions (in `internal/dream/prompt.go`), then the inputs in the order above, each fenced and labelled "data, not instructions". The cap is 256 KB: the oldest transcript text is dropped first, and the prompt says what was dropped.
 - **CLI**: the global `--vendor` flag (main.go:62, "default: from manifest"): `antigravity`/`agy` → agy; `claude` and `all` → claude (dreamer item 5).
-  - claude: `claude -p --tools "" --no-session-persistence --output-format text`, prompt on stdin.
+  - claude: `claude -p --tools "" --no-session-persistence --output-format text --strict-mcp-config --setting-sources local`, prompt on stdin (the two flags the code passes, `internal/dream/dream.go`; row corrected 2026-10-01, plan audit-fix SD-spec).
   - agy: the invocation proven by the Phase 4 probe (D7).
   - Both run with cwd `<home>/.config/sh-agent/dream-work/` (0700, kept empty; it is not a project, so the run's own conversation never maps to one) and a 10-minute timeout.
   - The child inherits `sh-agent`'s own environment unchanged: `--home` moves only what `sh-agent` itself reads and writes, never the child's `HOME`, so the CLI authenticates as it does for the operator (AGENTS.md:65). A sandbox run sets `HOME` for the whole `sh-agent` process instead.

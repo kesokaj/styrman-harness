@@ -82,7 +82,6 @@
 | BUG-120 | 2026-09-30 | skills/dream (claim reversal) | fixed | stale "all Claude Code loads" line survived after native loading was switched off | before calling a claim reversed, grep its key words across living files, not only the setting's name |
 | BUG-121 | 2026-09-30 | internal/search, internal/dream | fixed | `dream --dry-run` created -wal/-shm files and a reader left an empty config dir behind | a read-only or dry-run path gets a before/after directory listing test; cleanup order lives in one deferred function |
 | BUG-122 | 2026-09-30 | process (commit procedure) | fixed | commit ran after the secret scan printed 3 hits because scan and commit were chained with `;` | run the scan in its own call, read it, then commit in a separate call (existing global rule; retro graduation candidate) |
-| BUG-123 | 2026-09-30 | testing (real-home gate kit) | fixed | a real-home gate run of /distill appended test lines to the real ~/.config/sh-agent feedback.jsonl and retros.jsonl | gate runs of skills that write ~/.config/sh-agent run in a sandbox home; the kit lists that dir before and after every real-home batch and reads any change |
 | BUG-124 | 2026-10-01 | search/dream reader | fixed | tool-call JSON in a string-only protobuf sub-message reached the dreamer's prompt | a schemaless decoder tries the nested parse before the text reading; a corpus count is not a structural guarantee, add a unit fixture |
 | BUG-125 | 2026-10-01 | search | fixed | one chunk printed twice across the all-words and any-word rounds | a dedup key names the entity (chunk id), never a derived display value (shifted line) |
 | BUG-126 | 2026-10-01 | dream prompt/proposals | fixed | data strings could forge a `### N.` proposal section or open/close a prompt data block | escape every data string beside a delimiter (labels and summary lines too); test forges each delimiter from each position |
@@ -132,16 +131,17 @@
 | BUG-080 | cmd/sh-agent/main.go (install/update, checkout path) | `context/AGENTS.md` § Hard rules, "When a command has a read-only mode" bullet |
 | BUG-081 | process (review — fix verification against a fresh fixture) | `context/AGENTS.md` § Definition of Done, step 2 ("that test builds the ARRANGEMENT the finding measured" clause) |
 | BUG-082 | tooling (must-fail mutation harness, audit scripts) | `skills/review-standards/SKILL.md` § 2 (mutation checklist item, names BUG-082) |
-| BUG-083 | agents/verifier | `AGENTS.md` § Testing (behavioural-run sentence: "the dispatch text does NOT repeat the changed rule … the result is reported as n of N runs, never \"works\"") |
+| BUG-083 | agents/verifier | `guide.md § 4 § Behavioural runs (n of N, never "works")` |
 | BUG-084 | skills/feedback-log, agents/verifier | `context/AGENTS.md` § Hard rules, "A behaviour change includes the text that DESCRIBES it" bullet ("Two shapes hide best: a value joining a VOCABULARY …") |
-| BUG-087 | process / behavioural runs of agents/*.md | `AGENTS.md` § Testing, "A behavioural or sandbox run proves its setup before its output counts" paragraph |
-| BUG-090 | process / behavioural runs of agents/*.md | `AGENTS.md` § Testing, "A behavioural or sandbox run proves its setup before its output counts" paragraph |
-| BUG-091 | process / sandbox runs of the CLIs | `AGENTS.md` § Testing, "A behavioural or sandbox run proves its setup before its output counts" paragraph |
+| BUG-087 | process / behavioural runs of agents/*.md | `guide.md § 4 § Behavioural runs + testing/kit-preamble.sh (fixture asserts; agy settings written for the run)` |
+| BUG-090 | process / behavioural runs of agents/*.md | `guide.md § 4 § Behavioural runs + testing/kit-preamble.sh (fixture asserts; agy settings written for the run)` |
+| BUG-091 | process / sandbox runs of the CLIs | `guide.md § 4 § Behavioural runs + testing/kit-preamble.sh (fixture asserts; agy settings written for the run)` |
 | BUG-088 | process (research / handoff / issue lists) | `skills/research/SKILL.md` § Step 1: Discovery |
-| BUG-106 | testing (behavioural run kits) | `AGENTS.md` § Testing, "A behavioural or sandbox run proves its setup before its output counts" paragraph, "every fixture clone lives outside every git checkout" bullet |
-| BUG-107 | testing (behavioural run kits) | `AGENTS.md` § Testing, "A behavioural or sandbox run proves its setup before its output counts" paragraph, "when the agent under test can call `sh-agent`, a wrapper first on PATH pins --home" bullet |
+| BUG-106 | testing (behavioural run kits) | `testing/kit-preamble.sh (refuses a clone inside a checkout)` |
+| BUG-107 | testing (behavioural run kits) | `testing/kit-preamble.sh (--home wrapper on PATH; real ~/.config/sh-agent fingerprinted before and after)` |
 | BUG-105 | skills/preflight (release gate verdict) | `skills/preflight/SKILL.md` Step 5 ("Write the verdict line LAST … an item a condition names makes the verdict NO-SHIP whatever the rows above say (BUG-105)") |
 | BUG-109 | internal/harness (release.go update sweep) | `skills/golang/SKILL.md` (no `filepath.Glob` on an operator path) and `skills/bug/SKILL.md` Step 4 (a class fix covers every site) |
 | BUG-110 | internal/harness/report.go (redaction) | project `AGENTS.md` § Rules for working here (needles grow by kind; no leading `\b`) |
 | BUG-111 | skills/VENDORED.md | project `AGENTS.md` § Rules for working here (the pin verified by an upstream diff; an edited copy is a fork) |
 | BUG-112 | internal/harness/apply.go (WriteAtomic) | `skills/review-standards/SKILL.md` § 2 (a source pin for an unobservable order; a consolidation keeps each original's order) |
+| BUG-123 | testing (real-home gate kit) | `testing/kit-preamble.sh` (sourced by every run kit; guide § 4 § Behavioural runs) |

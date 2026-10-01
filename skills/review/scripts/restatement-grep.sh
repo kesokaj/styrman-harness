@@ -52,7 +52,7 @@ if [ "$all" -eq 1 ]; then
   while IFS= read -r line; do
     keep=1
     for w in "${words[@]}"; do
-      printf '%s\n' "${line#*:*:}" | grep -q $ci -F -- "$w" || { keep=0; break; }
+      grep -q $ci -F -- "$w" <<< "${line#*:*:}" || { keep=0; break; }
     done
     [ "$keep" -eq 1 ] && { printf '%s\n' "$line"; hits=$((hits+1)); }
   done < <(grep -nH $ci -F -- "${words[0]}" "${files[@]}" 2>/dev/null || true)

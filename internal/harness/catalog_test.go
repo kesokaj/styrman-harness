@@ -13,7 +13,9 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 )
 
 // The Google skills catalog (plan 2026-10-01-google-skills-catalog): the skills
@@ -345,16 +347,22 @@ func TestCatalogWriteModeNeedsCatalogDir(t *testing.T) {
 	}
 }
 
-// headPipeProblem is the first line of a shell script that pipes into `head`
-// without a guard. Under `set -o pipefail` the producer is killed by SIGPIPE
-// once its output outgrows a pipe, the pipeline's status is 141, and `set -e`
-// ends the script with no message (BUG-155; BUG-138 and BUG-148 are the same
-// family). A producer stops itself instead (`find -quit`, `awk '{…; exit}'`);
-// a line that must keep the pipe ends `|| true`.
-func headPipeProblem(script string) string {
+// earlyExitPipe matches a pipe into a consumer that stops reading before its
+// producer is done: `head`, `grep -q`, `grep -m`, `sed …q`, by name or by path.
+var earlyExitPipe = regexp.MustCompile(`\|\s*(\S*/)?(head\b|grep\s+(-\S+\s+)*-[a-zA-Z]*[qm]|sed\b[^|]*[0-9;]q\b)`)
+
+// earlyExitPipeProblem is the first line of a shell script that pipes into
+// such a consumer without a guard. Under `set -o pipefail` the producer is
+// killed by SIGPIPE once its output outgrows a pipe and the pipeline's status
+// is 141: `set -e` ends the script with no message, and an `||` or an `if`
+// on the pipeline takes the wrong branch (BUG-155, BUG-157; BUG-138 and
+// BUG-148 are the same family). A producer stops itself instead (`find
+// -quit`, `awk '{…; exit}'`), a test reads a here-string or asks git
+// directly; a line that only prints an excerpt ends `|| true`.
+func earlyExitPipeProblem(script string) string {
 	for _, l := range strings.Split(script, "\n") {
 		t := strings.TrimSpace(l)
-		if strings.HasPrefix(t, "#") || !regexp.MustCompile(`\|\s*head\b`).MatchString(t) {
+		if strings.HasPrefix(t, "#") || !earlyExitPipe.MatchString(t) {
 			continue
 		}
 		if !strings.HasSuffix(t, "|| true") {
@@ -364,22 +372,40 @@ func headPipeProblem(script string) string {
 	return ""
 }
 
-// TestScriptsHaveNoBareHeadPipe pins that rule on the harness's own scripts
-// that run under pipefail, and proves the check on both states first.
-func TestScriptsHaveNoBareHeadPipe(t *testing.T) {
-	if got := headPipeProblem("bad=$(find . -print | head -1)\n"); got == "" {
-		t.Fatal("the check passes a bare `| head` in a command substitution")
+// TestScriptsHaveNoEarlyExitPipe pins that rule on the shell scripts the
+// repository tracks that run under pipefail (the skills' scripts and the run
+// kits' preamble), and proves the check on both states first.
+func TestScriptsHaveNoEarlyExitPipe(t *testing.T) {
+	for _, bad := range []string{
+		"bad=$(find . -print | head -1)\n",
+		"git log --format=%h | grep -q -- \"^$sha\" || exit 2\n",
+		"printf '%s\\n' \"$line\" | grep -q $ci -F -- \"$w\" || keep=0\n",
+		"if producer | grep -m1 x; then :; fi\n",
+		"first=$(producer | sed 1q)\n",
+		"first=$(producer | sed -n '1p;q')\n",
+		"bad=$(find . -print | /usr/bin/head -1)\n",
+	} {
+		if earlyExitPipeProblem(bad) == "" {
+			t.Fatalf("the check passes %q", bad)
+		}
 	}
-	if got := headPipeProblem("# never `| head -1`\ngrep x f | head -20 >&2 || true\nbad=$(find . -print -quit)\n"); got != "" {
-		t.Fatalf("the check refuses a guarded or commented line: %q", got)
+	if got := earlyExitPipeProblem("# never `| head -1`\ngrep x f | head -20 >&2 || true\nbad=$(find . -print -quit)\ngrep -q x <<< \"$line\"\nsort f | grep -v x\nprintf x | sed 's/q/z/'\nsed -n 's/^date: //p' f | sort\n"); got != "" {
+		t.Fatalf("the check refuses a guarded, commented or whole-input line: %q", got)
 	}
 	root, err := filepath.Abs("../..")
 	if err != nil {
 		t.Fatal(err)
 	}
-	scripts, err := filepath.Glob(filepath.Join(root, "skills", "*", "scripts", "*.sh"))
-	if err != nil || len(scripts) == 0 {
-		t.Fatalf("no harness script found under skills/*/scripts: %v", err)
+	var scripts []string
+	for _, pat := range []string{"skills/*/scripts/*.sh", ".agents/docs/testing/*.sh"} {
+		m, err := filepath.Glob(filepath.Join(root, filepath.FromSlash(pat)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		scripts = append(scripts, m...)
+	}
+	if len(scripts) < 3 {
+		t.Fatalf("want the two skill scripts and the kit preamble, found %v", scripts)
 	}
 	for _, f := range scripts {
 		b, err := os.ReadFile(f)
@@ -389,8 +415,8 @@ func TestScriptsHaveNoBareHeadPipe(t *testing.T) {
 		if !strings.Contains(string(b), "pipefail") {
 			continue
 		}
-		if l := headPipeProblem(string(b)); l != "" {
-			t.Errorf("%s pipes into head without a guard (BUG-155): %s", filepath.Base(f), l)
+		if l := earlyExitPipeProblem(string(b)); l != "" {
+			t.Errorf("%s pipes into a consumer that exits early, without a guard (BUG-155): %s", filepath.Base(f), l)
 		}
 	}
 }
@@ -921,10 +947,55 @@ func TestRefreshCatalogScript(t *testing.T) {
 	if err := os.Mkdir(roParent, 0o555); err != nil {
 		t.Fatal(err)
 	}
-	if out, err := workRun(filepath.Join(roParent, "dest"), filepath.Join(tmp, "ro-work"), pinA, pinG); err == nil {
+	if os.Getuid() == 0 {
+		t.Log("running as root: a 0555 parent stops nothing, the failing-command case is not exercised")
+	} else if out, err := workRun(filepath.Join(roParent, "dest"), filepath.Join(tmp, "ro-work"), pinA, pinG); err == nil {
 		t.Errorf("a destination that cannot be created: want a failure\n%s", out)
 	} else if !strings.Contains(out, "delete that directory if the value is sensitive") {
 		t.Errorf("a run stopped by a failing command after the clone does not say an override's value stays in the work directory:\n%s", out)
+	}
+	// And when a signal ends it: TERM while the script waits for the writer
+	// (a stub `go` that says it started and then sleeps). The whole process
+	// group is signalled, as a terminal does, so the stub dies and the
+	// script's TERM trap exits 143 through the note.
+	{
+		stub := filepath.Join(tmp, "stub-bin")
+		started := filepath.Join(tmp, "stub-go-started")
+		if err := os.MkdirAll(stub, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(stub, "go"), []byte("#!/bin/sh\n: > '"+started+"'\nexec sleep 120\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		cmd := exec.Command("bash", script, "--dest", filepath.Join(tmp, "sig-dest"), "--work", filepath.Join(tmp, "sig-work"), pinA, pinG)
+		cmd.Dir = tmp
+		cmd.Env = fixtureEnv("HOME="+fakeHome, "PATH="+stub+string(os.PathListSeparator)+os.Getenv("PATH"), "CATALOG_AGENTS_CLI_REPO="+agents, "CATALOG_GOOGLE_SKILLS_REPO="+gskills, "CATALOG_DIR=", "CATALOG_WRITE=")
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+		var buf bytes.Buffer
+		cmd.Stdout, cmd.Stderr = &buf, &buf
+		if err := cmd.Start(); err != nil {
+			t.Fatal(err)
+		}
+		deadline := time.Now().Add(60 * time.Second)
+		for {
+			if _, err := os.Stat(started); err == nil {
+				break
+			}
+			if time.Now().After(deadline) {
+				syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+				cmd.Wait()
+				t.Fatalf("the script never reached the writer:\n%s", buf.String())
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		if err := syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM); err != nil {
+			t.Fatal(err)
+		}
+		err := cmd.Wait()
+		var ee *exec.ExitError
+		if !errors.As(err, &ee) || ee.ExitCode() != 143 || !strings.Contains(buf.String(), "delete that directory if the value is sensitive") {
+			t.Errorf("a run ended by TERM after the clone: want exit 143 and the note that an override's value stays in the work directory, got %v\n%s", err, buf.String())
+		}
 	}
 	if out, err := workRun(freshDest, freshWork, pinA, pinG); err != nil {
 		t.Errorf("the corrected run on the same --work was refused: %v\n%s", err, out)
@@ -968,6 +1039,27 @@ func TestRefreshCatalogScript(t *testing.T) {
 		out, err := cmd.CombinedOutput()
 		if err == nil || !strings.Contains(string(out), "cannot clone the agents-cli source") || strings.Contains(string(out), "SECRETPATH") || strings.Contains(string(out), "fatal:") {
 			t.Errorf("a source that cannot be cloned: want it named by role, and neither its value nor git's own message in the output, got err %v\n%s", err, out)
+		}
+	}
+	// git has channels that no redirect of its output covers: a trace file
+	// named by the caller's environment records the clone's arguments. The
+	// script turns tracing off for its own git calls (security review of
+	// 7b3e969..a224329).
+	{
+		trace := filepath.Join(tmp, "git-trace.log")
+		trace2 := filepath.Join(tmp, "git-trace2.log")
+		cmd := exec.Command("bash", script, "--dest", filepath.Join(tmp, "dest-t"), "--work", filepath.Join(tmp, "work-t"), pinA, pinG)
+		cmd.Dir = tmp
+		secretPath := filepath.Join(tmp, "no-such-SECRETTRACE-repository")
+		cmd.Env = fixtureEnv("HOME="+fakeHome, "CATALOG_AGENTS_CLI_REPO="+secretPath, "CATALOG_GOOGLE_SKILLS_REPO="+gskills, "CATALOG_DIR=", "CATALOG_WRITE=", "GIT_TRACE="+trace, "GIT_TRACE2_EVENT="+trace2)
+		out, err := cmd.CombinedOutput()
+		if err == nil || !strings.Contains(string(out), "cannot clone the agents-cli source") {
+			t.Errorf("a traced run with a source that cannot be cloned: want the role-named refusal, got err %v\n%s", err, out)
+		}
+		for _, f := range []string{trace, trace2} {
+			if b, err := os.ReadFile(f); err == nil && strings.Contains(string(b), "SECRETTRACE") {
+				t.Errorf("%s holds the override's value: the script's git calls ran with the caller's tracing on", filepath.Base(f))
+			}
 		}
 	}
 	// The same on the path every later refresh takes: a work directory that

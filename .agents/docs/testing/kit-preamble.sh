@@ -36,7 +36,10 @@ if [ -n "${KIT_ASSERT_GREP:-}" ]; then
   done <<< "$KIT_ASSERT_GREP"
 fi
 if [ -n "${KIT_ASSERT_COMMIT:-}" ]; then
-  git -C "$KIT_CLONE" log --format=%h | grep -q -- "^${KIT_ASSERT_COMMIT}" || { echo "kit: commit $KIT_ASSERT_COMMIT not in the clone's log" >&2; exit 2; }
+  # Asked of git directly, never `git log | grep -q`: under pipefail grep's
+  # early exit kills git log on a long history and the status is 141, which
+  # refused a commit that was there (BUG-157).
+  git -C "$KIT_CLONE" merge-base --is-ancestor "$KIT_ASSERT_COMMIT" HEAD 2>/dev/null || { echo "kit: commit $KIT_ASSERT_COMMIT not in the clone's log" >&2; exit 2; }
 fi
 # The real ~/.config/sh-agent before and after: a run that writes there fails
 # the kit. The fingerprint is `ls -lR` (names, sizes, mtimes), so an appended

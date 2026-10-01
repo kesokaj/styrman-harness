@@ -24,3 +24,6 @@ A value that must never be shown is tracked by where it FLOWS, not by which call
 
 ## Related
 BUG-155 (same script, same review), BUG-110 (redaction by kind). Other records naming the script: BUG-146, BUG-147, BUG-148, BUG-150.
+
+## Addendum 2026-10-01
+The security read of 7b3e969..a224329 (finding F3, low) found channels no redirect covers: a git trace target named by the caller's environment or config (`GIT_TRACE`, `GIT_TRACE2_EVENT`: reproduced, the override's value was written into both files), git's terminal credential prompt (shows the URL; not probed), the process list while git runs, and `bash -x`. Fix: the script exports `GIT_TERMINAL_PROMPT=0` and sets every `GIT_TRACE*` variable and the three `GIT_TRACE2*` targets to 0 for its own calls; its header now says the value is in the process list while git runs and that `bash -x` prints it, so a token belongs in a credential helper. Test: `TestRefreshCatalogScript` runs with `GIT_TRACE` and `GIT_TRACE2_EVENT` pointing at files and an override holding a marker; both files held the marker before the fix. Not closed by code: the process list and `bash -x`, stated in the header. Lesson for Prevention: "where it flows" includes git's own side channels (trace, prompt), not only its stdout and stderr.

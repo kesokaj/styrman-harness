@@ -39,19 +39,31 @@
 # variables replace the source repositories, for the test's local fixtures:
 # CATALOG_AGENTS_CLI_REPO and CATALOG_GOOGLE_SKILLS_REPO, each an https:// URL
 # (with no user information or query string in it) or an absolute path,
-# nothing else. No message shows such a value, and the manifest records the
-# upstream repositories' names, never an override. git itself keeps the value
-# in the work clones, and a run that used an override says so when it ends,
-# whether it succeeded or failed. Relative --dest and --work are resolved
+# nothing else. No message of the script shows such a value, git's own output,
+# tracing and terminal prompt are off for its calls, and the manifest records
+# the upstream repositories' names, never an override. git itself keeps the
+# value in the work clones, and a run that used an override says so when it
+# ends, whether it succeeded or failed. While git runs, the value is one of
+# its arguments, which other users of the machine can read in the process
+# list, and `bash -x` prints it: a token belongs in a credential helper,
+# never in the URL. Relative --dest and --work are resolved
 # against the caller's directory.
 set -euo pipefail
+
+# git has channels that no redirect of its output covers: a trace target (from
+# the caller's environment or git config) records a clone's arguments, and the
+# credential prompt opens the terminal and shows the URL. Both are off for
+# every git call below; a credential belongs in a helper.
+export GIT_TERMINAL_PROMPT=0 GIT_TRACE=0 GIT_TRACE2=0 GIT_TRACE2_EVENT=0 GIT_TRACE2_PERF=0 GIT_CURL_VERBOSE=0
+while IFS= read -r v; do export "$v=0"; done < <(compgen -e | grep '^GIT_TRACE' || true)
 
 usage() { sed -n '2,6p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; }
 fail() { echo "refresh-catalog: $*" >&2; exit 1; }
 # git keeps a clone's source in its config, FETCH_HEAD and reflogs: with an
 # override, that is the override's value, on disk under the work directory
 # from the first clone or fetch on. The run says so when it ends, however it
-# ends: done, refused through fail, or stopped by a command under set -e.
+# ends: done, refused through fail, stopped by a command under set -e, or
+# ended by INT or TERM (the two traps below exit through the EXIT trap).
 on_disk=""
 override_note() {
   local rc=$?

@@ -643,3 +643,35 @@ func TestNoDuplicateHitAcrossRounds(t *testing.T) {
 		t.Errorf("header counts the duplicate:\n%s", out)
 	}
 }
+
+// A directory holding a `.sh-agent-noindex` file is left out of the index,
+// files below it included, tracked or not: vendored data a project
+// carries (the harness's Google skills catalog) would otherwise crowd the
+// project's own files out of the hits (recall 0.633 -> 0.596 on the fixture,
+// 2026-10-01). Files beside the directory stay in.
+func TestNoIndexMarkerSkipsTheDirectory(t *testing.T) {
+	root := newRepo(t)
+	home := t.TempDir()
+	writeFile(t, root, "docs/own.md", "the ocelot lives here\n")
+	writeFile(t, root, "vendor/data/.sh-agent-noindex", "")
+	writeFile(t, root, "vendor/data/a/entry.md", "an ocelot in vendored data\n")
+	writeFile(t, root, "vendor/beside.md", "an ocelot beside the marked directory\n")
+	commitAll(t, root, "add")
+	writeFile(t, root, "vendor/data/untracked.md", "an untracked ocelot in vendored data\n")
+	out := mustSearch(t, Options{Dir: root, Home: home, Words: []string{"ocelot"}})
+	for _, want := range []string{"docs/own.md:", "vendor/beside.md:"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("a file outside the marked directory is missing (%s):\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "vendor/data/") {
+		t.Errorf("the marked directory is in the index:\n%s", out)
+	}
+	// A marker that is not committed yet counts too, and a reconcile drops
+	// what was indexed before it appeared.
+	writeFile(t, root, "docs/.sh-agent-noindex", "")
+	out = mustSearch(t, Options{Dir: root, Home: home, Words: []string{"ocelot"}})
+	if strings.Contains(out, "docs/own.md") || !strings.Contains(out, "vendor/beside.md:") {
+		t.Errorf("an uncommitted marker did not take docs/ out of the index:\n%s", out)
+	}
+}

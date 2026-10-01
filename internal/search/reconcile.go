@@ -82,6 +82,9 @@ func docsRootOf(root string) string {
 // reads is indexed with the edit until `index --rebuild` (a known limit; the
 // operator's choice at the security review's cap, plan D35).
 // prefix limits it to one directory.
+// noIndexMarker names the file that takes its directory out of the index.
+const noIndexMarker = ".sh-agent-noindex"
+
 func gitView(root, prefix string) ([]entry, error) {
 	under := func(p string) bool { return prefix == "" || strings.HasPrefix(p, prefix) }
 	// Every read goes through an os.Root: a path that leaves the checkout
@@ -154,10 +157,31 @@ func gitView(root, prefix string) ([]entry, error) {
 		}
 		view[p] = entry{path: p, oid: blobID(data), state: state}
 	}
+	// A directory holding a noIndexMarker is data the project carries, not its
+	// own text: nothing below it is indexed. The marker counts in every state
+	// git reports it in (committed, staged, not yet added): the first search
+	// after the marker is written must already leave the directory out.
+	var marked []string
+	for p := range view {
+		if path.Base(p) == noIndexMarker {
+			marked = append(marked, path.Dir(p)+"/")
+		}
+	}
+	noIndex := func(p string) bool {
+		for _, dir := range marked {
+			if strings.HasPrefix(p, dir) {
+				return true
+			}
+		}
+		return false
+	}
 	entries := make([]entry, 0, len(view))
 	for _, p := range order {
 		if harness.SecretShaped(path.Base(p)) {
 			continue // never indexed, even untracked (security review, finding 6)
+		}
+		if noIndex(p) {
+			continue
 		}
 		if e, ok := view[p]; ok {
 			entries = append(entries, e)

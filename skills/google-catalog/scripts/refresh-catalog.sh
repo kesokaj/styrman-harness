@@ -115,6 +115,9 @@ find "$build" -type d -exec chmod 755 {} +
 cp "$work/agents-cli/LICENSE" "$build/LICENSE-agents-cli"
 cp "$work/google-skills/LICENSE" "$build/LICENSE-google-skills"
 chmod 644 "$build/LICENSE-agents-cli" "$build/LICENSE-google-skills"
+# The catalog is data, not the checkout's own text: `sh-agent search` leaves a
+# directory holding this marker out of its index.
+: > "$build/.sh-agent-noindex"
 
 # INDEX.md and CHECKSUMS, by the Go tests in write mode over the build; an
 # entry without frontmatter name and description fails here, before the swap.

@@ -28,7 +28,7 @@ import (
 
 // catalogHarnessFiles are written by the harness, not vendored: CHECKSUMS does
 // not cover them.
-var catalogHarnessFiles = map[string]bool{"INDEX.md": true, "MANIFEST.md": true, "CHECKSUMS": true}
+var catalogHarnessFiles = map[string]bool{"INDEX.md": true, "MANIFEST.md": true, "CHECKSUMS": true, ".sh-agent-noindex": true}
 
 const catalogIndexHeader = "# Google skills catalog — index\n\nOne line per entry: the directory name under `catalog/`, then the start of its description. Grep this file for the product or task words, then read `catalog/<name>/SKILL.md`.\n\n"
 
@@ -445,6 +445,9 @@ func TestRefreshCatalogScript(t *testing.T) {
 	}
 	if info, err := os.Stat(filepath.Join(dest, "gamma", "scripts", "run.sh")); err != nil || info.Mode()&0o111 != 0 {
 		t.Errorf("the executable bit was not cleared: %v %v", info, err)
+	}
+	if _, err := os.Stat(filepath.Join(dest, ".sh-agent-noindex")); err != nil {
+		t.Errorf("the search marker was not written: %v", err)
 	}
 	if !strings.Contains(out, "next: git add") {
 		t.Errorf("the script does not say what to run next:\n%s", out)

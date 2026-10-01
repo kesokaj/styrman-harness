@@ -5,7 +5,9 @@ Skills in the first table are vendored verbatim from the open skills.sh ecosyste
 send code or project data to an external service (a "register", "publish" or telemetry
 step); such a step is scoped to public or OSS work only, or the skill is not kept (BUG-022). Update by re-fetching from the pinned source and bumping the entry
 here; never edit vendored content in place (fork it into a differently-named skill
-instead). The second table lists the one fork that predates that rule.
+instead). The second table lists the one fork that predates that rule. The third table lists
+vendored catalogs: a subtree of third-party skills inside a harness skill, reached through that
+skill and never installed as skills themselves.
 
 | Skill | Source | Pin | License | Vendored | Update via |
 |-------|--------|-----|---------|----------|------------|
@@ -37,6 +39,23 @@ It also asks that a copy of the licence travel with the work: this repository is
 published, and if that changes, add a `LICENSE` file for `gke-basics` before it does.
 
 Notes:
+
+## Vendored catalogs
+
+| Catalog | Source | Pin | License | Vendored | Update via |
+|---------|--------|-----|---------|----------|------------|
+| google-catalog/catalog | github.com/google/agents-cli (`skills/`, `extensions/langchain/template/.agents/skills`) and github.com/google/skills (`skills/cloud`, `skills/developers`); 141 entries, per-source rows in `google-catalog/catalog/MANIFEST.md` | 2c39459 and d5d9052 | Apache-2.0 | 2026-10-01 | `bash skills/google-catalog/scripts/refresh-catalog.sh <agents-cli pin> <google-skills pin>`, then `git add skills/google-catalog && go test ./...` |
+
+A catalog is vendored by its refresh script, never by hand and never by `npx skills add`: the
+script copies the entries byte for byte at the two pins (file modes aside: no executable bit),
+refuses what the harness cannot carry (a symlink, a Go file, a name in two source sets, an entry
+without frontmatter) until the operator passes `--exclude <entry>`, and writes `INDEX.md` and
+`CHECKSUMS` through the Go tests, which then pin the tree both ways (`TestCatalogMatchesChecksums`,
+`TestCatalogIndexMatchesEntries`, `TestCatalogFilesAreCarryable`). Installed as global skills
+these 141 push the harness's own skills out of both CLIs' skill lists
+(`.agents/docs/plans/2026-10-01-research-google-skills-catalog.md`), so they stay behind the
+`google-catalog` router. A refresh's diff gets a security review before it is committed.
+
 - `grill-me` (a launcher for `grilling`) and `skill-repair` (repairs a `skills`-CLI manifest the
   harness does not use) were pruned 2026-09-03 after the sandbox matrix: `/grilling` does the same
   job on both CLIs, and `sh-agent adopt` replaced the manifest repair.

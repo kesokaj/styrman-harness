@@ -106,3 +106,55 @@ func TestRestatementGrepRunsOutsideHarness(t *testing.T) {
 		}
 	})
 }
+
+// A VENDORED.md row whose first cell is a path — a vendored catalog inside a
+// harness skill — excludes that subtree from the living files, and only it:
+// the skill's own SKILL.md beside the catalog stays in.
+func TestRestatementGrepSkipsVendoredCatalog(t *testing.T) {
+	for _, tool := range []string{"bash", "git"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			t.Skipf("%s not on PATH", tool)
+		}
+	}
+	script, err := filepath.Abs(filepath.Join("..", "..", "skills", "review", "scripts", "restatement-grep.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	write := func(rel, body string) {
+		t.Helper()
+		p := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("skills/VENDORED.md", "| Catalog | Source | Pin |\n|---|---|---|\n| x/catalog | github.com/o/r | abc1234 |\n")
+	write("skills/x/catalog/e/SKILL.md", "an entry that says zebraword\n")
+	write("skills/x/SKILL.md", "the router says zebraword too\n")
+	write("skills/y/SKILL.md", "a living skill that says zebraword\n")
+	for _, args := range [][]string{{"init", "-q"}, {"add", "-A"}, {"-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-qm", "init"}} {
+		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	cmd := exec.Command("bash", script, "--", "zebraword")
+	cmd.Dir = dir
+	var out, errb bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &out, &errb
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("script: %v\nstderr: %s", err, errb.String())
+	}
+	got := out.String()
+	for _, want := range []string{"skills/x/SKILL.md:1:", "skills/y/SKILL.md:1:"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("a living file is missing from the hits (%s):\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "skills/x/catalog/") {
+		t.Errorf("the vendored catalog is in the hits:\n%s", got)
+	}
+}

@@ -43,6 +43,9 @@ func TestSkillLinksResolve(t *testing.T) {
 		if rel == "VENDORED.md" {
 			return nil // the manifest names other skills' files by design
 		}
+		if isVendoredPath(vendored, filepath.ToSlash(rel)) && !forks[skill] {
+			return nil // vendored verbatim, a whole skill or a subtree: upstream's links are upstream's
+		}
 		if forks[skill] {
 			// A fork kept under its upstream name: only its SKILL.md is ours to check;
 			// references/ and assets/ are upstream's text, dangling links included.

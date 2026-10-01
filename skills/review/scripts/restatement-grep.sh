@@ -18,7 +18,8 @@
 # Output: path:line: text, one per hit (`-H`: the path even for a single file), over the LIVING files: `git ls-files`
 # minus the records (`.agents/docs/{changes,handoffs,reviews,retros}/`,
 # `bugs/BUG-*`, dated `testing/20*` logs, `architecture/DECISIONS.md`) and
-# minus the vendored skills named in skills/VENDORED.md, which are never edited.
+# minus the vendored skills and vendored catalogs named in skills/VENDORED.md (a
+# first cell may be a path, `google-catalog/catalog`), which are never edited.
 # The testing guide, the skill matrix and the kit preamble ARE living files.
 # Tracked files only: a file created this session is invisible until it is
 # staged. Exit 0 with hits, 1 with none, 2 on usage.
@@ -40,7 +41,7 @@ cd "$root"
 # final grep exits 1, and under pipefail the substitution would take the script
 # down with it — exit 1, indistinguishable from "no hits", in every project
 # that is not the harness (BUG-138).
-vendored=$( { { grep -E '^\| [a-z0-9-]+ \|' skills/VENDORED.md 2>/dev/null || true; } | awk -F'|' '{gsub(/ /,"",$2); print $2}' | grep -v -E '^(Skill)$' | sed 's#^#^skills/#; s#$#/#'; } || true )
+vendored=$( { { grep -E '^\| [a-z0-9/-]+ \|' skills/VENDORED.md 2>/dev/null || true; } | awk -F'|' '{gsub(/ /,"",$2); print $2}' | grep -v -E '^(Skill)$' | sed 's#^#^skills/#; s#$#/#'; } || true )
 mapfile -t files < <(git ls-files -z | tr '\0' '\n' \
   | grep -v -E '^\.agents/docs/(changes|handoffs|reviews|retros)/|^\.agents/docs/bugs/BUG-|^\.agents/docs/testing/20[0-9][0-9]-|^\.agents/docs/architecture/DECISIONS\.md$' \
   | { if [ -n "$vendored" ]; then grep -v -E "$(printf '%s\n' "$vendored" | paste -sd'|' -)"; else cat; fi; } || true)

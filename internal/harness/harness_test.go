@@ -1006,6 +1006,19 @@ func vendoredSkills(t *testing.T, repo string) map[string]bool {
 	return out
 }
 
+// isVendoredPath reports whether rel, a slash-separated path relative to
+// skills/, is a vendored key of VENDORED.md or lies under one: a skill
+// vendored whole (`find-skills`) or a vendored subtree inside a harness skill
+// (`google-catalog/catalog`), whose prose is upstream's and is not checked.
+func isVendoredPath(vendored map[string]bool, rel string) bool {
+	for key := range vendored {
+		if rel == key || strings.HasPrefix(rel, key+"/") {
+			return true
+		}
+	}
+	return false
+}
+
 // TestNoTmpInHarnessProse guards the scratch rule at the source: the
 // context, the agents, the skills — their SKILL.md AND their references,
 // where the rule drifted unseen (BUG-019) — the commands, the rules, and the
@@ -1035,6 +1048,12 @@ func TestNoTmpInHarnessProse(t *testing.T) {
 	}
 	for _, root := range roots {
 		err := filepath.WalkDir(filepath.Join(repo, root), func(path string, d fs.DirEntry, err error) error {
+			if err == nil && d.IsDir() {
+				// A vendored subtree inside a harness skill is upstream's text.
+				if rel, rerr := filepath.Rel(filepath.Join(repo, "skills"), path); rerr == nil && isVendoredPath(vendored, filepath.ToSlash(rel)) {
+					return filepath.SkipDir
+				}
+			}
 			if err != nil || d.IsDir() || !strings.HasSuffix(path, ".md") {
 				return err
 			}

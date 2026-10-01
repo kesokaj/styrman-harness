@@ -57,8 +57,10 @@ fi
 # The real ~/.config/sh-agent before and after: a run that changes a name or
 # a file's contents there fails the kit. The fingerprint covers names and
 # contents, so an appended line to an existing file changes it; a names-only
-# listing did not (docs-lens review 2026-10-01). It does not see a rewrite
-# with the same bytes, a `touch` or a `chmod`.
+# listing did not (docs-lens review 2026-10-01). It does not see: a rewrite
+# with the same bytes, a `touch` or a `chmod`; a file made and removed again
+# before the run ends; anything inside a directory it cannot list, or inside
+# a subdirectory that is itself a symlink.
 # The real home is remembered here: a kit overrides HOME for the CLI it runs,
 # and the exit check must still look at the operator's own directory.
 kit_real_config="$HOME/.config/sh-agent"
@@ -69,10 +71,12 @@ kit_real_config="$HOME/.config/sh-agent"
 # fingerprint was the same empty value before and after, proving nothing.
 kit_list_real_config() { { ls -la "$kit_real_config/" 2>/dev/null || true; } | sed 's/^/  /'; }
 kit_fingerprint() {
-  # -L: the directory, or a file in it, may be a symlink (a dotfiles setup);
-  # find would otherwise stop at the link and never read what it points at.
-  { find -L "$kit_real_config" -print 2>/dev/null || true
-    find -L "$kit_real_config" -type f -exec cksum {} + 2>/dev/null || true; } | LC_ALL=C sort | cksum | cut -d' ' -f1
+  # -H: the directory itself may be a symlink (a dotfiles setup), and find
+  # would otherwise stop at it. Links inside are listed by name, never
+  # walked (-L would follow one to `/` and read the whole machine); a link
+  # to a file is read through by cksum, so its target's content counts.
+  { find -H "$kit_real_config" -print 2>/dev/null || true
+    find -H "$kit_real_config" \( -type f -o -type l \) -exec cksum {} + 2>/dev/null || true; } | LC_ALL=C sort | cksum | cut -d' ' -f1
 }
 echo "kit: real $kit_real_config before the run:"; kit_list_real_config
 kit_before=$(kit_fingerprint)

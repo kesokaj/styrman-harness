@@ -443,8 +443,11 @@ func pipeStages(line string) []string {
 // asks git directly; a line that only prints an excerpt ends `|| true`.
 //
 // It is a static check with limits, in the refusing direction and the
-// passing one: a `case` label spelled like a consumer (`a|head)`) is refused,
-// and a consumer reached through a function or a variable is not seen.
+// passing one: a `case` label spelled like a consumer (`a|head)`) is refused;
+// a `sed` stage is refused when a `q` or `Q` follows anything but a lowercase
+// letter, which takes in some harmless ones (`sed 's|a|b|' FAQ`, a label
+// `:q`, `s/x/"Q"/`): restructure such a line, or end it `|| true`; and a
+// consumer reached through a function or a variable is not seen.
 func earlyExitPipeProblem(script string) string {
 	// One logical line: a backslash continuation, and a line ending in a
 	// pipe, continue on the next.
@@ -1387,6 +1390,32 @@ func TestRefreshCatalogScript(t *testing.T) {
 		}
 	}
 	git(gskills, "tag", "-d", "20261001")
+	// A full id is no protection by itself: `git checkout --detach <id>`
+	// takes a local branch of that exact name first, and a clone makes the
+	// source's default branch local. A source whose default branch is named
+	// like the pin, and points elsewhere, must not choose the content
+	// (security review of 5bbd789..42670ff).
+	{
+		was := git(gskills, "symbolic-ref", "--short", "HEAD")
+		put(gskills, map[string]string{"skills/cloud/gamma/PLANTED.md": "content of another commit\n"})
+		other := commit(gskills)
+		git(gskills, "branch", pinG, other)
+		git(gskills, "symbolic-ref", "HEAD", "refs/heads/"+pinG)
+		git(gskills, "reset", "-q", "--hard", other)
+		bDest, bWork := filepath.Join(tmp, "branch-dest"), filepath.Join(tmp, "branch-work")
+		out, err := workRun(bDest, bWork, pinA, pinG)
+		if _, statErr := os.Stat(filepath.Join(bDest, "gamma", "PLANTED.md")); statErr == nil {
+			t.Errorf("a default branch named like the pin chose the content: the other commit's file was vendored (err %v)\n%s", err, out)
+		} else if err != nil {
+			t.Errorf("the pinned commit is in the source and must be vendored whatever a branch is called: %v\n%s", err, out)
+		} else if _, statErr := os.Stat(filepath.Join(bDest, "gamma", "SKILL.md")); statErr != nil {
+			t.Errorf("the run vendored nothing: %v\n%s", statErr, out)
+		}
+		git(gskills, "symbolic-ref", "HEAD", "refs/heads/"+was)
+		git(gskills, "branch", "-D", pinG)
+		git(gskills, "reset", "-q", "--hard", pinG)
+		git(gskills, "clean", "-qfd")
+	}
 	refuse("no frontmatter", "bad", map[string]string{"skills/cloud/bad/SKILL.md": "no frontmatter here\n"}, nil, "bad")
 	refuse("collision", "alpha", map[string]string{"skills/cloud/alpha/SKILL.md": skill("alpha", "description: a second alpha\n")}, nil, "")
 	refuse("symlink", "gamma", nil, func() {
@@ -1615,6 +1644,16 @@ func TestKitPreambleAssertsCommit(t *testing.T) {
 	}
 	if code, out := runThen("", `: > "$HOME/.config/sh-agent/through-the-link"`); code != 1 || !strings.Contains(out, "changed during the run") {
 		t.Errorf("a write through a symlinked config directory: want exit 1 and the kit's FAIL line, got exit %d\n%s", code, out)
+	}
+	// A new empty directory through the link: only the names pass sees it
+	// (sh-agent itself makes `proposals/` and `feedback/` there).
+	if code, out := runThen("", `mkdir "$HOME/.config/sh-agent/made-through-the-link"`); code != 1 || !strings.Contains(out, "changed during the run") {
+		t.Errorf("a new directory through a symlinked config directory: want exit 1 and the kit's FAIL line, got exit %d\n%s", code, out)
+	}
+	// A new symlink that loops back to the directory is a new name too, and
+	// following it must neither hide it nor run away.
+	if code, out := runThen("", `ln -s . "$HOME/.config/sh-agent/loop"`); code != 1 || !strings.Contains(out, "changed during the run") {
+		t.Errorf("a new looping symlink in the real config: want exit 1 and the kit's FAIL line, got exit %d\n%s", code, out)
 	}
 	// And a file in it that is itself a symlink: its target's content counts.
 	target := filepath.Join(tmp, "dotfiles-feedback.jsonl")

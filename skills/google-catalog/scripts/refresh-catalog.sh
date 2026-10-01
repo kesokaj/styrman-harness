@@ -172,7 +172,8 @@ pin_g=$2
 # A pin is the commit's full id. git checks a tag or branch named like a
 # shorter one out before the abbreviated id, and nothing after the checkout
 # can tell a commit that was made to share the prefix: whoever names refs at
-# the source would choose what a short pin vendors.
+# the source would choose what a short pin vendors. (A branch named like the
+# full id is handled at the checkout.)
 for pin in "$pin_a" "$pin_g"; do
   case "$pin" in *[!0-9a-f]*) pin_shape=bad ;; *) pin_shape=ok ;; esac
   if [ "$pin_shape" = bad ] || [ "${#pin}" -ne 40 ]; then
@@ -231,7 +232,12 @@ fetch() { # <clone name> <url> <pin>: a full clone, reused; checked out at the p
     git clone -q -- "$2" "$dir" >/dev/null 2>&1 ||
       fail "cannot clone the $1 source (git's own message is not shown: it repeats the source's value; run the git clone yourself to see it)"
   fi
-  git -C "$dir" -c advice.detachedHead=false checkout -q --detach "$3" 2>/dev/null || fail "pin $3 does not resolve in the $1 source"
+  # `<pin>^{commit}`, never the bare id: checkout takes a local branch of
+  # that exact name first, and a clone makes the source's default branch
+  # local. Then the commit checked out is compared with the pin, whatever
+  # the checkout did.
+  git -C "$dir" -c advice.detachedHead=false checkout -q --detach "$3^{commit}" 2>/dev/null || fail "pin $3 does not resolve in the $1 source"
+  [ "$(git -C "$dir" rev-parse HEAD)" = "$3" ] || fail "pin $3 did not check out as itself in the $1 source"
 }
 if [ "$url_a" != "$upstream_a" ] || [ "$url_g" != "$upstream_g" ]; then on_disk=1; fi
 fetch agents-cli "$url_a" "$pin_a"

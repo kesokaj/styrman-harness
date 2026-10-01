@@ -2,7 +2,7 @@
 owner: bugs
 date: 2026-10-01
 id: BUG-140
-status: open
+status: graduated 2026-10-01 to testing/guide.md § 4 § Behavioural runs (a kit separates the run from the check); cause of the lost lines unknown
 area: testing (skill-matrix run kits)
 ---
 # BUG-140: three of five matrix kit processes ended without their result line or EXIT-trap listing
@@ -22,6 +22,9 @@ Not fixed. Mitigation: check cells re-run by hand in the surviving clones, recor
 ## Prevention
 1. A run kit separates RUN from CHECK: the check is a second script (or a `--check-only` mode) that re-reads the clone and transcript and can be re-run after the driver finishes; a result line is derived from state on disk, not from the process that produced it.
 2. `grep ... | wc -l || echo 0` under `pipefail` prints two zeros (grep's exit 1 fails the pipeline, so the `||` also fires; the kit's `cloud_cmds` field shows it). Use `grep -c ... || true` for a count.
+
+## Graduated
+2026-10-01: the prevention rule is in `.agents/docs/testing/guide.md` § 4 § Behavioural runs (a kit separates the RUN from the CHECK; the check re-reads the saved output and the clone and can be run again; counts are `grep -c … || true`), written 2026-10-01. The cause of the three lost result lines is still unknown (status stays open). The rule was used twice on 2026-10-01 to re-judge a row from its saved record when a kit's verdict script failed.
 
 ## Related
 BUG-107, BUG-123 (kit-preamble); `testing/skill-matrix.md` § Procedure step 3. Cause open: next time, capture the exit status of each `xargs` child and `dmesg`/OOM evidence before re-running.

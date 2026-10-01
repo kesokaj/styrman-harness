@@ -85,20 +85,21 @@ const noIndexMarker = ".sh-agent-noindex"
 // again when its blob is indexed: a file edited and restored between the two
 // reads is indexed with the edit until `index --rebuild` (a known limit; the
 // operator's choice at the security review's cap, plan D35).
-// prefix limits it to one directory.
-func gitView(root, prefix string) ([]entry, error) {
+// prefix limits it to one directory. The second result is the directories a
+// marker takes out, from the whole checkout whatever the prefix.
+func gitView(root, prefix string) ([]entry, []string, error) {
 	under := func(p string) bool { return prefix == "" || strings.HasPrefix(p, prefix) }
 	// Every read goes through an os.Root: a path that leaves the checkout
 	// through `..` or a symlinked directory is refused by the standard
 	// library, whatever git lists (security check of the v1.13.0 gate fixes).
 	fsRoot, err := os.OpenRoot(root)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer fsRoot.Close()
 	out, err := git(root, nil, "ls-files", "-s", "-z")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var order []string
 	view := map[string]entry{}
@@ -130,7 +131,7 @@ func gitView(root, prefix string) ([]entry, error) {
 	// checkout (release gate security review, v1.13.0).
 	out, err = git(root, nil, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--no-renames")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	recs := strings.Split(string(out), "\x00")
 	for i := 0; i < len(recs); i++ {
@@ -205,7 +206,18 @@ func gitView(root, prefix string) ([]entry, error) {
 			delete(view, p) // an unmerged path appears once
 		}
 	}
-	return entries, nil
+	// The marked directories go back to the caller, sorted, the root as
+	// "./": the search header names them, so an empty answer is not read
+	// as "nothing there".
+	leftOut := make([]string, 0, len(marked))
+	for _, dir := range marked {
+		if dir == "" {
+			dir = "./"
+		}
+		leftOut = append(leftOut, dir)
+	}
+	sort.Strings(leftOut)
+	return entries, leftOut, nil
 }
 
 // blobID is the git blob ID of data under SHA-1 ("blob <len>\x00" + data).

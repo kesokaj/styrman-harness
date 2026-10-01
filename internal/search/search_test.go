@@ -664,7 +664,8 @@ func TestNoIndexMarkerSkipsTheDirectory(t *testing.T) {
 			t.Errorf("a file outside the marked directory is missing (%s):\n%s", want, out)
 		}
 	}
-	if strings.Contains(out, "vendor/data/") {
+	// A hit line starts with its path; the header names the directory itself.
+	if strings.Contains(out, "\nvendor/data/") {
 		t.Errorf("the marked directory is in the index:\n%s", out)
 	}
 	// A marker that is not committed yet counts too, and a reconcile drops
@@ -685,7 +686,7 @@ func TestNoIndexMarkerSkipsTheDirectory(t *testing.T) {
 	// A marker above the prefix a caller asks for counts as well: the global
 	// index reads only the docs root, and a checkout marked at its root has
 	// no docs trail to offer either (code review round 2).
-	entries, err := gitView(root, "vendor/")
+	entries, _, err := gitView(root, "vendor/")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -705,7 +706,7 @@ func TestNoIndexMarkerDeletedCountsNoMore(t *testing.T) {
 	writeFile(t, root, "vendor/data/entry.md", "an ocelot in vendored data\n")
 	commitAll(t, root, "add")
 	out := mustSearch(t, Options{Dir: root, Home: home, Words: []string{"ocelot"}})
-	if strings.Contains(out, "vendor/data/") {
+	if strings.Contains(out, "\nvendor/data/") {
 		t.Fatalf("the marked directory is in the index before the marker is removed:\n%s", out)
 	}
 	if err := os.Remove(filepath.Join(root, "vendor/data/.sh-agent-noindex")); err != nil {
@@ -714,5 +715,48 @@ func TestNoIndexMarkerDeletedCountsNoMore(t *testing.T) {
 	out = mustSearch(t, Options{Dir: root, Home: home, Words: []string{"ocelot"}})
 	if !strings.Contains(out, "vendor/data/entry.md:") {
 		t.Errorf("a marker deleted from the work tree still hides its directory:\n%s", out)
+	}
+}
+
+// TestHeaderNamesLeftOutDirectories: a marker hides a directory, and the
+// header of a words search and of --open says which, so an empty answer is
+// not read as "nothing there" (the v2.1.0 gate's L6). The global header
+// covers many projects and stays as it was.
+func TestHeaderNamesLeftOutDirectories(t *testing.T) {
+	root := newRepo(t)
+	home := t.TempDir()
+	writeFile(t, root, "docs/own.md", "the ocelot lives here\n")
+	writeFile(t, root, "vendor/beside.md", "an ocelot beside\n")
+	commitAll(t, root, "add")
+	out := mustSearch(t, Options{Dir: root, Home: home, Words: []string{"ocelot"}})
+	if strings.Contains(out, "left out") {
+		t.Errorf("no marker, yet the header names one:\n%s", out)
+	}
+	writeFile(t, root, "vendor/data/.sh-agent-noindex", "")
+	writeFile(t, root, "vendor/data/entry.md", "an ocelot in vendored data\n")
+	out = mustSearch(t, Options{Dir: root, Home: home, Words: []string{"ocelot"}})
+	if !strings.Contains(out, "; left out by .sh-agent-noindex: vendor/data/)") {
+		t.Errorf("one marker: the header does not name it:\n%s", out)
+	}
+	writeFile(t, root, "attic/.sh-agent-noindex", "")
+	out = mustSearch(t, Options{Dir: root, Home: home, Words: []string{"ocelot"}})
+	if !strings.Contains(out, "; left out by .sh-agent-noindex: attic/, vendor/data/)") {
+		t.Errorf("two markers: want them sorted in the header:\n%s", out)
+	}
+	var buf bytes.Buffer
+	Search(Options{Dir: root, Home: home, Open: true}, &buf)
+	if !strings.Contains(buf.String(), "left out by .sh-agent-noindex: attic/, vendor/data/") {
+		t.Errorf("--open: the header does not name the markers:\n%s", buf.String())
+	}
+	buf.Reset()
+	Search(Options{Dir: root, Home: home, Global: true, Words: []string{"ocelot"}}, &buf)
+	if strings.Contains(buf.String(), "left out") {
+		t.Errorf("--global: the header names one project's markers:\n%s", buf.String())
+	}
+	writeFile(t, root, ".sh-agent-noindex", "")
+	buf.Reset()
+	Search(Options{Dir: root, Home: home, Words: []string{"ocelot"}}, &buf) // no hit is an error here; the header is what matters
+	if !strings.Contains(buf.String(), "left out by .sh-agent-noindex: ./, attic/, vendor/data/") {
+		t.Errorf("a root marker: want ./ first in the header:\n%s", buf.String())
 	}
 }

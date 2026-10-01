@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -136,7 +137,7 @@ func TestInstallTimerRefusals(t *testing.T) {
 func TestRemoveTimerLinux(t *testing.T) {
 	home := timerHome(t)
 	calls := fakeManager(t, "systemctl", 0)
-	if err := RemoveTimer(home, "linux"); err != nil {
+	if _, err := RemoveTimer(home, "linux"); err != nil {
 		t.Fatalf("absent is fine: %v", err)
 	}
 	if callsOf(t, calls) != "" {
@@ -146,7 +147,7 @@ func TestRemoveTimerLinux(t *testing.T) {
 		t.Fatal(err)
 	}
 	os.Remove(calls)
-	if err := RemoveTimer(home, "linux"); err != nil {
+	if _, err := RemoveTimer(home, "linux"); err != nil {
 		t.Fatal(err)
 	}
 	if got := callsOf(t, calls); got != "--user disable --now sh-agent-dream.timer\n--user daemon-reload\n" {
@@ -171,7 +172,7 @@ func TestTimerMacOS(t *testing.T) {
 		t.Errorf("launchctl calls:\n%s", got)
 	}
 	os.Remove(calls)
-	if err := RemoveTimer(home, "darwin"); err != nil {
+	if _, err := RemoveTimer(home, "darwin"); err != nil {
 		t.Fatal(err)
 	}
 	if got := callsOf(t, calls); !strings.HasPrefix(got, "bootout gui/") {
@@ -244,7 +245,7 @@ func TestUnitNamesPerHome(t *testing.T) {
 		t.Errorf("a scratch timer must dream over its own home:\n%s", service)
 	}
 	os.Remove(calls)
-	if err := RemoveTimer(other, "linux"); err != nil {
+	if _, err := RemoveTimer(other, "linux"); err != nil {
 		t.Fatal(err)
 	}
 	if got := callsOf(t, calls); got != "--user disable --now "+unit+".timer\n--user daemon-reload\n" {
@@ -260,7 +261,7 @@ func TestUnitNamesPerHome(t *testing.T) {
 		t.Errorf("darwin plist for a scratch home:\n%s", pl)
 	}
 	os.Remove(mcalls)
-	if err := RemoveTimer(other, "darwin"); err != nil {
+	if _, err := RemoveTimer(other, "darwin"); err != nil {
 		t.Fatal(err)
 	}
 	if got := callsOf(t, mcalls); !strings.Contains(got, "bootout gui/") || !strings.Contains(got, plist+".plist") {
@@ -322,5 +323,72 @@ func TestRenderSystemdEscapesDollar(t *testing.T) {
 	service, _ := renderSystemd("/h/a$b/sh-agent", "/h/${X}", "/p")
 	if !strings.Contains(service, `ExecStart="/h/a$$b/sh-agent" dream --all --home "/h/$${X}"`) {
 		t.Errorf("a $ in ExecStart was not escaped:\n%s", service)
+	}
+}
+
+// TestRemoveTimerSaysWhatItRemoved: the caller prints "removed" only when a
+// unit of this home was on disk and is gone (the v2.1.0 gate: a removal that
+// found nothing reported success).
+func TestRemoveTimerSaysWhatItRemoved(t *testing.T) {
+	fakeManager(t, "systemctl", 0)
+	home := timerHome(t)
+	if err := InstallTimer(home, "/usr/bin:/bin", "linux"); err != nil {
+		t.Fatal(err)
+	}
+	if removed, err := RemoveTimer(home, "linux"); err != nil || !removed {
+		t.Errorf("an installed timer: removed=%v err=%v, want true", removed, err)
+	}
+	if removed, err := RemoveTimer(home, "linux"); err != nil || removed {
+		t.Errorf("nothing installed: removed=%v err=%v, want false", removed, err)
+	}
+}
+
+// TestLegacyTimerFilesAreNamedNotRemoved: a unit that v2.0.0 or earlier wrote
+// under the bare name, in a home that now gets a suffixed name, is not this
+// home's unit any more. It is never stopped or deleted here (a stop by name
+// ends whichever unit the manager loaded, possibly the real home's): it is
+// named, with the steps, by remove, uninstall and status.
+func TestLegacyTimerFilesAreNamedNotRemoved(t *testing.T) {
+	calls := fakeManager(t, "systemctl", 0)
+	real := timerHome(t)
+	other := t.TempDir()
+	timerFile := filepath.Join(other, ".config", "systemd", "user", unitName+".timer")
+	plistFile := filepath.Join(other, "Library", "LaunchAgents", plistName+".plist")
+	write(t, timerFile, "x", fresh)
+	write(t, plistFile, "x", fresh)
+	got := LegacyTimerFiles(other)
+	if len(got) != 2 || got[0] != timerFile || got[1] != plistFile {
+		t.Errorf("LegacyTimerFiles = %v, want the timer and the plist", got)
+	}
+	if removed, err := RemoveTimer(other, "linux"); err != nil || removed {
+		t.Errorf("RemoveTimer on a home with only legacy files: removed=%v err=%v", removed, err)
+	}
+	for _, f := range []string{timerFile, plistFile} {
+		if _, err := os.Stat(f); err != nil {
+			t.Errorf("a legacy file was removed: %v", err)
+		}
+	}
+	if c := callsOf(t, calls); c != "" {
+		t.Errorf("the service manager was called for a legacy unit:\n%s", c)
+	}
+	linux := LegacyTimerNotice(other, "linux")
+	for _, want := range []string{timerFile, "FragmentPath", "systemctl --user disable --now " + unitName + ".timer", "daemon-reload", "v2.0.0"} {
+		if !strings.Contains(linux, want) {
+			t.Errorf("the linux notice lacks %q:\n%s", want, linux)
+		}
+	}
+	darwin := LegacyTimerNotice(other, "darwin")
+	for _, want := range []string{plistFile, "launchctl print gui/" + strconv.Itoa(os.Getuid()) + "/" + plistName, "launchctl bootout"} {
+		if !strings.Contains(darwin, want) {
+			t.Errorf("the darwin notice lacks %q:\n%s", want, darwin)
+		}
+	}
+	if got := StatusLine(other); !strings.HasSuffix(got, "; legacy timer files under "+other+": run sh-agent dream --remove-timer for the cleanup steps") {
+		t.Errorf("StatusLine does not name the legacy files: %q", got)
+	}
+	// The real home's bare-named unit is its own, never legacy.
+	write(t, filepath.Join(real, ".config", "systemd", "user", unitName+".timer"), "x", fresh)
+	if got := LegacyTimerFiles(real); len(got) != 0 || LegacyTimerNotice(real, "linux") != "" {
+		t.Errorf("the real home's own unit is called legacy: %v", got)
 	}
 }

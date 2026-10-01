@@ -54,6 +54,7 @@ type scope struct {
 	files    int
 	changed  int
 	elapsed  time.Duration
+	leftOut  []string // directories a .sh-agent-noindex marker takes out (project scope only)
 }
 
 func (sc *scope) close() {
@@ -169,7 +170,7 @@ func prepare(o Options, out io.Writer) (*scope, error) {
 			return nil, err
 		}
 		docs := docsRootOf(root)
-		view, err := gitView(root, "")
+		view, leftOut, err := gitView(root, "")
 		if err != nil {
 			st.close()
 			return nil, fmt.Errorf("search: %w", err)
@@ -187,6 +188,7 @@ func prepare(o Options, out io.Writer) (*scope, error) {
 		p := proj{key: root, name: filepath.Base(root), docsRoot: docs}
 		if !o.Global {
 			sc.st, sc.projects = st, []proj{p}
+			sc.leftOut = leftOut
 			sc.byKey[root] = p
 		} else {
 			st.close()
@@ -314,7 +316,7 @@ func reconcileGlobal(o Options, out io.Writer) (*store, int, []proj, error) {
 			continue
 		}
 		docs := ".agents/docs"
-		v, err := gitView(r.root, docs+"/")
+		v, _, err := gitView(r.root, docs+"/") // the global header covers many projects: no left-out list
 		if err != nil {
 			return fail(fmt.Errorf("search: %w", err))
 		}
@@ -426,7 +428,11 @@ func Search(o Options, out io.Writer) error {
 }
 
 func (sc *scope) status() string {
-	return fmt.Sprintf("index current: %d files, reconciled %d changed in %d ms", sc.files, sc.changed, sc.elapsed.Milliseconds())
+	s := fmt.Sprintf("index current: %d files, reconciled %d changed in %d ms", sc.files, sc.changed, sc.elapsed.Milliseconds())
+	if len(sc.leftOut) > 0 {
+		s += "; left out by " + noIndexMarker + ": " + strings.Join(sc.leftOut, ", ")
+	}
+	return s
 }
 
 func (sc *scope) display(project, path string) string {

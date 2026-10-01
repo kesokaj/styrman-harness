@@ -22,19 +22,24 @@
 # name, a path git ignores — is caught by the suite it tells you to run next
 # (TestCatalogInstallsClean, TestEmbedHoldsOnlyTrackedFiles).
 #
-# The destination is replaced only when it is a catalog: an empty --dest or
-# --work, /, the home directory, the checkout and an ancestor of either are
-# refused, as is a non-empty destination without CHECKSUMS; the swap removes
-# only the directories that file names. The manifest's "## Excluded" and
-# "## Notes" sections are kept byte for byte.
+# The destination is replaced only when it is a catalog: an empty --dest, /,
+# the home directory, the checkout and an ancestor of either are refused, in
+# any spelling, as is a non-empty destination without CHECKSUMS; the swap
+# removes only the directories that file names. The manifest's "## Excluded"
+# and "## Notes" sections are kept byte for byte. The work directory is cloned
+# into and its build directory removed: it is never /, the home directory or
+# the checkout itself, never nested with --dest, and when it already holds
+# files it must be one this script marked (.refresh-catalog-work) or completed
+# a run in (origins.txt).
 #
 # INDEX.md and CHECKSUMS are written by the Go tests in write mode, so the
 # index is derived by the installer's own frontmatter parser.
 #
 # Needs git, go and (for the default sources) the network. Two environment
 # variables replace the source repositories, for the test's local fixtures:
-# CATALOG_AGENTS_CLI_REPO and CATALOG_GOOGLE_SKILLS_REPO. Relative --dest and
-# --work are resolved against the caller's directory.
+# CATALOG_AGENTS_CLI_REPO and CATALOG_GOOGLE_SKILLS_REPO, each an https:// URL
+# or an absolute path, nothing else. Relative --dest and --work are resolved
+# against the caller's directory.
 set -euo pipefail
 
 usage() { sed -n '2,6p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; }
@@ -78,6 +83,8 @@ phys() {
   # the rest would be a path under /: the callers stop on this status
   # (errexit does not reach into a command substitution).
   base=$(cd -P "$p" 2>/dev/null && pwd -P) || return 1
+  # `pwd -P` keeps a leading `//` as it was typed; one slash is the same place.
+  base="/${base#"${base%%[!/]*}"}"
   if [ -z "$rest" ]; then printf '%s\n' "$base"; else printf '%s%s\n' "${base%/}" "$rest"; fi
 }
 dest=$(phys "$dest") || fail "cannot resolve --dest: a directory on its path cannot be entered"
@@ -103,6 +110,22 @@ case "${home_phys%/}/" in "${dest%/}/"*) fail "--dest $dest contains the home di
 if [ -d "$dest" ] && [ -n "$(ls -A "$dest")" ] && [ ! -f "$dest/CHECKSUMS" ]; then
   fail "--dest $dest is not empty and has no CHECKSUMS: not a catalog, nothing is replaced there"
 fi
+# --work is cloned into and its build directory removed, so it gets the same
+# care: one spelling, never a place that holds something else, never nested
+# with --dest, and when it already holds files, only a directory this script
+# marked (before its first clone) or completed a run in (origins.txt).
+work=$(phys "$work") || fail "cannot resolve --work: a directory on its path cannot be entered"
+case "$work/" in
+  */../* | */./*) fail "--work $work goes through . or .. below a directory that does not exist: name the directory itself" ;;
+esac
+case "${work%/}/" in
+  / | "${repo_phys%/}/" | "${home_phys%/}/") fail "--work $work must not be /, the home directory or the checkout itself" ;;
+esac
+case "${work%/}/" in "${dest%/}/"*) fail "--work $work and --dest $dest must not contain each other" ;; esac
+case "${dest%/}/" in "${work%/}/"*) fail "--work $work and --dest $dest must not contain each other" ;; esac
+if [ -d "$work" ] && [ -n "$(ls -A "$work")" ] && [ ! -f "$work/.refresh-catalog-work" ] && [ ! -f "$work/origins.txt" ]; then
+  fail "--work $work is not a work directory of this script (not empty, and neither .refresh-catalog-work nor origins.txt in it): it would be cloned into and its build directory removed"
+fi
 pin_a=$1
 pin_g=$2
 for pin in "$pin_a" "$pin_g"; do
@@ -112,6 +135,16 @@ for pin in "$pin_a" "$pin_g"; do
 done
 url_a=${CATALOG_AGENTS_CLI_REPO:-https://github.com/google/agents-cli}
 url_g=${CATALOG_GOOGLE_SKILLS_REPO:-https://github.com/google/skills}
+# An override is an https URL or an absolute path (a local clone, the tests'
+# fixtures): git has transports that run a command (`ext::`), and plain http
+# can be rewritten on the way.
+for v in CATALOG_AGENTS_CLI_REPO CATALOG_GOOGLE_SKILLS_REPO; do
+  val=${!v:-}
+  case "$val" in
+    "" | https://* | /*) ;;
+    *) fail "$v must be an https:// URL or an absolute path, got: $(printf '%q' "$val")" ;;
+  esac
+done
 
 # The four source sets: label, clone, path below it.
 sets="agents-cli|agents-cli|skills
@@ -120,6 +153,9 @@ google-skills-cloud|google-skills|skills/cloud
 google-skills-developers|google-skills|skills/developers"
 
 mkdir -p "$work"
+# The marker goes in before the first clone, so a run that fails later (a pin
+# that does not resolve) leaves a directory the corrected run accepts.
+: > "$work/.refresh-catalog-work"
 fetch() { # <clone name> <url> <pin>: a full clone, reused; checked out at the pin
   local dir="$work/$1"
   if [ -d "$dir/.git" ]; then

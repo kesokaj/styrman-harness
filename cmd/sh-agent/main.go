@@ -298,13 +298,21 @@ func runUninstall(c *ctx) error {
 	if dream.TimerInstalled(c.home) {
 		if c.dryRun {
 			fmt.Fprintln(c.out, "[dry-run] would remove the dream timer")
-		} else if err := dream.RemoveTimer(c.home, runtime.GOOS); err != nil {
+		} else if removed, err := dream.RemoveTimer(c.home, runtime.GOOS); err != nil {
 			return err
-		} else {
+		} else if removed {
+			// Only when a unit of this home, for this system, was there:
+			// TimerInstalled also sees the other system's unit file.
 			fmt.Fprintln(c.out, "removed the dream timer")
 		}
 	}
-	return harness.Uninstall(c.home, c.dryRun, c.out)
+	err := harness.Uninstall(c.home, c.dryRun, c.out)
+	// A unit from v2.0.0 or earlier under the shared name is not this home's
+	// to remove; the operator is told where it is and what to do, dry run or not.
+	if notice := dream.LegacyTimerNotice(c.home, runtime.GOOS); notice != "" {
+		fmt.Fprintln(c.out, notice)
+	}
+	return err
 }
 
 // runReport needs no harness tree: a machine with no checkout must still be
@@ -338,15 +346,26 @@ func runDream(c *ctx) error {
 			what = "remove the nightly dream timer"
 		}
 		fmt.Fprintln(c.out, "[dry-run] would "+what+"; installed now: "+strconv.FormatBool(dream.TimerInstalled(c.home)))
+		if notice := dream.LegacyTimerNotice(c.home, runtime.GOOS); c.removeTimer && notice != "" {
+			fmt.Fprintln(c.out, notice)
+		}
 	case c.installTimer:
 		err = dream.InstallTimer(c.home, os.Getenv("PATH"), runtime.GOOS)
 		if err == nil {
 			fmt.Fprintln(c.out, "dream timer installed: sh-agent dream --all runs nightly at 03:00")
 		}
 	case c.removeTimer:
-		err = dream.RemoveTimer(c.home, runtime.GOOS)
+		var removed bool
+		removed, err = dream.RemoveTimer(c.home, runtime.GOOS)
 		if err == nil {
-			fmt.Fprintln(c.out, "dream timer removed")
+			if removed {
+				fmt.Fprintln(c.out, "dream timer removed")
+			} else {
+				fmt.Fprintln(c.out, "no dream timer found for "+c.home+" on this system")
+			}
+			if notice := dream.LegacyTimerNotice(c.home, runtime.GOOS); notice != "" {
+				fmt.Fprintln(c.out, notice)
+			}
 		}
 	default:
 		err = dream.Run(dream.Options{Home: c.home, Vendor: vendor, All: c.dreamAll, Project: c.dreamProject, DryRun: c.dryRun, Out: c.out})

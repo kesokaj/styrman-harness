@@ -2478,3 +2478,41 @@ func TestLintPermissionKeysByKind(t *testing.T) {
 		t.Errorf("the checkout: %v", err)
 	}
 }
+
+// TestLintRefusesUnreadableFrontmatterInDocs: a command or rule whose first
+// line opens a frontmatter block that Split cannot read was once treated as
+// having none, so the permission-key lint never saw it and the file deployed
+// as written (the v2.1.0 gate's L5). A file with no frontmatter still loads.
+func TestLintRefusesUnreadableFrontmatterInDocs(t *testing.T) {
+	load := func(kind, text string) error {
+		repo := newRepo(t)
+		os.MkdirAll(filepath.Join(repo, kind), 0o755)
+		os.WriteFile(filepath.Join(repo, kind, "x.md"), []byte(text), 0o644)
+		_, err := LoadInventory(DirSource(repo))
+		return err
+	}
+	for _, kind := range []string{"commands", "rules"} {
+		for name, text := range map[string]string{
+			"a byte-order mark":           "\ufeff---\ndescription: d\nallowed-tools: Bash\n---\nbody\n",
+			"spaces after the opening":    "---  \ndescription: d\nallowed-tools: Bash\n---\nbody\n",
+			"a tab after the opening":     "---\t\ndescription: d\nhooks:\n  Stop: []\n---\nbody\n",
+			"an unterminated block":       "---\ndescription: d\nallowed-tools: Bash\nbody with no closing line\n",
+			"a carriage return and space": "--- \r\ndescription: d\nallowed-tools: Bash\n---\nbody\n",
+		} {
+			err := load(kind, text)
+			if err == nil || !strings.Contains(err.Error(), "frontmatter starts but cannot be read") {
+				t.Errorf("%s with %s: want the unreadable-frontmatter refusal, got %v", kind, name, err)
+			}
+		}
+		for name, text := range map[string]string{
+			"no frontmatter":             "# A title\n\nbody\n",
+			"a rule line further down":   "A first line.\n\n---\n\nmore\n",
+			"a readable block":           "---\ndescription: d\n---\nbody\n",
+			"four dashes (a rule, text)": "----\nbody\n",
+		} {
+			if err := load(kind, text); err != nil {
+				t.Errorf("%s with %s refused: %v", kind, name, err)
+			}
+		}
+	}
+}

@@ -304,6 +304,10 @@ func LoadDocs(src Source, dirs ...string) ([]Doc, error) {
 				}
 				desc = fm["description"]
 				text = body
+			} else if opensFrontmatter(text) {
+				// Not "no frontmatter": a block that starts and cannot be
+				// read would deploy as written with its keys unchecked.
+				return nil, fmt.Errorf("%s: frontmatter starts but cannot be read (no closing ---, a byte-order mark, or spaces after the opening ---); a command or rule has a readable frontmatter block or none", shown)
 			}
 			if desc == "" {
 				desc = firstLine(text)
@@ -401,6 +405,15 @@ func RenderInventoryCompact(inv Inventory) string {
 		fmt.Fprintf(&b, "- Rules (%d): %s\n", len(inv.Rules), strings.Join(names, ", "))
 	}
 	return b.String()
+}
+
+// opensFrontmatter reports whether the first line is a frontmatter fence as
+// a YAML reader would take it: `---` after an optional byte-order mark, with
+// trailing spaces, tabs or a carriage return. Split wants the bare line.
+func opensFrontmatter(text string) bool {
+	first, _, _ := strings.Cut(text, "\n")
+	first = strings.TrimPrefix(first, "\ufeff")
+	return strings.TrimRight(first, " \t\r") == "---"
 }
 
 // slashNote explains the `/name` marking, but only when some skill carries

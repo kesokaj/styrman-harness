@@ -220,8 +220,10 @@ func absolutePath(path string) string {
 	return strings.Join(keep, string(filepath.ListSeparator))
 }
 
-// RemoveTimer stops and removes the dream timer; absent is fine.
-func RemoveTimer(home, goos string) error {
+// RemoveTimer stops and removes the dream timer of this home, for goos, and
+// reports whether there was one: absent is fine, but the caller says which
+// it was (a removal that found nothing once printed "removed").
+func RemoveTimer(home, goos string) (bool, error) {
 	unit, _ := UnitFor(home)
 	var files []string
 	var manager string
@@ -236,7 +238,7 @@ func RemoveTimer(home, goos string) error {
 		manager = "launchctl"
 		stop = [][]string{{"bootout", "gui/" + strconv.Itoa(os.Getuid()), macPlistPath(home)}}
 	default:
-		return nil
+		return false, nil
 	}
 	present := false
 	for _, p := range files {
@@ -245,7 +247,7 @@ func RemoveTimer(home, goos string) error {
 		}
 	}
 	if !present {
-		return nil
+		return false, nil
 	}
 	if _, err := exec.LookPath(manager); err == nil {
 		// The first stop call may fail when the unit was never loaded; the
@@ -254,7 +256,7 @@ func RemoveTimer(home, goos string) error {
 	}
 	for _, p := range files {
 		if err := os.Remove(p); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return &ExitError{2, "sh-agent dream --remove-timer: " + err.Error()}
+			return false, &ExitError{2, "sh-agent dream --remove-timer: " + err.Error()}
 		}
 	}
 	if len(stop) > 1 {
@@ -262,5 +264,57 @@ func RemoveTimer(home, goos string) error {
 			exec.Command(manager, stop[1]...).Run()
 		}
 	}
-	return nil
+	return true, nil
+}
+
+// LegacyTimerFiles lists the bare-named unit files under a home whose own
+// unit name is suffixed: what v2.0.0 or earlier wrote there before names were
+// per home (BUG-144), or what a home of an account the database does not
+// list holds since BUG-149. They are not this home's unit any more, so
+// install, remove and the installed check never see them; this is how the
+// operator still learns of them. The real home's bare-named unit is its own.
+func LegacyTimerFiles(home string) []string {
+	if unit, _ := UnitFor(home); unit == unitName {
+		return nil
+	}
+	var found []string
+	for _, p := range []string{
+		filepath.Join(home, ".config", "systemd", "user", unitName+".service"),
+		filepath.Join(home, ".config", "systemd", "user", unitName+".timer"),
+		filepath.Join(home, "Library", "LaunchAgents", plistName+".plist"),
+	} {
+		if _, err := os.Lstat(p); err == nil {
+			found = append(found, p)
+		}
+	}
+	return found
+}
+
+// LegacyTimerNotice is what remove, uninstall and status tell the operator
+// about LegacyTimerFiles: the paths and the steps. Nothing here stops or
+// deletes them, because the service manager is shared by every home of the
+// account and a stop by name ends whichever unit it loaded, which may be
+// the real home's.
+func LegacyTimerNotice(home, goos string) string {
+	files := LegacyTimerFiles(home)
+	if len(files) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "legacy dream timer files under %s, written by v2.0.0 or earlier under the name every home shared:\n", home)
+	for _, f := range files {
+		fmt.Fprintf(&b, "  %s\n", f)
+	}
+	b.WriteString("They are not removed or stopped here: a stop by name ends whichever unit the service manager loaded, which may be another home's.\n")
+	if goos == "darwin" {
+		uid := strconv.Itoa(os.Getuid())
+		fmt.Fprintf(&b, "Check which file is loaded: launchctl print gui/%s/%s (its path line)\n", uid, plistName)
+		fmt.Fprintf(&b, "If it is one of the files above: launchctl bootout gui/%s <that plist>\n", uid)
+		b.WriteString("Then delete the files above.")
+	} else {
+		fmt.Fprintf(&b, "Check which file is loaded: systemctl --user show -p FragmentPath %s.timer\n", unitName)
+		fmt.Fprintf(&b, "If it is one of the files above: systemctl --user disable --now %s.timer\n", unitName)
+		b.WriteString("Then delete the files above and run: systemctl --user daemon-reload")
+	}
+	return b.String()
 }

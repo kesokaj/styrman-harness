@@ -2,7 +2,7 @@
 owner: bugs
 date: 2026-10-01
 id: BUG-142
-status: open
+status: graduated 2026-10-01 to context/AGENTS.md § Definition of Done step 1 (the tree stays frozen while the verifier runs)
 area: process/verifier-dispatch
 ---
 # BUG-142: working tree edited while the verifier ran; its log ended BLOCKED
@@ -22,6 +22,9 @@ None in code. `-r3` was dispatched after all edits, with the edit queue emptied 
 ## Prevention
 Before dispatching `verifier`, empty your own edit queue: make every fix still intended, read `git status --short`, then dispatch. While the dispatch is in flight do only reads (`Read`, `grep`, `git log`); a fix that cannot wait stops the run (`TaskStop`), is committed, and the verifier is re-dispatched. A "docs-only" edit is not exempt: in this repository the test suite reads `skills/`, `agents/` and `context/`.
 The rule already exists (`context/AGENTS.md` § Definition of Done, step 1), so it was not followed.
+
+## Graduated
+2026-10-01: the rule lives in the global context, `context/AGENTS.md` § Definition of Done step 1 ("the tree stays frozen while it runs — a tree that moves gives a PASS that belongs to no commit, and a fix that cannot wait stops the run (`TaskStop`), commits, then re-dispatches"). It held through every verifier run of the v2.1.0 gate (five logs, none BLOCKED).
 
 ## Related
 - BUG-072 (earlier frozen-tree rule, graduated into the Definition of Done sentence). This record is the repeat.

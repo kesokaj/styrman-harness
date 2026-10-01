@@ -50,8 +50,12 @@ refuses what the harness cannot carry (a symlink, a Go file, a dotfile, a name i
 entry without frontmatter, a directory name that is not a plain skill name) until the operator passes
 `--exclude <entry>`, keeps every entry named under the manifest's `## Excluded` out and that section
 and `## Notes` byte for byte, replaces only a destination that is a catalog (never `/`, the home
-directory, the checkout or an ancestor of either; a non-empty destination must hold `CHECKSUMS`, and
-only the directories that file names are removed), and writes `INDEX.md` and
+directory, the checkout or an ancestor of either, in any spelling; a non-empty destination must hold
+`CHECKSUMS`, and only the directories that file names are removed), clones into a work directory
+that is its own (never `/`, the home directory or the checkout, never nested with the destination;
+one that already holds files must carry the script's `.refresh-catalog-work` marker or an
+`origins.txt`), takes a source override only as an `https://` URL or an absolute path, and writes
+`INDEX.md` and
 `CHECKSUMS` through the Go tests, which then pin the tree both ways (`TestCatalogMatchesChecksums`,
 `TestCatalogIndexMatchesEntries`, `TestCatalogFilesAreCarryable`). Installed as global skills
 these skills push the harness's own out of both CLIs' skill lists

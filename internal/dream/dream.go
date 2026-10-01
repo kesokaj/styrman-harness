@@ -192,6 +192,10 @@ func StatusLine(home string) string {
 	if TimerInstalled(home) {
 		timer = "timer installed"
 	}
+	// Every branch below ends in timer, so the legacy note reaches them all.
+	if len(LegacyTimerFiles(home)) > 0 {
+		timer += "; legacy timer files under " + home + ": run sh-agent dream --remove-timer for the cleanup steps"
+	}
 	st, err := readState(home)
 	if err != nil {
 		return "state unreadable: " + err.Error() + "; " + timer

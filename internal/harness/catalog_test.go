@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -326,7 +327,7 @@ func TestCatalogWriteModeNeedsCatalogDir(t *testing.T) {
 	}
 	t.Cleanup(func() { os.WriteFile(file, before, 0o644) }) // a broken guard must not leave the file rewritten
 	cmd := exec.Command("go", "test", ".", "-run", "^TestCatalogMatchesChecksums$", "-count=1")
-	cmd.Env = append(os.Environ(), "CATALOG_WRITE=1", "CATALOG_DIR=")
+	cmd.Env = fixtureEnv("CATALOG_WRITE=1", "CATALOG_DIR=")
 	out, err := cmd.CombinedOutput()
 	if err == nil || !strings.Contains(string(out), "needs CATALOG_DIR") {
 		t.Errorf("CATALOG_WRITE=1 without CATALOG_DIR was accepted (err %v):\n%s", err, out)
@@ -337,7 +338,7 @@ func TestCatalogWriteModeNeedsCatalogDir(t *testing.T) {
 	// The other half of the pair: CATALOG_DIR without the write mode would
 	// compare some other tree and pass for a catalog that is not this one.
 	cmd = exec.Command("go", "test", ".", "-run", "^TestCatalogMatchesChecksums$", "-count=1")
-	cmd.Env = append(os.Environ(), "CATALOG_WRITE=", "CATALOG_DIR="+t.TempDir())
+	cmd.Env = fixtureEnv("CATALOG_WRITE=", "CATALOG_DIR="+t.TempDir())
 	out, err = cmd.CombinedOutput()
 	if err == nil || !strings.Contains(string(out), "only for the refresh script's write mode") {
 		t.Errorf("CATALOG_DIR without CATALOG_WRITE=1 was accepted (err %v):\n%s", err, out)
@@ -351,6 +352,24 @@ func TestCatalogWriteModeNeedsCatalogDir(t *testing.T) {
 // does not have (security reviews of the v2.1.0 gate: found three times as
 // instances, pinned here as a kind).
 func TestCatalogNotesNeverAllowQuiet(t *testing.T) {
+	// The helper first, on lines that must and must not pass: a carve-out
+	// beside an allowed phrase once passed (code review, R3-1).
+	for line, bad := range map[string]bool{
+		"- `x` — No `--quiet` on any command.":                                      false,
+		"- `x` — bind on the bucket, drop `--quiet`, and confirm every IAM change.": false,
+		"- `x` — run it without `--quiet`; ask before `services enable`.":           false,
+		"- `x` — the operator only said so; drop `--quiet`; ask after the dry run.": false,
+		"- `x` — No `--quiet` except after approval.":                               true,
+		"- `x` — drop `--quiet` unless the command is read-only.":                   true,
+		"- `x` — `--quiet` only on read-only commands.":                             true,
+		"- `x` — No `--quiet` once the operator approved the plan.":                 true,
+		"- `x` — it runs `gcloud compute ssh --quiet`.":                             true,
+		"- `x` — pass `--project` on each command.":                                 false,
+	} {
+		if got := quietNoteProblem(line); (got != "") != bad {
+			t.Errorf("quietNoteProblem(%q) = %q, want a problem: %v", line, got, bad)
+		}
+	}
 	if os.Getenv("CATALOG_WRITE") == "1" {
 		t.Skip("the refresh script's build directory has no notes yet")
 	}
@@ -368,15 +387,55 @@ func TestCatalogNotesNeverAllowQuiet(t *testing.T) {
 			continue
 		}
 		seen++
-		lower := strings.ToLower(line)
-		if !strings.Contains(lower, "no `--quiet`") && !strings.Contains(lower, "drop `--quiet`") && !strings.Contains(lower, "without `--quiet`") {
-			t.Errorf("a note names --quiet without saying to leave it out (no `--quiet`, drop `--quiet` or without `--quiet`):\n%s", line)
+		if problem := quietNoteProblem(line); problem != "" {
+			t.Errorf("%s:\n%s", problem, line)
 		}
 	}
 	if seen == 0 {
 		t.Error("no note names --quiet: the test checks nothing (was the section renamed?)")
 	}
 }
+
+// fixtureEnv is the environment for every subprocess the catalog tests
+// start, the fixture's git calls and each run of the script: the caller's,
+// without any GIT_* variable, plus the test's own additions. An exported
+// GIT_DIR or GIT_INDEX_FILE (git sets them inside a hook) would aim the
+// fixture's add, commit and reset --hard at another repository (the v2.1.0
+// gate's L10).
+func fixtureEnv(extra ...string) []string {
+	var env []string
+	for _, kv := range os.Environ() {
+		if !strings.HasPrefix(kv, "GIT_") {
+			env = append(env, kv)
+		}
+	}
+	return append(env, extra...)
+}
+
+// quietNoteProblem judges one note: every clause that names `--quiet` must
+// say to leave it out, in one of three fixed phrases, and must not carve an
+// exception beside the phrase. A clause ends at a semicolon or at a full
+// stop followed by a space. It returns "" or the reason.
+func quietNoteProblem(line string) string {
+	for _, clause := range quietClauseEnd.Split(line, -1) {
+		if !strings.Contains(clause, "--quiet") {
+			continue
+		}
+		lower := strings.ToLower(clause)
+		if !strings.Contains(lower, "no `--quiet`") && !strings.Contains(lower, "drop `--quiet`") && !strings.Contains(lower, "without `--quiet`") {
+			return "a note names --quiet without saying to leave it out (no `--quiet`, drop `--quiet` or without `--quiet`)"
+		}
+		if word := quietCarveOut.FindString(lower); word != "" {
+			return "a note carves an exception (\"" + word + "\") in the clause that names --quiet; the router has none"
+		}
+	}
+	return ""
+}
+
+var (
+	quietClauseEnd = regexp.MustCompile(`;|\. `)
+	quietCarveOut  = regexp.MustCompile(`\b(except|unless|only|once|after)\b`)
+)
 
 // TestCatalogInstallsClean: the install plan over the real checkout has no
 // refusal — a secret-shaped name or a symlink anywhere under skills/ fails it,
@@ -441,7 +500,7 @@ func TestRefreshCatalogScript(t *testing.T) {
 	git := func(dir string, args ...string) string {
 		t.Helper()
 		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
-		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@example.invalid", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.invalid")
+		cmd.Env = fixtureEnv("GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@example.invalid", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.invalid")
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("git %v: %v\n%s", args, err, out)
@@ -501,7 +560,7 @@ func TestRefreshCatalogScript(t *testing.T) {
 		t.Helper()
 		cmd := exec.Command("bash", append([]string{script, "--dest", dest, "--work", work}, args...)...)
 		cmd.Dir = repo
-		cmd.Env = append(os.Environ(), "CATALOG_AGENTS_CLI_REPO="+agents, "CATALOG_GOOGLE_SKILLS_REPO="+gskills, "CATALOG_DIR=", "CATALOG_WRITE=")
+		cmd.Env = fixtureEnv("CATALOG_AGENTS_CLI_REPO="+agents, "CATALOG_GOOGLE_SKILLS_REPO="+gskills, "CATALOG_DIR=", "CATALOG_WRITE=")
 		var out bytes.Buffer
 		cmd.Stdout, cmd.Stderr = &out, &out
 		err := cmd.Run()
@@ -589,7 +648,7 @@ func TestRefreshCatalogScript(t *testing.T) {
 	// against the directory the nested go test runs in (BUG-146).
 	relCmd := exec.Command("bash", script, "--dest", "rel-dest", "--work", "rel-work", pinA, pinG)
 	relCmd.Dir = tmp
-	relCmd.Env = append(os.Environ(), "CATALOG_AGENTS_CLI_REPO="+agents, "CATALOG_GOOGLE_SKILLS_REPO="+gskills, "CATALOG_DIR=", "CATALOG_WRITE=")
+	relCmd.Env = fixtureEnv("CATALOG_AGENTS_CLI_REPO="+agents, "CATALOG_GOOGLE_SKILLS_REPO="+gskills, "CATALOG_DIR=", "CATALOG_WRITE=")
 	if out, err := relCmd.CombinedOutput(); err != nil {
 		t.Errorf("relative --dest and --work: %v\n%s", err, out)
 	} else if _, err := os.Stat(filepath.Join(tmp, "rel-dest", "gamma", "SKILL.md")); err != nil {
@@ -629,7 +688,7 @@ func TestRefreshCatalogScript(t *testing.T) {
 	put(bare, map[string]string{"CHECKSUMS": ""})
 	bareCmd := exec.Command("bash", script, "--dest", bare, "--work", work, pinA, pinG)
 	bareCmd.Dir = repo
-	bareCmd.Env = append(os.Environ(), "CATALOG_AGENTS_CLI_REPO="+agents, "CATALOG_GOOGLE_SKILLS_REPO="+gskills, "CATALOG_DIR=", "CATALOG_WRITE=")
+	bareCmd.Env = fixtureEnv("CATALOG_AGENTS_CLI_REPO="+agents, "CATALOG_GOOGLE_SKILLS_REPO="+gskills, "CATALOG_DIR=", "CATALOG_WRITE=")
 	if out, err := bareCmd.CombinedOutput(); err != nil {
 		t.Errorf("a refresh over a destination whose CHECKSUMS names no entry failed: %v\n%s", err, out)
 	} else if _, err := os.Stat(filepath.Join(bare, "gamma", "SKILL.md")); err != nil {
@@ -645,7 +704,7 @@ func TestRefreshCatalogScript(t *testing.T) {
 	for _, d := range []string{"", guardDir} {
 		cmd := exec.Command("bash", script, "--dest", d, "--work", work, pinA, pinG)
 		cmd.Dir = guardDir
-		cmd.Env = append(os.Environ(), "CATALOG_AGENTS_CLI_REPO="+agents, "CATALOG_GOOGLE_SKILLS_REPO="+gskills, "CATALOG_DIR=", "CATALOG_WRITE=")
+		cmd.Env = fixtureEnv("CATALOG_AGENTS_CLI_REPO="+agents, "CATALOG_GOOGLE_SKILLS_REPO="+gskills, "CATALOG_DIR=", "CATALOG_WRITE=")
 		out, err := cmd.CombinedOutput()
 		if err == nil {
 			t.Errorf("--dest %q was accepted:\n%s", d, out)
@@ -681,6 +740,9 @@ func TestRefreshCatalogScript(t *testing.T) {
 		{repo + "/no-such-dir/..", "below a directory that does not exist"},
 		{"/no-such-dir-for-this-test/..", "below a directory that does not exist"},
 		{fakeHome + "/no-such-dir/./catalog", "below a directory that does not exist"},
+		// A leading run of slashes is the same place (the v2.1.0 gate's L2).
+		{"/" + fakeHome, "is not a catalog directory"},
+		{"//" + fakeHome, "is not a catalog directory"},
 	} {
 		cmd := exec.Command("bash", script, "--dest", c.dest, "--work", work, pinA, pinG)
 		cmd.Dir = tmp
@@ -688,7 +750,7 @@ func TestRefreshCatalogScript(t *testing.T) {
 		// both regressed, the run stops at the clone and writes nowhere
 		// (code review round 3).
 		nowhere := filepath.Join(tmp, "no-such-repository")
-		cmd.Env = append(os.Environ(), "HOME="+fakeHome, "CATALOG_AGENTS_CLI_REPO="+nowhere, "CATALOG_GOOGLE_SKILLS_REPO="+nowhere, "CATALOG_DIR=", "CATALOG_WRITE=")
+		cmd.Env = fixtureEnv("HOME="+fakeHome, "CATALOG_AGENTS_CLI_REPO="+nowhere, "CATALOG_GOOGLE_SKILLS_REPO="+nowhere, "CATALOG_DIR=", "CATALOG_WRITE=")
 		out, err := cmd.CombinedOutput()
 		if err == nil || !strings.Contains(string(out), c.want) {
 			t.Errorf("--dest %s: want a refusal saying %q, got err %v\n%s", c.dest, c.want, err, out)
@@ -714,12 +776,93 @@ func TestRefreshCatalogScript(t *testing.T) {
 			t.Fatal(err)
 		}
 		t.Cleanup(func() { os.Chmod(locked, 0o755) })
-		if out, err := guardRun(filepath.Join(locked, "x"), append(os.Environ(), "HOME="+fakeHome)); err == nil || !strings.Contains(out, "cannot resolve") {
+		if out, err := guardRun(filepath.Join(locked, "x"), fixtureEnv("HOME="+fakeHome)); err == nil || !strings.Contains(out, "cannot resolve") {
 			t.Errorf("--dest below a directory that cannot be entered: want a refusal saying \"cannot resolve\", got err %v\n%s", err, out)
 		}
 	}
+	// --work is cloned into and its build directory removed, so it is a
+	// directory of this script or a new one (the v2.1.0 gate's L7): never /,
+	// the home directory or the checkout, never nested with --dest, and when
+	// it holds files, only with the marker the script writes before its
+	// first clone, or the origins.txt of an earlier completed run.
+	workRun := func(destArg, workArg string, pins ...string) (string, error) {
+		cmd := exec.Command("bash", append([]string{script, "--dest", destArg, "--work", workArg}, pins...)...)
+		cmd.Dir = tmp
+		cmd.Env = fixtureEnv("HOME="+fakeHome, "CATALOG_AGENTS_CLI_REPO="+agents, "CATALOG_GOOGLE_SKILLS_REPO="+gskills, "CATALOG_DIR=", "CATALOG_WRITE=")
+		out, err := cmd.CombinedOutput()
+		return string(out), err
+	}
+	// The three forbidden places are tried with a COPY of the script inside a
+	// stand-in checkout, and with sources that cannot be cloned: when this
+	// guard did not exist yet, the same cases run against the real checkout
+	// with working sources cloned the fixtures into it (BUG-150).
+	fakeRepo := filepath.Join(tmp, "fake-checkout")
+	scriptCopy := filepath.Join(fakeRepo, "skills", "google-catalog", "scripts", "refresh-catalog.sh")
+	scriptBytes, err := os.ReadFile(script)
+	if err != nil {
+		t.Fatal(err)
+	}
+	put(fakeRepo, map[string]string{"skills/google-catalog/scripts/refresh-catalog.sh": string(scriptBytes), "README.md": "a stand-in checkout\n"})
+	places := []string{fakeHome, fakeRepo}
+	if os.Geteuid() != 0 {
+		places = append(places, "/") // as root a regressed guard could write a marker there
+	}
+	for _, w := range places {
+		cmd := exec.Command("bash", scriptCopy, "--dest", filepath.Join(tmp, "dest-w"), "--work", w, pinA, pinG)
+		cmd.Dir = tmp
+		nowhere := filepath.Join(tmp, "no-such-repository")
+		cmd.Env = fixtureEnv("HOME="+fakeHome, "CATALOG_AGENTS_CLI_REPO="+nowhere, "CATALOG_GOOGLE_SKILLS_REPO="+nowhere, "CATALOG_DIR=", "CATALOG_WRITE=")
+		if out, err := cmd.CombinedOutput(); err == nil || !strings.Contains(string(out), "must not be /, the home directory or the checkout") {
+			t.Errorf("--work %s: want a refusal, got err %v\n%s", w, err, out)
+		}
+	}
+	for _, stray := range []string{filepath.Join(fakeRepo, "agents-cli"), filepath.Join(fakeRepo, ".refresh-catalog-work"), filepath.Join(fakeHome, "agents-cli"), filepath.Join(fakeHome, ".refresh-catalog-work")} {
+		if _, err := os.Stat(stray); err == nil {
+			t.Errorf("a refused --work was written into: %s", stray)
+		}
+	}
+	nest := filepath.Join(tmp, "nest")
+	for _, c := range [][2]string{{nest, filepath.Join(nest, "work")}, {filepath.Join(nest, "dest"), nest}} {
+		if out, err := workRun(c[0], c[1], pinA, pinG); err == nil || !strings.Contains(out, "must not contain each other") {
+			t.Errorf("--dest %s --work %s: want a refusal, got err %v\n%s", c[0], c[1], err, out)
+		}
+	}
+	foreign := filepath.Join(tmp, "someone-elses-directory")
+	put(foreign, map[string]string{"agents-cli/notes.txt": "the operator's own clone\n", "build/keep.txt": "kept\n"})
+	if out, err := workRun(filepath.Join(tmp, "dest-f"), foreign, pinA, pinG); err == nil || !strings.Contains(out, "is not a work directory of this script") {
+		t.Errorf("a non-empty --work without the marker: want a refusal, got err %v\n%s", err, out)
+	}
+	for _, f := range []string{"agents-cli/notes.txt", "build/keep.txt"} {
+		if _, err := os.Stat(filepath.Join(foreign, f)); err != nil {
+			t.Errorf("the refused --work lost %s: %v", f, err)
+		}
+	}
+	// A first run that fails after the checks (a pin that does not resolve)
+	// must leave a work directory the corrected run accepts.
+	freshWork, freshDest := filepath.Join(tmp, "fresh-work"), filepath.Join(tmp, "fresh-dest")
+	if out, err := workRun(freshDest, freshWork, pinA, "0000000000000000000000000000000000000000"); err == nil || !strings.Contains(out, "does not resolve") {
+		t.Fatalf("a first run with a bad pin: want the pin refusal, got err %v\n%s", err, out)
+	}
+	if out, err := workRun(freshDest, freshWork, pinA, pinG); err != nil {
+		t.Errorf("the corrected run on the same --work was refused: %v\n%s", err, out)
+	} else if _, err := os.Stat(filepath.Join(freshDest, "gamma", "SKILL.md")); err != nil {
+		t.Errorf("the corrected run vendored nothing: %v", err)
+	}
+	// The source overrides take an https URL or an absolute path, nothing
+	// else: git has transports that run a command (`ext::`).
+	for _, bad := range []string{"ext::sh -c id", "relative/path", "http://example.invalid/x", "file:///x"} {
+		cmd := exec.Command("bash", script, "--dest", filepath.Join(tmp, "dest-o"), "--work", filepath.Join(tmp, "work-o"), pinA, pinG)
+		cmd.Dir = tmp
+		cmd.Env = fixtureEnv("HOME="+fakeHome, "CATALOG_AGENTS_CLI_REPO="+bad, "CATALOG_GOOGLE_SKILLS_REPO="+gskills, "CATALOG_DIR=", "CATALOG_WRITE=")
+		if out, err := cmd.CombinedOutput(); err == nil || !strings.Contains(string(out), "CATALOG_AGENTS_CLI_REPO must be an https:// URL or an absolute path") {
+			t.Errorf("override %q: want a refusal naming the variable, got err %v\n%s", bad, err, out)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(tmp, "work-o")); err == nil {
+		t.Error("a refused override still created the work directory")
+	}
 	var noHome []string
-	for _, kv := range os.Environ() {
+	for _, kv := range fixtureEnv() {
 		if !strings.HasPrefix(kv, "HOME=") {
 			noHome = append(noHome, kv)
 		}

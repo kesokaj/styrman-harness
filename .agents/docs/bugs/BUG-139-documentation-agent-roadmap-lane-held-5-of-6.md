@@ -23,5 +23,8 @@ Not fixed. Options for the operator: (a) accept 5/6 and keep measuring on Antigr
 - Report a lane rule's result as n of N runs, never "holds".
 - A dispatch to `documentation`, `changelog` or `bugs` never names `ROADMAP.md` or `TODO.md` as a file to edit; the definition's refusal is the weaker guard.
 
+## Decision
+2026-10-01: skipped by decision (plan `plans/2026-10-01-gate-lows-and-harness-audit.md` D3); stays open. 5 of 6 is a measured rate and no mechanism makes a model's lane hold 6 of 6. The lane sentence stands in `agents/documentation.md`; the dispatch rule (a dispatch to `documentation`, `changelog` or `bugs` never names `ROADMAP.md` or `TODO.md` as a file to edit) lives only in this record; the control is the main agent reading every agent-written change against the diff before committing (Definition of Done step 4).
+
 ## Related
 Phase 4 change entry `changes/2026-10-01-0707-audit-fix-phase-4.md` (the lane fix); BUG-138 (same day).

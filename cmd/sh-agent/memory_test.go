@@ -158,6 +158,60 @@ func TestDreamTimerDryRun(t *testing.T) {
 	}
 }
 
+// TestDreamTimerSaysWhatItFound: --remove-timer says when it found nothing,
+// and it, uninstall and status name a unit that v2.0.0 or earlier wrote under
+// the bare name in a home that now gets a suffixed one, without touching it
+// (the v2.1.0 gate's L1). The temporary home is not the account's home, so
+// its own unit name is suffixed and the bare-named file is legacy.
+func TestDreamTimerSaysWhatItFound(t *testing.T) {
+	home := t.TempDir()
+	bin := t.TempDir()
+	calls := filepath.Join(t.TempDir(), "calls")
+	for _, m := range []string{"systemctl", "launchctl"} {
+		os.WriteFile(filepath.Join(bin, m), []byte("#!/bin/sh\necho \"$*\" >> \""+calls+"\"\n"), 0o755)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	var out bytes.Buffer
+	if err := run([]string{"dream", "--remove-timer", "--home", home}, &out); err != nil {
+		t.Fatalf("--remove-timer with nothing installed: %v", err)
+	}
+	if got := out.String(); !strings.Contains(got, "no dream timer found for "+home+" on this system") || strings.Contains(got, "dream timer removed") || strings.Contains(got, "legacy") {
+		t.Errorf("nothing installed: %q", got)
+	}
+	legacy := filepath.Join(home, ".config", "systemd", "user", "sh-agent-dream.timer")
+	if err := os.MkdirAll(filepath.Dir(legacy), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(legacy, []byte("[Timer]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"dream", "--remove-timer", "--home", home},
+		{"dream", "--remove-timer", "--dry-run", "--home", home},
+		{"uninstall", "--dry-run", "--home", home},
+		{"uninstall", "--home", home},
+	} {
+		out.Reset()
+		if err := run(args, &out); err != nil {
+			t.Errorf("%v: %v", args, err)
+		}
+		got := out.String()
+		if !strings.Contains(got, legacy) || !strings.Contains(got, "not removed or stopped here") {
+			t.Errorf("%v does not name the legacy unit:\n%s", args, got)
+		}
+		if strings.Contains(got, "dream timer removed") || strings.Contains(got, "removed the dream timer") {
+			t.Errorf("%v claims a removal:\n%s", args, got)
+		}
+		if _, err := os.Stat(legacy); err != nil {
+			t.Fatalf("%v removed the legacy unit: %v", args, err)
+		}
+	}
+	if _, err := os.Stat(calls); !os.IsNotExist(err) {
+		data, _ := os.ReadFile(calls)
+		t.Errorf("the service manager was called for a legacy unit:\n%s", data)
+	}
+}
+
 // A memory usage error exits 2 like every other usage error of this binary;
 // the usage line goes to the writer.
 func TestMemoryUsageErrorExits2(t *testing.T) {

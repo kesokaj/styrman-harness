@@ -40,7 +40,7 @@ func newRepo(t *testing.T) string {
 	write("skills/VENDORED.md", "not a skill\n")
 	write("commands/deploy.md", "---\ndescription: Deploy the thing\n---\nSteps\n")
 	write("rules/go-style.md", "# Go style\n\nUse slog.\n")
-	write("agents/reviewer.md", "---\nname: reviewer\ndescription: Reviews diffs\ntools: Read, Grep, Bash\nmodel: opus\nskills: review-standards\neffort: high\n---\nLoad ~/.claude/skills/review-standards first.\n")
+	write("agents/reviewer.md", "---\nname: reviewer\ndescription: Reviews diffs\ntools: Read, Grep, Bash\nmodel: opus\nskills: review-standards\neffort: high\nmaxTurns: 40\n---\nLoad ~/.claude/skills/review-standards first.\n")
 	return repo
 }
 
@@ -152,7 +152,7 @@ func TestDeriveAgy(t *testing.T) {
 			t.Errorf("derived agent missing %q:\n%s", want, s)
 		}
 	}
-	for _, unwanted := range []string{"effort:", "skills:", "~/.claude/"} {
+	for _, unwanted := range []string{"effort:", "skills:", "maxTurns:", "~/.claude/"} {
 		if strings.Contains(s, unwanted) {
 			t.Errorf("derived agent should not contain %q:\n%s", unwanted, s)
 		}
@@ -2298,4 +2298,87 @@ func TestResyncSkipsLink(t *testing.T) {
 	if fi, err := os.Lstat(dest); err != nil || fi.Mode()&os.ModeSymlink == 0 {
 		t.Errorf("the resync removed the operator's link at %s (err %v)", rel, err)
 	}
+}
+
+// TestAgentDescriptionRules: an agent's description is one line and names
+// neither "dispatch prompt" nor "harness binary" (AGENTS.md § Rules; audit
+// 2026-09-30, AG12). Until now only inspection enforced it.
+func TestAgentDescriptionRules(t *testing.T) {
+	for name, front := range map[string]string{
+		"two lines":       "name: x\ndescription: |\n  first line\n  second line\ntools: Read\n",
+		"dispatch prompt": "name: x\ndescription: \"the dispatch prompt names the file\"\ntools: Read\n",
+		"harness binary":  "name: x\ndescription: \"run by the harness binary\"\ntools: Read\n",
+	} {
+		repo := newRepo(t)
+		os.WriteFile(filepath.Join(repo, "agents", "x.md"), []byte("---\n"+front+"---\nbody\n"), 0o644)
+		if _, err := LoadAgents(DirSource(repo)); err == nil {
+			t.Errorf("%s: LoadAgents accepted the description", name)
+		}
+	}
+	// The fixture's own agent (one line, plain words) and the real agents pass.
+	if _, err := LoadAgents(DirSource(newRepo(t))); err != nil {
+		t.Errorf("the fixture's agents: %v", err)
+	}
+	if _, err := LoadAgents(DirSource(filepath.Join("..", ".."))); err != nil {
+		t.Errorf("the checkout's agents: %v", err)
+	}
+}
+
+// TestLintDescriptionLimit: a skill or agent description over 1,024
+// characters, the Agent Skills spec's limit, is refused; a multi-line
+// description is measured after its continuation lines are joined (audit
+// 2026-09-30, D19).
+func TestLintDescriptionLimit(t *testing.T) {
+	long := strings.Repeat("word ", 206) // 1,029 characters after the trailing space is trimmed
+	if err := Lint("name: x\ndescription: \"" + long + "\"\n"); err == nil {
+		t.Error("a 1,025-character description passed Lint")
+	}
+	block := "name: x\ndescription: |\n"
+	for i := 0; i < 11; i++ {
+		block += "  " + strings.Repeat("word ", 20) + "\n" // 11 × 100 = 1,100 joined
+	}
+	if err := Lint(block); err == nil {
+		t.Error("a 1,100-character block description passed Lint")
+	}
+	if err := Lint("name: x\ndescription: \"" + strings.Repeat("word ", 204) + "\"\n"); err != nil {
+		t.Errorf("a 1,020-character description was refused: %v", err)
+	}
+	// A block of exactly 1,023 joined characters passes: the `|` indicator
+	// and its space are not counted (code review of the fix).
+	block = "name: x\ndescription: |\n"
+	for i := 0; i < 10; i++ {
+		block += "  " + strings.Repeat("word ", 20) + "\n"
+	}
+	block += "  " + strings.Repeat("w", 13) + "\n" // 10 × 99 (joined by spaces) + 1 + 13 = 1,004 + 19 → under the limit
+	if err := Lint(block); err != nil {
+		t.Errorf("a block description under the limit was refused: %v", err)
+	}
+}
+
+// TestDeriveAgyRealReviewer: the derived Antigravity reviewer names the
+// review-standards skill by its agy path, because its Claude body names the
+// Claude path (audit 2026-09-30, AG5: the fixture test proved a rewrite the
+// real file never exercised).
+func TestDeriveAgyRealReviewer(t *testing.T) {
+	agents, err := LoadAgents(DirSource(filepath.Join("..", "..")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range agents {
+		if a.Name != "reviewer" {
+			continue
+		}
+		out, err := DeriveAgy(a)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(out), "~/.gemini/config/skills/review-standards/SKILL.md") {
+			t.Errorf("the derived reviewer does not name the review-standards skill by its Antigravity path")
+		}
+		if strings.Contains(string(out), "~/.claude/") {
+			t.Errorf("the derived reviewer still names a Claude path")
+		}
+		return
+	}
+	t.Fatal("no reviewer agent in the checkout")
 }

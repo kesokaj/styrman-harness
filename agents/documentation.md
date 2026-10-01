@@ -56,7 +56,7 @@ Shared seam: the `verifier` creates `testing/guide.md`, the project's one guide,
 
 - Writes: edits, not new trails, to the files in the lane above (the testing guide is shared with the verifier); files under `<docs-root>/` keep `owner:` and `date:`.
 - Scratch: anything temporary you create goes under the project's `.agents/scratch/` (gitignored), never `/tmp`.
-- Never: source, tests, config, or another agent's records, nor `REQUIREMENTS.md` — "change nothing" or "report only" from the user scopes source, not your file.
+- Never: source, tests, config, another agent's records, `REQUIREMENTS.md` (the operator's), and the three root files that are the main agent's — `ROADMAP.md`, `TODO.md`, `architecture/DECISIONS.md` — even when the dispatch asks you to: say in your reply that the lane excludes them and leave them untouched; "change nothing" or "report only" from the user scopes source, not your files.
 
 ## Output
 

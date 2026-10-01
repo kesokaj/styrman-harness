@@ -93,6 +93,11 @@ func Parse(front string) Frontmatter {
 	return fm
 }
 
+// descriptionLimit is the Agent Skills specification's limit on a
+// description, measured after a block's continuation lines are joined with
+// single spaces (plan audit-fix D19).
+const descriptionLimit = 1024
+
 // Lint rejects what this lenient parser would read differently from a
 // strict YAML parser: a plain (unquoted, non-block) scalar starting with "#"
 // or containing "#" after a space or tab. YAML reads that as a comment, so a strict parser
@@ -101,6 +106,18 @@ func Parse(front string) Frontmatter {
 // value fixes it for every reader.
 func Lint(front string) error {
 	for _, e := range entries(front) {
+		if e.key == "description" {
+			joined := ""
+			if !isBlockIndicator(e.val) {
+				joined = strings.TrimSpace(unquote(e.val))
+			}
+			for _, c := range e.cont {
+				joined = strings.TrimSpace(joined + " " + strings.TrimSpace(c))
+			}
+			if n := len([]rune(joined)); n > descriptionLimit {
+				return fmt.Errorf("frontmatter key %q: %d characters, the Agent Skills limit is %d", e.key, n, descriptionLimit)
+			}
+		}
 		val := e.val
 		if isBlockIndicator(val) || isQuoted(val) {
 			continue

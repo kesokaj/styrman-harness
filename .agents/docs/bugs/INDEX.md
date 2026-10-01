@@ -118,7 +118,7 @@
 | BUG-050 | internal/harness/plan.go (deploy walk) | `internal/harness/plan.go` (`secretShaped`) and `TestPlanRefusesSecretShapedFiles` |
 | BUG-057 | internal/harness (report_test.go fixture authoring) | `context/AGENTS.md` § Hard rules, "Ask git what actually changed" bullet |
 | BUG-058 | internal/harness (report.go — review Outcome accuracy) | `context/AGENTS.md` § Definition of Done, step 2 |
-| BUG-061 | agents/changelog (ADR authoring) | `agents/changelog.md` § Rules (first bullet) and `context/AGENTS.md` § Definition of Done, step 4 |
+| BUG-061 | agents/changelog (ADR authoring) | `feature § Decisions (the main agent writes ADRs; changelog refuses them) and context § Definition of Done step 4` |
 | BUG-066 | embed.go / release build | `skills/review-standards/SKILL.md` § 2 (generated-counterpart checklist item); one-line version in `context/AGENTS.md` § Hard rules |
 | BUG-068 | process / mutation testing | `skills/review-standards/SKILL.md` § 2 (mutation checklist item), cited from `skills/bug/SKILL.md` Step 3 and `skills/feature/SKILL.md` Step 4 |
 | BUG-069 | internal/harness/report.go (RemoveKeptClone) | one-line form in `context/AGENTS.md` § Hard rules; `err == nil && somethingToLose` example in `skills/golang/SKILL.md` § Error Handling |

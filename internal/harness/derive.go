@@ -27,9 +27,16 @@ const (
 )
 
 // DeriveAgy renders the Antigravity `agent.md` flavour of a Claude Code agent.
-// Claude-only keys (effort, maxTurns, isolation, permissionMode, skills)
-// are dropped: Antigravity has no equivalent, and markdown agents inherit
-// the global skills anyway.
+// Claude-only keys (effort, maxTurns, isolation, permissionMode) are dropped:
+// the vendor documents no equivalent, and the dispatcher names the budget in
+// the dispatch text. `skills:` is dropped too, on evidence rather than
+// assumption: on 2026-10-01 a probe agent carrying the vendor's documented
+// `skills: ["skills/<name>"]` key and a control agent without it both named
+// the six criteria of the review-standards skill and its installed path in
+// every run (3 of 3 with the key, 2 of 2 without; no hang, no denial), so an
+// Antigravity subagent reaches a global skill by the path its body names, the
+// one mechanism that works on both CLIs (plan audit-fix D5b). The body's
+// `~/.claude/skills/` paths are rewritten to the Antigravity directory.
 func DeriveAgy(a Agent) ([]byte, error) {
 	out := []string{
 		"name: " + a.Name,

@@ -245,6 +245,17 @@ func LoadAgents(src Source) ([]Agent, error) {
 		if fm["description"] == "" {
 			return nil, fmt.Errorf("agent %s: no description", name)
 		}
+		// One line, dispatch-worthy, and free of the two phrases that
+		// described a mechanism that no longer exists (AGENTS.md § Rules;
+		// until 2026-10-01 only inspection enforced this).
+		if descriptionIsMultiLine(front) {
+			return nil, fmt.Errorf("agent %s: description must be one line", name)
+		}
+		for _, banned := range []string{"dispatch prompt", "harness binary"} {
+			if strings.Contains(strings.ToLower(fm["description"]), banned) {
+				return nil, fmt.Errorf("agent %s: description names %q, a mechanism that no longer exists", name, banned)
+			}
+		}
 		agents = append(agents, Agent{Name: name, Description: fm["description"], Path: src.path(p), Front: fm, Body: body, Raw: raw})
 	}
 	sort.Slice(agents, func(i, j int) bool { return agents[i].Name < agents[j].Name })
@@ -404,4 +415,17 @@ func cell(s string, max int) string {
 		s = head[:cut] + "…"
 	}
 	return strings.ReplaceAll(s, "|", `\|`)
+}
+
+// descriptionIsMultiLine reports whether the frontmatter's description is a
+// block (`|`, `>`) or carries continuation lines: an agent's description is
+// one line.
+func descriptionIsMultiLine(front string) bool {
+	for _, e := range entries(front) {
+		if e.key != "description" {
+			continue
+		}
+		return isBlockIndicator(e.val) || len(e.cont) > 0
+	}
+	return false
 }

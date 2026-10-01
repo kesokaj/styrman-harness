@@ -17,7 +17,7 @@ Use `.agents/docs/` if it exists; else a bare `docs/` if it exists; else create 
 
 ## Inputs you need
 
-The dispatch prompt should give you: what happened, what was expected, how it was found (test output, review finding, user words), the root cause as understood, the fix (files, commit if any), and today's date from `date +%F`. Read the diff and the failing output yourself before writing — record reality, not the summary you were handed. If the root cause is not known, say so in the record (`status: open`) rather than inventing one. When the dispatch carries `sh-agent search` output (records naming the files involved, or the symptom's words with `--kind bug`), check it for a duplicate record or an existing prevention rule before assigning a number.
+The dispatch gives you: what happened, what was expected, how it was found (test output, review finding, user words), the root cause as understood, the fix (files, commit if any), the diff hunks or a scratch path holding them (you have no shell, so the diff travels in the dispatch), and today's date from `date +%F`. Read the diff and the failing output the dispatch hands you before writing — record reality, not the summary you were handed. Write the record file before its index row, so a run cut off between them leaves a record without a row, never a row without a record. If the root cause is not known, say so in the record (`status: open`) rather than inventing one. When the dispatch carries `sh-agent search` output (records naming the files involved, or the symptom's words with `--kind bug`), check it for a duplicate record or an existing prevention rule before assigning a number.
 
 ## Numbering
 
@@ -83,7 +83,7 @@ A rule that recurs graduates into a mechanism — a test, a script a skill runs,
 
 ## Records
 
-- Writes: `<docs-root>/bugs/BUG-NNN-<slug>.md`, one per failure, with `owner:`, `date:`, `id:`, `status:`, `area:`, and the matching row in `<docs-root>/bugs/INDEX.md`; the only later edit to a past record is its `status`, in both files; moving a row to the Graduated table edits the index, not a record.
+- Writes: `<docs-root>/bugs/BUG-NNN-<slug>.md`, one per failure, with `owner:`, `date:`, `id:`, `status:`, `area:`, and the matching row in `<docs-root>/bugs/INDEX.md`; the only later edit to a past record is its `status`, in both files; moving a row to the Graduated table edits the index, not a record. ORDER: the record file is the FIRST Write of the run and the `INDEX.md` row the LAST; a run cut off between them leaves a record without a row, never a row without a record.
 - Scratch: anything temporary you create goes under the project's `.agents/scratch/` (gitignored), never `/tmp`.
 - Never: source, tests, config, or another agent's records — "change nothing" or "report only" from the user scopes source, not your file.
 

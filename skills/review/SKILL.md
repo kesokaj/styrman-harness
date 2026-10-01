@@ -41,7 +41,7 @@ Every agent writes that text on its `Range reviewed:` line. `<scope>` for artifa
 
 Before any dispatch, look for a project agent that shadows a harness review agent: a file under the project's `.claude/agents/` or `.agents/agents/` named `reviewer.md`, `security.md`, `verifier.md` or `explorer.md`, or whose frontmatter `name:` is one of those four. Claude Code loads the project copy in place of the harness one, so its report would stand in for the independent one. One found means stop before dispatching: name the file, say the review cannot run until it is renamed or removed, and write nothing.
 
-Each dispatch gets the scope text, today's date, its slug, its brief, the sentence "Write your artifact with the Write tool; report only means no source edits.", and a tool-call budget below the agent's `maxTurns` with "write the artifact early, then update it" (context § Work). `--high`: on Claude Code pass `model: opus` to `reviewer` and `security`; on Antigravity subagents inherit the session model, so run the session with `agy --model pro` when it matters.
+Each dispatch gets the scope text, today's date, its slug, its brief, the sentence "Write your artifact with the Write tool; report only means no source edits.", and a tool-call budget below the agent's `maxTurns` with "write the artifact early, then update it" (context § Work). `--high`: on Claude Code pass `model: opus` to `reviewer` and `security`; on Antigravity `reviewer` inherits the session model and `security` is pinned to `pro` by its derived definition, so run the session with `agy --model pro` when it matters.
 
 | Lens | Agent | Slug it receives | Brief (verbatim) |
 |---|---|---|---|

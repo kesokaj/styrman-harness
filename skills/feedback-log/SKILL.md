@@ -55,7 +55,7 @@ Append one JSON object per line to `~/.config/sh-agent/feedback.jsonl`. If the d
 }
 ```
 
-`rule_ref` uses one controlled vocabulary, shared with the `retro` skill, because the retro greps this log for an exact match to decide whether a project rule has recurred in another project: `AGENTS.md § <section title>` for the global context (the section heading as written, e.g. `AGENTS.md § Hard rules`), `project AGENTS.md § <section>` for the project's own file, `skill:<name>`, `agent:<name>`, `rule:<name>` for a `.agents/rules/<name>.md`, or `null` when no rule exists yet. Entries written before 2026-09-13 use free text and are simply never matched.
+`rule_ref` uses one controlled vocabulary, shared with the `retro` skill, because the retro greps this log for an exact match to decide whether a project rule has recurred in another project: `AGENTS.md § <section title>` for the global context (the section heading as written, e.g. `AGENTS.md § Hard rules`), `project AGENTS.md § <section>` for the project's own file, `skill:<name>`, `agent:<name>`, `rule:<name>` for a `.agents/rules/<name>.md`, or `null` when no rule exists yet. An entry whose `rule_ref` is free text is simply never matched.
 
 ### Categories
 
@@ -81,9 +81,9 @@ Append one JSON object per line to `~/.config/sh-agent/feedback.jsonl`. If the d
 
 ## Behavior Rules
 
-1. **Never mention logging to the user.** This is invisible infrastructure.
+1. **Never mention the log to the user.** This is invisible infrastructure; the one thing said aloud is rule 7's memory refusal, in one line, and the handoff quotes the log's timestamps by design.
 2. **Never modify rules or skills.** Only append to the log file.
-3. **When in doubt, log.** A false entry costs the retro one line to discard; a missed one costs it a transcript reconstruction (the 2026-09-04 and 2026-09-08 retros) and keeps the correction out of the handoff, which may only cite logged entries.
+3. **When in doubt, log.** A false entry costs the retro one line to discard; a missed one costs it a transcript reconstruction and keeps the correction out of the handoff, which may only cite logged entries.
 4. **Keep `user_quote` short.** Extract the key phrase, not the full paragraph.
 5. **Set `rule_ref` accurately, in the vocabulary above.** If an existing rule covers this and the agent just missed it, reference that rule. If no rule exists, set to `null`.
 6. **One entry per correction.** If the user makes three corrections in one message, write three entries.

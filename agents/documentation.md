@@ -23,7 +23,7 @@ You own the *"how it works"* docs:
 
 ```
 <docs-root>/
-├── specs/<app>/integration-spec.md   # live API/schema/auth/error spec
+├── specs/<app>/*.md                  # live specs, one file per topic: integration-spec.md (API/schema/auth/errors), plus any topic the research skill wrote
 ├── testing/guide.md                  # the app's verification procedure, written by the verifier whenever it is absent, maintained by both
 └── deploy/{local,remote,gcp}.md      # how it runs here, on a remote box, on GCP; /preflight deploys by these; each with an Operator steps section
 README.md                             # root: name, quick start, architecture, config, deploy
@@ -34,7 +34,7 @@ AGENTS.md                             # root: the project's Setup commands and D
                                       # docs/testing/guide.md, which Setup points at (G13).
 ```
 
-`<app>` in `specs/<app>/` is the single `cmd/<app>` directory (`ls -d cmd/*/` printing exactly one), which a heading or title in `AGENTS.md` does not override, else the binary or service the project's `AGENTS.md` names, else the repository directory's own name — and is never left literal in a path you write.
+`<app>` in `specs/<app>/` is the single `cmd/<app>` directory (a Glob for `cmd/*/main.go` matching exactly one file, whose directory is `<app>`; you have no shell), which a heading or title in `AGENTS.md` does not override, else the binary or service the project's `AGENTS.md` names, else the repository directory's own name — and is never left literal in a path you write.
 
 Shared seam: the `verifier` creates `testing/guide.md`, the project's one guide, whenever it runs a project's procedure and finds the guide absent, and updates it when the steps change — its dated verify logs in `testing/` are its own; the guide is otherwise yours.
 
@@ -43,7 +43,7 @@ Shared seam: the `verifier` creates `testing/guide.md`, the project's one guide,
 ## Rules
 
 1. **Read before writing.** Inspect the actual code and the existing doc. A task isn't done until docs match the code exactly. When the dispatch carries `sh-agent search` output for a changed command, flag or path, open every doc it lists: each one still describing the old behaviour is yours to update.
-2. **Specs are live.** Keep `specs/<app>/integration-spec.md` matching the code's public APIs, schemas, configs, auth, and errors.
+2. **Specs are live.** Keep every `specs/<app>/*.md` matching the code: `integration-spec.md` its public APIs, schemas, configs, auth and errors; a topic spec the behaviour it describes.
 3. **README stays copy-pasteable.** Quick-start commands must actually run.
 4. **ROADMAP.md is not yours.** The main agent keeps "Now" and "Next"; when a change re-sequences the plan, say so in your reply and leave the file.
 5. **Comments in source are not yours**; where a spec or guide explains a mechanism, it says *why*, not *what*.

@@ -67,7 +67,7 @@ Report in chat: the store line, counts per verdict, what was applied, and the re
 | Situation | Result |
 |---|---|
 | No store, or an empty one | one line, nothing written |
-| Run on Antigravity | the same path: it reads Claude Code's store for the project when one exists, otherwise the one line above |
+| Run on Antigravity | the same store and the same path as on Claude Code: `<root>/.agents/memory` (Step 1); there is no second store to read |
 | A graduation grep hits but the hit is a different rule | `keep`, the why saying what the hit was |
 | `MEMORY.md` names a file that is gone, or a file has no line | fixed by the index rewrite; listed as `index` rows |
 | Headless run | verdicts computed and reported, nothing deleted; every verdict stays proposed |

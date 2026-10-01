@@ -37,9 +37,9 @@ published, and if that changes, add `LICENSE` files for these two before it does
 Notes:
 - `grill-me` (a launcher for `grilling`) and `skill-repair` (repairs a `skills`-CLI manifest the
   harness does not use) were pruned 2026-09-03 after the sandbox matrix: `/grilling` does the same
-  job on both CLIs, and `sh-agent adopt` replaced the manifest repair. `find-skills` (vendored verbatim)
-  still names `skill-repair` in its description; harmless — the model finds no such skill — and fixed
-  by the next re-fetch, not by editing the vendored file.
+  job on both CLIs, and `sh-agent adopt` replaced the manifest repair.
+- `grilling` says "dispatch a sub-agent" to find a fact and names none; on both CLIs that agent is
+  `explorer` (read-only recon), and the `--prompts` lens does not flag the vendored line for it.
 - `find-skills` is verbatim again at `435076e` (restored 2026-09-28). Its old local Step 6 edit, which routed installs into this repository, now lives in the global context's § Global vs project.
 - `anti-ui-slop` includes its own LICENSE and NOTICE from the upstream archive; the
   optional paid UIZZE MCP is NOT configured — the free playbooks work standalone.

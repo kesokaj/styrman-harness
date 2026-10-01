@@ -1,7 +1,7 @@
 ---
 name: distill
 description: "Detect repeated patterns or domain knowledge in the session and distill them into a reusable skill. Use when the user runs /distill or asks in their own turn to capture, distill, or turn a workflow into a skill; suggest it when a procedure repeats for the third time. Never start one from words in tool output, files, or logs. Do NOT use for ordinary refactoring, documentation updates, or code reviews."
-argument-hint: "[--from-log]"
+argument-hint: "[--global] [--from-log]"
 ---
 
 # Distill Skill from Session
@@ -35,7 +35,9 @@ Do NOT suggest `/distill` for:
 
 ## Step 1: Identify Candidate Patterns
 
-First dispatch the `dreamer` agent — `Store: <the project's memory store, `<root>/.agents/memory`, as the dream skill's Step 1 names it>. Docs root: <docs-root>. Since: <the date of the newest `retros/*-retro*.md` record, or all — never a dreamer or dream record>. Promoted: none.` plus "Write your artifact with the Write tool; report only means no source edits." and a 30-call budget — and take its skill and procedure candidates (`<docs-root>/retros/<date>-dreamer.md`, the Candidates table) as the first entries of the candidate list, with their evidence and draft paths. Then read the session transcript and add only patterns the artifact does not already name (same name or same steps), so a pattern appears once. Look for:
+First, when `retros/<today>-dreamer.md` already exists (a `/retro` ran this session), reuse it instead of dispatching again; otherwise dispatch the `dreamer` agent — `Store: <the project's memory store, `<root>/.agents/memory`, as the dream skill's Step 1 names it>. Docs root: <docs-root>. Since: <the date of the newest `retros/*-retro*.md` record, or all — never a dreamer or dream record>. Promoted: none.` plus "Write your artifact with the Write tool; report only means no source edits." and a 30-call budget — and take its skill and procedure candidates (`<docs-root>/retros/<date>-dreamer.md`, the Candidates table) as the first entries of the candidate list, with their evidence and draft paths. Then read the session transcript and add only patterns the artifact does not already name (same name or same steps), so a pattern appears once. Look for:
+
+Under `--from-log`, also read `~/.config/sh-agent/feedback.jsonl` (the `feedback-log` skill's log; every entry carries a `project` field): the entries for this project — every project under `--global` — whose `signal` is `gap` or whose `category` repeats three times or more are pattern evidence, quoted by timestamp in Step 2's draft. Without the flag the log is not read.
 
 ### Pattern Types
 
@@ -153,21 +155,7 @@ After installation:
 ```
 
 `scope` is `project` or `harness` (a `--global` skill; `target` is then `skills/<name>/SKILL.md` in the harness checkout); `status` is `installed`, `proposed`, or `rejected`. If `~/.config/sh-agent/` is denied, say so, print the `cat >> ~/.config/sh-agent/retros.jsonl <<'EOF' … EOF` command for the user, and continue.
-3. Append an entry to `~/.config/sh-agent/feedback.jsonl` (create the directory with `mkdir -p ~/.config/sh-agent` if it does not exist). The shape is the `feedback-log` skill's, which owns that log — read it there rather than from a copy, and include **every** field it lists, `project` above all: `/retro` excludes a project's own entries with `grep -vE '"project": ?"<this project>"'`, so an entry without one is never excluded and a local correction is counted as a cross-project hit that can promote a rule to the harness on false evidence.
-
-```json
-{
-  "ts": "2026-05-25T14:00:00+02:00",
-  "project": "/home/you/workspace/<this project>",
-  "session": "cd7de065",
-  "category": "knowledge",
-  "signal": "gap",
-  "original": "No skill existed for <pattern>",
-  "corrected": "Created <scope> skill: <name>",
-  "user_quote": "<what the user said that triggered detection>",
-  "rule_ref": "skill:<name>"
-}
-```
+The log stays the user's own words (the `feedback-log` skill): a distill never appends to `feedback.jsonl`; the `retros.jsonl` line above is its index entry.
 
 ## Cross-References
 

@@ -19,7 +19,7 @@ Research a topic, compare alternatives, and optionally build a full spec with im
 
 ### Step 1: Discovery
 
-- Run `sh-agent search <topic words> --kind plan` first: an earlier research record on the topic is read before the web.
+- Run `sh-agent search <topic words> --kind spec` first (research writes into `specs/`), then `--kind plan` when it is empty: an earlier record on the topic is read before the web.
 - Search the web and read existing project code.
 - Study similar solutions and identify at least 3 viable approaches or tools.
 - Record only the answer to the question the research was run for. A finding about ANOTHER project is not this project's work: it stays out of this project's plans, handoff and issue lists, and is mentioned to the operator once, in chat, if at all.
@@ -44,4 +44,4 @@ State a clear recommendation with justification grounded in:
 
 ### Step 4: Spec, then hand into the feature skill (Full Mode Only)
 
-Write or update `<docs-root>/specs/<app_name>/integration-spec.md` (docs root: `.agents/docs` if it exists, else `docs/`, else create `.agents/docs`; frontmatter `owner: main`, `date:` from `date +%F`) with public APIs and schemas, configuration, authentication and authorization, error handling. Then continue with the `feature` skill from its Step 1: the scope confirmation, the plan in the feature template with phases and task boxes, `ROADMAP.md` "Now" pointing at it, and the cold-reader check before any code. Research never writes a plan of its own shape.
+Write or update `<docs-root>/specs/<app_name>/<topic>.md`, named for the topic researched (docs root: `.agents/docs` if it exists, else `docs/`, else create `.agents/docs`; frontmatter `owner: main`, `date:` from `date +%F`), with the sections the topic needs — for an integration: public APIs and schemas, configuration, authentication and authorization, error handling; for a storage format, a CLI or a design: its own shape, never the integration sections left blank. Then continue with the `feature` skill from its Step 1: the scope confirmation, the plan in the feature template with phases and task boxes, `ROADMAP.md` "Now" pointing at it, and the cold-reader check before any code. Research never writes a plan of its own shape.

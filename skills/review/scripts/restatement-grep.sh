@@ -15,7 +15,7 @@
 #   --all  a line counts only when it holds every word (default: any word)
 #   --     ends the options; a word may start with `-` (`--append-system-prompt`)
 #          and any token after the first word is a word too
-# Output: path:line: text, one per hit, over the LIVING files: `git ls-files`
+# Output: path:line: text, one per hit (`-H`: the path even for a single file), over the LIVING files: `git ls-files`
 # minus the records (`.agents/docs/{changes,handoffs,reviews,retros}/`,
 # `bugs/BUG-*`, dated `testing/20*` logs, `architecture/DECISIONS.md`) and
 # minus the vendored skills named in skills/VENDORED.md, which are never edited.
@@ -36,7 +36,11 @@ done
 root=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "restatement-grep: not a git checkout" >&2; exit 2; }
 cd "$root"
 # The living files: everything git tracks except the records and the vendored skills.
-vendored=$( { grep -E '^\| [a-z0-9-]+ \|' skills/VENDORED.md 2>/dev/null || true; } | awk -F'|' '{gsub(/ /,"",$2); print $2}' | grep -v -E '^(Skill)$' | sed 's#^#^skills/#; s#$#/#' )
+# `|| true` on the whole pipeline: without VENDORED.md the list is empty, the
+# final grep exits 1, and under pipefail the substitution would take the script
+# down with it — exit 1, indistinguishable from "no hits", in every project
+# that is not the harness (BUG-138).
+vendored=$( { { grep -E '^\| [a-z0-9-]+ \|' skills/VENDORED.md 2>/dev/null || true; } | awk -F'|' '{gsub(/ /,"",$2); print $2}' | grep -v -E '^(Skill)$' | sed 's#^#^skills/#; s#$#/#'; } || true )
 mapfile -t files < <(git ls-files -z | tr '\0' '\n' \
   | grep -v -E '^\.agents/docs/(changes|handoffs|reviews|retros)/|^\.agents/docs/bugs/BUG-|^\.agents/docs/testing/20[0-9][0-9]-|^\.agents/docs/architecture/DECISIONS\.md$' \
   | { if [ -n "$vendored" ]; then grep -v -E "$(printf '%s\n' "$vendored" | paste -sd'|' -)"; else cat; fi; } || true)
@@ -50,11 +54,11 @@ if [ "$all" -eq 1 ]; then
       printf '%s\n' "${line#*:*:}" | grep -q $ci -F -- "$w" || { keep=0; break; }
     done
     [ "$keep" -eq 1 ] && { printf '%s\n' "$line"; hits=$((hits+1)); }
-  done < <(grep -n $ci -F -- "${words[0]}" "${files[@]}" 2>/dev/null || true)
+  done < <(grep -nH $ci -F -- "${words[0]}" "${files[@]}" 2>/dev/null || true)
 else
   pattern=$(printf '%s\n' "${words[@]}")
   while IFS= read -r line; do
     printf '%s\n' "$line"; hits=$((hits+1))
-  done < <(grep -n $ci -F -- "$pattern" "${files[@]}" 2>/dev/null || true)
+  done < <(grep -nH $ci -F -- "$pattern" "${files[@]}" 2>/dev/null || true)
 fi
 [ "$hits" -gt 0 ] && exit 0 || exit 1

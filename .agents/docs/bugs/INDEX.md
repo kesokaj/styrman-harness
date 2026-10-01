@@ -94,6 +94,8 @@
 | BUG-135 | 2026-10-01 | dream verb and collection wiring | fixed | dream usage exit codes and stderr inconsistent; git `--no-optional-locks` after the verb silently emptied the modified-file set | a command line built in code gets a test that runs it; every usage refusal of one verb exits the same code on the caller's writer |
 | BUG-136 | 2026-10-01 | trail naming | fixed | change entry named with a guessed time stamp (2330 at 23:02); recurrence of BUG-073 | a time-stamped file name comes from `date +%F-%H%M` in the same tool call that writes the file, never typed |
 | BUG-137 | 2026-10-01 | embed / release binary | fixed | 0755 review script under skills/ failed TestEmbeddedPlanEqualsCheckout (embed.FS has no exec bit); Phase 2 skipped go test as "no Go changed" | a file in the five embedded trees is a source change for the embed tests: run guide § 1 on every change, never give it an exec bit, invoke scripts as `bash <path>` |
+| BUG-138 | 2026-10-01 | skills/review (restatement-grep.sh) | fixed | script exited 1 with no output outside the harness checkout (no VENDORED.md under `set -e -o pipefail`); one-file hits lacked the path | test a shipped script in a non-harness temp repo, hit and no-hit; a possibly-empty pipeline in `$(...)` ends in `\|\| true` on the whole group |
+| BUG-139 | 2026-10-01 | agents/documentation | open | "ROADMAP.md is not yours" lane held 5 of 6 adversarial runs; p5d3 moved the v0.2 item into a new Later section | report lane rules as n of N; a dispatch to `documentation`, `changelog` or `bugs` never names ROADMAP.md or TODO.md as a file to edit |
 
 ## Graduated
 

@@ -272,7 +272,7 @@ cmd/sh-agent  the binary; internal/harness is the installer's logic and tests; i
 ```bash
 gofmt -l cmd internal && go vet ./... && go test -race ./...   # gofmt takes the source dirs: unlike the Go tool it walks .agents/scratch
 # Two size pins in internal/harness/size_test.go are part of `go test ./...` above and are the checks a change to
-# context/*.md or rules/*.md must pass: TestRenderedContextFitsAntigravityBlock renders the real checkout and pins it
+# context/*.md or rules/*.md must pass both size pins (-run TestRenderedContext): TestRenderedContextFitsAntigravityBlock renders the real checkout and pins it
 # under 22,000 bytes, inside Antigravity's 24,000-byte global rules block (REQUIREMENTS § Known limits, ADR-035);
 # TestRenderedContextUnderTarget pins it under 15,000, the harness's own ceiling (goal 14,500)
 # govulncheck: two known, unreachable advisories (GO-2026-5024 in golang.org/x/sys via the SQLite driver; on a Go before 1.25.12, GO-2026-4970 in os.Root.Open, guarded by an Lstat); an older Go also reports two stdlib advisories, fixed by a newer Go on the machine, never a pin here (ADR-029, ADR-045a)

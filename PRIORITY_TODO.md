@@ -11,7 +11,7 @@ Operator's words (2026-09-30): "I want everything fixed, improved, optimized, ad
 - [x] Phase 2 — Trail and spec truth (2026-10-01): delivery claim, spec drifts, handoff correction, stopped-review markers, BUG-122/123 graduation with mechanisms, stale plan closed, project § Testing
 - [x] Phase 3 — Global context under budget and consistent; templates (2026-10-01; render 14,882; the REQUIREMENTS edit waits for the operator's yes to the diff shown in chat, `.agents/scratch/audit-fix/requirements.diff`)
 - [x] Phase 4 — Agents: lanes, tools, derive, description test, behavioural runs (2026-10-01; 35 behavioural runs; 488 tests)
-- [ ] Phase 5 — Workflow skills: every WS finding; preflight and review fixes; `/review --resume` lens; size tiers
+- [x] Phase 5 — Workflow skills: every WS finding; preflight and review fixes; `/review --resume` lens; size tiers
 - [ ] Phase 6 — Technical skills: golang, frontend, typescript, terraform-gcp, gke, cloud-run-deploy, docker, gcloud-setup, json-api-style, bash, mermaid; strikes; VENDORED rows; link-check test
 - [ ] Phase 7 — New skills and templates: requirements, spec, operate-gcp, data-gcp, api auth, testing strategy, explain-project; init-project templates
 - [ ] Phase 8 — Installer simplifications (S1, S2, S5–S8, IN5–IN10)

@@ -124,18 +124,6 @@ Branch: <current git branch>
 should focus on. Otherwise, infer from the open items above. Name a skill or
 agent to start with only when one is genuinely the first move.>
 
-Never list a step the project's deploy guide records as a standing by-hand
-procedure (its § Operator steps: an update at each place, a smoke check after
-it): the guide owns it, the operator runs it, and repeating it here reads as a
-question ("dont ask all the time about this", 2026-09-30). Point at the guide
-once when the release changed what those steps pick up; otherwise say nothing.
-
-An item the previous handoff's Next Steps already held is not carried again:
-this session does it, or puts it to the operator as one line with a
-recommendation and records the answer. A second handoff that lists the same
-open item is a session that left work waiting ("nothing waiting in this
-project", 2026-09-30).
-
 1. <prioritized action item>
 2. <prioritized action item>
 ```
@@ -147,6 +135,8 @@ project", 2026-09-30).
 - **Reference, don't repeat.** If a spec or plan exists, link to it — don't paste its contents.
 - **Redact sensitive data.** Strip API keys, passwords, tokens, PII, and anything from `~/.zsh_secrets` or `.env` files. Replace with `<REDACTED>`.
 - **Include the branch and commit state.** The next agent needs to know where the code stands.
+- **Next Steps never repeat a standing procedure.** A step the project's deploy guide records as a by-hand procedure (its § Operator steps: an update at each place, a smoke check after it) is the guide's and the operator's; listing it reads as a question. Point at the guide once when the release changed what those steps pick up; otherwise say nothing.
+- **Next Steps never carry an item twice.** An item the previous handoff's Next Steps already held is done in this session, or put to the operator as one line with a recommendation and its answer recorded. A second handoff listing the same open item is a session that left work waiting.
 
 ## Step 5: Save the Document
 
@@ -156,7 +146,7 @@ Resolve the docs root first: `.agents/docs` if it exists, else `docs/` if it exi
 DOCS_ROOT=.agents/docs
 [ -d "$DOCS_ROOT" ] || { [ -d docs ] && DOCS_ROOT=docs; } || true
 mkdir -p "$DOCS_ROOT/handoffs"
-# Save as: $DOCS_ROOT/handoffs/$(date +%F-%H%M)-<topic>.md
+# Save as: $DOCS_ROOT/handoffs/$(date +%F-%H%M)-<topic>.md — the stamp is run in the same call that writes the file
 ```
 
 Handoffs are dated and **immutable** — never overwrite a previous handoff; a new session gets a new file.
@@ -165,7 +155,20 @@ Reading side: the Resume Protocol in the global context tells every fresh sessio
 
 ### Cold-reader check — before the handoff counts as finished
 
-A handoff is done when a fresh reader can resume from it, not when it is saved. Run the Resume Protocol as that reader (yourself with the file only, or the `explorer` agent given the path and nothing else): AGENTS.md → this handoff → ROADMAP.md "Now" → the active plan's unticked boxes → the three newest `changes/` → `bugs/INDEX.md` → TODO.md → `sh-agent search --open` → `sh-agent memory show` (an open plan that postdates this handoff outranks it). Ask for six things: the status and single next step as the trail states them, any named file that does not exist, any contradiction between handoff, ROADMAP, TODO, and plan, any plan with an unticked box outside its fenced blocks that `ROADMAP.md` "Now" does not name (`sh-agent search --open --kind plan`; when search refuses, ``awk 'FNR==1{f=0} match($0,/^`{3,}/){n=RLENGTH; if(!f){f=n} else if(n==f && $0 ~ /^`+[[:space:]]*$/){f=0}; next} !f && /^- \[ \]/{print FILENAME; nextfile}' <docs-root>/plans/*.md``), any commit since the previous handoff that changed paths outside `<docs-root>` with no `changes/` entry covering it, and anything still left to guess. Fix what comes back at the source (plan, ROADMAP, TODO via the dispatches above) and in the handoff itself while it is still this session's; then report.
+A handoff is done when a fresh reader can resume from it, not when it is saved. Run the resume order as that reader: yourself with the file only, the `explorer` agent given the path and nothing else, or `/review --resume`, which dispatches `explorer` with the same six questions. The order: `AGENTS.md` → this handoff → `ROADMAP.md` Now → the active plan's unticked boxes → the three newest `changes/` → `bugs/INDEX.md` → `TODO.md` → `sh-agent search --open` → `sh-agent memory show` (an open plan that postdates this handoff outranks it). Ask six things:
+
+1. The status and the single next step as the trail states them.
+2. Any named file that does not exist.
+3. Any contradiction between the handoff, `ROADMAP.md`, `TODO.md` and the plan.
+4. Any plan with an unticked box outside its fenced blocks that `ROADMAP.md` Now does not name: `sh-agent search --open --kind plan`, or, when search refuses, the program below.
+5. Any commit since the previous handoff that changed paths outside `<docs-root>` with no `changes/` entry covering it.
+6. Anything still left to guess.
+
+```bash
+awk 'FNR==1{f=0} match($0,/^`{3,}/){n=RLENGTH; if(!f){f=n} else if(n==f && $0 ~ /^`+[[:space:]]*$/){f=0}; next} !f && /^- \[ \]/{print FILENAME; nextfile}' <docs-root>/plans/*.md
+```
+
+Fix what comes back at the source (plan, `ROADMAP.md`, `TODO.md`, the dispatches above) and in the handoff itself while it is still this session's; then report.
 
 ## Step 6: Commit and push
 

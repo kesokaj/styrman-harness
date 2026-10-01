@@ -590,7 +590,9 @@ var stdin io.Reader = os.Stdin
 // working directory. A refusal prints its reason and exits 2.
 func memoryCmd(args []string, e memory.Entry, home, vendorFlag string, out io.Writer) error {
 	if len(args) != 1 || (args[0] != "add" && args[0] != "show") {
-		return errors.New("usage: sh-agent memory add --type T --name SLUG --description TEXT (body on stdin) | sh-agent memory show")
+		// A usage error exits 2 like every other usage error here (dream's, a verb's unknown flag).
+		fmt.Fprintln(out, "usage: sh-agent memory add --type T --name SLUG --description TEXT (body on stdin) | sh-agent memory show")
+		return exitCode(2)
 	}
 	wd, err := os.Getwd()
 	if err != nil {

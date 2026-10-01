@@ -154,7 +154,11 @@ func (o Options) realRun() error {
 		total += len(resp.Proposals)
 		logf(fmt.Sprintf("%s ok %d proposals", p.Root, len(resp.Proposals)))
 	}
-	if err := finish(len(projects), total, ""); err != nil && stateErr == nil {
+	runErr := ""
+	if failed > 0 {
+		runErr = fmt.Sprintf("%d project(s) failed", failed) // so `status` never reads a run with failures as clean
+	}
+	if err := finish(len(projects), total, runErr); err != nil && stateErr == nil {
 		stateErr = err
 	}
 	if stateErr != nil {

@@ -81,6 +81,13 @@ resource "google_cloud_run_v2_service" "app" {
     }
   }
 
+
+  lifecycle {
+    # cloud-run-deploy owns the revisions: the image tag of each deploy, the canary split, a rollback.
+    # Terraform shapes the service and never resets those on the next apply.
+    ignore_changes = [template[0].containers[0].image, traffic, client, client_version]
+  }
+
   depends_on = [
     google_secret_manager_secret_iam_member.run_reads_app,
     google_secret_manager_secret_version.app, # the revision reads the version at start; create it first

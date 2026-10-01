@@ -138,6 +138,29 @@ resource "google_project_iam_member" "run_sql_client" {
 ```
 
 - A `google_sql_user` password lands in state: prefer IAM database authentication (`database_flags { name = "cloudsql.iam_authentication", value = "on" }`, one `google_sql_user` of `type = "CLOUD_IAM_SERVICE_ACCOUNT"` per service account — the runtime SA and the migrate SA — with no password anywhere; the grants are the `data-gcp` skill's § Roles recipe).
+
+```hcl
+# IAM database authentication: one database user per service account, no password anywhere
+# (the instance needs database_flags { name = "cloudsql.iam_authentication" value = "on" }).
+resource "google_sql_user" "run" {
+  name     = trimsuffix(google_service_account.run.email, ".gserviceaccount.com")
+  instance = google_sql_database_instance.db.name
+  type     = "CLOUD_IAM_SERVICE_ACCOUNT"
+}
+
+resource "google_sql_user" "migrate" {
+  name     = trimsuffix(google_service_account.migrate.email, ".gserviceaccount.com")
+  instance = google_sql_database_instance.db.name
+  type     = "CLOUD_IAM_SERVICE_ACCOUNT"
+}
+
+resource "google_project_iam_member" "iam_db_login" {
+  for_each = { run = google_service_account.run.member, migrate = google_service_account.migrate.member }
+  project  = var.project
+  role     = "roles/cloudsql.instanceUser" # IAM login; roles/cloudsql.client is granted beside the service
+  member   = each.value
+}
+```
 - Private IP instead of public: `ip_configuration { ipv4_enabled = false  private_network = <vpc self_link> }` plus the service's `vpc_access` block below.
 - https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/sql_database_instance ; versions: https://docs.cloud.google.com/sql/docs/postgres/db-versions
 
@@ -204,6 +227,11 @@ resource "google_cloud_run_v2_service" "app" {
       }
       egress = "PRIVATE_RANGES_ONLY" # or ALL_TRAFFIC
     }
+  }
+  lifecycle {
+    # cloud-run-deploy owns the revisions: the image tag of each deploy, the canary split, a rollback.
+    # Terraform shapes the service and never resets those on the next apply.
+    ignore_changes = [template[0].containers[0].image, traffic, client, client_version]
   }
 }
 ```
@@ -288,6 +316,10 @@ resource "google_cloud_run_v2_job" "migrate" {
         }
       }
     }
+  }
+
+  lifecycle {
+    ignore_changes = [template[0].template[0].containers[0].image] # gcloud run jobs deploy owns the job's image too
   }
 }
 

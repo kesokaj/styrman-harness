@@ -23,7 +23,7 @@ The map in `README.md` § How it works defines how the harness reaches a machine
 gofmt -l cmd internal && go vet ./... && go test -race ./...   # before any completion claim; gofmt takes the source dirs, not `.`, because it walks .agents/scratch and the Go tool does not (BUG-048)
 # a change to context/*.md or rules/*.md must also pass the two size pins in internal/harness/size_test.go (part of `go test ./...`
 # above): TestRenderedContextFitsAntigravityBlock, under 22,000 bytes inside Antigravity's 24,000-byte block (ADR-035), and
-# TestRenderedContextUnderTarget, under 15,000 bytes, the harness's own ceiling (goal 14,500; plan audit-fix D2b)
+# TestRenderedContextUnderTarget, the hand-written context (the render before its generated `## Installed` inventory) under 15,000 bytes, the harness's own ceiling (goal 14,500; plan audit-fix D2b); the inventory grows with every skill dropped in and counts only toward the 22,000
 go run ./cmd/sh-agent install --home .agents/scratch/home  # exercise the installer against a scratch home (gitignored)
 go run ./cmd/sh-agent list                              # sanity-check skills and agents parse
 go mod download                                         # once per version, while online: the one module (modernc.org/sqlite, R4) for an offline build later
@@ -52,7 +52,6 @@ Nothing generated is committed. The deployed files are assembled by `sh-agent in
 
 ## Rules for working here
 
-- `PRIORITY_TODO.md` at the root, while it exists, is read FIRST on resume, before `AGENTS.md`'s own resume chain, and its phases go ahead of every other item in this project (operator, 2026-09-30). It lists the phases of the plan it names; the plan holds the tasks. The commit that ticks its last phase empties it and deletes this rule.
 - The installer must never run against the operator's real `$HOME` during development. Use `--home .agents/scratch/<name>` for every test (the global scratch rule: never `/tmp`). Deploying to the real home is the operator's job.
 - `sh-agent install` rebuilds the binary from its own git checkout with `go build` and lets that build install (BUG-006); the running binary is copied only when `go` is missing, when the tree is a plain copy with no `.git` (whose binary was built from that same tree and which may be read-only to the installing user, BUG-015), or when the source is the harness embedded in a release binary, where there is nothing to build from (ADR-033, D13). After a change under `cmd/` or `internal/`, `sh-agent status` from the target home must show a `binary` line without a warning before the install is called done.
 - Adding a tool to an agent's `tools:` list means adding it to `toolMap` in `internal/harness/derive.go`. An unmapped tool fails the install on purpose: Antigravity hangs a subagent that names a tool it does not recognise.

@@ -39,7 +39,7 @@ Status: built 2026-09-29 (plan `plans/2026-09-29-dreamer-memory-loop.md`); writi
 
 ## Known differences (R10)
 
-What only a CLI's own runtime controls, and neither the context nor `sh-agent` can reach (REQUIREMENTS.md R10 points here):
+What only a CLI's own runtime controls, and neither the context nor `sh-agent` can reach (REQUIREMENTS.md R10 will point here once its Phase 3 edit is approved — `plans/2026-10-01-requirements-edit-proposal.md`):
 
 | Difference | Claude Code | Antigravity | Why it stays |
 |---|---|---|---|

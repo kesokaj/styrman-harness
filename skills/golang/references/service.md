@@ -363,7 +363,7 @@ import (
 	"fmt"
 
 	"github.com/golang-migrate/migrate/v4"
-	mpg "github.com/golang-migrate/migrate/v4/database/postgres"
+	mpg "github.com/golang-migrate/migrate/v4/database/pgx/v5" // the pgx driver, not database/postgres (which pulls lib/pq)
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	_ "github.com/jackc/pgx/v5/stdlib" // registers the "pgx" database/sql driver
 )

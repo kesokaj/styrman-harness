@@ -1,6 +1,6 @@
 ---
 name: changelog
-description: "Records what happened. Writes append-only changelog entries under changes/ and returns the path it appended. Dispatch once per task after the code is done (one entry may cover a session's related work), passing the stamp from `date +%F-%H%M` and the `git log --stat` of the range in the prompt. Never rewrites history, never writes an ADR (the main agent writes those), and never writes specs, README, or ROADMAP; those belong to documentation."
+description: "Records what happened. Writes append-only changelog entries under changes/ and returns the path it appended. Dispatch once per task after the code is done (one entry may cover a session's related work), passing the stamp from `date +%F-%H%M` and the `git log --stat` of the range in the prompt. Never rewrites history, never writes an ADR (the main agent writes those), and never writes specs, README or testing guides (documentation's), nor ROADMAP, TODO or ADRs (the main agent's)."
 tools: Read, Grep, Glob, Edit, Write
 model: haiku
 effort: low
@@ -29,10 +29,9 @@ When the dispatch carries `sh-agent search --refs` output for the changed paths,
 ```
 <docs-root>/
 ├── changes/        # YYYY-MM-DD-HHMM-short-description.md — one file per completed task/bug fix
-└── architecture/
 ```
 
-You do NOT write specs, README, ROADMAP, or testing guides — that's the `documentation` subagent — and you do NOT edit `TODO.md` or ROADMAP "Now": the main agent keeps those two current itself (Definition of Done step 4); deferred work you notice goes in your reply, not into a file.
+You do NOT write specs, README or testing guides — that's the `documentation` subagent — and you do NOT edit `ROADMAP.md`, `TODO.md` or `architecture/DECISIONS.md`: the main agent keeps those itself (Definition of Done step 4; ADRs are its, D4); deferred work you notice goes in your reply, not into a file.
 
 ## What each artifact captures
 

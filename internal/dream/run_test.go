@@ -302,8 +302,12 @@ func TestRunInvalidOutputKeepsRawAndWatermark(t *testing.T) {
 	if !errors.As(err, &ee) || ee.Code != 1 {
 		t.Fatalf("err = %v, want exit 1", err)
 	}
-	if st, _ := readState(f.home); !st.Projects[f.root].IsZero() {
+	st, _ := readState(f.home)
+	if !st.Projects[f.root].IsZero() {
 		t.Error("watermark advanced on a failed project")
+	}
+	if !strings.Contains(st.LastRun.Error, "failed") {
+		t.Errorf("last_run.error = %q after a failed project: status would read the run as clean", st.LastRun.Error)
 	}
 	failed := filepath.Join(f.home, ".config", "sh-agent", "dream-failed")
 	entries, _ := os.ReadDir(failed)

@@ -37,7 +37,7 @@ Decided once, each with its reason; the `cloud-run-deploy` skill reads the first
 | Cloud SQL | the `PROJECT:REGION:INSTANCE` for `--add-cloudsql-instances`, or none |
 | Probes and scale | startup probe path; `--min-instances`/`--max-instances`/`--concurrency` when set |
 | Secrets | `--set-secrets` names and pinned versions (names, never values) |
-| Terraform state | the GCS bucket (`PROJECT-tfstate` or its suffixed name) and prefix, or none when nothing is in HCL (the `terraform` skill) |
+| Terraform state | the GCS bucket (`PROJECT-tfstate` or its suffixed name) and prefix, or none when nothing is in HCL (the `terraform` skill); when the service is in HCL, Terraform owns its shape and `cloud-run-deploy` owns revisions and traffic |
 | Database roles | the path (`data-gcp` skill): socket and password with the one role `app`, or IAM authentication with `<app>-run` and `<app>-migrate` users and the one-time `GRANT CREATE` by `postgres`; the date that grant ran |
 
 ## Procedure

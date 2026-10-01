@@ -36,7 +36,7 @@ Check `<docs-root>/bugs/INDEX.md` first (`sh-agent search --refs <path> --kind b
 
 ## Step 2: Goldfish diagnosis
 
-Dispatch the `explorer` agent with **only the symptom and the repro** — not your hypothesis — and this brief:
+Dispatch the `explorer` agent with **only the symptom and the repro** — not your hypothesis — a tool-call budget below its `maxTurns`, "write the artifact early, then update it", and this brief:
 
 > Independent diagnosis. Symptom: … Repro: … Investigate the codebase and rank the top one to three candidate root causes by likelihood, each with file:line, the evidence for it, and what would falsify it. Do not propose a fix. End with `diagnosis complete`.
 

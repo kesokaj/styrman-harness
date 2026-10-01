@@ -155,7 +155,7 @@ Reading side: the Resume Protocol in the global context tells every fresh sessio
 
 ### Cold-reader check — before the handoff counts as finished
 
-A handoff is done when a fresh reader can resume from it, not when it is saved. Run the resume order as that reader: yourself with the file only, the `explorer` agent given the path and nothing else, or `/review --resume`, which dispatches `explorer` with the same six questions. The order: `AGENTS.md` → this handoff → `ROADMAP.md` Now → the active plan's unticked boxes → the three newest `changes/` → `bugs/INDEX.md` → `TODO.md` → `sh-agent search --open` → `sh-agent memory show` (an open plan that postdates this handoff outranks it). Ask six things:
+A handoff is done when a fresh reader can resume from it, not when it is saved. Run the resume order as that reader: yourself with the file only, the `explorer` agent given the path and nothing else (a tool-call budget below its `maxTurns`; "write the artifact early, then update it"), or `/review --resume`, which dispatches `explorer` with the same six questions. The order: `AGENTS.md` → this handoff → `ROADMAP.md` Now → the active plan's unticked boxes → the three newest `changes/` → `bugs/INDEX.md` → `TODO.md` → `sh-agent search --open` → `sh-agent memory show` (an open plan that postdates this handoff outranks it). Ask six things:
 
 1. The status and the single next step as the trail states them.
 2. Any named file that does not exist.

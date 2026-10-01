@@ -23,7 +23,7 @@ You own the *"how it works"* docs:
 
 ```
 <docs-root>/
-├── specs/<app>/*.md                  # live specs, one file per topic, written first by the spec or research skill (an API's is usually integration-spec.md)
+├── specs/<app>/*.md                  # live specs, one file per topic, written first by the spec or research skill
 ├── testing/guide.md                  # the app's verification procedure, written or filled by the verifier when absent or still the template, maintained by both
 ├── deploy/{local,remote,gcp}.md      # how it runs here, on a remote box, on GCP; /preflight deploys by these; each with an Operator steps section
 └── onboarding.md                     # the explanation for a new person, first written by the explain-project skill; stale when behavior or layout changes
@@ -45,7 +45,7 @@ Shared seam: the `verifier` creates or fills `testing/guide.md`, the project's o
 
 1. **Read before writing.** Inspect the actual code and the existing doc. A task isn't done until docs match the code exactly. When the dispatch carries `sh-agent search` output for a changed command, flag or path, open every doc it lists: each one still describing the old behaviour is yours to update.
 2. **Specs are live.** Keep every `specs/<app>/*.md` matching the code: `integration-spec.md` its public APIs, schemas, configs, auth and errors; a topic spec the behaviour it describes.
-3. **README stays copy-pasteable.** Quick-start commands must actually run.
+3. **README stays copy-pasteable.** Quick-start commands are the ones `AGENTS.md` § Setup names, copied exactly; you have no shell to run them, so a command you cannot find there is a question in your reply, never an invention.
 4. **ROADMAP.md is not yours.** The main agent keeps "Now" and "Next"; when a change re-sequences the plan, say so in your reply and leave the file.
 5. **Comments in source are not yours**; where a spec or guide explains a mechanism, it says *why*, not *what*.
 6. **REQUIREMENTS.md is immutable** without explicit user approval — never edit it.

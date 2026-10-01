@@ -3,6 +3,7 @@ package harness
 import (
 	"io/fs"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -48,8 +49,8 @@ func TestRenderedContextFitsAntigravityBlock(t *testing.T) {
 	t.Logf("Antigravity rules block is %d bytes (context %d, rules %d), budget %d", total, len(ctx), rules, renderedContextBudgetBytes)
 }
 
-// renderedContextTargetBytes is the harness's own ceiling for the rendered
-// context, under the Antigravity block pin above: the audit of 2026-09-30
+// renderedContextTargetBytes is the harness's own ceiling for the hand-written
+// context (the render before its generated `## Installed` inventory), under the Antigravity block pin above: the audit of 2026-09-30
 // found the context 94 bytes from that pin, so no rule could be added and no
 // rules/ file deployed (plan audit-fix, C1, D2b). Adherence tracks the number
 // of distinct instructions, not bytes, so the cut moved whole rules into the
@@ -69,8 +70,16 @@ func TestRenderedContextUnderTarget(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(ctx) > renderedContextTargetBytes {
-		t.Fatalf("rendered context is %d bytes, target %d (goal 14,500): move a whole rule into the skill or agent that acts on it, never shorten a sentence", len(ctx), renderedContextTargetBytes)
+	// The hand-written part only: the generated `## Installed` inventory grows with
+	// every skill dropped in, and a file drop must never fail this pin (R5); the
+	// whole render, inventory included, stays under the Antigravity block in the
+	// test above.
+	written := string(ctx)
+	if i := strings.Index(written, "\n## Installed"); i >= 0 {
+		written = written[:i]
 	}
-	t.Logf("rendered context is %d bytes, target %d", len(ctx), renderedContextTargetBytes)
+	if len(written) > renderedContextTargetBytes {
+		t.Fatalf("hand-written context is %d bytes, target %d (goal 14,500): move a whole rule into the skill or agent that acts on it, never shorten a sentence", len(written), renderedContextTargetBytes)
+	}
+	t.Logf("hand-written context is %d bytes (render %d with the inventory), target %d", len(written), len(ctx), renderedContextTargetBytes)
 }

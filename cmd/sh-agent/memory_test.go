@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/kesokaj/styrman-harness/internal/memory"
 	"testing"
 )
 
@@ -151,5 +153,21 @@ func TestDreamTimerDryRun(t *testing.T) {
 	}
 	if _, err := os.Stat(calls); !os.IsNotExist(err) {
 		t.Error("a dry run called the service manager")
+	}
+}
+
+// A memory usage error exits 2 like every other usage error of this binary;
+// the usage line goes to the writer.
+func TestMemoryUsageErrorExits2(t *testing.T) {
+	for _, args := range [][]string{{}, {"forget"}, {"add", "extra"}} {
+		var out bytes.Buffer
+		err := memoryCmd(args, memory.Entry{}, t.TempDir(), "", &out)
+		var code exitCode
+		if !errors.As(err, &code) || code != 2 {
+			t.Errorf("memory %v: want exit 2, got %v", args, err)
+		}
+		if !strings.Contains(out.String(), "usage: sh-agent memory") {
+			t.Errorf("memory %v: usage line missing from the writer: %q", args, out.String())
+		}
 	}
 }

@@ -110,6 +110,8 @@ Flags — apply deliberately, not by default; a project-specific flag and its re
 
 ## Canary rollout
 
+When the service is in Terraform (`terraform` skill), Terraform set the image once and ignores it since: this skill owns every revision, the traffic split and the rollback, and a `terraform apply` in between changes none of them.
+
 `/preflight`'s deploy row runs this block from the SECOND revision on; the first deploy of a
 service that does not exist yet is a plain `gcloud run deploy` (there is no serving revision to
 keep traffic on), and a rollback skips it. Deploy without traffic, test the tagged revision with a

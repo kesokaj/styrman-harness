@@ -2,6 +2,7 @@ package dream
 
 import (
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -13,5 +14,12 @@ import (
 // skill, 2026-10-01.
 func TestMain(m *testing.M) {
 	os.Unsetenv("CLAUDE_CONFIG_DIR")
+	// And every GIT_* variable, as the other packages' TestMain does: the
+	// collector runs git in fixture checkouts.
+	for _, kv := range os.Environ() {
+		if k, _, _ := strings.Cut(kv, "="); strings.HasPrefix(k, "GIT_") {
+			os.Unsetenv(k)
+		}
+	}
 	os.Exit(m.Run())
 }

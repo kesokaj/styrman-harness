@@ -628,10 +628,16 @@ func TestRefreshCatalogScript(t *testing.T) {
 		t.Error("CHECKSUMS covers a harness-written file")
 	}
 	manifest, _ := os.ReadFile(filepath.Join(dest, "MANIFEST.md"))
-	for _, want := range []string{pinA[:7], pinG[:7], "## Excluded", "## Notes"} {
+	for _, want := range []string{pinA[:7], pinG[:7], "## Excluded", "## Notes", "https://github.com/google/agents-cli", "https://github.com/google/skills", "Fetched through an override"} {
 		if !strings.Contains(string(manifest), want) {
 			t.Errorf("MANIFEST.md lacks %q", want)
 		}
+	}
+	// The manifest names the upstream repositories, never the value of an
+	// override: that value may hold a token in its path, and the manifest is
+	// committed (the v2.2.0 gate's L4).
+	if strings.Contains(string(manifest), tmp) {
+		t.Errorf("MANIFEST.md records an override's value:\n%s", manifest)
 	}
 	if info, err := os.Stat(filepath.Join(dest, "gamma", "scripts", "run.sh")); err != nil || info.Mode()&0o111 != 0 {
 		t.Errorf("the executable bit was not cleared: %v %v", info, err)
@@ -881,8 +887,27 @@ func TestRefreshCatalogScript(t *testing.T) {
 		secretPath := filepath.Join(tmp, "no-such-SECRETPATH-repository")
 		cmd.Env = fixtureEnv("HOME="+fakeHome, "CATALOG_AGENTS_CLI_REPO="+secretPath, "CATALOG_GOOGLE_SKILLS_REPO="+gskills, "CATALOG_DIR=", "CATALOG_WRITE=")
 		out, err := cmd.CombinedOutput()
-		if err == nil || !strings.Contains(string(out), "cannot clone the agents-cli source") || strings.Contains(string(out), "SECRETPATH") {
-			t.Errorf("a source that cannot be cloned: want it named by role and its value kept out of the output, git's own message included, got err %v\n%s", err, out)
+		if err == nil || !strings.Contains(string(out), "cannot clone the agents-cli source") || strings.Contains(string(out), "SECRETPATH") || strings.Contains(string(out), "fatal:") {
+			t.Errorf("a source that cannot be cloned: want it named by role, and neither its value nor git's own message in the output, got err %v\n%s", err, out)
+		}
+	}
+	// The same on the path every later refresh takes: a work directory that
+	// already holds the clones fetches, and a fetch that fails says which
+	// source, not its value (the v2.2.0 gate's L3).
+	{
+		secretPath := filepath.Join(tmp, "no-such-SECRETFETCH-repository")
+		cmd := exec.Command("bash", script, "--dest", dest, "--work", work, pinA, pinG)
+		cmd.Dir = repo
+		cmd.Env = fixtureEnv("CATALOG_AGENTS_CLI_REPO="+secretPath, "CATALOG_GOOGLE_SKILLS_REPO="+gskills, "CATALOG_DIR=", "CATALOG_WRITE=")
+		out, err := cmd.CombinedOutput()
+		if err == nil || !strings.Contains(string(out), "cannot fetch the agents-cli source") || strings.Contains(string(out), "SECRETFETCH") || strings.Contains(string(out), "fatal:") {
+			t.Errorf("a source that cannot be fetched: want it named by role, and neither its value nor git's own message in the output, got err %v\n%s", err, out)
+		}
+		if snapshot() != good {
+			t.Error("a failed fetch changed the destination")
+		}
+		if out, code := run(pinA, pinG); code != 0 || snapshot() != good {
+			t.Fatalf("could not refresh again after the failed fetch (exit %d)\n%s", code, out)
 		}
 	}
 	var noHome []string
@@ -943,7 +968,7 @@ func TestRefreshCatalogScript(t *testing.T) {
 		git(gskills, "reset", "-q", "--hard", pinG)
 		git(gskills, "clean", "-qfd")
 	}
-	if out, code := run(pinA, "0000000000000000000000000000000000000000"); code != 1 || !strings.Contains(out, "does not resolve") || snapshot() != good {
+	if out, code := run(pinA, "0000000000000000000000000000000000000000"); code != 1 || !strings.Contains(out, "does not resolve in the google-skills source") || snapshot() != good {
 		t.Errorf("unresolvable pin: want exit 1 and an untouched destination, got exit %d\n%s", code, out)
 	}
 	refuse("no frontmatter", "bad", map[string]string{"skills/cloud/bad/SKILL.md": "no frontmatter here\n"}, nil, "bad")

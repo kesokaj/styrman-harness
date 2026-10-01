@@ -212,6 +212,45 @@ func TestDreamTimerSaysWhatItFound(t *testing.T) {
 	}
 }
 
+// TestTimerOfAnotherSystemIsNamed: a home copied between a Mac and a Linux
+// box holds the other system's unit file. status reads "timer installed" for
+// it, so uninstall and --remove-timer must not pass over it in silence: they
+// name the file and say it stays (the v2.2.0 gate's L1).
+func TestTimerOfAnotherSystemIsNamed(t *testing.T) {
+	home := t.TempDir()
+	unit, plist := dream.UnitFor(home)
+	other := filepath.Join(home, "Library", "LaunchAgents", plist+".plist")
+	if runtime.GOOS == "darwin" {
+		other = filepath.Join(home, ".config", "systemd", "user", unit+".timer")
+	}
+	if err := os.MkdirAll(filepath.Dir(other), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(other, []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"uninstall", "--home", home},
+		{"uninstall", "--dry-run", "--home", home},
+		{"dream", "--remove-timer", "--home", home},
+	} {
+		var out bytes.Buffer
+		if err := run(args, &out); err != nil {
+			t.Errorf("%v: %v", args, err)
+		}
+		got := out.String()
+		if !strings.Contains(got, other) || !strings.Contains(got, "for another system") {
+			t.Errorf("%v does not name the other system's unit file:\n%s", args, got)
+		}
+		if strings.Contains(got, "removed the dream timer") || strings.Contains(got, "dream timer removed") {
+			t.Errorf("%v claims a removal:\n%s", args, got)
+		}
+		if _, err := os.Stat(other); err != nil {
+			t.Fatalf("%v removed the other system's unit file: %v", args, err)
+		}
+	}
+}
+
 // A memory usage error exits 2 like every other usage error of this binary;
 // the usage line goes to the writer.
 func TestMemoryUsageErrorExits2(t *testing.T) {

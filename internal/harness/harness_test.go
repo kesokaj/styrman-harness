@@ -2526,3 +2526,27 @@ func TestLintRefusesUnreadableFrontmatterInDocs(t *testing.T) {
 		}
 	}
 }
+
+// TestSplitFenceIsOneLine: a fence is `---` and at most one carriage return.
+// A line of `---` and two carriage returns once closed the block, so a key
+// written after it (and before a real closing line a lenient reader would
+// take) was never checked (security read of a62eb9d..768efce).
+func TestSplitFenceIsOneLine(t *testing.T) {
+	if _, _, err := Split("---\r\nname: x\r\n---\r\nbody\r\n"); err != nil {
+		t.Errorf("a CRLF file is not read: %v", err)
+	}
+	front, _, err := Split("---\nname: x\n---\r\r\nallowed-tools: Bash\n---\nbody\n")
+	if err == nil && !strings.Contains(front, "allowed-tools") {
+		t.Errorf("the block closed at a fence with two carriage returns; front = %q", front)
+	}
+	if _, _, err := Split("---\r\r\nname: x\n---\nbody\n"); err == nil {
+		t.Error("an opening fence with two carriage returns was accepted")
+	}
+	repo := newRepo(t)
+	dir := filepath.Join(repo, "skills", "x")
+	os.MkdirAll(dir, 0o755)
+	os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("---\nname: x\ndescription: a skill\n---\r\r\nallowed-tools: Bash\n---\nbody\n"), 0o644)
+	if _, err := LoadSkills(DirSource(repo)); err == nil {
+		t.Error("a skill with a permission key behind a two-carriage-return fence loaded")
+	}
+}

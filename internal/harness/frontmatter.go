@@ -20,13 +20,19 @@ var keyLine = regexp.MustCompile(`^([A-Za-z0-9_-]+):(?:[ \t]+(.*))?$`)
 
 // Split separates a leading `---` block from the body that follows it.
 func Split(text string) (front, body string, err error) {
+	// A fence is `---` and at most one carriage return before the newline:
+	// `---\r\r` is some other line to a YAML reader, and taking it for the
+	// closing fence left what followed unchecked.
+	fence := func(l string) bool {
+		return strings.TrimSuffix(strings.TrimSuffix(l, "\n"), "\r") == "---"
+	}
 	first, rest, ok := strings.Cut(text, "\n")
-	if !ok || strings.TrimRight(first, "\r") != "---" {
+	if !ok || !fence(first) {
 		return "", "", errors.New("no YAML frontmatter block")
 	}
 	lines := strings.SplitAfter(rest, "\n")
 	for i, l := range lines {
-		if strings.TrimRight(l, "\r\n") == "---" {
+		if fence(l) {
 			return strings.Join(lines[:i], ""), strings.Join(lines[i+1:], ""), nil
 		}
 	}

@@ -786,6 +786,13 @@ func TestPrintableDropsLineAndDirectionControls(t *testing.T) {
 		"a\u2066b\u2069c":     "a?b?c",
 		"a\u200eb\u200fc":     "a?b?c",
 		"åäö — ünïcode stays": "åäö — ünïcode stays",
+		// The whole format class, not a list: tag characters spell text no
+		// terminal shows, and the Arabic letter mark reorders its neighbours.
+		"a\U000e0041\U000e0042b": "a??b",
+		"a\u200bb\u2060c":        "a?b?c",
+		"a\u061cb":               "a?b",
+		"\ufeffstart":            "?start",
+		"soft\u00adhyphen":       "soft?hyphen",
 	} {
 		if got := printable(in); got != want {
 			t.Errorf("printable(%q) = %q, want %q", in, got, want)

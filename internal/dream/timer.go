@@ -267,6 +267,29 @@ func RemoveTimer(home, goos string) (bool, error) {
 	return true, nil
 }
 
+// OtherSystemTimerFiles lists this home's unit files that belong to the
+// operating system the binary is not running on: a home copied between a Mac
+// and a Linux box holds them, TimerInstalled counts them, and RemoveTimer for
+// goos never touches them. The caller names them, so "timer installed" in
+// status and a removal that removed nothing do not contradict each other in
+// silence.
+func OtherSystemTimerFiles(home, goos string) []string {
+	var candidates []string
+	switch goos {
+	case "linux":
+		candidates = []string{macPlistPath(home)}
+	case "darwin":
+		candidates = []string{linuxServicePath(home), linuxTimerPath(home)}
+	}
+	var found []string
+	for _, p := range candidates {
+		if _, err := os.Lstat(p); err == nil {
+			found = append(found, p)
+		}
+	}
+	return found
+}
+
 // shellQuote puts a path in single quotes for a command the operator may
 // paste: a space, a `$` or a quote in a home path must not change the command.
 func shellQuote(s string) string {

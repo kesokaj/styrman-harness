@@ -312,7 +312,16 @@ func runUninstall(c *ctx) error {
 	if notice := dream.LegacyTimerNotice(c.home, runtime.GOOS); notice != "" {
 		fmt.Fprintln(c.out, notice)
 	}
+	otherSystemTimerNote(c)
 	return err
+}
+
+// otherSystemTimerNote names unit files of the operating system this binary
+// is not running on: they are never removed here, and status counts them.
+func otherSystemTimerNote(c *ctx) {
+	if files := dream.OtherSystemTimerFiles(c.home, runtime.GOOS); len(files) > 0 {
+		fmt.Fprintln(c.out, "a dream timer unit for another system is in this home and stays: "+strings.Join(files, ", "))
+	}
 }
 
 // runReport needs no harness tree: a machine with no checkout must still be
@@ -366,6 +375,7 @@ func runDream(c *ctx) error {
 			if notice := dream.LegacyTimerNotice(c.home, runtime.GOOS); notice != "" {
 				fmt.Fprintln(c.out, notice)
 			}
+			otherSystemTimerNote(c)
 		}
 	default:
 		err = dream.Run(dream.Options{Home: c.home, Vendor: vendor, All: c.dreamAll, Project: c.dreamProject, DryRun: c.dryRun, Out: c.out})

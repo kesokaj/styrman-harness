@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // Options are the flags of `sh-agent search` and `sh-agent index`.
@@ -619,9 +620,10 @@ func printable(s string) string {
 			return '?'
 		}
 		// Unicode's own line and paragraph separators forge a line as a
-		// newline does, and the direction marks and overrides reorder what
-		// a terminal shows.
-		if r == 0x2028 || r == 0x2029 || r == 0x200e || r == 0x200f || (r >= 0x202a && r <= 0x202e) || (r >= 0x2066 && r <= 0x2069) {
+		// newline does. The whole format class goes too, not a list of its
+		// members: direction marks and overrides reorder what a terminal
+		// shows, and zero-width and tag characters spell text nobody sees.
+		if unicode.Is(unicode.Zl, r) || unicode.Is(unicode.Zp, r) || unicode.Is(unicode.Cf, r) {
 			return '?'
 		}
 		return r

@@ -54,7 +54,9 @@ directory, the checkout or an ancestor of either, in any spelling; a non-empty d
 `CHECKSUMS`, and only the directories that file names are removed), clones into a work directory
 that is its own (never `/`, the home directory or the checkout, never nested with the destination;
 one that already holds files must carry the script's `.refresh-catalog-work` marker or an
-`origins.txt`), takes a source override only as an `https://` URL or an absolute path, and writes
+`origins.txt`), takes a source override only as an `https://` URL (no user information, no query string) or an
+absolute path, never shows or records such a value (the manifest names the upstream repositories; the
+pins identify the content), and writes
 `INDEX.md` and
 `CHECKSUMS` through the Go tests, which then pin the tree both ways (`TestCatalogMatchesChecksums`,
 `TestCatalogIndexMatchesEntries`, `TestCatalogFilesAreCarryable`). Installed as global skills

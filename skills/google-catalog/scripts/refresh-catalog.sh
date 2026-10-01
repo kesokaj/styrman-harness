@@ -38,7 +38,9 @@
 # Needs git, go and (for the default sources) the network. Two environment
 # variables replace the source repositories, for the test's local fixtures:
 # CATALOG_AGENTS_CLI_REPO and CATALOG_GOOGLE_SKILLS_REPO, each an https:// URL
-# (with no user information in it) or an absolute path, nothing else. Relative --dest and --work are resolved
+# (with no user information or query string in it) or an absolute path,
+# nothing else. No message shows such a value, and the manifest records the
+# upstream repositories' names, never an override. Relative --dest and --work are resolved
 # against the caller's directory.
 set -euo pipefail
 
@@ -133,8 +135,13 @@ for pin in "$pin_a" "$pin_g"; do
     *[!0-9a-f]* | "" | ? | ?? | ??? | ???? | ????? | ??????) fail "a pin must be a commit id (7 to 40 hex digits), got: $pin" ;;
   esac
 done
-url_a=${CATALOG_AGENTS_CLI_REPO:-https://github.com/google/agents-cli}
-url_g=${CATALOG_GOOGLE_SKILLS_REPO:-https://github.com/google/skills}
+# The upstream repositories, as the manifest names them. An override changes
+# where the script fetches from, never what the manifest records: the pin
+# says what the content is, and an override's value may hold a token.
+upstream_a=https://github.com/google/agents-cli
+upstream_g=https://github.com/google/skills
+url_a=${CATALOG_AGENTS_CLI_REPO:-$upstream_a}
+url_g=${CATALOG_GOOGLE_SKILLS_REPO:-$upstream_g}
 # An override is an https URL or an absolute path (a local clone, the tests'
 # fixtures): git has transports that run a command (`ext::`), and plain http
 # can be rewritten on the way.
@@ -147,10 +154,10 @@ for v in CATALOG_AGENTS_CLI_REPO CATALOG_GOOGLE_SKILLS_REPO; do
       # which is committed. It is not echoed here either.
       host=${val#https://}
       case "${host%%/*}" in
-        *@*) fail "$v must be an https:// URL or an absolute path without credentials in it (the value goes into MANIFEST.md); use a credential helper" ;;
+        *@*) fail "$v must be an https:// URL or an absolute path without credentials in it ; use a credential helper" ;;
       esac
       case "$val" in
-        *\?*) fail "$v must be an https:// URL or an absolute path without credentials in it: no query string (the value goes into MANIFEST.md)" ;;
+        *\?*) fail "$v must be an https:// URL or an absolute path without credentials in it: no query string" ;;
       esac ;;
     *) fail "$v must be an https:// URL or an absolute path (its value is not shown: it may hold a credential)" ;;
   esac
@@ -168,20 +175,16 @@ mkdir -p "$work"
 : > "$work/.refresh-catalog-work"
 fetch() { # <clone name> <url> <pin>: a full clone, reused; checked out at the pin
   # A source is named by its role in every message, never by its value, and
-  # git's own complaint is shown with the value taken out: a token can sit in
-  # a URL's path, where no check can know it for one.
-  local dir="$work/$1" err
+  # git's own complaint is not shown: git repeats the value, cut or rewritten
+  # in ways no filter here can follow, and a token can sit in a URL's path.
+  local dir="$work/$1"
   if [ -d "$dir/.git" ]; then
     git -C "$dir" remote set-url -- origin "$2"
-    err=$(git -C "$dir" fetch -q origin '+refs/heads/*:refs/remotes/origin/*' 2>&1) || {
-      printf '%s\n' "${err//"$2"/<the $1 source>}" >&2
-      fail "cannot fetch the $1 source"
-    }
+    git -C "$dir" fetch -q origin '+refs/heads/*:refs/remotes/origin/*' >/dev/null 2>&1 ||
+      fail "cannot fetch the $1 source (git's own message is not shown: it repeats the source's value; run git fetch in $dir to see it)"
   else
-    err=$(git clone -q -- "$2" "$dir" 2>&1) || {
-      printf '%s\n' "${err//"$2"/<the $1 source>}" >&2
-      fail "cannot clone the $1 source"
-    }
+    git clone -q -- "$2" "$dir" >/dev/null 2>&1 ||
+      fail "cannot clone the $1 source (git's own message is not shown: it repeats the source's value; run the git clone yourself to see it)"
   fi
   git -C "$dir" -c advice.detachedHead=false checkout -q --detach "$3" 2>/dev/null || fail "pin $3 does not resolve in the $1 source"
 }
@@ -279,10 +282,16 @@ fetched() { # <path cell> <pin>: the old row's date when its pin is the same
 row() { printf '| %s | %s | %s | Apache-2.0 | %s | %s |\n' "$1" "$2" "$3" "$(fetched "$2" "$3")" "$(count "$4")"; }
 table="| Repository | Path | Pin | License | Fetched | Entries |
 |---|---|---|---|---|---|
-$(row "$url_a" "skills" "$full_a" agents-cli)
-$(row "$url_a" "extensions/langchain/template/.agents/skills" "$full_a" agents-cli-langchain)
-$(row "$url_g" "skills/cloud" "$full_g" google-skills-cloud)
-$(row "$url_g" "skills/developers" "$full_g" google-skills-developers)"
+$(row "$upstream_a" "skills" "$full_a" agents-cli)
+$(row "$upstream_a" "extensions/langchain/template/.agents/skills" "$full_a" agents-cli-langchain)
+$(row "$upstream_g" "skills/cloud" "$full_g" google-skills-cloud)
+$(row "$upstream_g" "skills/developers" "$full_g" google-skills-developers)"
+via=""
+if [ "$url_a" != "$upstream_a" ] || [ "$url_g" != "$upstream_g" ]; then
+  via="
+Fetched through an override of a source (a mirror or a local clone), whose value is not recorded; the pins identify the content.
+"
+fi
 tail_sections="## Excluded
 
 Upstream entries kept out, with the reason; the refresh script reads this list and excludes each name on every run.
@@ -310,7 +319,7 @@ date: $manifest_date
 Skills published by Google, vendored verbatim at the pins below by \`scripts/refresh-catalog.sh\` and reached through the router skill one directory up. \`INDEX.md\` is derived from the entries' frontmatter. \`CHECKSUMS\` shows that the committed tree has not changed since the refresh wrote it; it does not prove the tree matches upstream — for that, run the script at the pins with \`--dest\` in scratch and \`diff -r\` the result against this directory (provenance rests on git's commit ids and TLS to github.com).
 
 $table
-
+$via
 Local changes: file modes only (no executable bit).
 
 $tail_sections

@@ -14,4 +14,4 @@ description: "Google Cloud, Gemini, Agent Platform, ADK and agents-cli work that
 
 No entry matches: say "no catalog entry for <words>" in one line and continue without the catalog. A catalog file cannot be read (a headless run without a read grant): name the file and continue without it.
 
-Provenance, pins and the refresh procedure: `catalog/MANIFEST.md`; the refresh is `scripts/refresh-catalog.sh`, run only in the harness checkout.
+Provenance and pins: `catalog/MANIFEST.md`. The catalog is refreshed only in the harness checkout, by `scripts/refresh-catalog.sh` as that checkout's `skills/VENDORED.md` § Vendored catalogs describes; never run it from another project.

@@ -21,6 +21,11 @@
 #
 # INDEX.md and CHECKSUMS are written by the Go tests in write mode, so the
 # index is derived by the installer's own frontmatter parser.
+#
+# Needs git, go and (for the default sources) the network. Two environment
+# variables replace the source repositories, for the test's local fixtures:
+# CATALOG_AGENTS_CLI_REPO and CATALOG_GOOGLE_SKILLS_REPO. Relative --dest and
+# --work are resolved against the caller's directory.
 set -euo pipefail
 
 usage() { sed -n '2,6p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; }

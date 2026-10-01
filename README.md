@@ -273,7 +273,7 @@ Record third-party provenance in `skills/VENDORED.md`. A skill you already insta
 ```
 context/     AGENTS.md (the global context) and dev-setup.md (environment, stack, GCP rule)
 agents/      subagents in Claude Code format — the single source; Antigravity's flavour is derived
-skills/      skills, each a directory with SKILL.md (+ references/, assets/); `feature` and `bug` are the work protocols and load themselves; `review` is the review command on both CLIs
+skills/      skills, each a directory with SKILL.md (+ references/, assets/); `feature` and `bug` are the work protocols and load themselves; `review` is the review command on both CLIs; `google-catalog` carries 141 Google-published skills under its `catalog/` as data it routes to, never installed as skills
 commands/    markdown prompts invoked as /name (empty; prefer skills)
 rules/       extra always-on or path-scoped rules (empty)
 cmd/sh-agent  the binary; internal/harness is the installer's logic and tests; internal/search the search index (`sh-agent search`, `sh-agent index`); internal/memory the project memory store (`sh-agent memory`); internal/dream the nightly dreamer (`sh-agent dream`)

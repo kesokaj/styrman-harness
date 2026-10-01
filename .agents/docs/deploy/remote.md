@@ -180,6 +180,8 @@ Publishing a release changes NOTHING about the repository's visibility: `styrman
 
 Upload the assets one call at a time, not all of them on `gh release create`: a single create-with-assets call ROLLS THE WHOLE RELEASE BACK when one upload fails, which is what GitHub's upload endpoint did twice for v1.1.0 (`HTTP 500: Error creating asset temp dir`, both attempts leaving no release and the tag intact). Create the release with `--notes-file` alone, then `gh release upload vX.Y.Z --repo kesokaj/styrman-harness <asset> --clobber` per file, retrying an individual upload before calling it a failure.
 
+Since the Google skills catalog (plan `2026-10-01-google-skills-catalog`) each binary embeds it, about 6 MB more (linux/amd64: 19.9 MB), and the zip of the tree is about 7 MB with some 2,575 entries, inside the 5,000 entries `update --from-zip` accepts; the uploads take correspondingly longer, nothing else in the procedure changes.
+
 After the upload: `gh release view vX.Y.Z --repo kesokaj/styrman-harness --json assets --jq '.assets[].name'` lists the six assets, and nothing further is pushed anywhere — a binary-only place picks the release up the next time the operator runs `sh-agent update` there.
 
 ### Release notes

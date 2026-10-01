@@ -136,6 +136,12 @@ go test -race ./internal/memory ./internal/dream ./internal/search ./cmd/sh-agen
 - Corpus measurement of the Antigravity reader (a change to `internal/search/dream.go`): `SH_AGENT_CORPUS=<dir of copied Antigravity conversation databases> go test ./internal/search -run TestAgyCorpusLeaves -count=1 -v` prints `corpus: N databases, L prose leaves kept, K with a tool-argument key`. K must be 0. The 2026-09-30 measurement over 95 databases was 971 and 0, before and after the reader change. The copies live under `.agents/scratch/` and are deleted after.
 - The kit is in `testing/2026-09-30-verify-parity-memory-dream-phase-4.md`.
 
+## 3f. The Google skills catalog (change under `skills/google-catalog/`, to `internal/harness/catalog_test.go`, or to the listing budget)
+
+- The catalog tests run inside § 1's `go test ./...`: `TestCatalogMatchesChecksums`, `TestCatalogIndexMatchesEntries`, `TestCatalogFilesAreCarryable` (each fails on an empty catalog), `TestCatalogInstallsClean`, `TestRouterDescription`, `TestSkillListingBudget` (names plus descriptions of the installed skills at most 19,500 bytes), and `TestRefreshCatalogScript`, which builds local fixture repositories and never reaches the network (it needs `bash`, `git` and `go`; `-short` skips it).
+- A refresh — `bash skills/google-catalog/scripts/refresh-catalog.sh <agents-cli pin> <google-skills pin>`, which needs the network — is followed by `git add skills/google-catalog && go test ./...` (an unstaged catalog fails `TestEmbedHoldsOnlyTrackedFiles` with "embedded but not tracked", the same message an ignored path gives), a read of `git diff --cached --stat -- skills/google-catalog`, and a security review of the diff before the commit (`AGENTS.md` § Rules).
+- Behaviour on the CLIs is three matrix rows (`skill-matrix.md`: `catalog-no-leak`, `catalog-route`, `catalog-precedence`), run on both from a sandbox home; each is judged from the run's own record (Claude Code's stream-json events, Antigravity's conversation database), not from the model's reply.
+
 ## 4. Sandbox start of each CLI (change to `context/`, `agents/`, or `skills/`)
 
 One start of Claude Code and one of Antigravity in the sandbox (paths and flags in

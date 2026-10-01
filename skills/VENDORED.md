@@ -38,8 +38,6 @@ Apache-2.0 permits redistribution with attribution, which the table above provid
 It also asks that a copy of the licence travel with the work: this repository is not
 published, and if that changes, add a `LICENSE` file for `gke-basics` before it does.
 
-Notes:
-
 ## Vendored catalogs
 
 | Catalog | Source | Pin | License | Vendored | Update via |
@@ -61,6 +59,8 @@ these 141 push the harness's own skills out of both CLIs' skill lists
   job on both CLIs, and `sh-agent adopt` replaced the manifest repair.
 - `grilling` says "dispatch a sub-agent" to find a fact and names none; on both CLIs that agent is
   `explorer` (read-only recon), and the `--prompts` lens does not flag the vendored line for it.
+Notes:
+
 - `find-skills` is verbatim again at `435076e` (restored 2026-09-28). Its old local Step 6 edit, which routed installs into this repository, now lives in the global context's § Global vs project.
 - The UIZZE UI skill (uizze.com, v1.2.13, formerly a row above) and the Python skill were removed on
   2026-10-01 (plan audit-fix D28, operator's strike): the first duplicated `frontend` and needed a paid

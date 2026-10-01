@@ -1,8 +1,10 @@
 package harness
 
 import (
+	"fmt"
 	"io/fs"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -82,4 +84,42 @@ func TestRenderedContextUnderTarget(t *testing.T) {
 		t.Fatalf("hand-written context is %d bytes, target %d (goal 14,500): move a whole rule into the skill or agent that acts on it, never shorten a sentence", len(written), renderedContextTargetBytes)
 	}
 	t.Logf("hand-written context is %d bytes (render %d with the inventory), target %d", len(written), len(ctx), renderedContextTargetBytes)
+}
+
+// TestSkillListingBudget pins what both CLIs must list at session start: the
+// names and descriptions of every model-invocable skill. Claude Code shows
+// descriptions for about 19,800 bytes of them and bare names beyond that
+// (measured 2026-10-01 with 173 skills installed: descriptions stopped after
+// the 41st alphabetically; plans/2026-10-01-research-google-skills-catalog.md),
+// so a skill past the budget has nothing that tells the model when to load it.
+// Antigravity's budget is larger (about 44,000) and drops the longest first.
+func TestSkillListingBudget(t *testing.T) {
+	const budget = 19500
+	skills, err := LoadSkills(DirSource(filepath.Join("..", "..")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	type entry struct {
+		name string
+		n    int
+	}
+	var sum int
+	var all []entry
+	for _, s := range skills {
+		if s.SlashOnly {
+			continue // not listed to the model
+		}
+		sum += len(s.Name) + len(s.Description)
+		all = append(all, entry{s.Name, len(s.Description)})
+	}
+	if sum <= budget {
+		t.Logf("skill listing is %d bytes of names and descriptions over %d skills, budget %d", sum, len(all), budget)
+		return
+	}
+	sort.Slice(all, func(i, j int) bool { return all[i].n > all[j].n })
+	var longest []string
+	for _, e := range all[:5] {
+		longest = append(longest, fmt.Sprintf("%s (%d)", e.name, e.n))
+	}
+	t.Errorf("skill listing is %d bytes of names and descriptions, over the budget of %d: shorten a description; the longest are %s", sum, budget, strings.Join(longest, ", "))
 }

@@ -1,18 +1,14 @@
 ---
 name: cloud-run-deploy
 description: |
-  End-to-end release workflow for Google Cloud Run: build container images locally with
-  Colima/Docker (ARM for local testing, AMD64 for deploy), push to GCP Artifact Registry,
-  deploy to Cloud Run, verify, and roll back. This is the HOW of a Cloud Run deploy, not
-  the decision to do one: "ship", "deploy", "release" or "cut vX.Y.Z" in the user's own turn
-  means `/preflight`, which runs its gate and then calls this skill's steps at its deploy row
-  — so enter through `/preflight` and never run these steps in its place. Use directly for the
-  mechanics: an image build or Artifact Registry push, a rollback, a `gcloud run` flag, a
-  failed revision, or a deploy `/preflight` has already gated.
-  Do NOT use to answer a ship/deploy/release request on its own — that is `/preflight`.
-  Do NOT use for Kubernetes/GKE workloads (use gke-basics), local-only container work
-  (use docker), gcloud auth problems (use gcloud-setup), or Terraform-managed
-  infrastructure (use terraform).
+  The HOW of a Google Cloud Run deploy: build the image locally (ARM to test, AMD64 to
+  deploy), push to Artifact Registry, deploy, verify, roll back. A ship, deploy, release or
+  "cut vX.Y.Z" request in the user's own turn means `/preflight`, which gates and then runs
+  these steps: never run them in its place. Use directly for the mechanics: an image build
+  or push, a rollback, a `gcloud run` flag, a failed revision, or a deploy `/preflight`
+  already gated. Do NOT use for GKE workloads (gke-basics), local-only container work
+  (docker), gcloud auth problems (gcloud-setup) or Terraform-managed infrastructure
+  (terraform).
 ---
 
 Release pipeline: **local build (Colima) → Artifact Registry → Cloud Run**. Build

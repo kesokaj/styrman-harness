@@ -14,8 +14,11 @@
 # that does not resolve; an entry without SKILL.md frontmatter (name and
 # description); an entry name in two source sets; a symlink; a go.mod, go.sum
 # or *.go file (the Go tool and the embed would both mishandle the directory).
-# The operator then passes --exclude <entry> and records it under the
-# manifest's "## Excluded". What it cannot see cheaply — a secret-shaped file
+# A dotfile inside an entry, a symlinked LICENSE or source directory, and a
+# directory name that is not lowercase letters, digits and hyphens are
+# refused the same way. The operator then passes --exclude <entry> and records
+# it under the manifest's "## Excluded"; every name listed there is excluded on
+# each later refresh without the flag. What it cannot see cheaply — a secret-shaped file
 # name, a path git ignores — is caught by the suite it tells you to run next
 # (TestCatalogInstallsClean, TestEmbedHoldsOnlyTrackedFiles).
 #
@@ -47,13 +50,30 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ $# -eq 2 ] || { usage; exit 2; }
+[ -n "$dest" ] && [ -n "$work" ] || fail "--dest and --work must not be empty"
 # Absolute before anything runs: the Go writer below runs with another working
 # directory, where a relative path would name nothing (BUG-146).
 abs() { case "$1" in /*) printf '%s\n' "$1" ;; *) printf '%s/%s\n' "$PWD" "$1" ;; esac; }
 dest=$(abs "$dest")
 work=$(abs "$work")
+# The swap below deletes directories under --dest, so --dest is never a place
+# that holds anything else: not /, the home directory, the checkout, or an
+# ancestor of either (security review S1).
+case "${dest%/}/" in
+  / | "${HOME%/}/" | "${repo%/}/") fail "--dest $dest is not a catalog directory" ;;
+esac
+case "${repo%/}/" in "${dest%/}/"*) fail "--dest $dest contains the checkout" ;; esac
+case "${HOME%/}/" in "${dest%/}/"*) fail "--dest $dest contains the home directory" ;; esac
+if [ -d "$dest" ] && [ -n "$(ls -A "$dest")" ] && [ ! -f "$dest/CHECKSUMS" ]; then
+  fail "--dest $dest is not empty and has no CHECKSUMS: not a catalog, nothing is replaced there"
+fi
 pin_a=$1
 pin_g=$2
+for pin in "$pin_a" "$pin_g"; do
+  case "$pin" in
+    *[!0-9a-f]* | "" | ? | ?? | ??? | ???? | ????? | ??????) fail "a pin must be a commit id (7 to 40 hex digits), got: $pin" ;;
+  esac
+done
 url_a=${CATALOG_AGENTS_CLI_REPO:-https://github.com/google/agents-cli}
 url_g=${CATALOG_GOOGLE_SKILLS_REPO:-https://github.com/google/skills}
 
@@ -67,17 +87,25 @@ mkdir -p "$work"
 fetch() { # <clone name> <url> <pin>: a full clone, reused; checked out at the pin
   local dir="$work/$1"
   if [ -d "$dir/.git" ]; then
-    git -C "$dir" remote set-url origin "$2"
+    git -C "$dir" remote set-url -- origin "$2"
     git -C "$dir" fetch -q origin '+refs/heads/*:refs/remotes/origin/*' || fail "cannot fetch $2"
   else
-    git clone -q "$2" "$dir" || fail "cannot clone $2"
+    git clone -q -- "$2" "$dir" || fail "cannot clone $2"
   fi
   git -C "$dir" -c advice.detachedHead=false checkout -q --detach "$3" 2>/dev/null || fail "pin $3 does not resolve in $2"
 }
 fetch agents-cli "$url_a" "$pin_a"
 fetch google-skills "$url_g" "$pin_g"
-short_a=$(git -C "$work/agents-cli" rev-parse --short=7 HEAD)
-short_g=$(git -C "$work/google-skills" rev-parse --short=7 HEAD)
+full_a=$(git -C "$work/agents-cli" rev-parse HEAD)
+full_g=$(git -C "$work/google-skills" rev-parse HEAD)
+
+# Entries the security review excluded stay excluded: the manifest's list is
+# merged into --exclude, so a refresh cannot bring one back by forgetting a flag.
+if [ -f "$dest/MANIFEST.md" ]; then
+  for name in $(sed -n '/^## Excluded/,/^## Notes/p' "$dest/MANIFEST.md" | sed -n 's/^- `\([^`]*\)`.*/\1/p'); do
+    excludes="$excludes $name"
+  done
+fi
 
 build="$work/build"
 rm -rf "$build"
@@ -89,10 +117,21 @@ excluded() { case " $excludes " in *" $1 "*) return 0 ;; esac; return 1; }
 while IFS='|' read -r label clone sub; do
   root="$work/$clone/$sub"
   [ -d "$root" ] || fail "source set $label: no $sub at the pin"
+  # No path component of a source set is a symlink: one would vendor
+  # directories from outside the clone (security review S2).
+  [ "$(cd "$root" && pwd -P)" = "$(cd "$work/$clone" && pwd -P)/$sub" ] || fail "source set $label: $sub leaves the clone through a symlink"
   for d in "$root"/*/; do
     [ -d "$d" ] || continue
     name=$(basename "$d")
     excluded "$name" && continue
+    # A skill name is lowercase letters, digits and hyphens: anything else
+    # (a space, a capital, a glob character) would break the bookkeeping
+    # below. Excluding it comes first, so one odd upstream directory never
+    # blocks every refresh.
+    case "$name" in
+      *[!a-z0-9-]* | -*) fail "entry \"$name\" ($label) is not a plain skill name (lowercase letters, digits, hyphens); the catalog cannot carry it (--exclude \"$name\")" ;;
+    esac
+    [ ! -L "${d%/}" ] || fail "entry $name ($label) is itself a symlink (--exclude $name)"
     [ -f "$d/SKILL.md" ] || fail "entry $name ($label) has no SKILL.md (--exclude $name)"
     prev=$(awk -v n="$name" '$1 == n {print $2}' "$origins")
     [ -z "$prev" ] || fail "entry $name is in two source sets, $prev and $label (--exclude $name drops both)"
@@ -100,6 +139,8 @@ while IFS='|' read -r label clone sub; do
     [ -z "$bad" ] || fail "entry $name ($label) holds a symlink: ${bad#"$root"/} (--exclude $name)"
     bad=$(find "${d%/}" -type f \( -name go.mod -o -name go.sum -o -name '*.go' \) -print | head -1)
     [ -z "$bad" ] || fail "entry $name ($label) holds a Go file the module would pick up: ${bad#"$root"/} (--exclude $name)"
+    bad=$(find "${d%/}" -mindepth 1 -name '.*' -print | head -1)
+    [ -z "$bad" ] || fail "entry $name ($label) holds a dotfile that would change how git or a tool treats the subtree: ${bad#"$root"/} (--exclude $name)"
     mkdir -p "$build/$name"
     cp -R "${d%/}/." "$build/$name/"
     printf '%s %s\n' "$name" "$label" >> "$origins"
@@ -111,9 +152,12 @@ SETS
 
 find "$build" -type f -exec chmod 644 {} +
 find "$build" -type d -exec chmod 755 {} +
-[ -f "$work/agents-cli/LICENSE" ] && [ -f "$work/google-skills/LICENSE" ] || fail "a repository has no LICENSE file at the pin"
-cp "$work/agents-cli/LICENSE" "$build/LICENSE-agents-cli"
-cp "$work/google-skills/LICENSE" "$build/LICENSE-google-skills"
+for lic in "$work/agents-cli/LICENSE" "$work/google-skills/LICENSE"; do
+  [ ! -L "$lic" ] || fail "LICENSE is a symlink at the pin: ${lic#"$work"/} (it would copy a local file into the catalog)"
+  [ -f "$lic" ] || fail "a repository has no LICENSE file at the pin: ${lic#"$work"/}"
+done
+cp -P "$work/agents-cli/LICENSE" "$build/LICENSE-agents-cli"
+cp -P "$work/google-skills/LICENSE" "$build/LICENSE-google-skills"
 chmod 644 "$build/LICENSE-agents-cli" "$build/LICENSE-google-skills"
 # The catalog is data, not the checkout's own text: `sh-agent search` leaves a
 # directory holding this marker out of its index.
@@ -142,13 +186,13 @@ fetched() { # <path cell> <pin>: the old row's date when its pin is the same
 row() { printf '| %s | %s | %s | Apache-2.0 | %s | %s |\n' "$1" "$2" "$3" "$(fetched "$2" "$3")" "$(count "$4")"; }
 table="| Repository | Path | Pin | License | Fetched | Entries |
 |---|---|---|---|---|---|
-$(row "$url_a" "skills" "$short_a" agents-cli)
-$(row "$url_a" "extensions/langchain/template/.agents/skills" "$short_a" agents-cli-langchain)
-$(row "$url_g" "skills/cloud" "$short_g" google-skills-cloud)
-$(row "$url_g" "skills/developers" "$short_g" google-skills-developers)"
+$(row "$url_a" "skills" "$full_a" agents-cli)
+$(row "$url_a" "extensions/langchain/template/.agents/skills" "$full_a" agents-cli-langchain)
+$(row "$url_g" "skills/cloud" "$full_g" google-skills-cloud)
+$(row "$url_g" "skills/developers" "$full_g" google-skills-developers)"
 tail_sections="## Excluded
 
-Upstream entries the refresh refused, with the reason; passed as \`--exclude\` on every refresh.
+Upstream entries kept out, with the reason; the refresh script reads this list and excludes each name on every run.
 
 - none
 
@@ -170,7 +214,7 @@ date: $manifest_date
 ---
 # Google skills catalog — provenance
 
-Skills published by Google, vendored verbatim at the pins below by \`scripts/refresh-catalog.sh\` and reached through the router skill one directory up. \`CHECKSUMS\` pins every vendored file; \`INDEX.md\` is derived from the entries' frontmatter.
+Skills published by Google, vendored verbatim at the pins below by \`scripts/refresh-catalog.sh\` and reached through the router skill one directory up. \`INDEX.md\` is derived from the entries' frontmatter. \`CHECKSUMS\` shows that the committed tree has not changed since the refresh wrote it; it does not prove the tree matches upstream — for that, run the script at the pins with \`--dest\` in scratch and \`diff -r\` the result against this directory (provenance rests on git's commit ids and TLS to github.com).
 
 $table
 
@@ -179,16 +223,23 @@ Local changes: file modes only (no executable bit).
 $tail_sections
 MANIFEST
 
-# Excluded entries the operator did not pass again.
-sed -n '/^## Excluded/,/^## Notes/p' "$build/MANIFEST.md" | sed -n 's/^- `\([^`]*\)`.*/\1/p' | while read -r name; do
-  excluded "$name" || echo "note: $name is listed under ## Excluded but was not passed as --exclude"
-done
-
 # The swap: entries replaced, entries upstream dropped removed.
 mkdir -p "$dest"
 before=$(cd "$dest" && find . -mindepth 1 -maxdepth 1 -type d | sed 's|^\./||' | sort)
 after=$(awk '{print $1}' "$origins" | sort)
-find "$dest" -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} +
+# Only the entry directories the old CHECKSUMS names are removed, never
+# whatever else a wrong --dest might hold.
+if [ -f "$dest/CHECKSUMS" ]; then
+  # `if`, never `[ … ] && rm`: under pipefail a false test on the last name
+  # would end the script here, silently, with the other entries already gone;
+  # and a CHECKSUMS with no entry line must not end it either (BUG-138's shape).
+  awk '{print $2}' "$dest/CHECKSUMS" | { grep / || true; } | cut -d/ -f1 | sort -u | while read -r old_entry; do
+    case "$old_entry" in "" | . | .. | */*) continue ;; esac
+    if [ -d "$dest/$old_entry" ]; then
+      rm -rf -- "${dest:?}/$old_entry"
+    fi
+  done
+fi
 cp -R "$build/." "$dest/"
 
 while IFS='|' read -r label clone sub; do
@@ -201,4 +252,6 @@ removed=$(comm -23 <(printf '%s\n' "$before") <(printf '%s\n' "$after") | tr '\n
 [ "$before" = "" ] && added="(first import: $(printf '%s\n' "$after" | wc -l | tr -d ' ') entries)"
 added=${added% }; echo "added: ${added:-none}"
 removed=${removed% }; echo "removed: ${removed:-none}"
+ex=$(printf '%s\n' $excludes | sort -u | tr '\n' ' ')
+echo "excluded: ${ex:-none}"
 echo "next: git add skills/google-catalog && go test ./..."

@@ -674,4 +674,22 @@ func TestNoIndexMarkerSkipsTheDirectory(t *testing.T) {
 	if strings.Contains(out, "docs/own.md") || !strings.Contains(out, "vendor/beside.md:") {
 		t.Errorf("an uncommitted marker did not take docs/ out of the index:\n%s", out)
 	}
+	// A marker at the root of the checkout is a directory like any other:
+	// nothing of the project is indexed.
+	writeFile(t, root, ".sh-agent-noindex", "")
+	var buf bytes.Buffer
+	Search(Options{Dir: root, Home: home, Words: []string{"ocelot"}}, &buf) // no hit is an error here; the output is what matters
+	if strings.Contains(buf.String(), "vendor/beside.md") || strings.Contains(buf.String(), "docs/own.md") {
+		t.Errorf("a root marker left files in the index:\n%s", buf.String())
+	}
+	// A marker above the prefix a caller asks for counts as well: the global
+	// index reads only the docs root, and a checkout marked at its root has
+	// no docs trail to offer either (code review round 2).
+	entries, err := gitView(root, "vendor/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("a root marker left %d entries in a prefixed view, first %s", len(entries), entries[0].path)
+	}
 }

@@ -15,7 +15,7 @@ import (
 	"testing"
 )
 
-// The Google skills catalog (plan 2026-10-01-google-skills-catalog): 141 skills
+// The Google skills catalog (plan 2026-10-01-google-skills-catalog): the skills
 // published by Google, vendored verbatim under skills/google-catalog/catalog/
 // and reached through one router skill, because installed as global skills
 // they push the harness's own skills out of both CLIs' listings.
@@ -32,9 +32,29 @@ var catalogHarnessFiles = map[string]bool{"INDEX.md": true, "MANIFEST.md": true,
 
 const catalogIndexHeader = "# Google skills catalog — index\n\nOne line per entry: the directory name under `catalog/`, then the start of its description. Grep this file for the product or task words, then read `catalog/<name>/SKILL.md`.\n\n"
 
+// catalogWriteMode reports whether the derived files are to be written. That
+// happens only on the refresh script's build directory: CATALOG_WRITE without
+// CATALOG_DIR would regenerate the checked-in CHECKSUMS from whatever is on
+// disk and turn the integrity test into its own answer (security review).
+func catalogWriteMode(t *testing.T) bool {
+	t.Helper()
+	if os.Getenv("CATALOG_WRITE") != "1" {
+		return false
+	}
+	if os.Getenv("CATALOG_DIR") == "" {
+		t.Fatal("CATALOG_WRITE=1 needs CATALOG_DIR: the checked-in INDEX.md and CHECKSUMS are written only by the refresh script, into its build directory")
+	}
+	return true
+}
+
 func catalogDir(t *testing.T) string {
 	t.Helper()
 	if d := os.Getenv("CATALOG_DIR"); d != "" {
+		if os.Getenv("CATALOG_WRITE") != "1" {
+			// Compare mode on another tree would pass for a catalog that is
+			// not the checked-in one (security review T1).
+			t.Fatal("CATALOG_DIR is only for the refresh script's write mode (CATALOG_WRITE=1)")
+		}
 		return d
 	}
 	repo, err := filepath.Abs("../..")
@@ -103,7 +123,7 @@ func TestCatalogMatchesChecksums(t *testing.T) {
 	catalogEntries(t, dir)
 	got := catalogSums(t, dir)
 	file := filepath.Join(dir, "CHECKSUMS")
-	if os.Getenv("CATALOG_WRITE") == "1" {
+	if catalogWriteMode(t) {
 		paths := make([]string, 0, len(got))
 		for p := range got {
 			paths = append(paths, p)
@@ -179,7 +199,7 @@ func TestCatalogIndexMatchesEntries(t *testing.T) {
 	}
 	want := catalogIndexHeader + strings.Join(lines, "\n") + "\n"
 	file := filepath.Join(dir, "INDEX.md")
-	if os.Getenv("CATALOG_WRITE") == "1" {
+	if catalogWriteMode(t) {
 		if err := os.WriteFile(file, []byte(want), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -221,6 +241,11 @@ func TestCatalogIndexMatchesEntries(t *testing.T) {
 func TestCatalogFilesAreCarryable(t *testing.T) {
 	dir := catalogDir(t)
 	catalogEntries(t, dir)
+	// The search marker travels with the catalog: without it `sh-agent search`
+	// indexes the entries and the checkout's own files drop in the hits.
+	if _, err := os.Stat(filepath.Join(dir, ".sh-agent-noindex")); err != nil {
+		t.Errorf("the catalog has no .sh-agent-noindex marker: %v", err)
+	}
 	root := dir
 	if os.Getenv("CATALOG_DIR") == "" {
 		root = filepath.Dir(dir) // the whole router skill, its scripts included
@@ -247,6 +272,75 @@ func TestCatalogFilesAreCarryable(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+// catalogExcluded reads the names under the manifest's "## Excluded".
+func catalogExcluded(t *testing.T, dir string) []string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(dir, "MANIFEST.md"))
+	if err != nil {
+		t.Fatalf("no MANIFEST.md: %v", err)
+	}
+	var out []string
+	in := false
+	for _, line := range strings.Split(string(data), "\n") {
+		switch {
+		case strings.HasPrefix(line, "## "):
+			in = line == "## Excluded"
+		case in && strings.HasPrefix(line, "- `"):
+			if name, _, ok := strings.Cut(line[3:], "`"); ok {
+				out = append(out, name)
+			}
+		}
+	}
+	return out
+}
+
+// TestCatalogExcludedEntriesAreAbsent: an entry the security review excluded
+// stays out — the manifest's list is what the refresh applies, and a refresh
+// that brought one back fails here.
+func TestCatalogExcludedEntriesAreAbsent(t *testing.T) {
+	dir := catalogDir(t)
+	catalogEntries(t, dir)
+	for _, name := range catalogExcluded(t, dir) {
+		if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+			t.Errorf("%s is listed under ## Excluded in MANIFEST.md and is in the catalog", name)
+		}
+	}
+}
+
+// TestCatalogWriteModeNeedsCatalogDir: CATALOG_WRITE=1 alone must not rewrite
+// the checked-in CHECKSUMS.
+func TestCatalogWriteModeNeedsCatalogDir(t *testing.T) {
+	if testing.Short() {
+		t.Skip("runs a nested go test")
+	}
+	if os.Getenv("CATALOG_WRITE") == "1" {
+		t.Skip("inside the write mode itself")
+	}
+	file := filepath.Join(catalogDir(t), "CHECKSUMS")
+	before, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.WriteFile(file, before, 0o644) }) // a broken guard must not leave the file rewritten
+	cmd := exec.Command("go", "test", ".", "-run", "^TestCatalogMatchesChecksums$", "-count=1")
+	cmd.Env = append(os.Environ(), "CATALOG_WRITE=1", "CATALOG_DIR=")
+	out, err := cmd.CombinedOutput()
+	if err == nil || !strings.Contains(string(out), "needs CATALOG_DIR") {
+		t.Errorf("CATALOG_WRITE=1 without CATALOG_DIR was accepted (err %v):\n%s", err, out)
+	}
+	if after, _ := os.ReadFile(file); !bytes.Equal(before, after) {
+		t.Error("the checked-in CHECKSUMS was rewritten")
+	}
+	// The other half of the pair: CATALOG_DIR without the write mode would
+	// compare some other tree and pass for a catalog that is not this one.
+	cmd = exec.Command("go", "test", ".", "-run", "^TestCatalogMatchesChecksums$", "-count=1")
+	cmd.Env = append(os.Environ(), "CATALOG_WRITE=", "CATALOG_DIR="+t.TempDir())
+	out, err = cmd.CombinedOutput()
+	if err == nil || !strings.Contains(string(out), "only for the refresh script's write mode") {
+		t.Errorf("CATALOG_DIR without CATALOG_WRITE=1 was accepted (err %v):\n%s", err, out)
 	}
 }
 
@@ -468,6 +562,91 @@ func TestRefreshCatalogScript(t *testing.T) {
 		t.Errorf("relative --dest: the catalog did not land under the caller's directory: %v", err)
 	}
 
+	// An entry the old CHECKSUMS names but whose directory is already gone
+	// (a half-done refresh, a hand deletion) must not stop the swap half way:
+	// the loop's last test once ended the pipeline with status 1, silently,
+	// after the other entries were deleted (code review 2026-10-01).
+	if err := os.RemoveAll(filepath.Join(dest, "gamma")); err != nil {
+		t.Fatal(err)
+	}
+	if out, code := run(pinA, pinG); code != 0 || snapshot() != good {
+		t.Fatalf("a refresh over a catalog with a missing entry directory did not restore it (exit %d)\n%s", code, out)
+	}
+
+	// The same loop's second way out: a CHECKSUMS that names no entry at all
+	// (an empty one) once made `grep /` end the pipeline the same way.
+	bare := filepath.Join(tmp, "bare-dest")
+	put(bare, map[string]string{"CHECKSUMS": ""})
+	bareCmd := exec.Command("bash", script, "--dest", bare, "--work", work, pinA, pinG)
+	bareCmd.Dir = repo
+	bareCmd.Env = append(os.Environ(), "CATALOG_AGENTS_CLI_REPO="+agents, "CATALOG_GOOGLE_SKILLS_REPO="+gskills, "CATALOG_DIR=", "CATALOG_WRITE=")
+	if out, err := bareCmd.CombinedOutput(); err != nil {
+		t.Errorf("a refresh over a destination whose CHECKSUMS names no entry failed: %v\n%s", err, out)
+	} else if _, err := os.Stat(filepath.Join(bare, "gamma", "SKILL.md")); err != nil {
+		t.Errorf("a refresh over a destination whose CHECKSUMS names no entry vendored nothing: %v", err)
+	}
+
+	// The destination guard: an empty --dest, and a directory that is not a
+	// catalog, are refused before anything is deleted (security review S1).
+	guardDir := filepath.Join(tmp, "not-a-catalog")
+	if err := os.MkdirAll(filepath.Join(guardDir, "precious"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range []string{"", guardDir} {
+		cmd := exec.Command("bash", script, "--dest", d, "--work", work, pinA, pinG)
+		cmd.Dir = guardDir
+		cmd.Env = append(os.Environ(), "CATALOG_AGENTS_CLI_REPO="+agents, "CATALOG_GOOGLE_SKILLS_REPO="+gskills, "CATALOG_DIR=", "CATALOG_WRITE=")
+		out, err := cmd.CombinedOutput()
+		if err == nil {
+			t.Errorf("--dest %q was accepted:\n%s", d, out)
+		}
+		if _, err := os.Stat(filepath.Join(guardDir, "precious")); err != nil {
+			t.Fatalf("--dest %q: a directory that is not a catalog entry was deleted", d)
+		}
+	}
+	// The places the guard names, each refused by its own message before the
+	// not-a-catalog check is reached: /, the home directory, the checkout,
+	// and an ancestor of either. HOME is a fixture directory here.
+	fakeHome := filepath.Join(tmp, "home", "user")
+	put(fakeHome, map[string]string{"keep.txt": "kept\n"})
+	for _, c := range []struct{ dest, want string }{
+		{"/", "is not a catalog directory"},
+		{fakeHome, "is not a catalog directory"},
+		{fakeHome + "/", "is not a catalog directory"},
+		{repo, "is not a catalog directory"},
+		{filepath.Dir(repo), "contains the checkout"},
+		{filepath.Dir(fakeHome), "contains the home directory"},
+	} {
+		cmd := exec.Command("bash", script, "--dest", c.dest, "--work", work, pinA, pinG)
+		cmd.Dir = tmp
+		cmd.Env = append(os.Environ(), "HOME="+fakeHome, "CATALOG_AGENTS_CLI_REPO="+agents, "CATALOG_GOOGLE_SKILLS_REPO="+gskills, "CATALOG_DIR=", "CATALOG_WRITE=")
+		out, err := cmd.CombinedOutput()
+		if err == nil || !strings.Contains(string(out), c.want) {
+			t.Errorf("--dest %s: want a refusal saying %q, got err %v\n%s", c.dest, c.want, err, out)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(fakeHome, "keep.txt")); err != nil {
+		t.Fatalf("the guard fixture's home directory was touched: %v", err)
+	}
+	if out, code := run(pinA, "main"); code == 0 || !strings.Contains(out, "commit id") {
+		t.Errorf("a pin that is not a commit id was accepted (exit %d)\n%s", code, out)
+	}
+	// An entry named under the manifest's ## Excluded stays out without the flag (S5).
+	mf := filepath.Join(dest, "MANIFEST.md")
+	orig, _ := os.ReadFile(mf)
+	if err := os.WriteFile(mf, bytes.Replace(orig, []byte("## Excluded\n"), []byte("## Excluded\n\n- `epsilon` — excluded by the fixture\n"), 1), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if out, code := run(pinA, pinG); code != 0 {
+		t.Errorf("a refresh with a manifest exclusion failed (exit %d)\n%s", code, out)
+	} else if _, err := os.Stat(filepath.Join(dest, "epsilon")); err == nil {
+		t.Error("an entry listed under ## Excluded was vendored")
+	}
+	os.WriteFile(mf, orig, 0o644)
+	if out, code := run(pinA, pinG); code != 0 || snapshot() != good {
+		t.Fatalf("could not restore the good catalog after the exclusion fixture (exit %d)\n%s", code, out)
+	}
+
 	// Refusals: each leaves the destination as it was and names the entry.
 	refuse := func(label, names string, files map[string]string, mutate func(), exclude string) {
 		t.Helper()
@@ -510,4 +689,18 @@ func TestRefreshCatalogScript(t *testing.T) {
 	}, "gamma")
 	refuse("go.mod", "delta", map[string]string{"skills/cloud/delta/go.mod": "module x\n"}, nil, "")
 	refuse("go file", "epsilon", map[string]string{"skills/developers/epsilon/main.go": "package main\n"}, nil, "")
+	refuse("name with a space", `(--exclude "bad name")`, map[string]string{"skills/cloud/bad name/SKILL.md": skill("bad-name", "description: a directory name with a space\n")}, nil, "bad name")
+	refuse("uppercase name", `(--exclude "Loud")`, map[string]string{"skills/cloud/Loud/SKILL.md": skill("loud", "description: a directory name with a capital\n")}, nil, "Loud")
+	refuse("dotfile", "delta", map[string]string{"skills/cloud/delta/.gitattributes": "* export-ignore\n"}, nil, "")
+	refuse("symlinked entry", "zeta", nil, func() {
+		if err := os.Symlink("gamma", filepath.Join(gskills, "skills/cloud/zeta")); err != nil {
+			t.Skip("no symlinks here")
+		}
+	}, "")
+	refuse("symlinked LICENSE", "LICENSE", nil, func() {
+		os.Remove(filepath.Join(gskills, "LICENSE"))
+		if err := os.Symlink("skills/cloud/gamma/SKILL.md", filepath.Join(gskills, "LICENSE")); err != nil {
+			t.Skip("no symlinks here")
+		}
+	}, "")
 }

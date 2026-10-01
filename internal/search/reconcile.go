@@ -74,17 +74,18 @@ func docsRootOf(root string) string {
 	return ".agents/docs"
 }
 
+// noIndexMarker names the file that takes its directory out of the index.
+const noIndexMarker = ".sh-agent-noindex"
+
 // gitView lists the checkout's current files: the index entries of
 // `git ls-files -s`, overridden by what `git status` reports modified or
 // untracked (their blob IDs computed from their bytes), minus deleted paths,
-// symlinks, submodules and secret-shaped names. A file's content is read
+// symlinks, submodules, secret-shaped names and every path under a
+// directory that holds a noIndexMarker file. A file's content is read
 // again when its blob is indexed: a file edited and restored between the two
 // reads is indexed with the edit until `index --rebuild` (a known limit; the
 // operator's choice at the security review's cap, plan D35).
 // prefix limits it to one directory.
-// noIndexMarker names the file that takes its directory out of the index.
-const noIndexMarker = ".sh-agent-noindex"
-
 func gitView(root, prefix string) ([]entry, error) {
 	under := func(p string) bool { return prefix == "" || strings.HasPrefix(p, prefix) }
 	// Every read goes through an os.Root: a path that leaves the checkout
@@ -101,8 +102,15 @@ func gitView(root, prefix string) ([]entry, error) {
 	}
 	var order []string
 	view := map[string]entry{}
+	// Markers are collected from the whole checkout, not only under prefix:
+	// a marker above the prefix covers it (a checkout marked at its root has
+	// no docs trail for the global index either).
+	markers := map[string]bool{}
 	for _, rec := range strings.Split(string(out), "\x00") {
 		meta, p, ok := strings.Cut(rec, "\t")
+		if ok && path.Base(p) == noIndexMarker {
+			markers[p] = true
+		}
 		if !ok || !under(p) {
 			continue
 		}
@@ -131,6 +139,13 @@ func gitView(root, prefix string) ([]entry, error) {
 			continue
 		}
 		x, y, p := rec[0], rec[1], rec[3:]
+		if path.Base(p) == noIndexMarker {
+			if _, err := fsRoot.Lstat(filepath.FromSlash(p)); y == 'D' || err != nil {
+				delete(markers, p) // a marker deleted from the work tree no longer counts
+			} else {
+				markers[p] = true
+			}
+		}
 		if !under(p) {
 			continue
 		}
@@ -162,10 +177,12 @@ func gitView(root, prefix string) ([]entry, error) {
 	// git reports it in (committed, staged, not yet added): the first search
 	// after the marker is written must already leave the directory out.
 	var marked []string
-	for p := range view {
-		if path.Base(p) == noIndexMarker {
-			marked = append(marked, path.Dir(p)+"/")
+	for p := range markers {
+		dir := path.Dir(p) + "/"
+		if dir == "./" {
+			dir = "" // a marker at the root: nothing of the checkout is indexed
 		}
+		marked = append(marked, dir)
 	}
 	noIndex := func(p string) bool {
 		for _, dir := range marked {

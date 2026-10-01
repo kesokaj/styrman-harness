@@ -39,7 +39,7 @@ context/AGENTS.md      the global context — single source, deployed to both ve
 context/dev-setup.md   environment, stack, GCP defaults — appended to the context at install
 agents/*.md            subagents in Claude Code format; Antigravity's agent.md is derived at install
 skills/<name>/         skills; .agents/skills is a symlink here so `npx skills add` lands in skills/
-skills/google-catalog/catalog/  141 Google-published skills vendored at a pin, reached through the google-catalog router, never installed as skills
+skills/google-catalog/catalog/  Google-published skills vendored at a pin (counts, exclusions, notes: its MANIFEST.md), reached through the google-catalog router, never installed as skills
 commands/, rules/      markdown prompts invoked as /name, and extra rules; both deploy to both vendors verbatim (empty today by design: scaffolding the installer already wires, operator 2026-09-30)
 cmd/sh-agent, internal/harness   the binary and its tests
 internal/search        `sh-agent search` and `index`: the SQLite index (the one package that imports the driver); also the dream job's two read-only SQLite reads (the global index's project list, Antigravity's conversation databases, from copies)

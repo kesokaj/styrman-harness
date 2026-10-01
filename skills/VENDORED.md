@@ -42,25 +42,26 @@ published, and if that changes, add a `LICENSE` file for `gke-basics` before it 
 
 | Catalog | Source | Pin | License | Vendored | Update via |
 |---------|--------|-----|---------|----------|------------|
-| google-catalog/catalog | github.com/google/agents-cli (`skills/`, `extensions/langchain/template/.agents/skills`) and github.com/google/skills (`skills/cloud`, `skills/developers`); 141 entries, per-source rows in `google-catalog/catalog/MANIFEST.md` | 2c39459 and d5d9052 | Apache-2.0 | 2026-10-01 | `bash skills/google-catalog/scripts/refresh-catalog.sh <agents-cli pin> <google-skills pin>`, then `git add skills/google-catalog && go test ./...` |
+| google-catalog/catalog | github.com/google/agents-cli (`skills/`, `extensions/langchain/template/.agents/skills`) and github.com/google/skills (`skills/cloud`, `skills/developers`); entry counts per source, exclusions and per-entry security notes in `google-catalog/catalog/MANIFEST.md` | 2c39459 and d5d9052 | Apache-2.0 | 2026-10-01 | `bash skills/google-catalog/scripts/refresh-catalog.sh <agents-cli pin> <google-skills pin>`, then `git add skills/google-catalog && go test ./...` |
 
 A catalog is vendored by its refresh script, never by hand and never by `npx skills add`: the
 script copies the entries byte for byte at the two pins (file modes aside: no executable bit),
-refuses what the harness cannot carry (a symlink, a Go file, a name in two source sets, an entry
-without frontmatter) until the operator passes `--exclude <entry>`, and writes `INDEX.md` and
+refuses what the harness cannot carry (a symlink, a Go file, a dotfile, a name in two source sets, an
+entry without frontmatter) until the operator passes `--exclude <entry>`, keeps every entry named
+under the manifest's `## Excluded` out, and writes `INDEX.md` and
 `CHECKSUMS` through the Go tests, which then pin the tree both ways (`TestCatalogMatchesChecksums`,
 `TestCatalogIndexMatchesEntries`, `TestCatalogFilesAreCarryable`). Installed as global skills
-these 141 push the harness's own skills out of both CLIs' skill lists
+these skills push the harness's own out of both CLIs' skill lists
 (`.agents/docs/plans/2026-10-01-research-google-skills-catalog.md`), so they stay behind the
 `google-catalog` router. A refresh's diff gets a security review before it is committed.
+
+Notes:
 
 - `grill-me` (a launcher for `grilling`) and `skill-repair` (repairs a `skills`-CLI manifest the
   harness does not use) were pruned 2026-09-03 after the sandbox matrix: `/grilling` does the same
   job on both CLIs, and `sh-agent adopt` replaced the manifest repair.
 - `grilling` says "dispatch a sub-agent" to find a fact and names none; on both CLIs that agent is
   `explorer` (read-only recon), and the `--prompts` lens does not flag the vendored line for it.
-Notes:
-
 - `find-skills` is verbatim again at `435076e` (restored 2026-09-28). Its old local Step 6 edit, which routed installs into this repository, now lives in the global context's § Global vs project.
 - The UIZZE UI skill (uizze.com, v1.2.13, formerly a row above) and the Python skill were removed on
   2026-10-01 (plan audit-fix D28, operator's strike): the first duplicated `frontend` and needed a paid

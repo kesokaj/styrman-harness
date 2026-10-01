@@ -49,6 +49,19 @@ The catalog cost 0.037 of recall and put its entries first for Google product wo
 
 The two misses are one-time or developer-side costs: the first install after an update writes 1,570 more files, each atomically; the suite's extra time is the tests that copy the whole checkout. Put to the operator as a one-line choice (D24), recommendation: accept.
 
+## Reruns after the security and prompts reviews changed the router (2026-10-01)
+
+The router's text and 88 manifest notes changed after the first batch (Phase 3), so the rows were run again twice from a fresh sandbox home, the second time on the text that is committed (`diff -rq` of `skills/google-catalog` against both vendors' installed copies: empty). A seventh task was added (an Agent Platform endpoint answering 403), and each routed row now also records whether the run read `MANIFEST.md`, which the router's step 2 requires before an entry is read.
+
+| batch | CLI | no-leak | routed tasks | manifest read | precedence |
+|---|---|---|---|---|---|
+| second (router after the security slices) | Claude Code | pass | 7 of 7 (task 1 judged from its saved record: the kit's verdict script stopped on a JSON line that was a bare string; the script now skips such lines) | 7 of 7 | pass |
+| second | Antigravity | pass by self-report, 37 names twice (35 harness skills and its two built-ins), no entry | 7 of 7 | 7 of 7 | pass |
+| third (the committed text) | Claude Code | pass | 7 of 7 | 7 of 7 | pass |
+| third | Antigravity | pass by self-report, 37 names twice, identical | 7 of 7 | 7 of 7 | pass |
+
+Antigravity denied one command in one routed run of each batch (headless mode cannot prompt): in both, the entry and the manifest had already been read, and the denied call was a later look at the project (`ls -la .agents/docs/deploy` in the second batch). The credentials copied into the sandbox home were deleted by name after each batch and a `find` over the sandbox finds none. Results: `~/sandbox/audit-fix/cat-results-router2.txt` (second), `cat-results.txt` (third). After the third batch only the refresh script changed (the exclusion order and a message), which no row exercises.
+
 ## What was not exercised
 
 An interactive session on either CLI (whether it prompts before reading under the installed skill directory: the operator's box); the Mac; a seventh family; Antigravity's no-leak from a record rather than its own listing.

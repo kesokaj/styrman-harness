@@ -56,3 +56,10 @@ The worst problem is a rule that points at coverage that does not exist. `AGENTS
 - The 19.9 / 13.9 / 7.1 MB sizes were not re-measured. No release build was made.
 - `skills/preflight/SKILL.md` and `context/AGENTS.md` were searched by the restatement script only, not read in full.
 - The untracked `.agents/docs/reviews/2026-10-01-security-catalog-ops-iam-secops.md` is outside this lens.
+
+## Outcome (main agent, 2026-10-01)
+
+1. [medium] `AGENTS.md` § Release named matrix rows that existed nowhere: fixed — `testing/skill-matrix.md` holds `catalog-no-leak`, `catalog-route`, `catalog-precedence` (b0789f1) and `testing/guide.md` § 3f describes them.
+2. [medium] sizes without a logged measurement: fixed — `testing/2026-10-01-verify-google-skills-catalog-phase-4.md` § Timing and size records the binary, zip, entry count, install and suite figures; `delivery.md` files the catalog under "Built, not yet released", which it is until the tag.
+3. [low] `skills/VENDORED.md` section between "Notes:" and its bullets: fixed (bfd25d3).
+- Lows: guide § 3f added; the router points at `skills/VENDORED.md` for the refresh procedure; the script header documents the two environment overrides; `deploy/local.md` is left without a refresh step (the procedure lives in VENDORED.md and guide § 3f; a standing operator step would restate it).

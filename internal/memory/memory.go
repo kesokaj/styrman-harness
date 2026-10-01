@@ -82,7 +82,7 @@ func trusted(root string) (string, error) {
 			return "", refuse("%s is a symlink: the memory store must be the project's own directory", p)
 		}
 	}
-	out, err := exec.Command("git", "-C", root, "ls-files", "--", ".agents/memory").Output()
+	out, err := exec.Command("git", storeTrackedArgs(root)...).Output()
 	if err != nil {
 		return "", refuse("cannot ask git what it tracks under .agents/memory: %v", err)
 	}
@@ -289,4 +289,13 @@ func lock(path string) (func(), error) {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
+}
+
+// storeTrackedArgs is the git call that asks what the repository tracks under
+// .agents/memory. The nightly dream runs it in every indexed project, so it holds
+// no index lock and runs no fsmonitor hook the project may have installed
+// (security review of the v2.0.0 gate, 2026-10-01; the dream's status call has
+// the same two guards).
+func storeTrackedArgs(root string) []string {
+	return []string{"--no-optional-locks", "-c", "core.fsmonitor=false", "-C", root, "ls-files", "--", ".agents/memory"}
 }

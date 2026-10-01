@@ -344,3 +344,13 @@ func TestShowOutsideACheckoutRefuses(t *testing.T) {
 		t.Fatalf("err = %v, want a refusal", err)
 	}
 }
+
+// The store check runs in every indexed project at 03:00: it must hold no
+// index lock and run no fsmonitor hook (v2.0.0 gate, security code slice).
+func TestStoreTrackedArgs(t *testing.T) {
+	got := strings.Join(storeTrackedArgs("/r"), " ")
+	want := "--no-optional-locks -c core.fsmonitor=false -C /r ls-files -- .agents/memory"
+	if got != want {
+		t.Fatalf("args = %q, want %q", got, want)
+	}
+}

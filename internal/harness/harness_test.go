@@ -2382,3 +2382,80 @@ func TestDeriveAgyRealReviewer(t *testing.T) {
 	}
 	t.Fatal("no reviewer agent in the checkout")
 }
+
+// TestLintRefusesAllowedTools: a skill's frontmatter is a permission surface;
+// `allowed-tools` lets every named tool run unprompted while the skill is
+// active, so a harness skill never sets it — the operator's permission mode
+// decides (BUG-143, graduated here).
+func TestLintRefusesAllowedTools(t *testing.T) {
+	repo := newRepo(t)
+	dir := filepath.Join(repo, "skills", "x")
+	os.MkdirAll(dir, 0o755)
+	os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("---\nname: x\ndescription: a skill\nallowed-tools: Bash\n---\nbody\n"), 0o644)
+	if _, err := LoadSkills(DirSource(repo)); err == nil || !strings.Contains(err.Error(), "allowed-tools") {
+		t.Errorf("a skill with allowed-tools passed: %v", err)
+	}
+	os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("---\nname: x\ndescription: a skill\n---\nbody\n"), 0o644)
+	if _, err := LoadSkills(DirSource(repo)); err != nil {
+		t.Errorf("the same skill without the key was refused: %v", err)
+	}
+	if _, err := LoadSkills(DirSource(filepath.Join("..", ".."))); err != nil {
+		t.Errorf("the checkout's skills: %v", err)
+	}
+}
+
+// TestLintPermissionKeysByKind: the permission-granting frontmatter keys are
+// refused per file kind, and a top-level line the installer's key grammar
+// cannot read is refused rather than skipped — a quoted or spaced key is the
+// same key to a YAML parser (security review 2026-10-01; one rule per kind).
+func TestLintPermissionKeysByKind(t *testing.T) {
+	skill := func(front string) error {
+		repo := newRepo(t)
+		dir := filepath.Join(repo, "skills", "x")
+		os.MkdirAll(dir, 0o755)
+		os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("---\nname: x\ndescription: a skill\n"+front+"---\nbody\n"), 0o644)
+		_, err := LoadSkills(DirSource(repo))
+		return err
+	}
+	for name, front := range map[string]string{
+		"double-quoted key": "\"allowed-tools\": Bash\n",
+		"single-quoted key": "'allowed-tools': Bash\n",
+		"spaced colon":      "allowed-tools : Bash\n",
+		"block list":        "allowed-tools:\n  - Bash\n",
+		"hooks":             "hooks:\n  PreToolUse: []\n",
+	} {
+		if err := skill(front); err == nil {
+			t.Errorf("skill with %s loaded", name)
+		}
+	}
+	for name, front := range map[string]string{
+		"metadata map":  "metadata:\n  version: \"1.0\"\n",
+		"license":       "license: Apache-2.0\n",
+		"comment line":  "# a comment\n",
+		"column-0 list": "compatibility:\n- claude\n- agy\n",
+	} {
+		if err := skill(front); err != nil {
+			t.Errorf("skill with %s refused: %v", name, err)
+		}
+	}
+	agent := func(front string) error {
+		repo := newRepo(t)
+		os.WriteFile(filepath.Join(repo, "agents", "x.md"), []byte("---\nname: x\ndescription: an agent\ntools: Read\n"+front+"---\nbody\n"), 0o644)
+		_, err := LoadAgents(DirSource(repo))
+		return err
+	}
+	for _, front := range []string{"permissionMode: bypassPermissions\n", "hooks:\n  Stop: []\n"} {
+		if err := agent(front); err == nil {
+			t.Errorf("agent with %q loaded", front)
+		}
+	}
+	repo := newRepo(t)
+	os.MkdirAll(filepath.Join(repo, "commands"), 0o755)
+	os.WriteFile(filepath.Join(repo, "commands", "x.md"), []byte("---\ndescription: a command\nallowed-tools: Bash\n---\nbody\n"), 0o644)
+	if _, err := LoadInventory(DirSource(repo)); err == nil {
+		t.Error("a command with allowed-tools loaded")
+	}
+	if _, err := LoadInventory(DirSource(filepath.Join("..", ".."))); err != nil {
+		t.Errorf("the checkout: %v", err)
+	}
+}

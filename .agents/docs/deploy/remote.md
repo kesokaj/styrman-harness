@@ -69,7 +69,7 @@ Experience flows back the one way too: each place runs `sh-agent report`, which 
 
 ```bash
 # machine A: change, verify, install, commit, push
-sh-agent install && git commit -am "context: tweak" && git push
+sh-agent install && git add <the file> && git commit -m "context: tweak" && git push
 # machine B
 sh-agent update            # fetch; refuse a dirty checkout; if behind: pull --ff-only; rebuild and reinstall
 sh-agent update --check    # only reports; exit 2 when behind, 0 when current; on a dirty checkout it prints the real run's refusal and exits 1 (so does --dry-run)

@@ -109,7 +109,7 @@ password-less DSN.
 **Roles.** The job runs under its own service account (`${MIGRATE_SA}`) so IAM and logs tell
 it from the service. The Postgres ROLE, however, comes from the DSN, not the service account:
 on the socket-and-password path (§ Connect item 1) there is one role, `app`, a `cloudsqlsuperuser`
-member with DDL at runtime. The owner/runtime split is path 2, **IAM database authentication**,
+member with DDL at runtime — and `cloudsqlsuperuser` carries CREATEROLE and CREATEDB, so a SQL injection on this path can create roles and databases, not only tables; the IAM path is the least-privilege one. The owner/runtime split is path 2, **IAM database authentication**,
 where each service account IS a database user with no privileges at all until granted
 (Google's documented default); the service and the job carry no password at all (the built-in `postgres` user keeps one, for the one-time step below, § Local). The job authenticates as the
 migrate user through the connector, never the socket: open the pool as in

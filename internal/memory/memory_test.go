@@ -354,3 +354,52 @@ func TestStoreTrackedArgs(t *testing.T) {
 		t.Fatalf("args = %q, want %q", got, want)
 	}
 }
+
+// Store's git call runs no project hook: a core.fsmonitor hook that writes a
+// marker fires for a plain `git status` (the control) and not for Store
+// (v2.0.0 gate, security code slice; the argument test alone would pass an
+// inline call that dropped the guard).
+func TestStoreRunsNoProjectHook(t *testing.T) {
+	root := repo(t)
+	marker := filepath.Join(t.TempDir(), "fired")
+	hook := filepath.Join(t.TempDir(), "hook.sh")
+	if err := os.WriteFile(hook, []byte("#!/bin/sh\ntouch \""+marker+"\"\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	git(t, root, "config", "core.fsmonitor", hook)
+	exec.Command("git", "-C", root, "status", "--porcelain").Run()
+	if _, err := os.Stat(marker); err != nil {
+		t.Skip("control: this git did not run the core.fsmonitor hook")
+	}
+	os.Remove(marker)
+	if _, err := Store(root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("Store ran the project's fsmonitor hook")
+	}
+}
+
+// A symlinked MEMORY.md is never read or rewritten: the index is the store's
+// own file (v2.0.0 gate, security code slice).
+func TestSymlinkedIndexRefused(t *testing.T) {
+	root := repo(t)
+	store := filepath.Join(root, ".agents", "memory")
+	os.MkdirAll(store, 0o700)
+	target := filepath.Join(t.TempDir(), "elsewhere.md")
+	os.WriteFile(target, []byte("- [x](x.md) — x\n"), 0o644)
+	if err := os.Symlink(target, filepath.Join(store, "MEMORY.md")); err != nil {
+		t.Skip("no symlinks here")
+	}
+	if _, err := Show(root, false); err == nil || !IsRefusal(err) {
+		t.Errorf("Show followed a symlinked index: %v", err)
+	}
+	if _, err := add(root, "x", "x", "x"); err == nil || !IsRefusal(err) {
+		t.Errorf("Add followed a symlinked index: %v", err)
+	}
+	// The refused Add left the link in place: the outside file was not copied
+	// into the store as a regular index (what happened before the refusal).
+	if info, err := os.Lstat(filepath.Join(store, "MEMORY.md")); err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Error("the index is no longer the link: Add wrote a regular MEMORY.md from the outside file")
+	}
+}

@@ -54,7 +54,7 @@ Notes:
   skill (the 2026-10-01 edit moved its examples to frontmatter `config:` and `packet`), so it is
   not vendored and carries no row; if an upstream is ever identified, fork it under another name
   rather than re-fetching over these edits.
-- To add a skill: run `npx skills add <owner/repo> -s <skill> -y` from the repo root (it lands
+- To add a skill: run `npx skills@<version> add <owner/repo> -s <skill>` from the repo root (pin the CLI's version and read its prompt; never `-y`) (it lands
   in `skills/` through the `.agents/skills` symlink), or copy any directory holding a `SKILL.md`
   into `skills/`, then `sh-agent install`. Add a row above. `sh-agent install` deploys exactly
   the repo's skills and removes only what it installed itself, so a skill installed by hand

@@ -282,6 +282,15 @@ func Redact(text string) string {
 	return string(out)
 }
 
+// RedactJSONL is Redact for JSON Lines: a needle hidden behind a JSON escape
+// (`\u003d`, `\"`) is matched on the decoded line as report does for
+// feedback.jsonl, so `sh-agent dream` and `report` redact the same records
+// (security review of the v2.0.0 gate).
+func RedactJSONL(text string) string {
+	out, _ := redactLines("", []byte(text), true)
+	return string(out)
+}
+
 // decoded is a JSON line's text with its escapes undone, for matching only: a
 // secret behind \" or \u0041 does not match the raw line. fmt prints each key
 // followed by a colon, so a secret-named key still reads as an assignment.

@@ -283,7 +283,9 @@ func feedback(home, root string, since time.Time) []entry {
 		if err != nil || !ts.After(since) {
 			continue
 		}
-		out = append(out, entry{ts: ts, text: sc.Text()})
+		// Redacted as a JSON line, so an escaped secret is caught the way
+		// report catches it; scrub runs the raw needles again later.
+		out = append(out, entry{ts: ts, text: strings.TrimRight(harness.RedactJSONL(sc.Text()+"\n"), "\n")})
 	}
 	return out
 }

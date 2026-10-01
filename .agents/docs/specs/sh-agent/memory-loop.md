@@ -35,7 +35,7 @@ Status: built 2026-09-29 (plan `plans/2026-09-29-dreamer-memory-loop.md`); writi
 | `.claude/settings.local.json` exists with another `autoMemoryDirectory`, or git tracks the file, or it is a symlink | `/init-project` keeps it, reports, writes nothing into it and moves nothing; `sh-agent memory show` reports native memory still on; `/dream` and the `dreamer` use only `<root>/.agents/memory` |
 | Agent cut at its turn limit | a partial artifact with `Status: IN PROGRESS` (its early-write rule); the caller says so |
 | `git clean -fdx`, a fresh clone, a deleted checkout | the store is gone with them, like scratch; the migration moved the files, so there is no second copy — the operator's choice (ADR-043) |
-| `.agents` or `.agents/memory` is a symlink, or git tracks something under it | `/init-project` stops and reports; `sh-agent memory add` and `show` (exit 2), `/dream` and the `dreamer` refuse the store. With native memory off (R10) Claude Code no longer loads `MEMORY.md` itself, so the ADR-043 residue (a force-added upstream `MEMORY.md` loaded unchecked) is closed where `/init-project` has run; it stays in a project scaffolded before R10 until then |
+| `.agents` or `.agents/memory` is a symlink, `MEMORY.md` itself is a symlink (the index must be the store's own file; `readLines`), or git tracks something under it | `/init-project` stops and reports; `sh-agent memory add` and `show` (exit 2), `/dream` and the `dreamer` refuse the store. With native memory off (R10) Claude Code no longer loads `MEMORY.md` itself, so the ADR-043 residue (a force-added upstream `MEMORY.md` loaded unchecked) is closed where `/init-project` has run; it stays in a project scaffolded before R10 until then |
 
 ## Known differences (R10)
 

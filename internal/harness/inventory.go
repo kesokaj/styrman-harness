@@ -200,6 +200,12 @@ func LoadSkills(src Source) ([]Skill, error) {
 		if fm["description"] == "" {
 			return nil, fmt.Errorf("skill %s: SKILL.md has no description", e.Name())
 		}
+		// A skill's frontmatter is a permission surface: allowed-tools lets every
+		// named tool run unprompted while the skill is active, so the operator's
+		// permission mode decides, never a skill (BUG-143).
+		if k := permissionKey(front, "allowed-tools", "hooks"); k != "" {
+			return nil, fmt.Errorf("skill %s: %s is never set in a harness skill; the operator's permission mode decides what runs unprompted (BUG-143)", name, k)
+		}
 		if first, dup := byName[name]; dup {
 			return nil, fmt.Errorf("two skills are named %q: skills/%s and skills/%s — one install destination, so one would silently overwrite the other", name, first, e.Name())
 		}
@@ -251,6 +257,9 @@ func LoadAgents(src Source) ([]Agent, error) {
 		if descriptionIsMultiLine(front) {
 			return nil, fmt.Errorf("agent %s: description must be one line", name)
 		}
+		if k := permissionKey(front, "hooks", "permissionMode"); k != "" {
+			return nil, fmt.Errorf("agent %s: %s is never set in a harness agent; the operator's permission mode decides (BUG-143)", name, k)
+		}
 		for _, banned := range []string{"dispatch prompt", "harness binary"} {
 			if strings.Contains(strings.ToLower(fm["description"]), banned) {
 				return nil, fmt.Errorf("agent %s: description names %q, a mechanism that no longer exists", name, banned)
@@ -289,6 +298,9 @@ func LoadDocs(src Source, dirs ...string) ([]Doc, error) {
 				fm, err := ParseStrict(front)
 				if err != nil {
 					return nil, fmt.Errorf("%s: %w", shown, err)
+				}
+				if k := permissionKey(front, "allowed-tools", "hooks"); k != "" {
+					return nil, fmt.Errorf("%s: %s is never set in a harness command or rule; the operator's permission mode decides (BUG-143)", shown, k)
 				}
 				desc = fm["description"]
 				text = body

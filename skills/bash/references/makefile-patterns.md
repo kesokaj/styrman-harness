@@ -200,10 +200,10 @@ ENV ?= development
 deploy:  ## Deploy to the target environment
 ifeq ($(ENV),production)
 	@echo "Deploying to production..."
-	gcloud run deploy $(APP_NAME) --image=$(REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG) --region=$(REGION)
+	gcloud run deploy $(APP_NAME) --image=$(REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG) --region=$(REGION) --project=$(GCP_PROJECT)
 else
 	@echo "Deploying to staging..."
-	gcloud run deploy $(APP_NAME)-staging --image=$(REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG) --region=$(REGION)
+	gcloud run deploy $(APP_NAME)-staging --image=$(REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG) --region=$(REGION) --project=$(GCP_PROJECT)
 endif
 ```
 

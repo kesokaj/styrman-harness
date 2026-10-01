@@ -2,7 +2,7 @@
 owner: bugs
 date: 2026-10-01
 id: BUG-143
-status: fixed
+status: graduated (rule 1 to `internal/harness/inventory.go` `LoadSkills` + `TestLintRefusesAllowedTools`)
 area: skills (bash, docker, golang, gcloud-setup)
 ---
 # BUG-143: skills shipped `allowed-tools: Bash` and unverified install fetches (`curl | sh`), missed by four reviews
@@ -22,8 +22,8 @@ The reviews (Phase 6 code/docs/prompts lenses, the Phase 6 security review) read
 Commit 89f3308: both `allowed-tools` lines deleted; golangci-lint installed from the pinned release asset verified with `sha256sum -c --ignore-missing` against the release's checksums file; the gcloud tarball step checks the SHA256 from the install page before `install.sh`.
 
 ## Prevention
-- A skill's frontmatter is a permission surface: `allowed-tools` is never set in a harness skill (the operator's permission mode decides). Candidate mechanism: an installer lint test (`TestLint...`) refusing the key.
-- Every install instruction in a skill fetches a pinned artifact and verifies a checksum or signature before running it; `curl | sh`, `wget -O- | bash` and unpinned `npx -y` are findings. The security reviewer's brief for skill assets names them. Graduation target: `review-standards` § 8 or the security agent's definition.
+- A skill's frontmatter is a permission surface: `allowed-tools` is never set in a harness skill (the operator's permission mode decides). Graduated: `LoadSkills` in `internal/harness/inventory.go` refuses any skill whose frontmatter sets it ("allowed-tools is never set in a harness skill; the operator's permission mode decides (BUG-143)"), pinned by `TestLintRefusesAllowedTools` in `internal/harness/harness_test.go`.
+- Every install instruction in a skill fetches a pinned artifact and verifies a checksum or signature before running it; `curl | sh`, `wget -O- | bash` and unpinned `npx -y` are findings. The security reviewer's brief for skill assets names them. Not yet mechanised: stays a review rule. Graduation target: `review-standards` § 8 or the security agent's definition.
 
 ## Related
 BUG-111 (vendored pins), D40 (no `:latest`). No existing rule covered either item (not a repeat). Fix commit 89f3308; review `reviews/2026-10-01-security-v1.16.2-0b1b5b8-harness-text.md`.

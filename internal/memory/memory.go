@@ -239,8 +239,15 @@ func nativeOn(root string, claudeInstalled bool) bool {
 	return !ok || v
 }
 
-// readLines returns the non-empty lines of path; a missing file is empty.
+// readLines returns the non-empty lines of path; a missing file is empty. A
+// symlink is refused: the index is the store's own file, and through a link
+// Show printed an outside file to the session and Add copied its lines into
+// the store (the atomic write replaces the link; nothing was written outside;
+// security review 2026-10-01).
 func readLines(path string) ([]string, error) {
+	if info, err := os.Lstat(path); err == nil && info.Mode()&os.ModeSymlink != 0 {
+		return nil, refuse("%s is a symlink: the index must be the store's own file", path)
+	}
 	f, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil

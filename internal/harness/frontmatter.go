@@ -73,11 +73,55 @@ func Parse(front string) Frontmatter { return parseEntries(entries(front)) }
 // installer's form, so a file is read once and a value a strict YAML parser
 // would read differently is refused before it is used.
 func ParseStrict(front string) (Frontmatter, error) {
+	if l, bad := unreadLine(front); bad {
+		return nil, fmt.Errorf("frontmatter line %q is not a plain `key: value` line: a quoted or spaced key is a key to a YAML parser and would be skipped here, so it is refused", l)
+	}
 	es := entries(front)
 	if err := lintEntries(es); err != nil {
 		return nil, err
 	}
 	return parseEntries(es), nil
+}
+
+// unreadLine is the first top-level frontmatter line the key grammar cannot
+// read. Blank lines, comments, indented continuations and column-0 list items
+// are fine; anything else (`"key": v`, `key : v`) is a key to a YAML parser
+// that entries would silently skip, so a lint keyed on names never saw it
+// (security review 2026-10-01).
+func unreadLine(front string) (string, bool) {
+	for _, l := range strings.Split(front, "\n") {
+		l = strings.TrimRight(l, "\r")
+		if l == "" || l[0] == ' ' || l[0] == '\t' || l[0] == '#' || l == "-" || strings.HasPrefix(l, "- ") {
+			continue
+		}
+		if !keyLine.MatchString(l) {
+			return l, true
+		}
+	}
+	return "", false
+}
+
+// Keys are the top-level keys of a frontmatter block, whatever their values'
+// shape: a nested map or a list is a key here though Parse drops its value.
+func Keys(front string) []string {
+	var out []string
+	for _, e := range entries(front) {
+		out = append(out, e.key)
+	}
+	return out
+}
+
+// permissionKey is the first key of front that grants a permission the
+// operator's own mode must decide: named per file kind by the caller.
+func permissionKey(front string, refused ...string) string {
+	for _, k := range Keys(front) {
+		for _, r := range refused {
+			if k == r {
+				return k
+			}
+		}
+	}
+	return ""
 }
 
 func parseEntries(es []entry) Frontmatter {

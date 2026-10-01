@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -532,5 +533,30 @@ func TestSessionTextSkipsMetaLines(t *testing.T) {
 	}
 	if strings.Contains(c.Prompt, "META CAVEAT") {
 		t.Error("a meta line reached the prompt")
+	}
+}
+
+// A secret hidden behind a JSON escape in feedback.jsonl is redacted the way
+// report redacts it: on the decoded line (v2.0.0 gate, security code slice).
+func TestFeedbackRedactsEscapedSecret(t *testing.T) {
+	f := newFixture(t)
+	path := filepath.Join(f.home, ".config", "sh-agent", "feedback.jsonl")
+	fh, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// json.Marshal writes & as \u0026, so the raw line reads "\u0026sig=…" and the
+	// query-string needle matches only the decoded line (the gate's measurement).
+	fmt.Fprintf(fh, `{"ts":%q,"project":%q,"original":"see https://h.example/p?x=1\u0026sig=0123456789abcdef0123456789abcdef"}`+"\n", fresh.Format(time.RFC3339), f.root)
+	fh.Close()
+	c, err := collect(f.home, "claude", project(f), since, maxPrompt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(c.Prompt, "0123456789abcdef0123456789abcdef") {
+		t.Fatalf("the escaped key reached the prompt:\n%s", labels(c))
+	}
+	if !strings.Contains(c.Prompt, "fresh feedback for this project") {
+		t.Error("the clean feedback line was lost")
 	}
 }

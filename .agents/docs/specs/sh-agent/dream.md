@@ -42,6 +42,7 @@ Status: built 2026-09-30 (plan `plans/2026-09-30-parity-memory-dream.md`). R3's 
 - The private agy settings are `{"toolPermission":"request-review","permissions":{"allow":[]},"trustedWorkspaces":[]}`.
 - A stream result whose status is not `SUCCESS`, or that names `denied_actions`, is no answer.
 - The timer freezes only the absolute entries of the installing shell's PATH.
+- The timer's unit name is per home (`dream.UnitFor(home)`): the real home (`os.UserHomeDir`, path cleaned) gets the bare `sh-agent-dream` (systemd) and `com.styrman.sh-agent-dream` (launchd label); any other `--home` gets `-<first 8 hex of sha256 of the cleaned home path>` appended to both. Install, remove, the installed check and the unit-file paths all derive the name from the same home, and the unit's command is `dream --all --home <that home>`, so a scratch timer dreams over its own home's index, never the real one. A symlinked spelling of the real home counts as the real home (`os.SameFile`). Why: the user service manager is shared by every home of the user, so a scratch `--install-timer`, `--remove-timer` or `uninstall` must never reach the operator's own timer (R6; BUG-144). An existing real-home timer keeps its bare name, so an upgrade finds and removes it unchanged.
 
 ## Consumers
 

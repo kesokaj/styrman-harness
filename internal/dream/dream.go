@@ -217,9 +217,11 @@ func TimerInstalled(home string) bool {
 }
 
 func linuxTimerPath(home string) string {
-	return filepath.Join(home, ".config", "systemd", "user", "sh-agent-dream.timer")
+	unit, _ := UnitFor(home)
+	return filepath.Join(home, ".config", "systemd", "user", unit+".timer")
 }
 
 func macPlistPath(home string) string {
-	return filepath.Join(home, "Library", "LaunchAgents", "com.styrman.sh-agent-dream.plist")
+	_, plist := UnitFor(home)
+	return filepath.Join(home, "Library", "LaunchAgents", plist+".plist")
 }

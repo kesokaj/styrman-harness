@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"github.com/kesokaj/styrman-harness/internal/dream"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -104,7 +105,8 @@ func TestDreamVerb(t *testing.T) {
 // systemctl; the real uninstall removes it, with no manifest left.
 func TestUninstallDryRunLeavesTheTimer(t *testing.T) {
 	home := t.TempDir()
-	unit := filepath.Join(home, ".config", "systemd", "user", "sh-agent-dream.timer")
+	unitName, _ := dream.UnitFor(home) // a scratch home gets its own unit name (R6)
+	unit := filepath.Join(home, ".config", "systemd", "user", unitName+".timer")
 	os.MkdirAll(filepath.Dir(unit), 0o755)
 	os.WriteFile(unit, []byte("x"), 0o644)
 	bin := t.TempDir()

@@ -416,7 +416,7 @@ func TestStatusLine(t *testing.T) {
 	st.LastRun.Error = "no claude on PATH"
 	b, _ = json.Marshal(st)
 	write(t, statePath(home), string(b), fresh)
-	write(t, filepath.Join(home, ".config", "systemd", "user", "sh-agent-dream.timer"), "x", fresh)
+	write(t, linuxTimerPath(home), "x", fresh)
 	if got := StatusLine(home); got != "last run 2026-09-30 failed: no claude on PATH; timer installed" {
 		t.Errorf("failed: %q", got)
 	}

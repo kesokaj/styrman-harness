@@ -6,6 +6,8 @@ package dream
 // next `install` would delete a listed unit as stale (plan D12).
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -22,24 +24,51 @@ const (
 	plistName = "com.styrman.sh-agent-dream"
 )
 
+// userHomeDir is the real home; a test seam, since the tests' homes are
+// temporary directories that must count as the real one.
+var userHomeDir = os.UserHomeDir
+
+// UnitFor names the systemd unit and the launchd label for a home. The real
+// home gets the bare names; any other home gets them suffixed with a short
+// hash of its path, so a scratch `--install-timer`, `--remove-timer` or
+// `uninstall` never touches the operator's own timer through the shared user
+// service manager (R6; security review of the v2.0.0 gate).
+func UnitFor(home string) (unit, plist string) {
+	if real, err := userHomeDir(); err == nil {
+		if filepath.Clean(real) == filepath.Clean(home) {
+			return unitName, plistName
+		}
+		// A symlinked spelling of the real home is the real home (review 2026-10-01).
+		if ri, err := os.Stat(real); err == nil {
+			if hi, err := os.Stat(home); err == nil && os.SameFile(ri, hi) {
+				return unitName, plistName
+			}
+		}
+	}
+	sum := sha256.Sum256([]byte(filepath.Clean(home)))
+	suffix := "-" + hex.EncodeToString(sum[:4])
+	return unitName + suffix, plistName + suffix
+}
+
 func linuxServicePath(home string) string {
-	return filepath.Join(home, ".config", "systemd", "user", unitName+".service")
+	unit, _ := UnitFor(home)
+	return filepath.Join(home, ".config", "systemd", "user", unit+".service")
 }
 
 // renderSystemd returns the service and timer unit texts. PATH is the one of
 // the shell that ran --install-timer: the user manager's own PATH lacks
 // ~/.local/bin, where claude and agy live (cold read r1).
-func renderSystemd(bin, path string) (string, string) {
+func renderSystemd(bin, home, path string) (string, string) {
 	// systemd expands %-specifiers inside quotes too; %% is a literal %.
-	bin, path = strings.ReplaceAll(bin, "%", "%%"), strings.ReplaceAll(path, "%", "%%")
+	bin, home, path = strings.ReplaceAll(bin, "%", "%%"), strings.ReplaceAll(home, "%", "%%"), strings.ReplaceAll(path, "%", "%%")
 	service := fmt.Sprintf(`[Unit]
 Description=sh-agent dream: the nightly background dreamer (R3)
 
 [Service]
 Type=oneshot
 Environment="PATH=%s"
-ExecStart="%s" dream --all
-`, path, bin)
+ExecStart="%s" dream --all --home "%s"
+`, path, bin, home)
 	timer := `[Unit]
 Description=Run sh-agent dream nightly
 
@@ -54,7 +83,7 @@ WantedBy=timers.target
 }
 
 // renderLaunchd returns the launchd agent's plist.
-func renderLaunchd(bin, path string) string {
+func renderLaunchd(label, bin, home, path string) string {
 	x := func(s string) string {
 		var b strings.Builder
 		for _, r := range s {
@@ -77,18 +106,20 @@ func renderLaunchd(bin, path string) string {
 <dict>
   <key>Label</key><string>%s</string>
   <key>ProgramArguments</key>
-  <array><string>%s</string><string>dream</string><string>--all</string></array>
+  <array><string>%s</string><string>dream</string><string>--all</string><string>--home</string><string>%s</string></array>
   <key>EnvironmentVariables</key>
   <dict><key>PATH</key><string>%s</string></dict>
   <key>StartCalendarInterval</key>
   <dict><key>Hour</key><integer>3</integer><key>Minute</key><integer>0</integer></dict>
 </dict>
 </plist>
-`, plistName, x(bin), x(path))
+`, label, x(bin), x(home), x(path))
 }
 
 // InstallTimer installs and starts the nightly dream timer for goos, with
-// ExecStart at home's BinPath and PATH as given.
+// ExecStart at home's BinPath, `--home home` so the nightly run is scoped to
+// that home (a scratch timer never dreams over the real home, R6), and PATH
+// as given.
 func InstallTimer(home, path, goos string) error {
 	bin := filepath.Join(home, harness.BinPath)
 	if info, err := os.Stat(bin); err != nil || !info.Mode().IsRegular() {
@@ -101,17 +132,18 @@ func InstallTimer(home, path, goos string) error {
 	if strings.ContainsAny(bin+path, "\"\\\n\r") {
 		return &ExitError{2, "sh-agent dream --install-timer: the binary path or PATH holds a quote, a backslash or a line break; the timer's unit cannot carry it safely"}
 	}
+	unit, label := UnitFor(home)
 	var files map[string]string
 	var manager string
 	var start [][]string
 	switch goos {
 	case "linux":
-		service, timer := renderSystemd(bin, path)
+		service, timer := renderSystemd(bin, home, path)
 		files = map[string]string{linuxServicePath(home): service, linuxTimerPath(home): timer}
 		manager = "systemctl"
-		start = [][]string{{"--user", "daemon-reload"}, {"--user", "enable", "--now", unitName + ".timer"}}
+		start = [][]string{{"--user", "daemon-reload"}, {"--user", "enable", "--now", unit + ".timer"}}
 	case "darwin":
-		files = map[string]string{macPlistPath(home): renderLaunchd(bin, path)}
+		files = map[string]string{macPlistPath(home): renderLaunchd(label, bin, home, path)}
 		manager = "launchctl"
 		start = [][]string{{"bootstrap", "gui/" + strconv.Itoa(os.Getuid()), macPlistPath(home)}}
 	default:
@@ -161,6 +193,7 @@ func absolutePath(path string) string {
 
 // RemoveTimer stops and removes the dream timer; absent is fine.
 func RemoveTimer(home, goos string) error {
+	unit, _ := UnitFor(home)
 	var files []string
 	var manager string
 	var stop [][]string
@@ -168,7 +201,7 @@ func RemoveTimer(home, goos string) error {
 	case "linux":
 		files = []string{linuxTimerPath(home), linuxServicePath(home)}
 		manager = "systemctl"
-		stop = [][]string{{"--user", "disable", "--now", unitName + ".timer"}, {"--user", "daemon-reload"}}
+		stop = [][]string{{"--user", "disable", "--now", unit + ".timer"}, {"--user", "daemon-reload"}}
 	case "darwin":
 		files = []string{macPlistPath(home)}
 		manager = "launchctl"

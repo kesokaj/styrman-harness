@@ -88,6 +88,7 @@ sh-agent dream --remove-timer    # stop and remove it (uninstall does too)
 ```
 
 - The unit runs `~/.local/bin/sh-agent`, with the absolute entries of the PATH of the shell that ran `--install-timer`, so it finds `claude` or `agy` there; one reachable only through a relative PATH entry is not found at 03:00. Run it from the shell you work in. A rerun from a shell with another PATH renders other text: the installed unit is kept and named, so run `--remove-timer` first.
+- The unit is `sh-agent-dream.timer` (Linux) or `com.styrman.sh-agent-dream` (macOS) for the real home and carries a short hash suffix for any other `--home`, and runs `dream --all --home <that home>`, so a scratch install or removal leaves the real timer alone and a scratch timer never dreams over the real home (the service manager is shared by every home of the user; BUG-144). A timer installed by v2.0.0 or earlier has unit text without `--home`; `--install-timer` keeps it and says so, so run `sh-agent dream --remove-timer` then `--install-timer` once after updating.
 - Claude Code runs with `--setting-sources local`: a user-level `apiKeyHelper` is not loaded and the run fails; a `claude` login works.
 - Antigravity needs the operator's `~/.gemini/antigravity-cli/antigravity-oauth-token`; the run copies it into a private HOME under `~/.config/sh-agent/dream-agy-home-*`, removed after the run.
 - A project is dreamt over only once `sh-agent search` or `index` has run in it (the global index is the list).

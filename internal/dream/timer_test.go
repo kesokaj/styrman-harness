@@ -25,6 +25,10 @@ func fakeManager(t *testing.T, name string, code int) (calls string) {
 func timerHome(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
+	// The test's home counts as the real one, so the bare unit names apply.
+	prev := userHomeDir
+	userHomeDir = func() (string, error) { return home, nil }
+	t.Cleanup(func() { userHomeDir = prev })
 	write(t, filepath.Join(home, ".local", "bin", "sh-agent"), "#!/bin/sh\n", fresh)
 	return home
 }
@@ -42,8 +46,8 @@ func callsOf(t *testing.T, path string) string {
 }
 
 func TestRenderSystemdUnits(t *testing.T) {
-	service, timer := renderSystemd("/h/.local/bin/sh-agent", "/h/.local/bin:/usr/bin")
-	for _, want := range []string{"Type=oneshot", `Environment="PATH=/h/.local/bin:/usr/bin"`, `ExecStart="/h/.local/bin/sh-agent" dream --all`} {
+	service, timer := renderSystemd("/h/.local/bin/sh-agent", "/h", "/h/.local/bin:/usr/bin")
+	for _, want := range []string{"Type=oneshot", `Environment="PATH=/h/.local/bin:/usr/bin"`, `ExecStart="/h/.local/bin/sh-agent" dream --all --home "/h"`} {
 		if !strings.Contains(service, want) {
 			t.Errorf("service lacks %q:\n%s", want, service)
 		}
@@ -56,8 +60,8 @@ func TestRenderSystemdUnits(t *testing.T) {
 }
 
 func TestRenderLaunchdPlist(t *testing.T) {
-	plist := renderLaunchd("/Users/o & p/.local/bin/sh-agent", "/usr/bin")
-	for _, want := range []string{"<string>com.styrman.sh-agent-dream</string>", "<string>/Users/o &amp; p/.local/bin/sh-agent</string>", "<string>dream</string>", "<string>--all</string>", "<key>Hour</key><integer>3</integer>", "<key>PATH</key><string>/usr/bin</string>"} {
+	plist := renderLaunchd("com.styrman.sh-agent-dream", "/Users/o & p/.local/bin/sh-agent", "/Users/o & p", "/usr/bin")
+	for _, want := range []string{"<string>com.styrman.sh-agent-dream</string>", "<string>/Users/o &amp; p/.local/bin/sh-agent</string>", "<string>dream</string>", "<string>--all</string>", "<string>--home</string><string>/Users/o &amp; p</string>", "<key>Hour</key><integer>3</integer>", "<key>PATH</key><string>/usr/bin</string>"} {
 		if !strings.Contains(plist, want) {
 			t.Errorf("plist lacks %q:\n%s", want, plist)
 		}
@@ -186,8 +190,8 @@ func TestInstallTimerRefusesUnsafePaths(t *testing.T) {
 			t.Errorf("PATH %q: %v", path, err)
 		}
 	}
-	service, _ := renderSystemd("/h/100%/sh-agent", "/p%n")
-	if !strings.Contains(service, "/h/100%%/sh-agent") || !strings.Contains(service, "PATH=/p%%n") {
+	service, _ := renderSystemd("/h/100%/sh-agent", "/h/100%", "/p%n")
+	if !strings.Contains(service, "/h/100%%/sh-agent") || !strings.Contains(service, "PATH=/p%%n") || !strings.Contains(service, `--home "/h/100%%"`) {
 		t.Errorf("a %% was not escaped:\n%s", service)
 	}
 }
@@ -204,5 +208,69 @@ func TestInstallTimerKeepsOnlyAbsolutePath(t *testing.T) {
 	service := read(t, filepath.Join(home, ".config", "systemd", "user", "sh-agent-dream.service"))
 	if !strings.Contains(service, `Environment="PATH=/a/bin:/b"`) {
 		t.Errorf("service:\n%s", service)
+	}
+}
+
+// A home other than the real one gets its own unit name and label, so a scratch
+// install or removal never reaches the operator's timer through the shared user
+// manager (v2.0.0 gate, security code slice; R6).
+func TestUnitNamesPerHome(t *testing.T) {
+	real := timerHome(t)
+	if unit, plist := UnitFor(real); unit != "sh-agent-dream" || plist != "com.styrman.sh-agent-dream" {
+		t.Fatalf("real home: %s %s", unit, plist)
+	}
+	other := t.TempDir()
+	unit, plist := UnitFor(other)
+	if !strings.HasPrefix(unit, "sh-agent-dream-") || len(unit) != len("sh-agent-dream-")+8 || plist != "com.styrman."+unit {
+		t.Fatalf("other home: %s %s", unit, plist)
+	}
+	if again, _ := UnitFor(other); again != unit {
+		t.Fatalf("not deterministic: %s then %s", unit, again)
+	}
+	if u2, _ := UnitFor(t.TempDir()); u2 == unit {
+		t.Fatal("two homes share a unit name")
+	}
+	write(t, filepath.Join(other, ".local", "bin", "sh-agent"), "#!/bin/sh\n", fresh)
+	calls := fakeManager(t, "systemctl", 0)
+	if err := InstallTimer(other, "/p", "linux"); err != nil {
+		t.Fatal(err)
+	}
+	if got := callsOf(t, calls); got != "--user daemon-reload\n--user enable --now "+unit+".timer\n" {
+		t.Errorf("systemctl calls:\n%s", got)
+	}
+	service := read(t, filepath.Join(other, ".config", "systemd", "user", unit+".service"))
+	if !strings.Contains(service, `dream --all --home "`+other+`"`) {
+		t.Errorf("a scratch timer must dream over its own home:\n%s", service)
+	}
+	os.Remove(calls)
+	if err := RemoveTimer(other, "linux"); err != nil {
+		t.Fatal(err)
+	}
+	if got := callsOf(t, calls); got != "--user disable --now "+unit+".timer\n--user daemon-reload\n" {
+		t.Errorf("remove side keeps the bare name:\n%s", got)
+	}
+	// macOS: the label and the plist path carry the same suffix, and bootout names that path.
+	mcalls := fakeManager(t, "launchctl", 0)
+	if err := InstallTimer(other, "/p", "darwin"); err != nil {
+		t.Fatal(err)
+	}
+	pl := read(t, macPlistPath(other))
+	if !strings.Contains(pl, "<string>"+plist+"</string>") || !strings.Contains(pl, "<string>--home</string><string>"+other+"</string>") || !strings.HasSuffix(macPlistPath(other), plist+".plist") {
+		t.Errorf("darwin plist for a scratch home:\n%s", pl)
+	}
+	os.Remove(mcalls)
+	if err := RemoveTimer(other, "darwin"); err != nil {
+		t.Fatal(err)
+	}
+	if got := callsOf(t, mcalls); !strings.Contains(got, "bootout gui/") || !strings.Contains(got, plist+".plist") {
+		t.Errorf("launchctl bootout:\n%s", got)
+	}
+	// A symlinked spelling of the real home is the real home.
+	link := filepath.Join(t.TempDir(), "home-link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Skip("no symlinks here")
+	}
+	if u, _ := UnitFor(link); u != "sh-agent-dream" {
+		t.Errorf("symlinked real home got %s", u)
 	}
 }

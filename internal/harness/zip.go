@@ -52,7 +52,7 @@ var zipTrees = map[string]bool{"context": true, "skills": true, "agents": true, 
 // stripped; entries outside the five trees are never written. On any error
 // the directory this call made is removed.
 func UnpackZip(zipPath, parent string, check func(sum string) error) (dir, sum string, err error) {
-	data, err := readCapped(zipPath, maxZipArchiveBytes)
+	data, err := ReadCapped(zipPath, maxZipArchiveBytes)
 	if err != nil {
 		return "", "", fmt.Errorf("%s: reading the archive: %w", zipPath, err)
 	}
@@ -86,9 +86,13 @@ func UnpackZip(zipPath, parent string, check func(sum string) error) (dir, sum s
 		return "", "", err
 	}
 
-	// The parent must already exist ("" is the system temp directory): the
-	// caller creates it and removes it again on any failure of the whole
-	// install, which can still refuse the zip after this returns (BUG-093).
+	// The parent must already exist: the caller creates it and removes it
+	// again on any failure of the whole install, which can still refuse the
+	// zip after this returns (BUG-093). An empty parent means beside the zip —
+	// the no-config dry run — never the system temp directory (IN10).
+	if parent == "" {
+		parent = filepath.Dir(zipPath)
+	}
 	tmp, err := os.MkdirTemp(parent, "zip-*")
 	if err != nil {
 		return "", "", err
@@ -176,12 +180,18 @@ func entrySize(f *zip.File) (int64, error) {
 		return 0, err
 	}
 	defer rc.Close()
-	n, err := io.Copy(io.Discard, io.LimitReader(rc, maxZipFileBytes+1))
+	return copyCapped(io.Discard, rc, maxZipFileBytes)
+}
+
+// copyCapped copies r into w, reading at most one byte past max, and refuses
+// an entry that exceeds it — the one place the per-file cap is applied.
+func copyCapped(w io.Writer, r io.Reader, max int64) (int64, error) {
+	n, err := io.Copy(w, io.LimitReader(r, max+1))
 	if err != nil {
 		return n, err
 	}
-	if n > maxZipFileBytes {
-		return n, fmt.Errorf("%w (%d bytes)", errTooLarge, maxZipFileBytes)
+	if n > max {
+		return n, fmt.Errorf("%w (%d bytes)", errTooLarge, max)
 	}
 	return n, nil
 }
@@ -245,17 +255,11 @@ func unpackFile(f *zip.File, dest string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	n, err := io.Copy(w, io.LimitReader(rc, maxZipFileBytes+1))
+	n, err := copyCapped(w, rc, maxZipFileBytes)
 	if cerr := w.Close(); err == nil {
 		err = cerr
 	}
-	if err != nil {
-		return n, err
-	}
-	if n > maxZipFileBytes {
-		return n, fmt.Errorf("%w (%d bytes)", errTooLarge, maxZipFileBytes)
-	}
-	return n, nil
+	return n, err
 }
 
 // zipNameSafe refuses a name that is absolute, holds a backslash, or has a

@@ -150,16 +150,13 @@ func Install(src Source, home string, files []File, vendor string, dryRun bool, 
 
 	sort.Strings(manifest)
 	// An embedded install records the release it came with and runs no git
-	// command (D17); a tree on disk records its path and commit.
-	repo, commit := EmbeddedPrefix+src.Version, ""
+	// command (D17); a tree on disk records its path and commit; a zip install
+	// records the archive, never the unpack directory (ADR-038). One reader
+	// of that value: OriginString (IN6).
+	repo, commit := src.OriginString(), ""
 	var info RepoInfo
-	if src.Origin != "" {
-		// A zip's tree is deleted once this returns: the manifest names the
-		// archive, never the unpack directory (ZipPrefix, ADR-038).
-		repo = src.Origin
-	} else if src.Dir != "" {
-		repo = src.Dir
-		info = Inspect(repo) // empty for a plain copy: no commit of another repo is recorded
+	if src.Dir != "" && src.Origin == "" {
+		info = Inspect(src.Dir) // empty for a plain copy: no commit of another repo is recorded
 		commit = info.Commit
 	}
 	switch {

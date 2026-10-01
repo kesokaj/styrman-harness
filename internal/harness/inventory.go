@@ -186,10 +186,10 @@ func LoadSkills(src Source) ([]Skill, error) {
 		if err != nil {
 			return nil, fmt.Errorf("skill %s: %w", e.Name(), err)
 		}
-		if err := Lint(front); err != nil {
+		fm, err := ParseStrict(front)
+		if err != nil {
 			return nil, fmt.Errorf("skill %s: %w", e.Name(), err)
 		}
-		fm := Parse(front)
 		name := fm["name"]
 		if name == "" {
 			name = e.Name()
@@ -231,10 +231,10 @@ func LoadAgents(src Source) ([]Agent, error) {
 		if err != nil {
 			return nil, fmt.Errorf("agent %s: %w", path.Base(p), err)
 		}
-		if err := Lint(front); err != nil {
+		fm, err := ParseStrict(front)
+		if err != nil {
 			return nil, fmt.Errorf("agent %s: %w", path.Base(p), err)
 		}
-		fm := Parse(front)
 		name := fm["name"]
 		if name == "" {
 			name = strings.TrimSuffix(path.Base(p), ".md")
@@ -286,10 +286,11 @@ func LoadDocs(src Source, dirs ...string) ([]Doc, error) {
 			desc := ""
 			text := string(raw)
 			if front, body, err := Split(text); err == nil {
-				if err := Lint(front); err != nil {
+				fm, err := ParseStrict(front)
+				if err != nil {
 					return nil, fmt.Errorf("%s: %w", shown, err)
 				}
-				desc = Parse(front)["description"]
+				desc = fm["description"]
 				text = body
 			}
 			if desc == "" {

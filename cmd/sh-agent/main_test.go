@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -18,22 +19,46 @@ import (
 	"github.com/kesokaj/styrman-harness/internal/harness"
 )
 
+// allFlags is a FlagSet holding the global flags and every verb's flags, for
+// the reorder tests: the value flags are read from it, as run does per verb.
+func allFlags() *flag.FlagSet {
+	c := &ctx{fs: flag.NewFlagSet("all", flag.ContinueOnError)}
+	c.fs.StringVar(&c.repoFlag, "repo", "", "")
+	c.fs.StringVar(&c.homeFlag, "home", "", "")
+	c.fs.StringVar(&c.vendorFlag, "vendor", "", "")
+	for _, v := range verbs {
+		if v.flags == nil {
+			continue
+		}
+		// each verb registers only its own flags; a name two verbs share
+		// (dry-run, global) would panic on the second definition
+		sub := &ctx{fs: flag.NewFlagSet("verb", flag.ContinueOnError)}
+		v.flags(sub)
+		sub.fs.VisitAll(func(f *flag.Flag) {
+			if c.fs.Lookup(f.Name) == nil {
+				c.fs.Var(f.Value, f.Name, f.Usage)
+			}
+		})
+	}
+	return c.fs
+}
+
 func TestReorder(t *testing.T) {
 	cases := map[string][]string{
 		// BUG-002: the flag package stops at the first positional argument.
 		"adopt my-skill --home /x":          {"--home", "/x", "adopt", "my-skill"},
 		"--vendor agy install":              {"--vendor", "agy", "install"},
 		"adopt a --force":                   {"--force", "adopt", "a"},
-		"adopt -- --looks-like-a-flag":      {"adopt", "--looks-like-a-flag"},
+		"adopt -- --looks-like-a-flag":      {"--", "adopt", "--looks-like-a-flag"}, // one marker, before every positional: the flag package stops there
 		"--repo r --home h adopt x --force": {"--repo", "r", "--home", "h", "--force", "adopt", "x"},
-		// A value flag missing from takesValue swallows the next argument:
+		// A value flag reorder does not know swallows the next argument:
 		// --feedback-repo would take "--dry-run" as its value and the run
 		// would push when a dry run was asked (BUG-002's shape).
 		"report --feedback-repo /x --dry-run": {"--feedback-repo", "/x", "--dry-run", "report"},
 		"report --dry-run":                    {"--dry-run", "report"},
 	}
 	for in, want := range cases {
-		if got := reorder(strings.Fields(in)); !reflect.DeepEqual(got, want) {
+		if got := reorder(allFlags(), strings.Fields(in)); !reflect.DeepEqual(got, want) {
 			t.Errorf("reorder(%q) = %q, want %q", in, got, want)
 		}
 	}
@@ -963,48 +988,6 @@ func TestUpdateNeverInstallsDirtyTree(t *testing.T) {
 // TestReadSettingsProblems covers the reader's refusals, including the open
 // failure the verifier reported as untested. A problem is named without a
 // byte of the file's contents.
-func TestReadSettingsProblems(t *testing.T) {
-	dir := t.TempDir()
-
-	if _, problem := readSettings(filepath.Join(dir, "absent.json")); problem != "could not be read" {
-		t.Errorf("missing file: %q", problem)
-	}
-
-	sub := filepath.Join(dir, "adirectory.json")
-	if err := os.Mkdir(sub, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if _, problem := readSettings(sub); problem != "is not a regular file" {
-		t.Errorf("directory: %q", problem)
-	}
-
-	if os.Geteuid() == 0 {
-		t.Skip("root can open a mode-000 file, so the open-failure leg cannot run")
-	}
-	unreadable := filepath.Join(dir, "unreadable.json")
-	secret := `{"attribution":{"commit":"SECRET"}}`
-	if err := os.WriteFile(unreadable, []byte(secret), 0o000); err != nil {
-		t.Fatal(err)
-	}
-	data, problem := readSettings(unreadable)
-	if problem != "could not be read" {
-		t.Errorf("unreadable regular file: %q", problem)
-	}
-	if len(data) != 0 {
-		t.Errorf("no bytes may be returned when the open failed, got %q", data)
-	}
-	// The problem strings are a closed set of fixed phrases, so asserting one
-	// does not contain the secret proves nothing; what is worth asserting is
-	// that the set IS closed — a future reader returning the OS error verbatim
-	// would leak a path, and returning file bytes would leak the file.
-	for _, allowed := range []string{"could not be read", "is not a regular file", ""} {
-		if problem == allowed {
-			return
-		}
-	}
-	t.Errorf("readSettings returned an unrecognised problem string %q; it must stay a closed set so nothing from the file or the OS error escapes", problem)
-}
-
 // TestUpdateRefusesWhenStatusIsUnknown closes the coverage gap the round-2
 // verifier named: `update`'s StatusUnknown branch had no cmd-level test.
 // "git could not answer" must refuse, not deploy — a checkout whose state
@@ -1825,56 +1808,102 @@ func TestStatusWarnsOnOversizedSettings(t *testing.T) {
 	}
 }
 
-// TestSettingsWriteUsesHarnessWriteAtomic pins the settings editor to the one
-// atomic-write helper: the temp-write-sync-rename sequence lived here and in
-// internal/harness, and a fix made in one had to be ported to the other by
-// hand once already (project review 2026-09-30, simplify finding 1).
-func TestSettingsWriteUsesHarnessWriteAtomic(t *testing.T) {
-	src, err := os.ReadFile("main.go")
+// TestVerbRefusesAnotherVerbsFlag: every verb has its own FlagSet (IN5), so a
+// flag that belongs to another verb is a usage error — exit 2, named on the
+// caller's writer — instead of being parsed and silently ignored.
+func TestVerbRefusesAnotherVerbsFlag(t *testing.T) {
+	t.Setenv(harness.ChildEnv, "1")
+	repo, err := filepath.Abs("../..")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(src), "os.CreateTemp(") {
-		t.Error("main.go writes through its own temp file; use harness.WriteAtomic")
+	for _, args := range [][]string{
+		{"list", "--check", "--force"},
+		{"version", "--dry-run"},
+		{"index", "--kind", "bug"},
+		{"status", "--rebuild"},
+	} {
+		home := t.TempDir()
+		var out bytes.Buffer
+		err := run(append(args, "--repo", repo, "--home", home), &out)
+		var code exitCode
+		if !errors.As(err, &code) || code != 2 {
+			t.Errorf("%q: err = %v, want exit 2", args, err)
+		}
+		if !strings.Contains(out.String(), "flag provided but not defined") {
+			t.Errorf("%q: the refusal should name the flag on the writer, got:\n%s", args, out.String())
+		}
 	}
-	if !strings.Contains(string(src), "harness.WriteAtomic(") {
-		t.Error("main.go does not call harness.WriteAtomic")
+	// The verb's own flags still parse, in any order around positionals.
+	home := t.TempDir()
+	var out bytes.Buffer
+	if err := run([]string{"list", "--repo", repo, "--home", home}, &out); err != nil {
+		t.Fatalf("list with only global flags: %v\n%s", err, out.String())
 	}
 }
 
-// TestAttributionSetReportsAnUnwritableSettingsFile drives the error branch
-// behind harness.WriteAtomic: a settings directory that cannot take a temp
-// file makes the edit fail, and the failure is reported with its cause and
-// the by-hand remedy, the file left as it was (v1.13.1 gate review).
-func TestAttributionSetReportsAnUnwritableSettingsFile(t *testing.T) {
-	if os.Geteuid() == 0 {
-		t.Skip("root ignores the directory permissions this test relies on")
+// `--` ends the flags for the flag package and for reorder alike: what follows
+// is positional, so a verb-scoped flag after it is never parsed (security
+// review 2026-10-01, f2), and a verb that takes no positional arguments
+// refuses it instead of ignoring it.
+func TestDoubleDashKeepsFollowingArgumentsPositional(t *testing.T) {
+	fs := flag.NewFlagSet("x", flag.ContinueOnError)
+	fs.String("from-zip", "", "")
+	fs.String("home", "", "") // the global flags sit on every verb's FlagSet in run()
+	got := reorder(fs, []string{"--home", "h", "--", "--from-zip", "z"})
+	want := []string{"--home", "h", "--", "--from-zip", "z"}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Fatalf("reorder dropped the -- marker: got %q", got)
 	}
-	home := t.TempDir()
-	dir := filepath.Join(home, ".claude")
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	// A positional before the marker: the marker still moves ahead of every
+	// positional, so Args() is exactly the words (`search foo -- bar` searches
+	// "foo bar", not "foo -- bar").
+	got = reorder(fs, []string{"foo", "--", "bar", "--from-zip"})
+	want = []string{"--", "foo", "bar", "--from-zip"}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Fatalf("a positional before -- left the marker in place: got %q", got)
+	}
+}
+
+// A verb that takes no positional arguments refuses a stray one with a usage
+// error: `list - --check` and `version extra` exit 2 instead of running with
+// the argument silently ignored (security review 2026-10-01, f3).
+func TestVerbRefusesStrayArguments(t *testing.T) {
+	isolate(t) // no PATH, a scratch cwd: a regression here must never reach the real home or run git
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv(harness.ChildEnv, "1")
+	repo, err := filepath.Abs("../..")
+	if err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(dir, "settings.json")
-	if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
-		t.Fatal(err)
+	for _, args := range [][]string{
+		{"version", "extra"},
+		{"list", "-", "--check"},
+		{"update", "--", "--from-zip", "nowhere.zip"},
+	} {
+		var out bytes.Buffer
+		err := run(append([]string{args[0], "--repo", repo, "--home", t.TempDir()}, args[1:]...), &out)
+		var code exitCode
+		if !errors.As(err, &code) || code != 2 {
+			t.Errorf("%v: want exit 2 for a stray argument, got %v (output %q)", args, err, out.String())
+		}
 	}
-	if err := os.Chmod(dir, 0o500); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { os.Chmod(dir, 0o700) })
+}
+
+// `update --home -- --from-zip FILE`: the flag package takes `--` as --home's
+// value, so a scan of the raw arguments that stops at `--` never sees the zip
+// flag; the branch is decided from the parsed FlagSet instead, and the zip path
+// refuses the missing file rather than running a normal update.
+func TestUpdateFromZipDecidedByParsedFlags(t *testing.T) {
+	isolate(t)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv(harness.ChildEnv, "1")
 	var out bytes.Buffer
-	attributionSet(home, false, &out)
-	got := out.String()
-	if !strings.Contains(got, "could not be written") || !strings.Contains(got, "add the key by hand") {
-		t.Errorf("the failure should be reported with the remedy, got %q", got)
+	err := run([]string{"update", "--home", "--", "--from-zip", "nowhere.zip"}, &out)
+	if err == nil {
+		t.Fatalf("a missing zip was accepted (output %q)", out.String())
 	}
-	data, err := os.ReadFile(path)
-	if err != nil || string(data) != "{}\n" {
-		t.Errorf("the settings file should be untouched, got %q %v", data, err)
-	}
-	entries, _ := os.ReadDir(dir)
-	if len(entries) != 1 {
-		t.Errorf("no temp file should be left behind, got %d entries", len(entries))
+	if !strings.Contains(err.Error(), "nowhere.zip") && !strings.Contains(out.String(), "nowhere.zip") {
+		t.Fatalf("the zip branch did not run: err %v, output %q", err, out.String())
 	}
 }

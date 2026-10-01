@@ -70,7 +70,7 @@ Then confirm the checkout path still rebuilds with
 `<built binary> install --repo <this checkout> --home .agents/scratch/<slug>/home3 --dry-run`
 → `[dry-run] the binary would be rebuilt from <checkout>`.
 
-## 3b. `report`, the feedback loop back (change to `internal/harness/report.go`, `cmd/sh-agent/main.go`'s report wiring, or `reorder`'s `takesValue` map)
+## 3b. `report`, the feedback loop back (change to `internal/harness/report.go`, `cmd/sh-agent/main.go`'s report wiring, or `reorder`, which derives the value-taking flags from the verb's FlagSet)
 
 Never run `report` without `--dry-run` from a dev or verification session — it pushes
 to the real feedback repository (`git@github.com:kesokaj/styrman-harness-feedback.git`)
@@ -82,8 +82,8 @@ go run ./cmd/sh-agent report --dry-run --home .agents/scratch/<slug>-home
 
 Must print the destination, the collected/absent files, and the redaction list (what was
 caught — it cannot show a miss), and write nothing (`git status` in a real feedback checkout stays byte-identical before and
-after). `go test ./cmd/... -run TestReorder` covers a new value-flag being added to
-`takesValue`; `-run TestReport` alone does NOT run every report test (`TestSendReport`,
+after). `go test ./cmd/... -run TestReorder` covers a new value-flag registered on
+a verb's FlagSet (reorder derives the value-taking set from it); `-run TestReport` alone does NOT run every report test (`TestSendReport`,
 `TestResolveFeedbackFailures`, `TestSendReportRefusesRedirectsAndLinks`,
 `TestSendReportPushesOnlyToFeedbackURL` don't match that prefix) — use
 `go test ./internal/... -run 'TestReport|TestSendReport|TestResolveFeedback'` for

@@ -42,7 +42,7 @@ func ResolveSource(explicit, home, version string) (Source, error) {
 				// Name WHERE the path came from: an exported $SH_AGENT_REPO in
 				// a shell profile makes every command on the machine fail, and
 				// "drop it" is unactionable without knowing which one to drop
-				// (code review 2026-09-18; BUG-076's rule).
+				// (BUG-076).
 				return Source{}, fmt.Errorf("this is the release binary %s: it installs the harness built into it and never a tree on disk, so %s=%s is refused — unset it, or build sh-agent from that tree and run that build's install", version, from.origin, from.path)
 			}
 		}
@@ -77,15 +77,11 @@ func ResolveSource(explicit, home, version string) (Source, error) {
 	// hash, never a path (EmbeddedPrefix, ZipPrefix): neither is a candidate.
 	zipNote := ""
 	if st, found, err := LoadState(home); err == nil && found {
-		switch {
-		case strings.HasPrefix(st.Repo, ZipPrefix):
-			sum := strings.TrimPrefix(st.Repo, ZipPrefix+"sha256:")
-			if len(sum) > 12 {
-				sum = sum[:12]
-			}
-			zipNote = fmt.Sprintf("this home was installed from a zip (sha256 %s); a development build needs a checkout or --repo — or run `sh-agent update --from-zip <file>` again. ", sum)
-		case !strings.HasPrefix(st.Repo, EmbeddedPrefix):
-			candidates = append(candidates, st.Repo)
+		switch o := st.Origin(); o.Kind {
+		case OriginZip:
+			zipNote = fmt.Sprintf("this home was installed from a zip (sha256 %s); a development build needs a checkout or --repo — or run `sh-agent update --from-zip <file>` again. ", o.ShortSum())
+		case OriginPath:
+			candidates = append(candidates, o.Path)
 		}
 	}
 	for _, c := range candidates {
@@ -98,6 +94,96 @@ func ResolveSource(explicit, home, version string) (Source, error) {
 		built = fmt.Sprintf("this build is %s, a development build rather than a vX.Y.Z release, so it has no harness built in", version)
 	}
 	return Source{}, fmt.Errorf("%sharness repo not found and %s: run from inside the checkout, pass --repo, set SH_AGENT_REPO, or install from a release binary (README § Install without cloning)", zipNote, built)
+}
+
+// ResolveSourceLenient is ResolveSource for a verb that only READS the
+// harness and must run on a machine with none: `report`. A release binary
+// reports the files built into it, with a note when --repo was also given
+// (the record would otherwise carry a null harness, BUG-077's shape); a
+// development build takes what ResolveSource finds, and when it finds
+// nothing the zero Source is returned with the reason as the note. The note
+// is for the caller's writer; it is never an error.
+func ResolveSourceLenient(explicit, home, version string) (src Source, note string) {
+	if IsReleaseVersion(version) {
+		if explicit != "" {
+			note = "report: --repo is not used here; this release binary reports the harness built into it"
+		}
+		return EmbeddedSource(version), note
+	}
+	src, err := ResolveSource(explicit, home, version)
+	if err != nil {
+		return Source{}, "report: " + err.Error()
+	}
+	return src, ""
+}
+
+// OriginKind classifies what a manifest's repo value names.
+type OriginKind int
+
+const (
+	// OriginPath is a tree on disk: a checkout or a plain copy.
+	OriginPath OriginKind = iota
+	// OriginRelease is the harness built into a release binary ("embedded:vX.Y.Z").
+	OriginRelease
+	// OriginZip is a repository zip the operator passed to update --from-zip
+	// ("zip:sha256:<sum>;<trust>"), whose unpacked tree is gone (ADR-038).
+	OriginZip
+)
+
+// Origin is a manifest's repo value, parsed once for every reader (IN6).
+type Origin struct {
+	Kind    OriginKind
+	Path    string // OriginPath: the tree
+	Release string // OriginRelease: the release tag
+	Sum     string // OriginZip: the archive's sha256
+	Trust   string // OriginZip: "unverified", "verified vX.Y.Z", or "" for a manifest from before the verdict was recorded
+}
+
+// ParseOrigin reads a manifest repo value.
+func ParseOrigin(repo string) Origin {
+	if release, ok := strings.CutPrefix(repo, EmbeddedPrefix); ok {
+		return Origin{Kind: OriginRelease, Release: release}
+	}
+	if rest, ok := strings.CutPrefix(repo, ZipPrefix+"sha256:"); ok {
+		sum, trust, _ := strings.Cut(rest, ";")
+		return Origin{Kind: OriginZip, Sum: sum, Trust: trust}
+	}
+	return Origin{Kind: OriginPath, Path: repo}
+}
+
+// Origin is the parsed form of the manifest's repo value.
+func (s State) Origin() Origin { return ParseOrigin(s.Repo) }
+
+// ShortSum is the first 12 hex digits of a zip origin's sha256, enough to
+// tell zips apart in a message.
+func (o Origin) ShortSum() string {
+	if len(o.Sum) > 12 {
+		return o.Sum[:12]
+	}
+	return o.Sum
+}
+
+// OriginString is what the manifest records as this source: the explicit
+// Origin when set (a zip's archive), the release for the embedded files, the
+// tree's path otherwise.
+func (s Source) OriginString() string {
+	switch {
+	case s.Origin != "":
+		return s.Origin
+	case s.Dir == "":
+		return EmbeddedPrefix + s.Version
+	}
+	return s.Dir
+}
+
+// ZipOrigin is the manifest value for a zip install: the archive's sha256 and
+// the verdict, so status can tell a verified install from an unverified one
+// after the output has scrolled away.
+func ZipOrigin(sum, verifiedTag string) string {
+	if verifiedTag != "" {
+		return ZipPrefix + "sha256:" + sum + ";verified " + verifiedTag
+	}
+	return ZipPrefix + "sha256:" + sum + ";unverified"
 }
 
 func absSource(dir string) (Source, error) {
@@ -124,7 +210,7 @@ type RepoInfo struct {
 	Dirty  bool
 	// StatusUnknown is set when git could not report the tree's state at all.
 	// A caller deciding whether to DEPLOY treats it as dirty: "git failed" is
-	// not "the tree is clean" (release review of v1.0.0, finding 4).
+	// not "the tree is clean" .
 	StatusUnknown bool
 }
 
@@ -151,11 +237,9 @@ func Inspect(repo string) RepoInfo {
 	}
 	branch, _ := gitOut(repo, "rev-parse", "--abbrev-ref", "HEAD")
 	commit, _ := gitOut(repo, "rev-parse", "--short", "HEAD")
-	// --untracked-files=all, never the bare form: `status.showUntrackedFiles`
-	// is an ordinary git setting, and with `no` a plain `--porcelain` reports
-	// a tree holding a whole new, wholly untracked skill directory as clean —
-	// which `update` would then deploy to every vendor directory, the exact
-	// outcome the dirty check exists to stop (security review 2026-09-16).
+	// --untracked-files=all, never the bare form: with `status.showUntrackedFiles
+	// no`, a plain `--porcelain` reports a tree holding a wholly untracked
+	// skill directory as clean, which `update` would then deploy.
 	status, statusErr := gitOut(repo, "status", "--porcelain", "--untracked-files=all")
 	return RepoInfo{Branch: branch, Commit: commit, Dirty: status != "", StatusUnknown: statusErr != nil}
 }
@@ -180,8 +264,7 @@ func Behind(repo string) (int, error) {
 // in the operator's own environment on purpose: GIT_* variables, git config,
 // GIT_SSH_COMMAND and PATH are theirs to set, exactly as for a `git pull`
 // typed by hand; only the plain-copy check above is kept independent of
-// git so a typo or a nested copy can never redirect a build (security
-// reviews of 2026-09-13, rounds 1–3).
+// git so a typo or a nested copy can never redirect a build.
 func Pull(repo string, out io.Writer) error {
 	if !IsCheckout(repo) {
 		return errPlainCopy

@@ -62,7 +62,7 @@ func TestMemoryRefusalExitsTwo(t *testing.T) {
 }
 
 // TestDreamVerb: the verb reaches the package with its flags, --project taking
-// a value (takesValue), and refuses neither-nor with the usage line.
+// a value (reorder reads that from the FlagSet), and refuses neither-nor with the usage line.
 func TestDreamVerb(t *testing.T) {
 	home := t.TempDir()
 	var code exitCode

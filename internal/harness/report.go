@@ -40,14 +40,13 @@ var prefixNeedles = []string{
 	"-----BEGIN", "PRIVATE KEY", "AKIA", "ASIA", "AIza", "ya29.", "GOCSPX-",
 	"ghp_", "gho_", "ghs_", "ghu_", "ghr_", "github_pat_", "glpat-", "gldt-", "glrt-", "glptt-",
 	"sk-ant-", "sk-proj-", "xoxb-", "xoxp-", "xoxa-", "xoxs-",
-	// Security review 2026-09-30, finding 3: Stripe webhook secrets and PyPI
-	// (every token opens with the base64 of its macaroon location); the
+	// Stripe webhook secrets and PyPI tokens (security review 2026-09-30, f3;
+	// every PyPI token opens with the base64 of its macaroon location); the
 	// Stripe keys are a keyword needle below, because `sk_test_` sits inside
-	// `task_test_` (v1.13.1 gate). Rounds 2 and 3 of the check: the service,
-	// admin and None key shapes.
+	// `task_test_`; the service, admin and None key shapes are covered too.
 	"whsec_", "pypi-AgEIcHlwaS5vcmc", "pypi-AgENdGVzdC5weXBpLm9yZw",
 	"sk-svcacct-", "sk-admin-", "sk-None-",
-	// v1.14.0 gate, security finding 1: an age key and DigitalOcean tokens.
+	// An age key and DigitalOcean tokens (v1.14.0 gate, security f1).
 	"AGE-SECRET-KEY-", "dop_v1_", "doo_v1_", "dor_v1_",
 }
 
@@ -67,8 +66,7 @@ var keywordNeedles = []struct {
 	// one (audit 2026-09-30, IN1).
 	accept func(m []string) bool
 }{
-	// One rule per kind (audit 2026-09-30, IN1; three review rounds of the
-	// fix): a key holding a word of the pass family (password, passwd,
+	// One rule per kind (audit 2026-09-30, IN1): a key holding a word of the pass family (password, passwd,
 	// passphrase, pwd), secret, token or api key, followed by `:` or `=`,
 	// or by a space when the key is a `--flag`; the value is the rest of
 	// that token or the whole quoted string, on the same line. A quoted
@@ -121,8 +119,8 @@ var keywordNeedles = []struct {
 	// username goes too, and a pathless URL followed by an unrelated `@` on
 	// the same line takes the line with it: over-redaction in the safe
 	// direction, accepted like `ASIAN` and pinned in the test. One rule per
-	// kind, not one per instance: the security rounds of 2026-09-30 found a
-	// shape past every instance listed, five times.
+	// kind, not one per instance: an instance list is always one shape short
+	// (BUG-110).
 	{"url token", regexp.MustCompile(`://[^/\s:@]{16,}:?@`), nil},
 	// Every Slack webhook host and path (services, workflows, triggers, a
 	// port, a gov domain), any case.
@@ -139,9 +137,9 @@ var keywordNeedles = []struct {
 	// and `-bench . -b 3` are not cookies (audit 2026-09-30, IN1).
 	{"cookie header", regexp.MustCompile(`(?i)(set-)?cookie["']?\s*:\s*\S|(^|\s)(-b|--cookie)[ =]["']?\S+=\S|document\.cookie\s*=`), nil},
 	{"vault token", regexp.MustCompile(`hv[sbr]\.[A-Za-z0-9_-]{20,}`), nil},
-	// The seventh pass over this list (security check 2026-09-30) widened
-	// the rules above; a shape past them is a design question for the
-	// operator, never an eighth batch: the list is a safety net (delivery.md).
+	// A shape past the rules above is a design question for the operator,
+	// never another batch of instances: the list is a safety net (delivery.md,
+	// BUG-110).
 }
 
 // A key block opens at a PEM header, or at a header whose dashes a chat UI
@@ -714,15 +712,15 @@ func RemoveKeptClone(home, url string, out io.Writer) error {
 		// `report` pushed with `-u <url>`, which leaves the branch tracking a
 		// URL rather than a remote, so nothing updates the remote-tracking
 		// refs and commits long since pushed still count here. Saying "has N
-		// unpushed commits" sent the operator looking for work that was not
-		// lost (measured on the real clone, 2026-09-18).
+		// unpushed commits" would send the operator looking for work that was
+		// never lost (review 2026-09-18).
 		//
 		// The settling command covers the SAME refs as the count — `--all
 		// --not --remotes` — not just HEAD: with a commit on a second local
 		// branch, a HEAD-only check prints nothing while the count says 2,
 		// and the guide then tells the operator an empty list means the clone
-		// holds nothing unique. That would have been a hand-deletion of the
-		// only copy of that commit (code review 2026-09-18). The path is not
+		// holds nothing unique — a hand-deletion of the only copy of that
+		// commit (code review 2026-09-18). The path is not
 		// interpolated: leave() already names the directory, and a path with
 		// a space or a shell metacharacter would ride into text the operator
 		// pastes (security review 2026-09-18).

@@ -13,17 +13,17 @@ import (
 )
 
 func TestReorderSearchFlags(t *testing.T) {
-	// --limit, --kind and --refs take values: missing from takesValue they
+	// --limit, --kind and --refs take values: were reorder not told so they
 	// would swallow the next word (BUG-002's shape).
 	cases := map[string][]string{
 		"search zip --kind bug verify --limit 3": {"--kind", "bug", "--limit", "3", "search", "zip", "verify"},
 		"search --refs BUG-049 --global":         {"--refs", "BUG-049", "--global", "search"},
 		"search --open --kind plan":              {"--open", "--kind", "plan", "search"},
 		"index --rebuild --home /h":              {"--rebuild", "--home", "/h", "index"},
-		"search -- --from-zip is a word":         {"search", "--from-zip", "is", "a", "word"},
+		"search -- --from-zip is a word":         {"--", "search", "--from-zip", "is", "a", "word"},
 	}
 	for in, want := range cases {
-		if got := reorder(strings.Fields(in)); !reflect.DeepEqual(got, want) {
+		if got := reorder(allFlags(), strings.Fields(in)); !reflect.DeepEqual(got, want) {
 			t.Errorf("reorder(%q) = %q, want %q", in, got, want)
 		}
 	}

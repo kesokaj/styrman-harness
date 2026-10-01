@@ -468,20 +468,31 @@ func TestUpdateFromZipSweepWithGlobCharsInHome(t *testing.T) {
 	}
 }
 
-// A dry run on a fresh home unpacks under the system temp directory and
-// leaves nothing there either.
+// A dry run on a fresh home (no ~/.config/sh-agent yet) unpacks beside the
+// zip, never under the system temp directory, and removes that directory
+// again: the zip's folder and TMPDIR hold nothing new afterwards.
 func TestUpdateFromZipDryRunCleansTempDir(t *testing.T) {
 	isolate(t)
 	tmp := t.TempDir()
 	t.Setenv("TMPDIR", tmp)
 	zp := markedZip(t)
-	before, _ := os.ReadDir(tmp)
+	zdir := filepath.Dir(zp)
+	beforeTmp, _ := os.ReadDir(tmp)
+	beforeZip, _ := os.ReadDir(zdir)
 	if err := run([]string{"update", "--from-zip", zp, "--home", t.TempDir(), "--dry-run"}, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
-	after, _ := os.ReadDir(tmp)
-	if len(after) != len(before) {
-		t.Errorf("the dry run left %d new entries in TMPDIR", len(after)-len(before))
+	afterTmp, _ := os.ReadDir(tmp)
+	if len(afterTmp) != len(beforeTmp) {
+		t.Errorf("the dry run left %d new entries in TMPDIR", len(afterTmp)-len(beforeTmp))
+	}
+	afterZip, _ := os.ReadDir(zdir)
+	if len(afterZip) != len(beforeZip) {
+		var names []string
+		for _, e := range afterZip {
+			names = append(names, e.Name())
+		}
+		t.Errorf("the dry run left %d new entries beside the zip: %v", len(afterZip)-len(beforeZip), names)
 	}
 }
 

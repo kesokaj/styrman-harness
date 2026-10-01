@@ -39,6 +39,8 @@ The verb × place-kind matrix of `plans/2026-09-18-sh-agent-works-everywhere.md`
 | `search --refs ADR-040` | exercised: `ADR-040  …DECISIONS.md:383  Superseded by ADR-041`, `referenced by 21:` | refused: the same message | exercised: same |
 | `search --open --kind bug` | exercised: `search: 2 open records`, BUG-105 and BUG-083 | refused: the same message | exercised: same |
 | `index --rebuild` | exercised: same counts after a rebuild | refused: the same message | exercised: same |
+| `list --check`, `index --kind bug`, `version --dry-run` (added 2026-10-01, Phase 8: one FlagSet per verb) | refused: `flag provided but not defined: -check` plus the verb's usage, exit 2 | refused: the same, exit 2 | refused: the same, exit 2 |
+| `list foo`, `status foo`, `version x`, `list - --check`, `update -- --from-zip x` (added 2026-10-01, Phase 8: a verb without positional arguments refuses a stray one) | refused: `<verb> takes no arguments: ["foo"]`, exit 2, no usage block | refused: the same, exit 2 | refused: the same, exit 2 |
 | `search --global zip` | exercised: the checkout registered itself; 873 trail files, `checkout:.agents/docs/plans/…` | exercised: answers outside a checkout, `0 hits` from a fresh home (nothing registered) | exercised: same as the checkout |
 
 | `memory add` / `memory show` (added 2026-09-30, plan `2026-09-30-parity-memory-dream`) | exercised: a build of the tree wrote `.agents/memory/prefer-tables.md` and its line, 0600 in a 0700 store, and `show` printed it with the rollout hint; outside a checkout, exit 2 (`testing/2026-09-30-verify-parity-memory-dream-phase-1.md`) | not run: the verb runs before the harness tree is resolved (`main.go`, the `memory` case), so the place kind never reaches it | not run: the same |

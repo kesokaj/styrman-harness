@@ -66,10 +66,23 @@ func entries(front string) []entry {
 	return out
 }
 
-// Parse reads the top-level keys of a frontmatter block.
-func Parse(front string) Frontmatter {
+// Parse reads the top-level keys of a frontmatter block, leniently.
+func Parse(front string) Frontmatter { return parseEntries(entries(front)) }
+
+// ParseStrict lints and parses the block in one pass over its entries: the
+// installer's form, so a file is read once and a value a strict YAML parser
+// would read differently is refused before it is used.
+func ParseStrict(front string) (Frontmatter, error) {
+	es := entries(front)
+	if err := lintEntries(es); err != nil {
+		return nil, err
+	}
+	return parseEntries(es), nil
+}
+
+func parseEntries(es []entry) Frontmatter {
 	fm := Frontmatter{}
-	for _, e := range entries(front) {
+	for _, e := range es {
 		key, val, cont := e.key, e.val, e.cont
 		switch {
 		case isBlockIndicator(val):
@@ -100,12 +113,14 @@ const descriptionLimit = 1024
 
 // Lint rejects what this lenient parser would read differently from a
 // strict YAML parser: a plain (unquoted, non-block) scalar starting with "#"
-// or containing "#" after a space or tab. YAML reads that as a comment, so a strict parser
-// truncates the value or, inside a flow sequence, fails the whole file —
-// which is how the Antigravity CLI silently dropped two skills. Quoting the
-// value fixes it for every reader.
-func Lint(front string) error {
-	for _, e := range entries(front) {
+// or containing "#" after a space or tab, which YAML reads as a comment (the
+// Antigravity CLI then drops the skill, BUG-004), and a description over the
+// Agent Skills limit. Quoting the value fixes the first for every reader.
+// Lint alone is the thin form; ParseStrict lints and parses in one pass.
+func Lint(front string) error { return lintEntries(entries(front)) }
+
+func lintEntries(es []entry) error {
+	for _, e := range es {
 		if e.key == "description" {
 			joined := ""
 			if !isBlockIndicator(e.val) {
@@ -196,7 +211,7 @@ func yamlQuote(s string) string {
 			b.WriteString(`\t`)
 		case r < 0x20 || r == 0x7f:
 			// A raw control character ends a double-quoted YAML scalar for a
-			// strict parser (security audit 2026-09-18).
+			// strict parser (security review 2026-09-18).
 			fmt.Fprintf(&b, `\u%04x`, r)
 		default:
 			b.WriteRune(r)

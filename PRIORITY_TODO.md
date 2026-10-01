@@ -14,7 +14,7 @@ Operator's words (2026-09-30): "I want everything fixed, improved, optimized, ad
 - [x] Phase 5 — Workflow skills: every WS finding; preflight and review fixes; `/review --resume` lens; size tiers
 - [x] Phase 6 — Technical skills: golang, frontend, typescript, terraform-gcp, gke, cloud-run-deploy, docker, gcloud-setup, json-api-style, bash, mermaid; strikes; VENDORED rows; link-check test
 - [x] Phase 7 — New skills and templates: requirements, spec, operate-gcp, data-gcp, api auth, testing strategy, explain-project; init-project templates
-- [ ] Phase 8 — Installer simplifications (S1, S2, S5–S8, IN5–IN10)
+- [x] Phase 8 — Installer simplifications (S1, S2, S5–S8, IN5–IN10)
 - [ ] Phase 9 — Real-home install, sandbox runs, re-audit, handoff
 
 ## Operator decisions

@@ -21,9 +21,7 @@
 package main
 
 import (
-	"bytes"
 	"debug/buildinfo"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -93,332 +91,448 @@ type exitCode int
 
 func (e exitCode) Error() string { return fmt.Sprintf("exit %d", int(e)) }
 
+// ctx is what one verb runs with: its FlagSet (the global flags plus the
+// verb's own, and nothing else), the parsed values, the home, the writer, and
+// for the verbs that read the harness, the resolved source.
+type ctx struct {
+	cmd  string
+	fs   *flag.FlagSet
+	out  io.Writer
+	home string
+	// global flags, accepted by every verb
+	repoFlag, homeFlag, vendorFlag string
+	// per-verb flags; a verb's flags func registers only the ones it reads
+	dryRun, check, force, openRecords, global, rebuild, dreamAll, installTimer, removeTimer bool
+	feedbackRepo, fromZip, kind, refs, memType, memName, memDesc, dreamProject              string
+	limit                                                                                   int
+	// src is the harness, resolved before run for the verbs that mark source
+	src harness.Source
+}
+
+// repo is the tree on disk, "" for the files embedded in a release binary;
+// no git helper is ever called with "" (D17).
+func (c *ctx) repo() string { return c.src.Dir }
+
+// vendor resolves --vendor against the manifest.
+func (c *ctx) vendor() (string, error) { return resolveVendor(c.vendorFlag, c.home) }
+
+func (c *ctx) dryRunFlag() {
+	c.fs.BoolVar(&c.dryRun, "dry-run", false, "print what would change, change nothing")
+}
+
+// verb is one command: the flags it declares, whether it reads the harness
+// tree, and what it does.
+type verb struct {
+	flags      func(c *ctx) // registers the verb's own flags; nil for none
+	source     bool         // resolve the harness source before run
+	positional bool         // takes positional arguments (search words, adopt's name, memory's subverb); every other verb refuses a stray one
+	run        func(c *ctx) error
+}
+
+// verbs is the command table. A verb's FlagSet holds the three global flags
+// and the ones its flags func registers, so `list --check` is a usage error
+// instead of a flag parsed and silently ignored (IN5). Adding a verb here is
+// a map change under the project's README map rule (D9: verbs unchanged).
+var verbs = map[string]verb{
+	"version":   {run: runVersion},
+	"uninstall": {flags: (*ctx).dryRunFlag, run: runUninstall},
+	"report": {flags: func(c *ctx) {
+		c.fs.StringVar(&c.feedbackRepo, "feedback-repo", "", "report: feedback checkout (never cloned into)")
+		c.dryRunFlag()
+	}, run: runReport},
+	"memory": {flags: func(c *ctx) {
+		c.fs.StringVar(&c.memType, "type", "", "memory add: user, feedback, project or reference")
+		c.fs.StringVar(&c.memName, "name", "", "memory add: the memory's slug")
+		c.fs.StringVar(&c.memDesc, "description", "", "memory add: one line")
+	}, positional: true, run: runMemory},
+	"dream": {flags: func(c *ctx) {
+		c.fs.BoolVar(&c.dreamAll, "all", false, "dream: every project in the global search index")
+		c.fs.StringVar(&c.dreamProject, "project", "", "dream: one checkout")
+		c.fs.BoolVar(&c.installTimer, "install-timer", false, "dream: install the nightly user timer")
+		c.fs.BoolVar(&c.removeTimer, "remove-timer", false, "dream: remove the nightly user timer")
+		c.dryRunFlag()
+	}, run: runDream},
+	"search": {flags: func(c *ctx) {
+		c.fs.IntVar(&c.limit, "limit", 0, "search: hits to print, 1-50 (default 10)")
+		c.fs.StringVar(&c.kind, "kind", "", "search: only hits of this kind")
+		c.fs.StringVar(&c.refs, "refs", "", "search: records naming this ID or path")
+		c.fs.BoolVar(&c.openRecords, "open", false, "search: open bugs and plans with unticked boxes")
+		c.fs.BoolVar(&c.global, "global", false, "search, index: the global search index")
+	}, positional: true, run: runSearch},
+	"index": {flags: func(c *ctx) {
+		c.fs.BoolVar(&c.global, "global", false, "search, index: the global search index")
+		c.fs.BoolVar(&c.rebuild, "rebuild", false, "index: delete and rebuild the index")
+	}, run: runSearch},
+	"install": {flags: (*ctx).dryRunFlag, source: true, run: runInstall},
+	"sync":    {flags: (*ctx).dryRunFlag, source: true, run: runInstall},
+	"status":  {source: true, run: func(c *ctx) error { return status(c.src, c.home, c.vendorFlag, c.out) }},
+	"diff":    {source: true, run: runDiff},
+	"update": {flags: func(c *ctx) {
+		c.fs.BoolVar(&c.check, "check", false, "update: only report whether the repo is behind")
+		c.fs.StringVar(&c.fromZip, "from-zip", "", "update: install the harness in this repository zip with the running binary")
+		c.dryRunFlag()
+	}, source: true, run: runUpdate},
+	"list":   {source: true, run: runList},
+	"render": {source: true, run: runRender},
+	"adopt": {flags: func(c *ctx) {
+		c.fs.BoolVar(&c.force, "force", false, "adopt: replace an existing skill")
+	}, source: true, positional: true, run: runAdopt},
+}
+
 func run(args []string, out io.Writer) error {
 	if len(args) == 0 || args[0] == "help" || args[0] == "-h" || args[0] == "--help" {
 		fmt.Fprint(out, usage)
 		return nil
 	}
 	cmd, rest := args[0], args[1:]
-
-	fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
-	fs.SetOutput(out)
-	repoFlag := fs.String("repo", "", "harness checkout")
-	homeFlag := fs.String("home", "", "install under this directory instead of $HOME")
-	vendorFlag := fs.String("vendor", "", "target vendor: all, antigravity (or agy), claude")
-	dryRun := fs.Bool("dry-run", false, "print what would change, change nothing")
-	check := fs.Bool("check", false, "update: only report whether the repo is behind")
-	force := fs.Bool("force", false, "adopt: replace an existing skill")
-	feedbackFlag := fs.String("feedback-repo", "", "report: feedback checkout (never cloned into)")
-	fromZip := fs.String("from-zip", "", "update: install the harness in this repository zip with the running binary")
-	limit := fs.Int("limit", 0, "search: hits to print, 1-50 (default 10)")
-	kind := fs.String("kind", "", "search: only hits of this kind")
-	refs := fs.String("refs", "", "search: records naming this ID or path")
-	openRecords := fs.Bool("open", false, "search: open bugs and plans with unticked boxes")
-	global := fs.Bool("global", false, "search, index: the global search index")
-	rebuild := fs.Bool("rebuild", false, "index: delete and rebuild the index")
-	memType := fs.String("type", "", "memory add: user, feedback, project or reference")
-	memName := fs.String("name", "", "memory add: the memory's slug")
-	memDesc := fs.String("description", "", "memory add: one line")
-	dreamAll := fs.Bool("all", false, "dream: every project in the global search index")
-	dreamProject := fs.String("project", "", "dream: one checkout")
-	installTimer := fs.Bool("install-timer", false, "dream: install the nightly user timer")
-	removeTimer := fs.Bool("remove-timer", false, "dream: remove the nightly user timer")
-	if err := fs.Parse(reorder(rest)); err != nil {
-		return err
+	v, ok := verbs[cmd]
+	if !ok {
+		return fmt.Errorf("unknown command %q\n\n%s", cmd, usage)
+	}
+	// A zip place (R8, ADR-038): the operator named the archive, so no tree is
+	// resolved and no other verb runs — `uninstall --from-zip` must not
+	// uninstall, `report --from-zip` must not report. Refused before the
+	// FlagSet sees it, so the refusal names the right verb rather than an
+	// undefined flag.
+	if cmd != "update" && hasFlag(rest, "from-zip") {
+		return fmt.Errorf("--from-zip belongs to update: sh-agent update --from-zip <file>")
 	}
 
-	home := *homeFlag
-	if home == "" {
+	c := &ctx{cmd: cmd, out: out, fs: flag.NewFlagSet(cmd, flag.ContinueOnError)}
+	c.fs.SetOutput(out)
+	c.fs.StringVar(&c.repoFlag, "repo", "", "harness checkout")
+	c.fs.StringVar(&c.homeFlag, "home", "", "install under this directory instead of $HOME")
+	c.fs.StringVar(&c.vendorFlag, "vendor", "", "target vendor: all, antigravity (or agy), claude")
+	if v.flags != nil {
+		v.flags(c)
+	}
+	if err := c.fs.Parse(reorder(c.fs, rest)); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return err
+		}
+		// The flag package has named the flag on the writer; a usage error
+		// exits 2 like every other usage error here.
+		return exitCode(2)
+	}
+	if !v.positional && c.fs.NArg() > 0 {
+		// A stray argument is never ignored: `list - --check` and `update --
+		// --from-zip x` would otherwise run the verb as if nothing had been said.
+		fmt.Fprintf(out, "%s takes no arguments: %q\n", cmd, c.fs.Args())
+		return exitCode(2)
+	}
+
+	c.home = c.homeFlag
+	if c.home == "" {
 		h, err := os.UserHomeDir()
 		if err != nil {
 			return err
 		}
-		home = h
+		c.home = h
 	}
-	// Absolute before anything runs: the checkout path rebuilds and runs
-	// the build's install with cmd.Dir = repo, so a relative --home landed
+	// Absolute before anything runs: the checkout path rebuilds and runs the
+	// build's install with cmd.Dir = repo, so a relative --home would land
 	// inside the repository on a real install and under the invoking
 	// directory on --dry-run (BUG-080).
-	if abs, err := filepath.Abs(home); err == nil {
-		home = abs
+	if abs, err := filepath.Abs(c.home); err == nil {
+		c.home = abs
 	}
 
-	// A zip place (R8, ADR-038): the operator named the archive, so no tree
-	// is resolved — not the working directory, not the manifest, and not a
-	// release binary's embedded files. Every refusal comes before any command
-	// runs: `uninstall --from-zip` must not uninstall, `report --from-zip`
-	// must not report, and an empty value is refused rather than read as no
-	// flag — that would fall through to a normal update, which on a release
-	// binary downloads and replaces the binary.
-	zipSet := false
-	fs.Visit(func(f *flag.Flag) { zipSet = zipSet || f.Name == "from-zip" })
-	if zipSet {
+	fromZipSet := false
+	c.fs.Visit(func(f *flag.Flag) { fromZipSet = fromZipSet || f.Name == "from-zip" })
+	// The parsed FlagSet decides, never a scan of the raw arguments: `--home --`
+	// makes `--` a value, and a scan that stopped there would skip this branch
+	// and run a normal update (security review 2026-10-01, round 2).
+	if cmd == "update" && fromZipSet {
+		// Every refusal comes before any command runs, and an empty value is
+		// refused rather than read as no flag — that would fall through to a
+		// normal update, which on a release binary downloads and replaces the
+		// binary.
 		switch {
-		case cmd != "update":
-			return fmt.Errorf("--from-zip belongs to update: sh-agent update --from-zip <file>")
-		case *fromZip == "" || strings.HasPrefix(*fromZip, "-"):
+		case c.fromZip == "" || strings.HasPrefix(c.fromZip, "-"):
 			// A value that looks like a flag was a flag: `--from-zip --dry-run`
 			// must not read --dry-run as the file and run a real update.
 			return errors.New("--from-zip needs a file: sh-agent update --from-zip <file>")
-		case *check || *repoFlag != "":
+		case c.check || c.repoFlag != "":
 			return errors.New("--from-zip installs the named zip; --check/--repo do not apply to it")
 		}
-		return updateFromZip(*fromZip, home, *vendorFlag, *dryRun, out)
+		return updateFromZip(c.fromZip, c.home, c.vendorFlag, c.dryRun, out)
 	}
 
-	switch cmd {
-	case "version":
-		fmt.Fprintln(out, "sh-agent", buildVersion())
-		return nil
-	case "uninstall":
-		// The dream timer is not in the manifest (the next install would delete
-		// it as stale); uninstall removes it by R4's dream clause, also when no
-		// manifest is left, and a dry run only says so.
-		if dream.TimerInstalled(home) {
-			if *dryRun {
-				fmt.Fprintln(out, "[dry-run] would remove the dream timer")
-			} else if err := dream.RemoveTimer(home, runtime.GOOS); err != nil {
-				return err
-			} else {
-				fmt.Fprintln(out, "removed the dream timer")
-			}
-		}
-		return harness.Uninstall(home, *dryRun, out)
-	case "report":
-		// Before ResolveSource, which errors when no harness is found: a
-		// machine with no checkout must still be able to report.
-		return report(*repoFlag, *feedbackFlag, home, *dryRun, out)
-	case "memory":
-		// Before ResolveSource: memory needs no harness tree (R10).
-		return memoryCmd(fs.Args(), memory.Entry{Type: *memType, Name: *memName, Description: *memDesc}, home, *vendorFlag, out)
-	case "dream":
-		// Before ResolveSource: the dream job needs no harness tree (R3's exception).
-		vendor, err := resolveVendor(*vendorFlag, home)
+	if v.source {
+		src, err := harness.ResolveSource(c.repoFlag, c.home, buildVersion())
 		if err != nil {
 			return err
 		}
-		switch {
-		case *installTimer && *removeTimer:
-			// A usage error exits 2 like every other dream usage error, and
-			// says why on the caller's writer (audit 2026-09-30, IN12, IN13).
-			fmt.Fprintln(out, "sh-agent dream: --install-timer or --remove-timer, not both")
-			return exitCode(2)
-		case (*installTimer || *removeTimer) && *dryRun:
-			// A new side effect goes below the read-only mode (context § Hard
-			// rules): the dry run names what would change and calls nothing.
-			what := "install the nightly dream timer (sh-agent dream --all at 03:00)"
-			if *removeTimer {
-				what = "remove the nightly dream timer"
-			}
-			fmt.Fprintln(out, "[dry-run] would "+what+"; installed now: "+strconv.FormatBool(dream.TimerInstalled(home)))
-		case *installTimer:
-			err = dream.InstallTimer(home, os.Getenv("PATH"), runtime.GOOS)
-			if err == nil {
-				fmt.Fprintln(out, "dream timer installed: sh-agent dream --all runs nightly at 03:00")
-			}
-		case *removeTimer:
-			err = dream.RemoveTimer(home, runtime.GOOS)
-			if err == nil {
-				fmt.Fprintln(out, "dream timer removed")
-			}
-		default:
-			err = dream.Run(dream.Options{Home: home, Vendor: vendor, All: *dreamAll, Project: *dreamProject, DryRun: *dryRun, Out: out})
-		}
-		var ee *dream.ExitError
-		if errors.As(err, &ee) {
-			fmt.Fprintln(out, ee.Msg)
-			return exitCode(ee.Code)
-		}
-		return err
-	case "search", "index":
-		// Before ResolveSource too: searching needs no harness tree, and a
-		// release-binary or zip place has none (plan D10).
-		wd, err := os.Getwd()
-		if err != nil {
-			return err
-		}
-		o := search.Options{Dir: wd, Home: home, Words: fs.Args(), Refs: *refs, Open: *openRecords,
-			Kind: *kind, Limit: *limit, Global: *global, Rebuild: *rebuild}
-		if cmd == "index" {
-			return search.Index(o, out)
-		}
-		return search.Search(o, out)
+		c.src = src
 	}
+	return v.run(c)
+}
 
-	src, err := harness.ResolveSource(*repoFlag, home, buildVersion())
+// hasFlag reports whether args carry the named flag, as `-name`, `--name`,
+// `-name=…` or `--name=…`, before `--`.
+func hasFlag(args []string, name string) bool {
+	for _, a := range args {
+		if a == "--" {
+			return false
+		}
+		t := strings.TrimLeft(a, "-")
+		if len(a)-len(t) > 2 || len(a) == len(t) {
+			continue
+		}
+		if t == name || strings.HasPrefix(t, name+"=") {
+			return true
+		}
+	}
+	return false
+}
+
+func runVersion(c *ctx) error {
+	fmt.Fprintln(c.out, "sh-agent", buildVersion())
+	return nil
+}
+
+func runUninstall(c *ctx) error {
+	// The dream timer is not in the manifest (the next install would delete
+	// it as stale); uninstall removes it by R4's dream clause, also when no
+	// manifest is left, and a dry run only says so.
+	if dream.TimerInstalled(c.home) {
+		if c.dryRun {
+			fmt.Fprintln(c.out, "[dry-run] would remove the dream timer")
+		} else if err := dream.RemoveTimer(c.home, runtime.GOOS); err != nil {
+			return err
+		} else {
+			fmt.Fprintln(c.out, "removed the dream timer")
+		}
+	}
+	return harness.Uninstall(c.home, c.dryRun, c.out)
+}
+
+// runReport needs no harness tree: a machine with no checkout must still be
+// able to report, so the source is resolved leniently (IN7).
+func runReport(c *ctx) error {
+	return report(c.repoFlag, c.feedbackRepo, c.home, c.dryRun, c.out)
+}
+
+// runMemory needs no harness tree (R10).
+func runMemory(c *ctx) error {
+	return memoryCmd(c.fs.Args(), memory.Entry{Type: c.memType, Name: c.memName, Description: c.memDesc}, c.home, c.vendorFlag, c.out)
+}
+
+// runDream needs no harness tree (R3's exception).
+func runDream(c *ctx) error {
+	vendor, err := c.vendor()
 	if err != nil {
 		return err
 	}
-	// repo is the tree on disk, "" for the files embedded in a release binary;
-	// no git helper is ever called with "" (D17).
-	repo := src.Dir
+	switch {
+	case c.installTimer && c.removeTimer:
+		// A usage error exits 2 like every other dream usage error, and says
+		// why on the caller's writer (IN12, IN13).
+		fmt.Fprintln(c.out, "sh-agent dream: --install-timer or --remove-timer, not both")
+		return exitCode(2)
+	case (c.installTimer || c.removeTimer) && c.dryRun:
+		// A new side effect goes below the read-only mode (context § Hard
+		// rules): the dry run names what would change and calls nothing.
+		what := "install the nightly dream timer (sh-agent dream --all at 03:00)"
+		if c.removeTimer {
+			what = "remove the nightly dream timer"
+		}
+		fmt.Fprintln(c.out, "[dry-run] would "+what+"; installed now: "+strconv.FormatBool(dream.TimerInstalled(c.home)))
+	case c.installTimer:
+		err = dream.InstallTimer(c.home, os.Getenv("PATH"), runtime.GOOS)
+		if err == nil {
+			fmt.Fprintln(c.out, "dream timer installed: sh-agent dream --all runs nightly at 03:00")
+		}
+	case c.removeTimer:
+		err = dream.RemoveTimer(c.home, runtime.GOOS)
+		if err == nil {
+			fmt.Fprintln(c.out, "dream timer removed")
+		}
+	default:
+		err = dream.Run(dream.Options{Home: c.home, Vendor: vendor, All: c.dreamAll, Project: c.dreamProject, DryRun: c.dryRun, Out: c.out})
+	}
+	var ee *dream.ExitError
+	if errors.As(err, &ee) {
+		fmt.Fprintln(c.out, ee.Msg)
+		return exitCode(ee.Code)
+	}
+	return err
+}
 
-	switch cmd {
-	case "install", "sync":
-		vendor, err := resolveVendor(*vendorFlag, home)
-		if err != nil {
-			return err
-		}
-		if repo == "" {
-			// A release binary installs the harness built into it and itself:
-			// there is no source to build from (D13).
-			if *dryRun {
-				fmt.Fprintf(out, "[dry-run] release binary %s: the harness built into it and the running binary would be installed\n", src.Version)
-			} else {
-				fmt.Fprintf(out, "release binary %s: installing the harness built into it and the running binary\n", src.Version)
-			}
-			return installFiles(src, home, vendor, *dryRun, out)
-		}
-		if err := knownCheckout(*repoFlag, home, repo); err != nil {
-			return err
-		}
-		// The deployed binary must be the repo's own build: rebuild and let
-		// that build install, unless this process is that build (ChildEnv),
-		// there is no toolchain to build with, the tree is a plain copy, or
-		// this is a dry run — a dry run never builds or runs a fresh binary;
-		// like every install it still reads the checkout's git state, which
-		// is why the checkout must be one the operator named or installed
-		// before. A plain copy (no .git: an unpacked bundle)
-		// never rebuilds — whoever unpacked it built the running binary from
-		// that same tree, the tree is often read-only to the installing user,
-		// and git cannot update it anyway (BUG-015).
-		_, goErr := exec.LookPath("go")
-		own := harness.IsCheckout(repo)
-		rebuild := shouldRebuild(goErr == nil, os.Getenv(harness.ChildEnv) == "1", own)
-		if *dryRun && rebuild {
-			fmt.Fprintf(out, "[dry-run] the binary would be rebuilt from %s\n", repo)
-		} else if rebuild {
-			var pass []string
-			if *homeFlag != "" {
-				pass = append(pass, "--home", home)
-			}
-			if *vendorFlag != "" {
-				pass = append(pass, "--vendor", vendor)
-			}
-			return harness.Reinstall(repo, pass, out)
-		}
-		if !own && *dryRun {
-			fmt.Fprintln(out, "[dry-run] plain copy, not its own git checkout: the running binary would be installed as is")
-		} else if !own {
-			fmt.Fprintln(out, "plain copy, not its own git checkout: the running binary is installed as is")
-		} else if goErr != nil {
-			fmt.Fprintln(out, "warning: go is not on PATH; the running binary was copied, not rebuilt — install Go and run `sh-agent update`")
-		}
-		return installFiles(src, home, vendor, *dryRun, out)
-
-	case "status":
-		return status(src, home, *vendorFlag, out)
-
-	case "diff":
-		vendor, err := resolveVendor(*vendorFlag, home)
-		if err != nil {
-			return err
-		}
-		// A zip install is not compared: the zip is not kept, and the source
-		// this binary resolves (its embedded files, a checkout) is not what was
-		// installed (ADR-038).
-		if st, found, err := harness.LoadState(home); err == nil && found && strings.HasPrefix(st.Repo, harness.ZipPrefix) {
-			fmt.Fprintln(out, "diff       not compared — this home was installed from a zip that is not kept; run update --from-zip <file> again to change it")
-			return nil
-		}
-		files, err := harness.Plan(src, nil, vendor)
-		if err != nil {
-			return err
-		}
-		return harness.Diff(home, files, out)
-
-	case "update":
-		// A dry run of update is its --check: it reports, and changes nothing —
-		// no download, no binary replaced, no kept clone shed, no pull. It
-		// says what a real update would do instead.
-		dry := *dryRun
-		if dry {
-			*check = true
-		}
-		if repo == "" {
-			// A release binary has no source to build from: the newest
-			// release is downloaded and verified instead (Phase 4).
-			args, err := installPassArgs(*homeFlag, home, *vendorFlag)
-			if err != nil {
-				return err
-			}
-			// Both kinds of place shed the clone earlier versions kept
-			// (plan § Old kept clone cleanup, D9). Only the checkout path
-			// did, so a binary-only place went on holding every other
-			// place's reports — which is the complaint this whole feature
-			// began with. Never under --check, which changes nothing
-			// (BUG-070). Found on the work Mac, 2026-09-18.
-			if !*check {
-				shedKeptClone(home, out)
-			}
-			// The BUG-079 note, when this run wrote the installed binary, is
-			// printed by UpdateFromRelease itself: only there is "replaced"
-			// known, and only there can its positive case be tested.
-			err = harness.UpdateFromRelease(home, src.Version, *check, args, out)
-			if errors.Is(err, harness.ErrNewerRelease) {
-				if dry {
-					fmt.Fprintln(out, "[dry-run] update would download that release, verify its signed checksums, replace the binary and reinstall")
-					return nil
-				}
-				return exitCode(2)
-			}
-			if err != nil {
-				return fmt.Errorf("update: %w", err)
-			}
-			return nil
-		}
-		if err := knownCheckout(*repoFlag, home, repo); err != nil {
-			return err
-		}
-		err := update(repo, home, *check, *homeFlag, *vendorFlag, out)
-		var code exitCode
-		if dry && errors.As(err, &code) && code == 2 {
-			fmt.Fprintln(out, "[dry-run] update would pull those commits, rebuild and reinstall")
-			return nil
-		}
+// runSearch serves `search` and `index`; neither needs a harness tree, and a
+// release-binary or zip place has none (plan D10).
+func runSearch(c *ctx) error {
+	wd, err := os.Getwd()
+	if err != nil {
 		return err
+	}
+	o := search.Options{Dir: wd, Home: c.home, Words: c.fs.Args(), Refs: c.refs, Open: c.openRecords,
+		Kind: c.kind, Limit: c.limit, Global: c.global, Rebuild: c.rebuild}
+	if c.cmd == "index" {
+		return search.Index(o, c.out)
+	}
+	return search.Search(o, c.out)
+}
 
-	case "list":
-		inv, err := harness.LoadInventory(src)
-		if err != nil {
-			return err
-		}
-		fmt.Fprint(out, harness.RenderInventory(inv))
-		return nil
-
-	case "render":
-		inv, err := harness.LoadInventory(src)
-		if err != nil {
-			return err
-		}
-		data, err := harness.RenderContext(src, inv)
-		if err != nil {
-			return err
-		}
-		_, err = out.Write(data)
+func runInstall(c *ctx) error {
+	vendor, err := c.vendor()
+	if err != nil {
 		return err
+	}
+	repo := c.repo()
+	if repo == "" {
+		// A release binary installs the harness built into it and itself:
+		// there is no source to build from (D13).
+		if c.dryRun {
+			fmt.Fprintf(c.out, "[dry-run] release binary %s: the harness built into it and the running binary would be installed\n", c.src.Version)
+		} else {
+			fmt.Fprintf(c.out, "release binary %s: installing the harness built into it and the running binary\n", c.src.Version)
+		}
+		return installFiles(c.src, c.home, vendor, c.dryRun, c.out)
+	}
+	if err := knownCheckout(c.repoFlag, c.home, repo); err != nil {
+		return err
+	}
+	// The deployed binary must be the repo's own build: rebuild and let that
+	// build install, unless this process is that build (ChildEnv), there is
+	// no toolchain, the tree is a plain copy, or this is a dry run — a dry run
+	// never builds or runs a fresh binary, though like every install it reads
+	// the checkout's git state, which is why the checkout must be one the
+	// operator named or installed before. A plain copy (no .git) never
+	// rebuilds: whoever unpacked it built the running binary from that same
+	// tree, the tree may be read-only, and git cannot update it (BUG-015).
+	_, goErr := exec.LookPath("go")
+	own := harness.IsCheckout(repo)
+	rebuild := shouldRebuild(goErr == nil, os.Getenv(harness.ChildEnv) == "1", own)
+	if c.dryRun && rebuild {
+		fmt.Fprintf(c.out, "[dry-run] the binary would be rebuilt from %s\n", repo)
+	} else if rebuild {
+		var pass []string
+		if c.homeFlag != "" {
+			pass = append(pass, "--home", c.home)
+		}
+		if c.vendorFlag != "" {
+			pass = append(pass, "--vendor", vendor)
+		}
+		return harness.Reinstall(repo, pass, c.out)
+	}
+	if !own && c.dryRun {
+		fmt.Fprintln(c.out, "[dry-run] plain copy, not its own git checkout: the running binary would be installed as is")
+	} else if !own {
+		fmt.Fprintln(c.out, "plain copy, not its own git checkout: the running binary is installed as is")
+	} else if goErr != nil {
+		fmt.Fprintln(c.out, "warning: go is not on PATH; the running binary was copied, not rebuilt — install Go and run `sh-agent update`")
+	}
+	return installFiles(c.src, c.home, vendor, c.dryRun, c.out)
+}
 
-	case "adopt":
-		if fs.NArg() != 1 {
-			return errors.New("usage: sh-agent adopt <skill-name-or-path> [--force]")
-		}
-		if repo == "" {
-			return errors.New("adopt needs a harness checkout (`git clone git@github.com:kesokaj/styrman-harness.git`, then run adopt from a build of it); this install is a release binary and carries no tree to adopt into")
-		}
-		dest, err := harness.Adopt(repo, home, fs.Arg(0), *force)
-		if err != nil {
-			return err
-		}
-		next := "commit and push the repo"
-		if !harness.IsCheckout(repo) {
-			// A plain copy has no repository: the adopted skill lives only
-			// here until it is copied into a checkout (audit 2026-09-18).
-			next = "copy it into your harness checkout and commit there — this tree is a plain copy with no repository"
-		}
-		fmt.Fprintf(out, "adopted into %s\nnext: review it, run `sh-agent install`, then %s\n", dest, next)
+func runDiff(c *ctx) error {
+	vendor, err := c.vendor()
+	if err != nil {
+		return err
+	}
+	// A zip install is not compared: the zip is not kept, and the source this
+	// binary resolves (its embedded files, a checkout) is not what was
+	// installed (ADR-038).
+	if st, found, err := harness.LoadState(c.home); err == nil && found && st.Origin().Kind == harness.OriginZip {
+		fmt.Fprintln(c.out, "diff       not compared — this home was installed from a zip that is not kept; run update --from-zip <file> again to change it")
 		return nil
 	}
-	return fmt.Errorf("unknown command %q\n\n%s", cmd, usage)
+	files, err := harness.Plan(c.src, nil, vendor)
+	if err != nil {
+		return err
+	}
+	return harness.Diff(c.home, files, c.out)
+}
+
+func runUpdate(c *ctx) error {
+	// A dry run of update is its --check: it reports, and changes nothing —
+	// no download, no binary replaced, no kept clone shed, no pull. It says
+	// what a real update would do instead.
+	dry := c.dryRun
+	check := c.check || dry
+	repo := c.repo()
+	if repo == "" {
+		// A release binary has no source to build from: the newest release is
+		// downloaded and verified instead.
+		args, err := installPassArgs(c.homeFlag, c.home, c.vendorFlag)
+		if err != nil {
+			return err
+		}
+		// Both kinds of place shed the clone earlier versions kept (D9), never
+		// under --check, which changes nothing (BUG-070).
+		if !check {
+			shedKeptClone(c.home, c.out)
+		}
+		// The BUG-079 note, when this run wrote the installed binary, is
+		// printed by UpdateFromRelease itself: only there is "replaced" known.
+		err = harness.UpdateFromRelease(c.home, c.src.Version, check, args, c.out)
+		if errors.Is(err, harness.ErrNewerRelease) {
+			if dry {
+				fmt.Fprintln(c.out, "[dry-run] update would download that release, verify its signed checksums, replace the binary and reinstall")
+				return nil
+			}
+			return exitCode(2)
+		}
+		if err != nil {
+			return fmt.Errorf("update: %w", err)
+		}
+		return nil
+	}
+	if err := knownCheckout(c.repoFlag, c.home, repo); err != nil {
+		return err
+	}
+	err := update(repo, c.home, check, c.homeFlag, c.vendorFlag, c.out)
+	var code exitCode
+	if dry && errors.As(err, &code) && code == 2 {
+		fmt.Fprintln(c.out, "[dry-run] update would pull those commits, rebuild and reinstall")
+		return nil
+	}
+	return err
+}
+
+func runList(c *ctx) error {
+	inv, err := harness.LoadInventory(c.src)
+	if err != nil {
+		return err
+	}
+	fmt.Fprint(c.out, harness.RenderInventory(inv))
+	return nil
+}
+
+func runRender(c *ctx) error {
+	inv, err := harness.LoadInventory(c.src)
+	if err != nil {
+		return err
+	}
+	data, err := harness.RenderContext(c.src, inv)
+	if err != nil {
+		return err
+	}
+	_, err = c.out.Write(data)
+	return err
+}
+
+func runAdopt(c *ctx) error {
+	if c.fs.NArg() != 1 {
+		return errors.New("usage: sh-agent adopt <skill-name-or-path> [--force]")
+	}
+	repo := c.repo()
+	if repo == "" {
+		return errors.New("adopt needs a harness checkout (`git clone git@github.com:kesokaj/styrman-harness.git`, then run adopt from a build of it); this install is a release binary and carries no tree to adopt into")
+	}
+	dest, err := harness.Adopt(repo, c.home, c.fs.Arg(0), c.force)
+	if err != nil {
+		return err
+	}
+	next := "commit and push the repo"
+	if !harness.IsCheckout(repo) {
+		// A plain copy has no repository: the adopted skill lives only here
+		// until it is copied into a checkout.
+		next = "copy it into your harness checkout and commit there — this tree is a plain copy with no repository"
+	}
+	fmt.Fprintf(c.out, "adopted into %s\nnext: review it, run `sh-agent install`, then %s\n", dest, next)
+	return nil
 }
 
 // installFiles plans the source with the running binary and installs it,
@@ -436,37 +550,25 @@ func installFiles(src harness.Source, home, vendor string, dryRun bool, out io.W
 		return err
 	}
 	// A dry run wrote no binary, so no statement about how PATH reaches it is
-	// true; the hint would call the bin dir "not on PATH" whether it is or not
-	// (security review round 3).
+	// true.
 	if !dryRun {
-		if err := pathHint(home, out); err != nil {
-			return err
-		}
+		pathHint(home, out)
 	}
 	if vendor == harness.VendorAll || vendor == harness.VendorClaude {
-		attributionSet(home, dryRun, out)
-		return attributionHint(home, "note: ", out)
+		harness.AttributionSet(home, dryRun, out)
+		harness.AttributionHint(home, "note: ", out)
 	}
 	return nil
 }
 
 func report(repoFlag, feedbackFlag, home string, dryRun bool, out io.Writer) error {
-	// `report` READS a source, it never installs one, so a release binary
-	// takes its own files directly rather than going through the refusal
-	// ResolveSource owes `install`: an exported $SH_AGENT_REPO would otherwise
-	// send a record with harness_version, drift, skills and agents all null —
-	// a machine reporting nothing useful, which is the shape BUG-077 was about
-	// (security review 2026-09-18).
-	var src harness.Source
-	if v := buildVersion(); harness.IsReleaseVersion(v) {
-		src = harness.EmbeddedSource(v)
-		if repoFlag != "" {
-			fmt.Fprintf(out, "report: --repo is not used here; this release binary reports the harness built into it\n")
-		}
-	} else if resolved, err := harness.ResolveSource(repoFlag, home, buildVersion()); err != nil {
-		fmt.Fprintf(out, "report: %v\n", err)
-	} else {
-		src = resolved
+	// `report` READS a source, it never installs one: a release binary reports
+	// the harness built into it, a development build what it finds, a machine
+	// with none reports without one (IN7; BUG-077's shape was a record with a
+	// null harness).
+	src, note := harness.ResolveSourceLenient(repoFlag, home, buildVersion())
+	if note != "" {
+		fmt.Fprintln(out, note)
 	}
 	host, err := os.Hostname()
 	if err != nil {
@@ -508,7 +610,7 @@ func memoryCmd(args []string, e memory.Entry, home, vendorFlag string, out io.Wr
 		text, err = memory.Show(wd, vendor != harness.VendorAntigravity)
 	}
 	if memory.IsRefusal(err) {
-		fmt.Fprintln(out, "sh-agent memory:", err) // on the caller's writer (audit 2026-09-30, IN13)
+		fmt.Fprintln(out, "sh-agent memory:", err) // on the caller's writer, where a test reads it (IN13)
 		return exitCode(2)
 	}
 	if err != nil {
@@ -537,8 +639,8 @@ func status(src harness.Source, home, vendorFlag string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	zipSum, fromZip := strings.CutPrefix(st.Repo, harness.ZipPrefix+"sha256:")
-	fromZip = found && fromZip
+	origin := st.Origin()
+	fromZip := found && origin.Kind == harness.OriginZip
 	zipNote := ""
 	if fromZip {
 		zipNote = "; this home was installed from a zip — run update --from-zip <file> again to change it"
@@ -553,7 +655,7 @@ func status(src harness.Source, home, vendorFlag string, out io.Writer) error {
 		dirty := "clean"
 		if info.StatusUnknown {
 			// Never render an unreadable tree as clean: git failing to report is
-			// not evidence of anything (round-2 release review).
+			// not evidence of anything.
 			dirty = "state unknown — git could not report it"
 		} else if info.Dirty {
 			dirty = "uncommitted changes"
@@ -574,14 +676,13 @@ func status(src harness.Source, home, vendorFlag string, out io.Writer) error {
 		vDisplay = harness.VendorAll
 	}
 	from := "commit " + st.Commit
-	if release, ok := strings.CutPrefix(st.Repo, harness.EmbeddedPrefix); ok {
-		from = "release " + release
-	} else if fromZip {
-		// A manifest from before the verdict was recorded has no ";…" part.
-		sum, trust, _ := strings.Cut(zipSum, ";")
-		from = "zip sha256:" + short(sum)
-		if trust != "" {
-			from += " (" + trust + ")"
+	switch origin.Kind {
+	case harness.OriginRelease:
+		from = "release " + origin.Release
+	case harness.OriginZip:
+		from = "zip sha256:" + origin.ShortSum()
+		if origin.Trust != "" { // a manifest from before the verdict was recorded has none
+			from += " (" + origin.Trust + ")"
 		}
 	}
 	fmt.Fprintf(out, "installed  %s from %s (vendor: %s, %d files, manifest ~/.config/sh-agent/state.json)\n", st.InstalledAt, from, vDisplay, len(st.Files))
@@ -678,9 +779,7 @@ func status(src harness.Source, home, vendorFlag string, out io.Writer) error {
 		fmt.Fprintln(out, "note       ~/.claude/CLAUDE.md is yours; move only rules meant for every machine into a rule file under rules/ in the harness repo — rules/ ships to every install on every machine, never credentials or personal or host-specific notes — then remove it and run install to write the one-line import")
 	}
 	if vendor == harness.VendorAll || vendor == harness.VendorClaude {
-		if err := attributionHint(home, "note       ", out); err != nil {
-			return err
-		}
+		harness.AttributionHint(home, "note       ", out)
 	}
 	if !report.Drift() {
 		fmt.Fprintf(out, "drift      none — %d files match the repo\n", report.Counts["ok"])
@@ -702,13 +801,12 @@ func update(repo, home string, checkOnly bool, homeFlag, vendorFlag string, out 
 	} else {
 		fmt.Fprintf(out, "behind upstream by %d commit(s)\n", behind)
 	}
-	// A dirty checkout is never installed, on either path. `update` deploys
-	// the WORKING TREE, not the commit it just fetched, so uncommitted work
-	// reaches every vendor directory — which is R6 defeated (BUG-046).
-	// `install` stays the deliberate way to deploy a dirty tree. The check
-	// sits above the --check and --dry-run returns: a read-only mode that
-	// promised a pull the real run refuses was no check of it (audit
-	// 2026-09-30, IN4).
+	// A dirty checkout is never installed, on either path: `update` deploys
+	// the WORKING TREE, not the fetched commit, so uncommitted work would reach
+	// every vendor directory (BUG-046); `install` stays the deliberate way to
+	// deploy a dirty tree. The check sits above the --check and --dry-run
+	// returns, so the read-only mode refuses exactly what the real run refuses
+	// (IN4).
 	if info.Dirty || info.StatusUnknown {
 		what := "has uncommitted changes"
 		if info.StatusUnknown {
@@ -722,8 +820,7 @@ func update(repo, home string, checkOnly bool, homeFlag, vendorFlag string, out 
 		}
 		return exitCode(2)
 	}
-	// Below every `--check` return: that mode reports and changes nothing
-	// (security review 2026-09-17, finding 2).
+	// Below every `--check` return: that mode reports and changes nothing.
 	shedKeptClone(home, out)
 	if behind > 0 {
 		if err := harness.Pull(repo, out); err != nil {
@@ -773,10 +870,9 @@ func installPassArgs(homeFlag, home, vendorFlag string) ([]string, error) {
 
 // knownCheckout refuses to build and install from a checkout that was only
 // discovered by walking up from the working directory when a different
-// checkout is already installed. Building runs that tree's code and deploys
-// its context everywhere; standing in a harness-shaped directory (an unpacked
-// copy, a clone under review) must not be enough. An explicit --repo or
-// $SH_AGENT_REPO, or a first install, is.
+// checkout is already installed: building runs that tree's code and deploys
+// its context everywhere, so standing in a harness-shaped directory must not
+// be enough. An explicit --repo or $SH_AGENT_REPO, or a first install, is.
 func knownCheckout(repoFlag, home, repo string) error {
 	if repoFlag != "" || os.Getenv("SH_AGENT_REPO") != "" {
 		return nil
@@ -788,15 +884,14 @@ func knownCheckout(repoFlag, home, repo string) error {
 	if !found || st.Repo == "" {
 		return nil
 	}
-	// A manifest written by an embedded install records a release, never a
-	// path: it is not handed to samePath, which would resolve it against the
-	// working directory (security review 2026-09-17, finding 2).
-	if release, ok := strings.CutPrefix(st.Repo, harness.EmbeddedPrefix); ok {
-		return fmt.Errorf("this home was installed from the release binary %s, not from a checkout; pass --repo %s to build and install from it", release, repo)
-	}
-	if sum, ok := strings.CutPrefix(st.Repo, harness.ZipPrefix+"sha256:"); ok {
-		sum, _, _ = strings.Cut(sum, ";")
-		return fmt.Errorf("this home was installed from a zip (sha256 %s), not from a checkout; pass --repo %s to build and install from it", short(sum), repo)
+	// A manifest written by an embedded or zip install records a release or
+	// an archive, never a path: neither is handed to samePath, which would
+	// resolve it against the working directory.
+	switch o := st.Origin(); o.Kind {
+	case harness.OriginRelease:
+		return fmt.Errorf("this home was installed from the release binary %s, not from a checkout; pass --repo %s to build and install from it", o.Release, repo)
+	case harness.OriginZip:
+		return fmt.Errorf("this home was installed from a zip (sha256 %s), not from a checkout; pass --repo %s to build and install from it", o.ShortSum(), repo)
 	}
 	if samePath(st.Repo, repo) {
 		return nil
@@ -838,42 +933,42 @@ func binaryOlder(rev, commit string) bool {
 
 // reorder moves flags in front of positional arguments so that
 // `sh-agent adopt my-skill --home /tmp/x` parses; the flag package stops at
-// the first positional argument otherwise.
-func reorder(args []string) []string {
-	// Every flag that TAKES A VALUE belongs here, or it swallows the next
-	// argument: `report --feedback-repo /x --dry-run` parses --dry-run as the
-	// path and pushes when a dry run was asked (BUG-002's shape, caught by
-	// the cold read of the delivery plan before it shipped).
-	takesValue := map[string]bool{
-		"-repo": true, "--repo": true,
-		"-home": true, "--home": true,
-		"-vendor": true, "--vendor": true,
-		"-feedback-repo": true, "--feedback-repo": true,
-		"-from-zip": true, "--from-zip": true,
-		"-limit": true, "--limit": true,
-		"-kind": true, "--kind": true,
-		"-refs": true, "--refs": true,
-		"-type": true, "--type": true,
-		"-name": true, "--name": true,
-		"-description": true, "--description": true,
-		"-project": true, "--project": true,
-	}
+// the first positional argument otherwise. Which flags take a value is read
+// from the FlagSet itself, so a value flag can never be missing from a
+// hand-kept list and swallow the next argument (BUG-002: `report
+// --feedback-repo /x --dry-run` once parsed --dry-run as the path).
+func reorder(fs *flag.FlagSet, args []string) []string {
+	valueFlags := map[string]bool{}
+	fs.VisitAll(func(f *flag.Flag) {
+		if b, ok := f.Value.(interface{ IsBoolFlag() bool }); ok && b.IsBoolFlag() {
+			return
+		}
+		valueFlags["-"+f.Name], valueFlags["--"+f.Name] = true, true
+	})
 	var flags, positional []string
+	marker := false
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		switch {
 		case a == "--":
+			// Everything after the marker is positional, flag-shaped or not; the
+			// marker itself is re-emitted once, between the flags and every
+			// positional, so the flag package stops exactly there.
+			marker = true
 			positional = append(positional, args[i+1:]...)
 			i = len(args)
 		case strings.HasPrefix(a, "-"):
 			flags = append(flags, a)
-			if takesValue[a] && i+1 < len(args) {
+			if valueFlags[a] && i+1 < len(args) {
 				flags = append(flags, args[i+1])
 				i++
 			}
 		default:
 			positional = append(positional, a)
 		}
+	}
+	if marker {
+		flags = append(flags, "--")
 	}
 	return append(flags, positional...)
 }
@@ -899,7 +994,7 @@ func selfExecutable() ([]byte, error) {
 // command will not run. PATH not reaching it is the old note, naming what
 // answers instead when something does. Every fact comes from one PathShadows
 // call, so the two halves cannot disagree on what "on PATH" means.
-func pathHint(home string, out io.Writer) error {
+func pathHint(home string, out io.Writer) {
 	bin := filepath.Join(home, harness.BinPath)
 	binDir := filepath.Dir(bin)
 	shadows, onPath := harness.PathShadows(os.Getenv("PATH"), bin)
@@ -913,202 +1008,6 @@ func pathHint(home string, out io.Writer) error {
 	default:
 		fmt.Fprintf(out, "note: %s is not on PATH; add it so `sh-agent` is available everywhere\n", binDir)
 	}
-	return nil
-}
-
-// attributionSet writes the one vendor setting the harness owns (R4,
-// ADR-025): Claude Code's attribution off, so no commit or PR carries the
-// trailer the context's Git rule forbids. Only an absent key is written — a
-// present value of any kind is the operator's and attributionHint says when
-// it is on. The write is a textual insertion before the object's closing
-// brace, re-parsed before it lands, because encoding/json would reorder the
-// operator's keys; every byte up to the object's last value stays, and the
-// file keeps its own line endings. No state of the file
-// fails the install: the deployment already succeeded and this file is
-// advisory. dryRun prints what would be written and touches nothing.
-func attributionSet(home string, dryRun bool, out io.Writer) {
-	const fragment = `"attribution": {"commit": "", "pr": ""}`
-	path := filepath.Join(home, harness.ClaudeRoot, "settings.json")
-	// Lstat, not Stat: a settings.json that is a symlink (a dotfiles checkout)
-	// is never written through — a rename would replace the link with a file.
-	info, err := os.Lstat(path)
-	switch {
-	case err == nil && info.Mode()&os.ModeSymlink != 0:
-		fmt.Fprintf(out, "settings: %s is a symlink; add the key to its target by hand\n", path)
-		return
-	case errors.Is(err, os.ErrNotExist):
-		if dryRun {
-			fmt.Fprintf(out, "[dry-run] would create %s with %s\n", path, fragment)
-			return
-		}
-		content := []byte("{\n  " + fragment + "\n}\n")
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			settingsUnwritable(out, path, err)
-			return
-		}
-		// O_EXCL: the Lstat above is advisory; whatever appears at the path
-		// between the two calls (a planted link, a FIFO) makes this fail
-		// instead of being written through or blocked on.
-		f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
-		if err != nil {
-			settingsUnwritable(out, path, err)
-			return
-		}
-		if _, err := f.Write(content); err != nil {
-			f.Close()
-			settingsUnwritable(out, path, err)
-			return
-		}
-		if err := f.Sync(); err != nil {
-			f.Close()
-			settingsUnwritable(out, path, err)
-			return
-		}
-		if err := f.Close(); err != nil {
-			settingsUnwritable(out, path, err)
-			return
-		}
-		fmt.Fprintf(out, "settings: %s created with %s — Claude Code's commit and PR trailers are off\n", path, fragment)
-		return
-	case err != nil, !info.Mode().IsRegular():
-		return // attributionHint names it, and readSettings bounds the size
-	}
-	data, problem := readSettings(path)
-	if problem != "" {
-		return // attributionHint names it
-	}
-	var top map[string]json.RawMessage
-	if err := json.Unmarshal(data, &top); err != nil || top == nil {
-		// malformed, not an object, or the bare value null (a nil map with no
-		// error): attributionHint names each with one line
-		return
-	}
-	if _, present := top["attribution"]; present {
-		return
-	}
-	// Insert after the last byte of the object's body, keeping the operator's
-	// indentation style (two spaces, the file's own newline before the brace)
-	// and whatever follows the closing brace.
-	trimmed := bytes.TrimRight(data, " \t\r\n")
-	closing := bytes.LastIndexByte(trimmed, '}')
-	opening := bytes.IndexByte(trimmed, '{')
-	if closing <= opening {
-		fmt.Fprintf(out, "settings: %s could not be edited safely (the result would not parse); add the key by hand\n", path)
-		return
-	}
-	nl := "\n"
-	if bytes.Contains(data, []byte("\r\n")) {
-		nl = "\r\n" // keep the file's own line endings
-	}
-	body := bytes.TrimRight(trimmed[:closing], " \t\r\n")
-	insert := "," + nl + "  " + fragment + nl
-	if len(bytes.TrimSpace(trimmed[opening+1:closing])) == 0 {
-		body = trimmed[:opening+1]
-		insert = nl + "  " + fragment + nl
-	}
-	result := make([]byte, 0, len(data)+len(insert))
-	result = append(result, body...)
-	result = append(result, insert...)
-	result = append(result, trimmed[closing:]...)
-	result = append(result, data[len(trimmed):]...)
-	if !json.Valid(result) {
-		fmt.Fprintf(out, "settings: %s could not be edited safely (the result would not parse); add the key by hand\n", path)
-		return
-	}
-	if dryRun {
-		fmt.Fprintf(out, "[dry-run] would add %s to %s\n", fragment, path)
-		return
-	}
-	if err := harness.WriteAtomic(path, result, info.Mode().Perm()); err != nil {
-		settingsUnwritable(out, path, err)
-		return
-	}
-	fmt.Fprintf(out, "settings: %s — %s added; other keys untouched\n", path, fragment)
-}
-
-// settingsUnwritable is the one sentence for every way the settings file
-// could not be written; five call sites said it five times.
-func settingsUnwritable(out io.Writer, path string, err error) {
-	fmt.Fprintf(out, "settings: %s could not be written (%v); add the key by hand\n", path, err)
-}
-
-// readSettings reads the operator's settings file, bounded to a regular file
-// of at most one megabyte; problem names why it could not be read, without a
-// byte of its contents.
-func readSettings(path string) (data []byte, problem string) {
-	info, err := os.Stat(path)
-	switch {
-	case err != nil:
-		return nil, "could not be read"
-	case !info.Mode().IsRegular():
-		return nil, "is not a regular file"
-	case info.Size() > 1<<20:
-		// One bound, here, so install and status say the same thing about
-		// a file this tool will not rewrite (audit 2026-09-18).
-		return nil, "is larger than 1 MiB, more than this tool will read or rewrite"
-	}
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, "could not be read"
-	}
-	defer f.Close()
-	data, err = io.ReadAll(io.LimitReader(f, 1<<20))
-	if err != nil {
-		return nil, "could not be read"
-	}
-	return data, ""
-}
-
-// attributionHint says when Claude Code will still add its Co-Authored-By
-// trailer. The context's Git rule forbids the trailer, but in the sandbox the
-// rule alone did not hold (three of three headless commits carried it); the
-// CLI's own setting is what stops it, and settings.json is the operator's
-// file, so install and status only say so. prefix is each command's note
-// style ("note: " for install, "note       " for status). Advisory only: no
-// state of that file may fail install or status, and nothing from it is
-// echoed.
-func attributionHint(home, prefix string, out io.Writer) error {
-	path := filepath.Join(home, harness.ClaudeRoot, "settings.json")
-	off, problem := attributionOff(path)
-	switch {
-	case problem != "":
-		fmt.Fprintf(out, "%s%s %s, so the attribution setting could not be checked; Claude Code adds a Co-Authored-By trailer to every commit unless it sets \"attribution\": {\"commit\": \"\"} (context § Git)\n", prefix, path, problem)
-	case !off:
-		fmt.Fprintf(out, "%s%s does not set \"attribution\": {\"commit\": \"\"}; Claude Code adds a Co-Authored-By trailer to every commit until it does (context § Git)\n", prefix, path)
-	}
-	return nil
-}
-
-// attributionOff reads the operator's settings file, bounded to a regular
-// file of at most one megabyte. off is true when attribution.commit is "" or
-// false; problem names why the file could not be judged, without a byte of
-// its contents (a JSON error string carries the input it choked on).
-func attributionOff(path string) (off bool, problem string) {
-	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-		return false, ""
-	}
-	data, problem := readSettings(path)
-	if problem != "" {
-		return false, problem
-	}
-	var settings struct {
-		Attribution struct {
-			Commit any `json:"commit"`
-		} `json:"attribution"`
-	}
-	if err := json.Unmarshal(data, &settings); err != nil {
-		if json.Valid(data) {
-			return false, "is not a JSON object"
-		}
-		return false, "is not valid JSON"
-	}
-	switch v := settings.Attribution.Commit.(type) {
-	case string:
-		return v == "", ""
-	case bool:
-		return !v, ""
-	}
-	return false, ""
 }
 
 // buildVersion describes the running process, for `sh-agent version`.
@@ -1170,8 +1069,8 @@ func updateFromZip(zipPath, home, vendorFlag string, dryRun bool, out io.Writer)
 		return err
 	}
 	// A dry run writes nothing, so it never creates ~/.config/sh-agent: when
-	// that directory is absent it unpacks under the system temp directory
-	// instead (plan D10).
+	// that directory is absent the unpack goes beside the zip instead, never
+	// the system temp directory (IN10).
 	parent := filepath.Join(home, ".config", "sh-agent")
 	if dryRun {
 		if _, err := os.Stat(parent); err != nil {
@@ -1230,11 +1129,7 @@ func updateFromZip(zipPath, home, vendorFlag string, dryRun bool, out io.Writer)
 	fmt.Fprintf(out, "%szip %s (sha256 %s, %s): installing its harness and the running binary %s; nothing is downloaded and nothing in the zip replaces the binary\n", prefix, zipPath, sum, trust, buildVersion())
 	// The manifest keeps the verdict too, so status can tell a verified install
 	// from an unverified one after the output has scrolled away.
-	origin := harness.ZipPrefix + "sha256:" + sum + ";unverified"
-	if verifiedTag != "" {
-		origin = harness.ZipPrefix + "sha256:" + sum + ";verified " + verifiedTag
-	}
-	src := harness.Source{FS: os.DirFS(dir), Dir: dir, Origin: origin}
+	src := harness.Source{FS: os.DirFS(dir), Dir: dir, Origin: harness.ZipOrigin(sum, verifiedTag)}
 	if err := installFiles(src, home, vendor, dryRun, out); err != nil {
 		return err
 	}
@@ -1244,12 +1139,4 @@ func updateFromZip(zipPath, home, vendorFlag string, dryRun bool, out io.Writer)
 		harness.SweepStaleDirs(parent, "zip-", time.Hour, out)
 	}
 	return nil
-}
-
-// short is the first 12 hex digits of a sha256, enough to tell zips apart.
-func short(sum string) string {
-	if len(sum) > 12 {
-		return sum[:12]
-	}
-	return sum
 }

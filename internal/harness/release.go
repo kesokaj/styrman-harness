@@ -206,7 +206,7 @@ func downloadRelease(dir, tag, asset string, out io.Writer) ([]byte, error) {
 		}
 		return nil, fmt.Errorf("release %s has no %s", tag, asset)
 	}
-	data, err := readCapped(path, maxAssetBytes)
+	data, err := ReadCapped(path, maxAssetBytes)
 	if err != nil {
 		return nil, fmt.Errorf("release %s: %s is not usable: %w", tag, asset, err)
 	}
@@ -247,7 +247,7 @@ func verifySignedSums(keygen, sumsDir, signersDir, what string) (sums []byte, ta
 	if _, err := os.Stat(sumsPath); err != nil {
 		return nil, "", fmt.Errorf("%s has no SHA256SUMS", what)
 	}
-	sums, err = readCapped(sumsPath, maxSumsBytes)
+	sums, err = ReadCapped(sumsPath, maxSumsBytes)
 	if err != nil {
 		return nil, "", fmt.Errorf("%s: SHA256SUMS is not usable: %w", what, err)
 	}
@@ -353,9 +353,10 @@ func sshKeygen() (string, error) {
 	return p, nil
 }
 
-// readCapped reads a file a release supplied, refusing one that would not fit
-// in memory comfortably.
-func readCapped(path string, max int64) ([]byte, error) {
+// ReadCapped is the one capped file read: it refuses a file over max bytes
+// before reading it (a release asset, a settings file, a signature), so no
+// caller streams an unbounded file into memory.
+func ReadCapped(path string, max int64) ([]byte, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -364,7 +365,16 @@ func readCapped(path string, max int64) ([]byte, error) {
 	if info, err := f.Stat(); err == nil && info.Size() > max {
 		return nil, fmt.Errorf("%d bytes is larger than the %d this reads", info.Size(), max)
 	}
-	return io.ReadAll(io.LimitReader(f, max))
+	// One byte past the cap: a stream whose Stat size says nothing (a FIFO, a
+	// special file) fails closed instead of being cut short.
+	data, err := io.ReadAll(io.LimitReader(f, max+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > max {
+		return nil, fmt.Errorf("more than the %d bytes this reads", max)
+	}
+	return data, nil
 }
 
 // compareRelease orders two vX.Y.Z tags. Both are known to match
@@ -448,9 +458,12 @@ func VerifyZipSums(zipPath, sum string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("%w; the zip has signed checksums beside it and cannot be verified without it", err)
 	}
-	signersDir, err := os.MkdirTemp("", "sh-agent-verify-*")
+	// The signers file goes beside the zip, never under the system temp
+	// directory (scratch is the project's or the home's; IN10), and is removed
+	// on every exit path.
+	signersDir, err := os.MkdirTemp(dir, ".sh-agent-verify-*")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("cannot write the signers scratch beside %s: %w", filepath.Base(zipPath), err)
 	}
 	defer os.RemoveAll(signersDir)
 	what := filepath.Base(zipPath)

@@ -82,3 +82,12 @@ The script changed in eight passes and its tests use fixtures. Run once at the c
 - Read against the blocking conditions: none of these is a verification command the range added, a plan tier, or a failing row; the project's rule on Antigravity and real-home runs is met above.
 
 VERDICT: SHIP
+
+## Outcome
+
+Written by the main agent on 2026-10-02, after the release, on the operator's choice ("Only do 1,2,4"):
+
+- L1: fixed. "Reaches HEAD" allows only records (dated files) to change after the log's head; the testing guide, a matrix, a kit or a script is not a record.
+- L2: fixed. A log that shows a row failing under any heading is cleared like a FAIL log.
+- L4: fixed. The project template asks a main-agent log for each row as n of N, and PASS only when every row met it.
+- L3, L5 to L9, L11: skipped by the operator's choice. L10: at the next catalog refresh.

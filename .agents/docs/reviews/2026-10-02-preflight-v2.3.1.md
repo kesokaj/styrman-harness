@@ -44,3 +44,10 @@ Real-home smoke on both CLIs and one Antigravity run of each changed skill (`pre
 The Mac; an interactive session on either CLI. Neither is a verification command, a plan tier or a failing row.
 
 VERDICT: SHIP
+
+## Outcome
+
+Written by the main agent on 2026-10-02, on the operator's choice to fix row 1 and cut v2.3.2:
+
+- Row 1: fixed. An uncommitted change to source, the testing guide, a matrix, a kit or a script under the docs root now means no log reaches HEAD.
+- Rows 2 and 3: left, as recorded.

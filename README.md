@@ -237,7 +237,7 @@ Every customization is a file in a directory. Drop it in, run `sh-agent install`
 | `skills/<name>/SKILL.md` | a skill (Agent Skills standard); the model loads it when the description matches, and `/name` types it | `~/.claude/skills/<name>/` | `~/.gemini/config/skills/<name>/` |
 | `agents/<name>.md` | a subagent in Claude Code format (`name`, `description`, `tools`, `model`, …) | `~/.claude/agents/<name>.md` | `~/.gemini/config/agents/<name>/agent.md`, tools and model translated |
 | `commands/<name>.md` (or `workflows/`) | a plain markdown prompt invoked as `/name`; frontmatter `description` optional | `~/.claude/commands/<name>.md` | `~/.gemini/config/workflows/<name>.md` |
-| `rules/<name>.md` | an always-on or path-scoped rule (Claude: `paths:` frontmatter; Antigravity: `trigger: glob` + `globs:`; both ignore the other's keys) — on Antigravity it shares the same 24,000-byte global rules block as the context, so `rules/*.md` counts toward the budget `TestRenderedContextFitsAntigravityBlock` (`internal/harness/size_test.go`) pins under 22,000 bytes (REQUIREMENTS § Known limits) | `~/.claude/rules/<name>.md` | `~/.gemini/config/rules/<name>.md` |
+| `rules/<name>.md` | an always-on or path-scoped rule (Claude: `paths:` frontmatter; Antigravity: `trigger: always_on`, or `trigger: glob` + `globs:`; both ignore the other's keys) — on Antigravity it shares the same 24,000-byte global rules block as the context, so `rules/*.md` counts toward the budget `TestRenderedContextFitsAntigravityBlock` (`internal/harness/size_test.go`) pins under 22,000 bytes (REQUIREMENTS § Known limits) | `~/.claude/rules/<name>.md` | `~/.gemini/config/rules/<name>.md` |
 | `context/<name>.md` | more global context, appended after `AGENTS.md` | part of `~/.claude/AGENTS.md` | part of `~/.gemini/config/rules/AGENTS.md` |
 
 A skill is the portable way to write a command: both vendors run any skill as `/name` without translation, and the model can load it itself when the description matches — every harness skill works both ways, so the agent can run `/handoff` or `/retro` for you. Add `disable-model-invocation: true` only to a skill that must never fire on its own (none of the harness's own do). Prefer a skill over `commands/` for anything new.
@@ -275,7 +275,7 @@ context/     AGENTS.md (the global context) and dev-setup.md (environment, stack
 agents/      subagents in Claude Code format — the single source; Antigravity's flavour is derived
 skills/      skills, each a directory with SKILL.md (+ references/, assets/); `feature` and `bug` are the work protocols and load themselves; `review` is the review command on both CLIs; `google-catalog` carries Google-published skills under its `catalog/` as data it routes to, never installed as skills
 commands/    markdown prompts invoked as /name (empty; prefer skills)
-rules/       extra always-on or path-scoped rules (empty)
+rules/       extra always-on or path-scoped rules (one today: critical-thinking.md, always on)
 cmd/sh-agent  the binary; internal/harness is the installer's logic and tests; internal/search the search index (`sh-agent search`, `sh-agent index`); internal/memory the project memory store (`sh-agent memory`); internal/dream the nightly dreamer (`sh-agent dream`)
 .agents/     this repo's own trail (docs/, incl. bugs/INDEX.md), scratch/ (gitignored), and a skills -> ../skills symlink for the skills CLI
 ```

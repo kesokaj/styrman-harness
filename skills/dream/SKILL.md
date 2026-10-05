@@ -53,7 +53,7 @@ After the edits, `MEMORY.md` is rewritten from the files: one line per file (`- 
 
 Present the numbered table — `#`, memory file, verdict (and `promote` when flagged), one-line why with its `file:line` — and the edits it implies. `--dry-run` stops here, nothing written.
 
-Otherwise ask: go per number, or go all. The table is the undo point, since the store is not under git, so the record (Step 6) quotes every deleted memory in full. Apply only the numbers the user names; a number not named stays as it is. When no reply can arrive — a print-mode run such as `claude -p` or `agy -p`, or a user who said they will not answer — nothing is applied, every verdict stays proposed, and the reply says so.
+Otherwise ask for the global context's approval by number ("go all approved", "go approved 1-3, skip 5"). The table is the undo point, since the store is not under git, so the record (Step 6) quotes every deleted memory in full. Apply only the numbers the user names; a number not named stays as it is. When no reply can arrive — a print-mode run such as `claude -p` or `agy -p`, or a user who said they will not answer — nothing is applied, every verdict stays proposed, and the reply says so.
 
 ## Step 6: The record
 

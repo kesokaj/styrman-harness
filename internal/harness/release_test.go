@@ -481,7 +481,9 @@ func TestEveryDocumentedReleaseKeyIsKnown(t *testing.T) {
 	if !ok {
 		t.Fatalf("releaseSigner is not an ssh-ed25519 line: %s", releaseSigner)
 	}
-	keyRE := regexp.MustCompile(`ssh-ed25519 (AAAA[0-9A-Za-z+/=]+)`)
+	// Any OpenSSH public key type, a hardware sk- key included.
+	keyRE := regexp.MustCompile(`(?:sk-)?(?:ssh|ecdsa)-[a-z0-9-]+(?:@openssh\.com)? (AAAA[0-9A-Za-z+/=]+)`)
+	const bridgeStart, bridgeEnd = "**The bridge, v2.4.0 only", "\n```\n\n"
 	for _, rel := range []string{
 		filepath.Join("..", "..", ".agents", "docs", "deploy", "remote.md"),
 		filepath.Join("..", "..", "README.md"),
@@ -490,15 +492,30 @@ func TestEveryDocumentedReleaseKeyIsKnown(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		text := string(data)
+		// The retired key belongs to the bridge block alone: anywhere else it
+		// would sign, or be checked, outside the one release it was kept for.
+		lo, hi := -1, -1
+		if i := strings.Index(text, bridgeStart); i >= 0 {
+			if j := strings.Index(text[i:], bridgeEnd); j >= 0 {
+				lo, hi = i, i+j
+			}
+		}
 		found := 0
-		for _, m := range keyRE.FindAllStringSubmatch(string(data), -1) {
+		for _, m := range keyRE.FindAllStringSubmatchIndex(text, -1) {
 			found++
-			if m[1] != signerKey && m[1] != retiredReleaseKey {
-				t.Errorf("%s names key %s, which is neither the signer's nor the retired one", rel, m[1])
+			key := text[m[2]:m[3]]
+			switch {
+			case key == signerKey:
+			case key == retiredReleaseKey && m[0] >= lo && m[1] <= hi:
+			case key == retiredReleaseKey:
+				t.Errorf("%s names the retired key outside the v2.4.0 bridge block, at byte %d", rel, m[0])
+			default:
+				t.Errorf("%s names key %s, which is neither the signer's nor the retired one", rel, key)
 			}
 		}
 		if found == 0 {
-			t.Errorf("%s names no ssh-ed25519 key", rel)
+			t.Errorf("%s names no public key", rel)
 		}
 	}
 }

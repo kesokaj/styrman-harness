@@ -100,7 +100,7 @@ The signer — the allowed_signers line `verify-tag` checks against:
 ```
 ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJmUbDQuzqRfH5KH1pY8dLF7xeSpNcYduSsioRa7tNYZ
 ```
-Fingerprint `SHA256:BwBzPnfXKuKrWP6p10IZgcDG8uwSRXJOFv0Izl+79yQ`. The private key lives in the operator's SSH agent, never at a default key path: a password manager's agent, a hardware key, or `ssh-add` of a passphrase-protected file such as `~/.ssh/styrman-release_ed25519`. Any machine whose agent holds it can cut a release; none other can. While it is loaded, any process that reaches the agent can sign with it, so load it only for the release window, with a lifetime (`ssh-add -t 900 <file>`, or the password manager's per-use approval), and never forward that agent to another host. It is never `~/.ssh/id_ed25519`, which machine setup creates and overwrites (the previous key was lost from the Linux box that way on 2026-10-05) and which is a login key, not a release key. Never paste the private key anywhere, a chat included: that exposed the previous one (ADR-052). v2.4.0 is the bridge release of the 2026-10-05 key rotation (ADR-052): its `SHA256SUMS.sig` is signed by the retired key, `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR`, so verify v2.4.0 against that key and every later release against the line here.
+Fingerprint `SHA256:BwBzPnfXKuKrWP6p10IZgcDG8uwSRXJOFv0Izl+79yQ`. The private key lives in the operator's SSH agent, never at a default key path: a password manager's agent, a hardware key, or `ssh-add` of a passphrase-protected file such as `~/.ssh/styrman-release_ed25519`. Any machine whose agent holds it can cut a release; none other can. While it is loaded, any process that reaches the agent can sign with it, so load it only for the release window, with a lifetime (`ssh-add -t 900 <file>`, or the password manager's per-use approval), and never forward that agent to another host. It is never `~/.ssh/id_ed25519`, which machine setup creates and overwrites (the previous key was lost from the Linux box that way on 2026-10-05) and which is a login key, not a release key. Never paste the private key anywhere, a chat included: that exposed the previous one (ADR-052). v2.4.0 is the bridge release of the 2026-10-05 key rotation (ADR-052, ADR-052a): its `SHA256SUMS.sig` is signed by the retired key for v2.3.2-and-older binaries, and its `SHA256SUMS.current.sig` by the line here, which is the one every human check of v2.4.0 and of every later release verifies.
 
 Procedure — what `/preflight` runs at its Step 6 here (the skill's Step 6.3 follows a project's Release section), each command its own call, its exit status read before the next; `<gated head>` is the head SHA of the gate report's `Range reviewed:` line, the one external input — the tag itself takes no target, so no placeholder can sit on both sides of a check:
 ```bash
@@ -174,7 +174,7 @@ gh release create vX.Y.Z --repo kesokaj/styrman-harness --verify-tag --title "st
 for a in SHA256SUMS SHA256SUMS.sig sh-agent-linux-amd64 sh-agent-darwin-arm64 sh-agent-linux-arm64 styrman-harness-vX.Y.Z.zip; do
   gh release upload vX.Y.Z --repo kesokaj/styrman-harness "$a" --clobber || echo "retry $a by hand"
 done
-gh release view vX.Y.Z --repo kesokaj/styrman-harness --json assets --jq '.assets[].name'   # all six
+gh release view vX.Y.Z --repo kesokaj/styrman-harness --json assets --jq '.assets[].name'   # all six (seven for v2.4.0, with SHA256SUMS.current.sig)
 cd -
 ```
 
@@ -186,16 +186,19 @@ ssh-keygen -Y sign -f release-signer.pub -n sh-agent-release SHA256SUMS && mv SH
 rm -f release-signer.pub
 printf '%s\n' 'ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJmUbDQuzqRfH5KH1pY8dLF7xeSpNcYduSsioRa7tNYZ' > allowed_signers
 ssh-keygen -Y verify -f allowed_signers -I ostling.simon@gmail.com -n sh-agent-release -s SHA256SUMS.current.sig < SHA256SUMS   # exit 0: the operator's current key vouches for these files
+RETIRED=<path of the retired private key file>                    # it exists only for this block
+ssh-add -t 900 "$RETIRED"
 ssh-add -L | cut -d' ' -f1,2 | grep -qxF 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR'   # exit 0: the retired key is in the agent
 printf '%s\n' 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR' > retired-signer.pub
 ssh-keygen -Y sign -f retired-signer.pub -n sh-agent-release SHA256SUMS
 printf '%s\n' 'ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR' > allowed_signers
 ssh-keygen -Y verify -f allowed_signers -I ostling.simon@gmail.com -n sh-agent-release -s SHA256SUMS.sig < SHA256SUMS   # exit 0: what a v2.3.2 place checks
 rm -f allowed_signers
-ssh-add -d retired-signer.pub && rm -f retired-signer.pub   # the retired key leaves the agent; delete its private file too
+ssh-add -d retired-signer.pub && rm -f retired-signer.pub && rm -f "$RETIRED" && test ! -e "$RETIRED"   # exit 0: the retired key is out of the agent and off the disk
+! ssh-add -L | grep -qF 'AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F'   # exit 0: and stays out
 # 3b (bridge). a v2.3.2 binary built from its own tag accepts the bridge signature; the v2.4.0 binary
 # refuses it and accepts the current one — so no built binary still trusts the retired key
-mkdir -p ../v232src && git archive v2.3.2 | tar -x -C ../v232src
+mkdir -p ../v232src && git -C "$(git rev-parse --show-toplevel)" archive v2.3.2 | tar -x -C ../v232src   # -C: from a subdirectory, a bare git archive packs only that subdirectory
 (cd ../v232src && CGO_ENABLED=0 GOTOOLCHAIN=local go build -trimpath -ldflags "-X main.version=v2.3.2" -o ../sh-agent-v2.3.2 ./cmd/sh-agent)
 mkdir -p ../zipcheck && ../sh-agent-v2.3.2 update --from-zip styrman-harness-v2.4.0.zip --home ../zipcheck --dry-run > ../zipcheck.out   # into a file, never a pipe (BUG-086)
 grep -q "VERIFIED against the signed SHA256SUMS of release v2.4.0" ../zipcheck.out   # exit 0: a v2.3.2 place accepts the bridge

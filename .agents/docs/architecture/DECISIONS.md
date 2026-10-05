@@ -594,3 +594,11 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
 - R9's Update, Zip place and Release bullets change as the operator approved (one commit with this ADR).
 
 **Consequences.** Trust in a release binary is the operator's GitHub account and HTTPS, the same as a checkout place pulling `main`; a stolen GitHub credential can now publish a binary every binary-only place installs, where before it could only push code. A place on v2.3.2 or older must update while v2.4.0 is the newest release, or install a later binary by hand; a zip place on such a binary installs a later zip marked `UNVERIFIED` until its binary is replaced. The map's labels lose "signed"; no path moves.
+
+## ADR-053a: The release host is pinned, and what else a release now trusts     (2026-10-05) — Accepted, amends ADR-053
+
+**Context.** The security review of ADR-053 (`reviews/2026-10-05-security-v2.4.0-unsigned-adr053.md`) found that gh takes its host from `GH_HOST` when `--repo` names none, so with no signature the environment could choose where a binary comes from; that GitHub Actions is enabled on the repository, so anything that can push a workflow can publish a release every binary-only place installs; and that the `gh` token found in plain text in scratch (BUG-160) can now publish a release on its own.
+
+**Decision.** `ReleaseRepo` names its host, `github.com/kesokaj/styrman-harness`, in every gh call (`TestUpdateFromReleasePinsTheHost`, must-fail seen with the host removed; the real gh honours it with `GH_HOST=example.invalid`). A binary-only place's wording says what the check is: `CHECKED against the SHA256SUMS of release vX.Y.Z (integrity only)`; the manifest's `verified vX.Y.Z` token is kept, so existing installs read the same. Actions and the token are the operator's: turning Actions off (the harness has no CI by rule) and rotating the token are put to them in the v2.4.0 handoff.
+
+**Consequences.** Trust in a binary-only place's update is: the operator's GitHub account and every credential that can push to or publish on `kesokaj/styrman-harness` (its SSH login keys, the `gh` token, Actions while enabled), and HTTPS to github.com.

@@ -646,7 +646,7 @@ func TestUpdateFromZipUnsignedSaysUnverified(t *testing.T) {
 	if err := run([]string{"update", "--from-zip", zp, "--home", t.TempDir()}, &out); err != nil {
 		t.Fatalf("%v\n%s", err, out.String())
 	}
-	if !strings.Contains(out.String(), "UNVERIFIED") || strings.Contains(out.String(), "VERIFIED against") {
+	if !strings.Contains(out.String(), "UNVERIFIED") || strings.Contains(out.String(), "CHECKED against") {
 		t.Errorf("an unsigned zip is not marked UNVERIFIED:\n%s", out.String())
 	}
 }
@@ -665,7 +665,7 @@ func TestUpdateFromZipSignatureAloneSaysUnverified(t *testing.T) {
 	if err := run([]string{"update", "--from-zip", zp, "--home", home}, &out); err != nil {
 		t.Fatalf("a zip with only a signature beside it was refused: %v\n%s", err, out.String())
 	}
-	if !strings.Contains(out.String(), "UNVERIFIED") || strings.Contains(out.String(), "VERIFIED against") {
+	if !strings.Contains(out.String(), "UNVERIFIED") || strings.Contains(out.String(), "CHECKED against") {
 		t.Errorf("not marked UNVERIFIED:\n%s", out.String())
 	}
 	st, found, err := harness.LoadState(home)
@@ -675,8 +675,7 @@ func TestUpdateFromZipSignatureAloneSaysUnverified(t *testing.T) {
 }
 
 // A release zip with its SHA256SUMS beside it installs and says VERIFIED; the
-// same zip with one byte changed is refused, home untouched. PATH holds no
-// ssh-keygen: nothing in the check needs one (ADR-053).
+// same zip with one byte changed is refused, home untouched.
 func TestUpdateFromZipVerifiedAndTampered(t *testing.T) {
 	isolate(t)
 	t.Setenv("PATH", t.TempDir())
@@ -699,7 +698,7 @@ func TestUpdateFromZipVerifiedAndTampered(t *testing.T) {
 	if err := run([]string{"update", "--from-zip", zp, "--home", vhome}, &out); err != nil {
 		t.Fatalf("verified zip: %v\n%s", err, out.String())
 	}
-	if !strings.Contains(out.String(), "VERIFIED against the SHA256SUMS of release v1.2.3") {
+	if !strings.Contains(out.String(), "CHECKED against the SHA256SUMS of release v1.2.3 (integrity only)") {
 		t.Errorf("a verified zip does not say so:\n%s", out.String())
 	}
 	// The verdict outlives the output: status reads it from the manifest. It

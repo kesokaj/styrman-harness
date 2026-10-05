@@ -1158,7 +1158,7 @@ func updateFromZip(zipPath, home, vendorFlag string, dryRun bool, out io.Writer)
 	}
 	trust := "UNVERIFIED — no SHA256SUMS beside it; trust rests on your own download"
 	if verifiedTag != "" {
-		trust = "VERIFIED against the SHA256SUMS of release " + verifiedTag
+		trust = "CHECKED against the SHA256SUMS of release " + verifiedTag + " (integrity only)"
 	}
 	fmt.Fprintf(out, "%szip %s (sha256 %s, %s): installing its harness and the running binary %s; nothing is downloaded and nothing in the zip replaces the binary\n", prefix, zipPath, sum, trust, buildVersion())
 	// The manifest keeps the verdict too, so status can tell a verified install

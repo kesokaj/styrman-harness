@@ -142,7 +142,7 @@ sha256sum -c SHA256SUMS                                                    # exi
 # 3. BEFORE anything is published: this host's own built binary checks the release zip
 #    against SHA256SUMS, as a zip place will (ADR-039)
 mkdir -p ../zipcheck && "./sh-agent-$(go env GOOS)-$(go env GOARCH)" update --from-zip styrman-harness-vX.Y.Z.zip --home ../zipcheck --dry-run > ../zipcheck.out   # into a file, never a pipe (BUG-086)
-grep -q "VERIFIED against the SHA256SUMS of release vX.Y.Z" ../zipcheck.out   # exit 0
+grep -q "CHECKED against the SHA256SUMS of release vX.Y.Z" ../zipcheck.out   # exit 0
 # 4. the release, with notes read by the operator before the upload — created with the
 #    notes ALONE, then one upload per asset: a create carrying every asset rolls the whole
 #    release back when a single upload fails, which is what GitHub did twice for v1.1.0
@@ -160,7 +160,7 @@ cd -
 **The bridge, v2.4.0 only (ADR-053).** Every binary up to v2.3.2 refuses a release without a `SHA256SUMS.sig` signed by the old key, so v2.4.0 — the first release whose binary needs none — carries one, made once with that key, and is the last release that does. Run this after step 2, in the same directory, and add `SHA256SUMS.sig` to step 4's upload list:
 ```bash
 RETIRED=<path of the old private key file>                        # it exists only for this block
-test "$(ssh-keygen -lf "$RETIRED" | cut -d' ' -f2)" = SHA256:5HpYQJjpG+yE1xXBTOIZPsTkbkgkVnV8z0eG8hBawyU   # exit 0: RETIRED is set, exists, and is the old key — nothing else is used, or deleted below
+test -n "$RETIRED" && test -f "$RETIRED" && test "$(ssh-keygen -y -f "$RETIRED" | ssh-keygen -lf - | cut -d' ' -f2)" = SHA256:5HpYQJjpG+yE1xXBTOIZPsTkbkgkVnV8z0eG8hBawyU   # exit 0: RETIRED is set, is a file, and its PRIVATE half is the old key (a .pub beside it is not read) — nothing else is used, or deleted below
 ssh-keygen -Y sign -f "$RETIRED" -n sh-agent-release SHA256SUMS
 printf '%s\n' 'ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR' > allowed_signers
 ssh-keygen -Y verify -f allowed_signers -I ostling.simon@gmail.com -n sh-agent-release -s SHA256SUMS.sig < SHA256SUMS   # exit 0: what a v2.3.2 place checks
@@ -180,7 +180,7 @@ Upload the assets one call at a time, not all of them on `gh release create`: a 
 
 Since the Google skills catalog (plan `2026-10-01-google-skills-catalog`) each binary embeds it, about 6 MB more (linux/amd64: 19.9 MB), and the zip of the tree is about 7 MB with some 2,575 entries, inside the 5,000 entries `update --from-zip` accepts; the uploads take correspondingly longer, nothing else in the procedure changes.
 
-After the upload: `gh release view vX.Y.Z --repo kesokaj/styrman-harness --json assets --jq '.assets[].name'` lists the six assets, and nothing further is pushed anywhere — a binary-only place picks the release up the next time the operator runs `sh-agent update` there.
+After the upload: `gh release view vX.Y.Z --repo kesokaj/styrman-harness --json assets --jq '.assets[].name'` lists the five assets (six for v2.4.0), and nothing further is pushed anywhere — a binary-only place picks the release up the next time the operator runs `sh-agent update` there.
 
 ### Release notes
 

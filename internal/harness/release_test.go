@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -19,6 +18,7 @@ import (
 // because the cases that test a missing tool run with a PATH that holds
 // almost nothing.
 const fakeGh = `#!/bin/sh
+[ -n "$GH_ARGS_LOG" ] && printf '%s\n' "$*" >> "$GH_ARGS_LOG"
 if [ "$1" = "release" ] && [ "$2" = "view" ]; then
   if [ -n "$GH_FAIL_VIEW" ]; then
     echo "gh: HTTP 401: Bad credentials (https://api.github.com/graphql)" >&2
@@ -85,19 +85,9 @@ func writeSums(t *testing.T, dir, asset, tag string) {
 		"# styrman-harness "+tag+"\n"+hex.EncodeToString(sum[:])+"  "+asset+"\n")
 }
 
-func mustRun(t *testing.T, dir, name string, args ...string) {
-	t.Helper()
-	cmd := exec.Command(name, args...)
-	cmd.Dir = dir
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("%s %v: %v\n%s", name, args, err, out)
-	}
-}
-
 // env puts the fake gh on PATH and points it at this release; withGh false
-// leaves gh off it. PATH holds that directory ALONE, so nothing else on the
-// machine — ssh-keygen included — is reachable: an update that needed it would
-// fail here.
+// leaves gh off it. PATH holds that directory ALONE, so the real gh is never
+// reached.
 func (r release) env(t *testing.T, withGh bool) {
 	t.Helper()
 	bin := t.TempDir()
@@ -484,6 +474,37 @@ func TestUpdateFromReleaseSweepStaysInHome(t *testing.T) {
 	for _, keep := range []string{sibling, young} {
 		if _, err := os.Stat(keep); err != nil {
 			t.Errorf("%s should survive the sweep: %v", keep, err)
+		}
+	}
+}
+
+// TestUpdateFromReleasePinsTheHost: every gh call names github.com in --repo,
+// so GH_HOST cannot send the update to another server (security review
+// 2026-10-05, ADR-053).
+func TestUpdateFromReleasePinsTheHost(t *testing.T) {
+	r := newRelease(t, "v9.9.9")
+	r.env(t, true)
+	home := t.TempDir()
+	installedBinary(t, home)
+	t.Setenv("SH_AGENT_FAKE_MARKER", filepath.Join(home, "installed.txt"))
+	t.Setenv("GH_HOST", "example.invalid")
+	log := filepath.Join(t.TempDir(), "gh-args")
+	t.Setenv("GH_ARGS_LOG", log)
+	var out bytes.Buffer
+	if err := UpdateFromRelease(home, "v1.0.0", false, []string{"--home", home}, &out); err != nil {
+		t.Fatalf("update: %v\n%s", err, out.String())
+	}
+	data, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(calls) < 2 {
+		t.Fatalf("gh was called %d times, want view and download:\n%s", len(calls), data)
+	}
+	for _, c := range calls {
+		if !strings.Contains(c, "--repo github.com/kesokaj/styrman-harness") {
+			t.Errorf("a gh call does not pin the host: %s", c)
 		}
 	}
 }

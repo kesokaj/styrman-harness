@@ -81,7 +81,7 @@ Releases are annotated `vX.Y.Z` tags on `main`, cut only by `/preflight vX.Y.Z` 
 | `internal/harness/derive.go` | Claude → Antigravity agent translation |
 | `REQUIREMENTS.md` | Non-negotiables for the harness |
 | `.agents/docs/plans/2026-09-03-rebuild.md` | The rebuild checklist |
-| `.agents/docs/deploy/remote.md` | The four places, the resync loop, and the signed-tag release procedure (ADR-030, ADR-033) |
+| `.agents/docs/deploy/remote.md` | The four places, the resync loop, and the release procedure, with no key (ADR-030, ADR-033, ADR-053) |
 | `.agents/docs/specs/sh-agent/delivery.md` | The delivery model and the feedback loop, end to end |
 | `internal/harness/report.go` | `sh-agent report`: collect, redact, send to the feedback repository |
 | `internal/search/search.go` | `sh-agent search` and `index`: reconcile against git, then query; spec `.agents/docs/specs/sh-agent/search.md` |

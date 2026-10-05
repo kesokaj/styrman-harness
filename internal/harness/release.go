@@ -17,8 +17,11 @@ import (
 	"time"
 )
 
-// ReleaseRepo is the repository a release binary updates from.
-const ReleaseRepo = "kesokaj/styrman-harness"
+// ReleaseRepo is the repository a release binary updates from, with its host:
+// gh takes the host from GH_HOST when --repo names none, and with no signature
+// on a release the host is the whole of where a binary comes from (security
+// review 2026-10-05, ADR-053).
+const ReleaseRepo = "github.com/kesokaj/styrman-harness"
 
 // sumsVersionMarker is the line `/preflight` writes at the top of
 // SHA256SUMS, naming the release those hashes belong to, so one release's

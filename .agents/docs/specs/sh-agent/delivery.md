@@ -60,7 +60,7 @@ Originals never leave `~/.config/sh-agent/`. R7 keeps that as the one place harn
 ## What is deliberately NOT being built
 
 - **A webservice**, for delivery or for feedback. Git already carries both halves. A service adds hosting, per-machine authentication and an attack surface, for one user, against R3, R4 and local-by-default. A dashboard over collected data stays possible later without changing how any machine reports.
-- **A signed-tag delivery channel.** ADR-026 designed one on 2026-09-16 to give a consumer host a trust root; ADR-030 withdrew it the next day because the operator authenticates as themselves everywhere, so it solved a problem that was not there. Tags survive as release markers — `v1.0.0` stands, and the versioning rule and signing recipe stay in `deploy/remote.md`; what a tag delivers today is § The model.
+- **A signed-tag delivery channel.** ADR-026 designed one on 2026-09-16 to give a consumer host a trust root; ADR-030 withdrew it the next day because the operator authenticates as themselves everywhere, so it solved a problem that was not there. Tags survive as release markers — `v1.0.0` stands, and the versioning rule and the tag recipe stay in `deploy/remote.md` (unsigned since v2.4.0, ADR-053); what a tag delivers today is § The model.
 - **Vendored mirrors.** Two projects kept a `.git`-less copy refreshed by hand, which is why a mirror refresh kept appearing as a task in three repositories at once. They retire. Each consumer's own session does that work in its own repository.
 - **Per-machine keys of any kind**, for the reason above.
 
@@ -80,7 +80,7 @@ This is easy to get wrong when several of those repositories sit side by side on
 
 **Open, defaulting to no:** whether this repository becomes public. Only that would let a machine bootstrap with no credential at all, and it is a question about content rather than packaging.
 
-**Built, 2026-09-17:** what was here as "a follow-up with its own plan — versioned release bundles" is now the release binary above (ADR-033, `.agents/docs/plans/2026-09-17-release-binary.md`). It needed no CI: the binary cross-compiles locally in `/preflight`, which signs the checksums with the same key as the tag. It does not remove the credential requirement while the repository is private.
+**Built, 2026-09-17:** what was here as "a follow-up with its own plan — versioned release bundles" is now the release binary above (ADR-033, `.agents/docs/plans/2026-09-17-release-binary.md`). It needed no CI: the binary cross-compiles locally in `/preflight`, which writes the checksums (signed with the tag's key until v2.3.2; unsigned since v2.4.0, ADR-053). It does not remove the credential requirement while the repository is private.
 
 ## Antigravity derivation
 

@@ -14,7 +14,8 @@ it and record outcomes only. Update this file in the same run that changes the s
 gofmt -l cmd internal     # must print nothing; NOT `gofmt -l .` — it walks .agents/scratch,
                           # where a stray Go file fails a gate that has nothing to do with it (BUG-048)
 go vet ./...
-go test -race ./...
+go test -race -timeout 30m ./...   # -timeout 30m: on a one-CPU box (nproc = 1) cmd/sh-agent takes ~13 min under -race,
+                                   # past Go's 10-minute default per-package timeout (a larger machine: ~62 s)
 ```
 
 The suite does not depend on the caller's environment: every test package drops `GIT_*` variables in a `TestMain` (git exports them inside a hook, and they would aim a fixture's git at another repository), and the dream package's also clears `CLAUDE_CONFIG_DIR`. A check for that, when a test helper that runs git or reads a CLI's directory changes: `GIT_DIR=/nonexistent CLAUDE_CONFIG_DIR=/nonexistent go test ./...`.
@@ -119,7 +120,7 @@ and `status` reports drift none from a fresh home on each of the three place kin
 ## 3d. Search index (change to `internal/search`, or to the `search`/`index` wiring in `cmd/sh-agent`)
 
 ```bash
-go test -race ./internal/search ./cmd/sh-agent                 # unit tests: reconcile, parsing, queries, refusals, the global search index
+go test -race -timeout 30m ./internal/search ./cmd/sh-agent    # unit tests: reconcile, parsing, queries, refusals, the global search index
 SH_AGENT_RECALL=1 go test ./internal/search -run 'TestRecall$' -v   # recall measurement over testdata/recall.tsv: prints per-question recall and the means; not a gate
 go build -o .agents/scratch/sh-agent ./cmd/sh-agent
 .agents/scratch/sh-agent index --rebuild --home .agents/scratch/s   # this checkout: under 10 s
@@ -131,7 +132,7 @@ A new or changed verb also gets its rows in `sh-agent-matrix.md` (section 3c). A
 ## 3e. Memory, dream and the timer (change to `internal/memory`, `internal/dream`, or the `memory`/`dream` wiring in `cmd/sh-agent`)
 
 ```bash
-go test -race ./internal/memory ./internal/dream ./internal/search ./cmd/sh-agent
+go test -race -timeout 30m ./internal/memory ./internal/dream ./internal/search ./cmd/sh-agent
 ```
 
 - The unit tests put fake `claude`, `agy`, `systemctl` and `launchctl` on PATH; nothing calls a real CLI or manager.

@@ -20,7 +20,7 @@ The map in `README.md` § How it works defines how the harness reaches a machine
 ## Setup commands
 
 ```bash
-gofmt -l cmd internal && go vet ./... && go test -race ./...   # before any completion claim; gofmt takes the source dirs, not `.`, because it walks .agents/scratch and the Go tool does not (BUG-048)
+gofmt -l cmd internal && go vet ./... && go test -race -timeout 30m ./...   # before any completion claim; gofmt takes the source dirs, not `.`, because it walks .agents/scratch and the Go tool does not (BUG-048); -timeout 30m because on a one-CPU box cmd/sh-agent takes ~13 min under -race, past Go's 10-minute default
 # a change to context/*.md or rules/*.md must also pass the two size pins in internal/harness/size_test.go (part of `go test ./...`
 # above): TestRenderedContextFitsAntigravityBlock, under 22,000 bytes inside Antigravity's 24,000-byte block (ADR-035), and
 # TestRenderedContextUnderTarget, the hand-written context (the render before its generated `## Installed` inventory) under 15,000 bytes, the harness's own ceiling (goal 14,500; plan audit-fix D2b); the inventory grows with every skill dropped in and counts only toward the 22,000

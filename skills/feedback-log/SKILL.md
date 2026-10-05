@@ -55,7 +55,7 @@ Append one JSON object per line to `~/.config/sh-agent/feedback.jsonl`. If the d
 }
 ```
 
-`rule_ref` uses one controlled vocabulary, shared with the `retro` skill, because the retro greps this log for an exact match to decide whether a project rule has recurred in another project: `AGENTS.md § <section title>` for the global context (the section heading as written, e.g. `AGENTS.md § Hard rules`), `project AGENTS.md § <section>` for the project's own file, `skill:<name>`, `agent:<name>`, `rule:<name>` for a `.agents/rules/<name>.md`, or `null` when no rule exists yet. An entry whose `rule_ref` is free text is simply never matched.
+`rule_ref` uses one controlled vocabulary, shared with the `retro` skill, because the retro greps this log for an exact match to decide whether a project rule has recurred in another project: `AGENTS.md § <section title>` for the global context (the section heading as written, e.g. `AGENTS.md § Hard rules`), `project AGENTS.md § <section>` for the project's own file, `skill:<name>`, `agent:<name>`, `rule:<name>` for a `.agents/rules/<name>.md` or the harness's global `rules/<name>.md`, or `null` when no rule exists yet. An entry whose `rule_ref` is free text is simply never matched.
 
 ### Categories
 

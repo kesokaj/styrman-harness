@@ -52,12 +52,12 @@ Read the conversation transcript, plus the entries in `~/.config/sh-agent/feedba
 
 ## Step 2: Target, scope, rule_ref — per finding
 
-1. **`rule_ref`**, one controlled vocabulary shared with the `feedback-log` skill: `AGENTS.md § <section title>` (global context), `project AGENTS.md § <section>`, `skill:<name>`, `agent:<name>`, `rule:<name>` (a `.agents/rules/<name>.md`), or `null` when no rule exists yet.
+1. **`rule_ref`**, one controlled vocabulary shared with the `feedback-log` skill: `AGENTS.md § <section title>` (global context), `project AGENTS.md § <section>`, `skill:<name>`, `agent:<name>`, `rule:<name>` (a `.agents/rules/<name>.md` or the harness's global `rules/<name>.md`), or `null` when no rule exists yet.
 2. **The one target file** the fix belongs in. A finding about THIS project's code, layout, commands, or conventions targets the project; a finding about how an agent, a global skill, or the global context behaves targets the harness.
 
 | Category | Project target | Harness target |
 |---|---|---|
-| Rule gap or restatement | `.agents/rules/<name>.md`, or `AGENTS.md` § | `context/AGENTS.md` |
+| Rule gap or restatement | `.agents/rules/<name>.md`, or `AGENTS.md` § | `context/AGENTS.md`, or `rules/<name>.md` for an always-on rule |
 | Environment / stack / GCP | `AGENTS.md` § Deploy, `.agents/docs/deploy/*.md` | `context/dev-setup.md` |
 | Skill knowledge or workflow | `.agents/skills/<name>/SKILL.md` (never a harness skill's name; see `sh-agent list`) | `skills/<name>/SKILL.md` |
 | Skill reference | `.agents/skills/<name>/references/<topic>.md` | `skills/<name>/references/<topic>.md` |

@@ -283,7 +283,7 @@ cmd/sh-agent  the binary; internal/harness is the installer's logic and tests; i
 ## Working on the harness
 
 ```bash
-gofmt -l cmd internal && go vet ./... && go test -race ./...   # gofmt takes the source dirs: unlike the Go tool it walks .agents/scratch
+gofmt -l cmd internal && go vet ./... && go test -race -timeout 30m ./...   # gofmt takes the source dirs: unlike the Go tool it walks .agents/scratch; -timeout 30m for a one-CPU box (cmd/sh-agent ~13 min under -race)
 # Two size pins in internal/harness/size_test.go run inside `go test ./...` above and are what a change to context/*.md
 # or rules/*.md must pass (-run TestRenderedContext): TestRenderedContextUnderTarget pins the hand-written context under
 # 15,000 bytes, the harness's own ceiling (the generated skill inventory does not count); TestRenderedContextFitsAntigravityBlock

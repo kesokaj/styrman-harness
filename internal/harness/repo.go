@@ -21,7 +21,7 @@ import (
 // tree the shell happens to be in. version is the running binary's.
 func ResolveSource(explicit, home, version string) (Source, error) {
 	// A RELEASE binary installs the harness built into it — the published
-	// repository at the tagged commit, signed and verified on the way in — and
+	// repository at the tagged commit, checked against its SHA256SUMS on the way in — and
 	// `update` replaces the whole binary to change them. The one tree it
 	// installs is a zip the operator names with `update --from-zip`, which
 	// never passes through here (ADR-038). Otherwise no tree on this machine

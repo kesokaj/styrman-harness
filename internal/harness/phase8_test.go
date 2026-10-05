@@ -69,11 +69,11 @@ func assertEmpty(t *testing.T, dir, what string) {
 	}
 }
 
-// VerifyZipSums keeps its signers file beside the zip, never under the
-// system temp directory, and removes it on every exit path.
+// VerifyZipSums writes nothing: not under the system temp directory, not
+// beside the zip, on either exit path.
 func TestVerifyZipSumsWritesNothingUnderTempDir(t *testing.T) {
 	watched := watchedTempDir(t)
-	dir, zp, _ := signedZipDir(t, "v1.2.3")
+	dir, zp := releaseZipDir(t, "v1.2.3")
 	before, _ := os.ReadDir(dir)
 	if _, err := VerifyZipSums(zp, zipSum(t, zp)); err != nil {
 		t.Fatalf("VerifyZipSums: %v", err)
@@ -81,7 +81,7 @@ func TestVerifyZipSumsWritesNothingUnderTempDir(t *testing.T) {
 	assertEmpty(t, watched, "the system temp directory after a verified zip")
 	after, _ := os.ReadDir(dir)
 	if len(after) != len(before) {
-		t.Errorf("the zip's folder holds %d entries after verification, had %d: the signers scratch was left behind", len(after), len(before))
+		t.Errorf("the zip's folder holds %d entries after verification, had %d: something was left behind", len(after), len(before))
 	}
 	// The error path: a checksum that cannot match still leaves nothing.
 	if _, err := VerifyZipSums(zp, strings.Repeat("0", 64)); err == nil {

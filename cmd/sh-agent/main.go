@@ -47,8 +47,8 @@ Commands:
   install [--vendor V] [--dry-run]  deploy context, skills, and agents into ~/.claude and/or ~/.gemini/config (alias: sync)
   status                  show what is installed and whether it drifted from the repo (exit 1 on drift)
   diff                    unified diff of every drifted file
-  update [--check|--dry-run]  checkout: git fetch, pull --ff-only and reinstall when behind; release binary: download the newest release, verify its signed checksums, replace the binary and reinstall (--check only reports, exit 2 when behind; --dry-run reports what update would do and changes nothing)
-  update --from-zip FILE [--dry-run]  zip place: unpack a repository zip you downloaded, install its harness and the running binary (nothing in the zip replaces the binary), delete the unpacked copy; with the release's SHA256SUMS and SHA256SUMS.sig beside it the zip is verified, otherwise it is installed marked UNVERIFIED
+  update [--check|--dry-run]  checkout: git fetch, pull --ff-only and reinstall when behind; release binary: download the newest release, check it against its SHA256SUMS, replace the binary and reinstall (--check only reports, exit 2 when behind; --dry-run reports what update would do and changes nothing)
+  update --from-zip FILE [--dry-run]  zip place: unpack a repository zip you downloaded, install its harness and the running binary (nothing in the zip replaces the binary), delete the unpacked copy; with the release's SHA256SUMS beside it the zip is checked against it, otherwise it is installed marked UNVERIFIED
   uninstall [--dry-run]   remove exactly the files install wrote, and the dream timer when one is installed; nothing else
   list                    print the skill and agent inventory
   render                  print the assembled context file
@@ -501,7 +501,7 @@ func runUpdate(c *ctx) error {
 		err = harness.UpdateFromRelease(c.home, c.src.Version, check, args, c.out)
 		if errors.Is(err, harness.ErrNewerRelease) {
 			if dry {
-				fmt.Fprintln(c.out, "[dry-run] update would download that release, verify its signed checksums, replace the binary and reinstall")
+				fmt.Fprintln(c.out, "[dry-run] update would download that release, check it against its SHA256SUMS, replace the binary and reinstall")
 				return nil
 			}
 			return exitCode(2)
@@ -1128,13 +1128,13 @@ func updateFromZip(zipPath, home, vendorFlag string, dryRun bool, out io.Writer)
 	}
 	// The zip place is the fallback for machines that cannot take the normal
 	// way in, so it accepts the zip it is given (ADR-041). A release zip with
-	// its SHA256SUMS and SHA256SUMS.sig beside it is verified before a byte is
-	// written, and refused if that check fails; without the pair it is
-	// installed marked UNVERIFIED (R9).
+	// its SHA256SUMS beside it is checked before a byte is written, and refused
+	// if that check fails; without it, it is installed marked UNVERIFIED (R9,
+	// ADR-053: the checksums are not signed, so the check is of integrity).
 	verifiedTag := ""
 	check := func(sum string) error {
 		tag, err := harness.VerifyZipSums(zipPath, sum)
-		if errors.Is(err, harness.ErrZipUnsigned) {
+		if errors.Is(err, harness.ErrZipNoSums) {
 			return nil
 		}
 		if err != nil {
@@ -1156,9 +1156,9 @@ func updateFromZip(zipPath, home, vendorFlag string, dryRun bool, out io.Writer)
 	if dryRun {
 		prefix = "[dry-run] "
 	}
-	trust := "UNVERIFIED — no signed SHA256SUMS beside it; trust rests on your own download"
+	trust := "UNVERIFIED — no SHA256SUMS beside it; trust rests on your own download"
 	if verifiedTag != "" {
-		trust = "VERIFIED against the signed SHA256SUMS of release " + verifiedTag
+		trust = "VERIFIED against the SHA256SUMS of release " + verifiedTag
 	}
 	fmt.Fprintf(out, "%szip %s (sha256 %s, %s): installing its harness and the running binary %s; nothing is downloaded and nothing in the zip replaces the binary\n", prefix, zipPath, sum, trust, buildVersion())
 	// The manifest keeps the verdict too, so status can tell a verified install

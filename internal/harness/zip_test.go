@@ -435,21 +435,16 @@ func TestSweepInterruptedClonesGlobCharsInHome(t *testing.T) {
 	}
 }
 
-// signedZipDir builds a release-shaped folder: the zip, its SHA256SUMS naming
-// it under the release marker, and the signature, with the test key as the
-// compiled-in signer.
-func signedZipDir(t *testing.T, tag string) (dir, zipPath string, r release) {
+// releaseZipDir builds a release-shaped folder: the zip and its SHA256SUMS
+// naming it under the release marker. No key is involved (ADR-053).
+func releaseZipDir(t *testing.T, tag string) (dir, zipPath string) {
 	t.Helper()
-	r = newRelease(t, tag)
-	old := releaseSigner
-	releaseSigner = r.signer
-	t.Cleanup(func() { releaseSigner = old })
 	dir = t.TempDir()
 	name := "styrman-harness-" + tag + ".zip"
 	zipPath = filepath.Join(dir, name)
 	writeZip(t, zipPath, harnessEntries(t, "styrman-harness-"+tag+"/"))
-	signRelease(t, dir, name, r.key, tag)
-	return dir, zipPath, r
+	writeSums(t, dir, name, tag)
+	return dir, zipPath
 }
 
 func zipSum(t *testing.T, p string) string {
@@ -463,50 +458,36 @@ func zipSum(t *testing.T, p string) string {
 
 func TestVerifyZipSums(t *testing.T) {
 	t.Run("verified", func(t *testing.T) {
-		_, zp, _ := signedZipDir(t, "v1.2.3")
+		_, zp := releaseZipDir(t, "v1.2.3")
 		tag, err := VerifyZipSums(zp, zipSum(t, zp))
 		if err != nil || tag != "v1.2.3" {
 			t.Errorf("tag=%q err=%v, want v1.2.3 and no error", tag, err)
 		}
 	})
-	t.Run("no sums: unsigned", func(t *testing.T) {
+	t.Run("no sums", func(t *testing.T) {
 		zp := filepath.Join(t.TempDir(), "styrman-harness-main.zip")
 		writeZip(t, zp, harnessEntries(t, "styrman-harness-main/"))
-		if _, err := VerifyZipSums(zp, zipSum(t, zp)); !errors.Is(err, ErrZipUnsigned) {
-			t.Errorf("err = %v, want ErrZipUnsigned", err)
+		if _, err := VerifyZipSums(zp, zipSum(t, zp)); !errors.Is(err, ErrZipNoSums) {
+			t.Errorf("err = %v, want ErrZipNoSums", err)
 		}
 	})
-	// Half the pair is no pair: the zip is unsigned, and installs UNVERIFIED
-	// like any zip without its sums (R9, ADR-041).
-	t.Run("sig missing: unsigned", func(t *testing.T) {
-		dir, zp, _ := signedZipDir(t, "v1.2.3")
-		if err := os.Remove(filepath.Join(dir, "SHA256SUMS.sig")); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := VerifyZipSums(zp, zipSum(t, zp)); !errors.Is(err, ErrZipUnsigned) {
-			t.Errorf("err = %v, want ErrZipUnsigned", err)
-		}
-	})
-	t.Run("foreign key", func(t *testing.T) {
-		_, zp, _ := signedZipDir(t, "v1.2.3")
-		other := newRelease(t, "v1.2.3")
-		releaseSigner = other.signer
-		_, err := VerifyZipSums(zp, zipSum(t, zp))
-		if err == nil || !strings.Contains(err.Error(), "does not verify") {
-			t.Errorf("err = %v, want the signature refusal", err)
-		}
-		if err != nil && strings.Contains(strings.ToLower(err.Error()), "unverified") {
-			t.Errorf("the refusal suggests removing the checksums (a bypass): %v", err)
+	// A signature beside the zip, from a release before ADR-053, changes
+	// nothing: only SHA256SUMS is read.
+	t.Run("stray signature ignored", func(t *testing.T) {
+		dir, zp := releaseZipDir(t, "v1.2.3")
+		writeFile(t, filepath.Join(dir, "SHA256SUMS.sig"), "not a signature\n")
+		if tag, err := VerifyZipSums(zp, zipSum(t, zp)); err != nil || tag != "v1.2.3" {
+			t.Errorf("tag=%q err=%v, want v1.2.3 and no error", tag, err)
 		}
 	})
 	t.Run("checksum mismatch", func(t *testing.T) {
-		_, zp, _ := signedZipDir(t, "v1.2.3")
+		_, zp := releaseZipDir(t, "v1.2.3")
 		if _, err := VerifyZipSums(zp, strings.Repeat("0", 64)); err == nil || !strings.Contains(err.Error(), "checksum mismatch") {
 			t.Errorf("err = %v, want checksum mismatch", err)
 		}
 	})
 	t.Run("stale sums of another release", func(t *testing.T) {
-		dir, _, _ := signedZipDir(t, "v1.2.3")
+		dir, _ := releaseZipDir(t, "v1.2.3")
 		newer := filepath.Join(dir, "styrman-harness-v1.3.0.zip")
 		writeZip(t, newer, harnessEntries(t, "styrman-harness-v1.3.0/"))
 		_, err := VerifyZipSums(newer, zipSum(t, newer))
@@ -517,20 +498,21 @@ func TestVerifyZipSums(t *testing.T) {
 			t.Errorf("the refusal points at the stale release: %v", err)
 		}
 	})
-	t.Run("sig present, sums missing: unsigned", func(t *testing.T) {
-		dir, zp, _ := signedZipDir(t, "v1.2.3")
+	t.Run("sig present, sums missing: no sums", func(t *testing.T) {
+		dir, zp := releaseZipDir(t, "v1.2.3")
+		writeFile(t, filepath.Join(dir, "SHA256SUMS.sig"), "not a signature\n")
 		if err := os.Remove(filepath.Join(dir, "SHA256SUMS")); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := VerifyZipSums(zp, zipSum(t, zp)); !errors.Is(err, ErrZipUnsigned) {
-			t.Errorf("err = %v, want ErrZipUnsigned", err)
+		if _, err := VerifyZipSums(zp, zipSum(t, zp)); !errors.Is(err, ErrZipNoSums) {
+			t.Errorf("err = %v, want ErrZipNoSums", err)
 		}
 	})
-	t.Run("sums unreadable: refused, not unsigned", func(t *testing.T) {
+	t.Run("sums unreadable: refused, not absent", func(t *testing.T) {
 		if os.Geteuid() == 0 {
 			t.Skip("root reads through permissions")
 		}
-		dir, zp, _ := signedZipDir(t, "v1.2.3")
+		dir, zp := releaseZipDir(t, "v1.2.3")
 		// A folder that cannot be searched: stat fails with a permission
 		// error, which is not "the files are absent".
 		locked := filepath.Join(dir, "locked")
@@ -541,7 +523,7 @@ func TestVerifyZipSums(t *testing.T) {
 		if err := os.Rename(zp, inner); err != nil {
 			t.Fatal(err)
 		}
-		for _, f := range []string{"SHA256SUMS", "SHA256SUMS.sig"} {
+		for _, f := range []string{"SHA256SUMS"} {
 			if err := os.Rename(filepath.Join(dir, f), filepath.Join(locked, f)); err != nil {
 				t.Fatal(err)
 			}
@@ -554,12 +536,12 @@ func TestVerifyZipSums(t *testing.T) {
 		if _, statErr := os.Stat(filepath.Join(locked, "SHA256SUMS")); statErr == nil || errors.Is(statErr, fs.ErrNotExist) {
 			t.Fatalf("fixture: stat must fail with a non-absence error, got %v", statErr)
 		}
-		if _, err := VerifyZipSums(inner, sum); err == nil || errors.Is(err, ErrZipUnsigned) {
-			t.Errorf("err = %v, want a refusal, never ErrZipUnsigned", err)
+		if _, err := VerifyZipSums(inner, sum); err == nil || errors.Is(err, ErrZipNoSums) {
+			t.Errorf("err = %v, want a refusal, never ErrZipNoSums", err)
 		}
 	})
 	t.Run("renamed zip", func(t *testing.T) {
-		dir, zp, _ := signedZipDir(t, "v1.2.3")
+		dir, zp := releaseZipDir(t, "v1.2.3")
 		renamed := filepath.Join(dir, "styrman-harness-v1.2.3 (1).zip")
 		if err := os.Rename(zp, renamed); err != nil {
 			t.Fatal(err)
@@ -572,7 +554,7 @@ func TestVerifyZipSums(t *testing.T) {
 	// name and different bytes. Renaming it only trades one refusal for a
 	// checksum mismatch, so both refusals name the file the release published.
 	t.Run("github source archive", func(t *testing.T) {
-		dir, _, _ := signedZipDir(t, "v1.2.3")
+		dir, _ := releaseZipDir(t, "v1.2.3")
 		src := filepath.Join(dir, "styrman-harness-1.2.3.zip")
 		writeZip(t, src, harnessEntries(t, "styrman-harness-1.2.3/"))
 		_, err := VerifyZipSums(src, zipSum(t, src))

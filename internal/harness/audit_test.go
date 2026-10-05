@@ -29,7 +29,7 @@ func TestIsReleaseVersionIsCanonical(t *testing.T) {
 
 func TestNonCanonicalTagNeverReachesTheDownload(t *testing.T) {
 	r := newRelease(t, "v9.9.9")
-	r.env(t, true, true)
+	r.env(t, true)
 	t.Setenv("GH_TAG", "v1.02.2")
 	home := t.TempDir()
 	dest := installedBinary(t, home)

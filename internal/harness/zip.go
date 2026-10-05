@@ -17,7 +17,7 @@ import (
 // ZipPrefix marks a manifest's repo value written by an install from a zip:
 // "zip:sha256:<hex>;verified vX.Y.Z" or "zip:sha256:<hex>;unverified" names
 // the archive the operator passed and whether it was checked against a
-// release's signed SHA256SUMS, never a path — the unpacked tree is deleted
+// release's SHA256SUMS, never a path — the unpacked tree is deleted
 // once the install is done (ADR-038, ADR-039). A manifest written before the
 // verdict was recorded carries the bare "zip:sha256:<hex>".
 const ZipPrefix = "zip:"
@@ -58,7 +58,7 @@ func UnpackZip(zipPath, parent string, check func(sum string) error) (dir, sum s
 	}
 	h := sha256.Sum256(data)
 	sum = hex.EncodeToString(h[:])
-	// The check — a signature verification — sees the hash of the very bytes
+	// The check — the release's SHA256SUMS — sees the hash of the very bytes
 	// that will be unpacked, and a refusal leaves nothing behind.
 	if check != nil {
 		if err := check(sum); err != nil {

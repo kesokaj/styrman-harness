@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -58,52 +57,32 @@ printf 'install %s\n' "$*" >> "$SH_AGENT_FAKE_MARKER"
 type release struct {
 	assets string // what gh "downloads" from
 	tag    string
-	signer string // allowed-signers line for the key that signed SHA256SUMS
-	key    string // that key, for a case that re-signs a tampered file
 }
 
-// newRelease builds a signed release: the platform's binary, SHA256SUMS over
-// it, and a real ssh-keygen signature over that file.
+// newRelease builds a release: the platform's binary and SHA256SUMS over it.
+// No key is involved (ADR-053).
 func newRelease(t *testing.T, tag string) release {
 	t.Helper()
-	if _, err := exec.LookPath("ssh-keygen"); err != nil {
-		t.Skip("ssh-keygen not installed")
-	}
 	dir := t.TempDir()
-	keys := t.TempDir()
-	key := filepath.Join(keys, "key")
-	mustRun(t, "", "ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", "test@release", "-f", key)
-	pub, err := os.ReadFile(key + ".pub")
-	if err != nil {
-		t.Fatal(err)
-	}
-	fields := strings.Fields(string(pub))
-	if len(fields) < 2 {
-		t.Fatalf("unexpected public key %q", pub)
-	}
-
 	asset := AssetName(runtime.GOOS, runtime.GOARCH)
 	writeFile(t, filepath.Join(dir, asset), fakeReleaseBinary)
-	signRelease(t, dir, asset, key, tag)
-	return release{assets: dir, tag: tag, key: key, signer: "test@release " + fields[0] + " " + fields[1]}
+	writeSums(t, dir, asset, tag)
+	return release{assets: dir, tag: tag}
 }
 
-// signRelease writes SHA256SUMS over the asset as it is on disk now, and
-// signs it. Called again after changing the asset when a case needs the
-// checksum to match, and NOT called again when it must not.
-func signRelease(t *testing.T, dir, asset, key, tag string) {
+// writeSums writes SHA256SUMS over the asset as it is on disk now. Called
+// again after changing the asset when a case needs the checksum to match,
+// and NOT called again when it must not.
+func writeSums(t *testing.T, dir, asset, tag string) {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(dir, asset))
 	if err != nil {
 		t.Fatal(err)
 	}
 	sum := sha256.Sum256(data)
-	// The marker /preflight writes, which puts the VERSION inside the signed
-	// bytes (plan D26).
+	// The marker /preflight writes, naming the release (plan D26).
 	writeFile(t, filepath.Join(dir, "SHA256SUMS"),
 		"# styrman-harness "+tag+"\n"+hex.EncodeToString(sum[:])+"  "+asset+"\n")
-	_ = os.Remove(filepath.Join(dir, "SHA256SUMS.sig"))
-	mustRun(t, dir, "ssh-keygen", "-Y", "sign", "-q", "-f", key, "-n", ReleaseNamespace, "SHA256SUMS")
 }
 
 func mustRun(t *testing.T, dir, name string, args ...string) {
@@ -115,10 +94,11 @@ func mustRun(t *testing.T, dir, name string, args ...string) {
 	}
 }
 
-// releaseEnv puts the fake gh on PATH, points it at this release, and
-// compiles in the test key's signer line. withSSHKeygen false leaves
-// ssh-keygen off PATH; withGh false leaves gh off it.
-func (r release) env(t *testing.T, withGh, withSSHKeygen bool) {
+// env puts the fake gh on PATH and points it at this release; withGh false
+// leaves gh off it. PATH holds that directory ALONE, so nothing else on the
+// machine — ssh-keygen included — is reachable: an update that needed it would
+// fail here.
+func (r release) env(t *testing.T, withGh bool) {
 	t.Helper()
 	bin := t.TempDir()
 	if withGh {
@@ -128,28 +108,11 @@ func (r release) env(t *testing.T, withGh, withSSHKeygen bool) {
 			t.Fatal(err)
 		}
 	}
-	// PATH holds this directory ALONE, so "gh missing" means missing: adding
-	// the real ssh-keygen's directory would have brought the real gh with it,
-	// and the first run of this test called the real repository (caught
-	// 2026-09-17). ssh-keygen is linked in instead when a case wants it.
-	if withSSHKeygen {
-		real, err := exec.LookPath("ssh-keygen")
-		if err != nil {
-			t.Skip("ssh-keygen not installed")
-		}
-		if err := os.Symlink(real, filepath.Join(bin, "ssh-keygen")); err != nil {
-			t.Fatal(err)
-		}
-	}
 	t.Setenv("PATH", bin)
 	t.Setenv("GH_TAG", r.tag)
 	t.Setenv("GH_ASSETS", r.assets)
 	t.Setenv("GH_FAIL_VIEW", "")
 	os.Unsetenv("GH_FAIL_VIEW")
-
-	old := releaseSigner
-	releaseSigner = r.signer
-	t.Cleanup(func() { releaseSigner = old })
 }
 
 // installedBinary is the sentinel this machine already has, so every refusal
@@ -166,7 +129,7 @@ func installedBinary(t *testing.T, home string) string {
 
 func TestUpdateFromReleaseReplacesAndInstalls(t *testing.T) {
 	r := newRelease(t, "v9.9.9")
-	r.env(t, true, true)
+	r.env(t, true)
 	home := t.TempDir()
 	dest := installedBinary(t, home)
 	marker := filepath.Join(home, "installed.txt")
@@ -221,7 +184,7 @@ func TestUpdateFromReleaseReplacesAndInstalls(t *testing.T) {
 
 func TestUpdateFromReleaseUpToDateAndCheck(t *testing.T) {
 	r := newRelease(t, "v1.0.0")
-	r.env(t, true, true)
+	r.env(t, true)
 	home := t.TempDir()
 	dest := installedBinary(t, home)
 	before, err := os.ReadFile(dest)
@@ -256,149 +219,71 @@ func TestUpdateFromReleaseUpToDateAndCheck(t *testing.T) {
 	}
 }
 
-// TestUpdateFromReleaseRefusals: every way the release can fail to prove it
-// is the operator's leaves the installed binary exactly as it was, names the
-// check that failed, and keeps nothing (plan § Failure modes).
+// TestUpdateFromReleaseRefusals: every way a release can fail its checks
+// leaves the installed binary exactly as it was, names the check that failed,
+// and keeps nothing (plan § Failure modes).
 func TestUpdateFromReleaseRefusals(t *testing.T) {
+	asset := AssetName(runtime.GOOS, runtime.GOARCH)
 	for _, tc := range []struct {
 		name    string
 		want    string
 		gh      bool
-		keygen  bool
 		prepare func(t *testing.T, r release)
 	}{
-		{
-			name: "gh missing", want: "install gh and run gh auth login",
-			gh: false, keygen: true,
-		},
+		{name: "gh missing", want: "install gh and run gh auth login", gh: false},
 		{
 			name: "gh cannot reach the repository", want: "gh release view failed: gh: HTTP 401",
-			gh: true, keygen: true,
+			gh:      true,
 			prepare: func(t *testing.T, _ release) { t.Setenv("GH_FAIL_VIEW", "1") },
 		},
 		{
-			// Neither a system copy nor one on PATH: nothing can verify the
-			// release, so nothing is downloaded.
-			name: "ssh-keygen missing", want: "ssh-keygen not found; cannot verify the release",
-			gh: true, keygen: false,
-			prepare: func(t *testing.T, _ release) {
-				old := sshKeygenSystemPaths
-				sshKeygenSystemPaths = []string{filepath.Join(t.TempDir(), "absent")}
-				t.Cleanup(func() { sshKeygenSystemPaths = old })
-			},
-		},
-		{
 			name: "no asset for this platform", want: "has no sh-agent-",
-			gh: true, keygen: true,
+			gh: true,
 			prepare: func(t *testing.T, r release) {
-				if err := os.Remove(filepath.Join(r.assets, AssetName(runtime.GOOS, runtime.GOARCH))); err != nil {
+				if err := os.Remove(filepath.Join(r.assets, asset)); err != nil {
 					t.Fatal(err)
 				}
 			},
 		},
 		{
-			name: "signature made by another key", want: "SHA256SUMS signature does not verify",
-			gh: true, keygen: true,
+			// The asset changes AFTER the checksums were written: only the hash
+			// catches it.
+			name: "binary does not match its checksum", want: "checksum mismatch for sh-agent-",
+			gh: true,
 			prepare: func(t *testing.T, r release) {
-				other := filepath.Join(t.TempDir(), "other")
-				mustRun(t, "", "ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", "other@release", "-f", other)
-				signRelease(t, r.assets, AssetName(runtime.GOOS, runtime.GOARCH), other, r.tag)
+				writeFile(t, filepath.Join(r.assets, asset), "#!/bin/sh\necho not the binary that was listed\n")
 			},
 		},
 		{
-			name: "SHA256SUMS altered after signing", want: "SHA256SUMS signature does not verify",
-			gh: true, keygen: true,
+			name: "SHA256SUMS altered", want: "checksum mismatch for sh-agent-",
+			gh: true,
 			prepare: func(t *testing.T, r release) {
 				writeFile(t, filepath.Join(r.assets, "SHA256SUMS"),
-					"# styrman-harness "+r.tag+"\n"+strings.Repeat("0", 64)+"  "+AssetName(runtime.GOOS, runtime.GOARCH)+"\n")
+					"# styrman-harness "+r.tag+"\n"+strings.Repeat("0", 64)+"  "+asset+"\n")
 			},
 		},
 		{
-			name: "binary does not match its signed checksum", want: "checksum mismatch for sh-agent-",
-			gh: true, keygen: true,
-			prepare: func(t *testing.T, r release) {
-				// The asset changes AFTER the checksums were signed, so the
-				// signature still verifies and only the hash catches it.
-				writeFile(t, filepath.Join(r.assets, AssetName(runtime.GOOS, runtime.GOARCH)),
-					"#!/bin/sh\necho not the binary that was signed\n")
-			},
+			// The hash matches; only the version the file names says this is
+			// another release's SHA256SUMS served under this tag.
+			name: "checksums of another release", want: "SHA256SUMS says v1.2.3 but this is release v9.9.9",
+			gh:      true,
+			prepare: func(t *testing.T, r release) { writeSums(t, r.assets, asset, "v1.2.3") },
 		},
 		{
-			// The trust model is that the signer is COMPILED IN. A release
-			// that ships its own allowed-signers file must not be able to
-			// nominate the key that vouches for it.
-			name: "release ships its own signer file", want: "SHA256SUMS signature does not verify",
-			gh: true, keygen: true,
+			name: "checksums naming no version", want: "names no release version",
+			gh: true,
 			prepare: func(t *testing.T, r release) {
-				other := filepath.Join(t.TempDir(), "other")
-				mustRun(t, "", "ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", "other@release", "-f", other)
-				signRelease(t, r.assets, AssetName(runtime.GOOS, runtime.GOARCH), other, r.tag)
-				pub, err := os.ReadFile(other + ".pub")
-				if err != nil {
-					t.Fatal(err)
-				}
-				fields := strings.Fields(string(pub))
-				// The SAME identity as the compiled-in line, so only the KEY
-				// differs: nothing but where the signer line came from can
-				// tell these two apart.
-				line := "test@release " + fields[0] + " " + fields[1] + "\n"
-				for _, name := range []string{"allowed_signers", "allowed_signers_from_release"} {
-					writeFile(t, filepath.Join(r.assets, name), line)
-				}
-			},
-		},
-		{
-			// The signature is honest and the hash matches; only the version
-			// the signed file names says this is another release's SHA256SUMS
-			// served under this tag.
-			name: "signed checksums of another release", want: "the signed SHA256SUMS says v1.2.3 but this is release v9.9.9",
-			gh: true, keygen: true,
-			prepare: func(t *testing.T, r release) {
-				asset := AssetName(runtime.GOOS, runtime.GOARCH)
-				data, err := os.ReadFile(filepath.Join(r.assets, asset))
-				if err != nil {
-					t.Fatal(err)
-				}
-				sum := sha256.Sum256(data)
-				writeFile(t, filepath.Join(r.assets, "SHA256SUMS"),
-					"# styrman-harness v1.2.3\n"+hex.EncodeToString(sum[:])+"  "+asset+"\n")
-				if err := os.Remove(filepath.Join(r.assets, "SHA256SUMS.sig")); err != nil {
-					t.Fatal(err)
-				}
-				mustRun(t, r.assets, "ssh-keygen", "-Y", "sign", "-q", "-f", r.key, "-n", ReleaseNamespace, "SHA256SUMS")
-			},
-		},
-		{
-			// A signed SHA256SUMS with no version in it cannot be told from
-			// any other release's, which is what the marker exists to stop.
-			name: "signed checksums naming no version", want: "names no release version",
-			gh: true, keygen: true,
-			prepare: func(t *testing.T, r release) {
-				asset := AssetName(runtime.GOOS, runtime.GOARCH)
 				data, err := os.ReadFile(filepath.Join(r.assets, asset))
 				if err != nil {
 					t.Fatal(err)
 				}
 				sum := sha256.Sum256(data)
 				writeFile(t, filepath.Join(r.assets, "SHA256SUMS"), hex.EncodeToString(sum[:])+"  "+asset+"\n")
-				if err := os.Remove(filepath.Join(r.assets, "SHA256SUMS.sig")); err != nil {
-					t.Fatal(err)
-				}
-				mustRun(t, r.assets, "ssh-keygen", "-Y", "sign", "-q", "-f", r.key, "-n", ReleaseNamespace, "SHA256SUMS")
-			},
-		},
-		{
-			name: "no signature in the release", want: "has no SHA256SUMS.sig",
-			gh: true, keygen: true,
-			prepare: func(t *testing.T, r release) {
-				if err := os.Remove(filepath.Join(r.assets, "SHA256SUMS.sig")); err != nil {
-					t.Fatal(err)
-				}
 			},
 		},
 		{
 			name: "no checksums in the release", want: "has no SHA256SUMS",
-			gh: true, keygen: true,
+			gh: true,
 			prepare: func(t *testing.T, r release) {
 				if err := os.Remove(filepath.Join(r.assets, "SHA256SUMS")); err != nil {
 					t.Fatal(err)
@@ -408,7 +293,7 @@ func TestUpdateFromReleaseRefusals(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := newRelease(t, "v9.9.9")
-			r.env(t, tc.gh, tc.keygen)
+			r.env(t, tc.gh)
 			if tc.prepare != nil {
 				tc.prepare(t, r)
 			}
@@ -430,93 +315,16 @@ func TestUpdateFromReleaseRefusals(t *testing.T) {
 				t.Errorf("err = %v, want it to contain %q", err, tc.want)
 			}
 			if after, _ := os.ReadFile(dest); string(after) != string(before) {
-				t.Error("the installed binary was replaced by a release that did not verify")
+				t.Error("the installed binary was replaced by a release that failed its checks")
 			}
 			if _, err := os.Stat(marker); err == nil {
-				t.Error("an install ran although the release did not verify")
+				t.Error("an install ran although the release failed its checks")
 			}
 			left, _ := filepath.Glob(filepath.Join(home, ".config", "sh-agent", "release-*"))
 			if len(left) != 0 {
 				t.Errorf("left behind: %v", left)
 			}
 		})
-	}
-}
-
-// TestReleaseSignerMatchesTheDeployGuide: the line compiled in here and the
-// allowed-signers line `.agents/docs/deploy/remote.md` § Releases gives
-// `git verify-tag` are the same operator key. Two copies of a key are two
-// keys the day one of them is rotated, so this fails when they drift.
-func TestReleaseSignerMatchesTheDeployGuide(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("..", "..", ".agents", "docs", "deploy", "remote.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var documented []string
-	for _, line := range strings.Split(string(data), "\n") {
-		if strings.HasPrefix(line, "ostling.simon@gmail.com ssh-") {
-			documented = append(documented, strings.TrimSpace(line))
-		}
-	}
-	if len(documented) == 0 {
-		t.Fatal("remote.md § Releases names no allowed-signers line")
-	}
-	for _, line := range documented {
-		if line != releaseSigner {
-			t.Errorf("remote.md carries\n  %s\nbut the binary verifies releases against\n  %s", line, releaseSigner)
-		}
-	}
-}
-
-// retiredReleaseKey signed every release up to v2.4.0's checksums; it was
-// exposed on 2026-10-05 and rotated out (ADR-052). The docs still print it for
-// the v2.4.0 bridge, and nowhere else may a key other than the signer's appear.
-const retiredReleaseKey = "AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR"
-
-// Every copy of a key in the release procedure and the install instructions —
-// printf lines, the agent check, the signing key, the bridge — is the signer's
-// key or the retired one; a half-done rotation leaves a third.
-func TestEveryDocumentedReleaseKeyIsKnown(t *testing.T) {
-	_, signerKey, ok := strings.Cut(releaseSigner, " ssh-ed25519 ")
-	if !ok {
-		t.Fatalf("releaseSigner is not an ssh-ed25519 line: %s", releaseSigner)
-	}
-	// Any OpenSSH public key type, a hardware sk- key included.
-	keyRE := regexp.MustCompile(`(?:sk-)?(?:ssh|ecdsa)-[a-z0-9-]+(?:@openssh\.com)?[ \t]+(AAAA[0-9A-Za-z+/=]+)`)
-	const bridgeStart, bridgeEnd = "**The bridge, v2.4.0 only", "\n```\n\n"
-	for _, rel := range []string{
-		filepath.Join("..", "..", ".agents", "docs", "deploy", "remote.md"),
-		filepath.Join("..", "..", "README.md"),
-	} {
-		data, err := os.ReadFile(rel)
-		if err != nil {
-			t.Fatal(err)
-		}
-		text := string(data)
-		// The retired key belongs to the bridge block alone: anywhere else it
-		// would sign, or be checked, outside the one release it was kept for.
-		lo, hi := -1, -1
-		if i := strings.Index(text, bridgeStart); i >= 0 {
-			if j := strings.Index(text[i:], bridgeEnd); j >= 0 {
-				lo, hi = i, i+j
-			}
-		}
-		found := 0
-		for _, m := range keyRE.FindAllStringSubmatchIndex(text, -1) {
-			found++
-			key := text[m[2]:m[3]]
-			switch {
-			case key == signerKey:
-			case key == retiredReleaseKey && m[0] >= lo && m[1] <= hi:
-			case key == retiredReleaseKey:
-				t.Errorf("%s names the retired key outside the v2.4.0 bridge block, at byte %d", rel, m[0])
-			default:
-				t.Errorf("%s names key %s, which is neither the signer's nor the retired one", rel, key)
-			}
-		}
-		if found == 0 {
-			t.Errorf("%s names no public key", rel)
-		}
 	}
 }
 
@@ -539,8 +347,8 @@ func TestChecksumFor(t *testing.T) {
 		{name: "sh-agent-darwin-arm64", want: strings.Repeat("b", 64)},
 		{name: "sh-agent-linux-arm64", wantErr: "does not carry a SHA-256"},
 		{name: "sh-agent-windows-amd64", wantErr: "no line names"},
-		// A signed file that says two things about one name is a reason to
-		// stop, not to take the first.
+		// A file that says two things about one name is a reason to stop, not
+		// to take the first.
 		{name: "twice", wantErr: "two different hashes"},
 		{name: "same", want: strings.Repeat("e", 64)},
 	} {
@@ -577,39 +385,13 @@ func TestCompareRelease(t *testing.T) {
 	}
 }
 
-// TestSSHKeygenPrefersASystemPath: the verifier's verdict IS the trust chain,
-// so a copy planted earlier in PATH must not be the one that runs (security
-// review 2026-09-17).
-func TestSSHKeygenPrefersASystemPath(t *testing.T) {
-	if _, err := os.Stat("/usr/bin/ssh-keygen"); err != nil {
-		t.Skip("no system ssh-keygen to prefer")
-	}
-	bin := t.TempDir()
-	planted := filepath.Join(bin, "ssh-keygen")
-	writeFile(t, planted, "#!/bin/sh\nexit 0\n")
-	if err := os.Chmod(planted, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", bin)
-	got, err := sshKeygen()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got == planted {
-		t.Errorf("sshKeygen() = %q, the planted copy", got)
-	}
-	if got != "/usr/bin/ssh-keygen" {
-		t.Errorf("sshKeygen() = %q, want the system path", got)
-	}
-}
-
-// TestUpdateFromReleaseNeverGoesBackwards: an older release is signed exactly
-// as honestly as a newer one, so a release that was deleted or re-pointed
-// would otherwise install a genuine binary the operator has moved past, and
+// TestUpdateFromReleaseNeverGoesBackwards: a release that was deleted or
+// re-pointed would otherwise install a genuine binary the operator has moved
+// past, and
 // `--check` would keep announcing it (security review 2026-09-17, finding 1).
 func TestUpdateFromReleaseNeverGoesBackwards(t *testing.T) {
 	r := newRelease(t, "v0.9.0")
-	r.env(t, true, true)
+	r.env(t, true)
 	home := t.TempDir()
 	dest := installedBinary(t, home)
 	before, err := os.ReadFile(dest)
@@ -664,41 +446,6 @@ func TestUpdateFromReleaseNeverGoesBackwards(t *testing.T) {
 	}
 }
 
-// TestVerifierMessageCarriesWhatTheToolSaid: an OpenSSH too old for
-// `-Y verify` exits 255, exactly as a bad signature does, so without the
-// tool's own words a broken machine reads as a tampered release. The verdict
-// is unchanged — nothing installs either way — but the cause is visible
-// (code review 2026-09-17, round 2).
-func TestVerifierMessageCarriesWhatTheToolSaid(t *testing.T) {
-	bin := t.TempDir()
-	fake := filepath.Join(bin, "ssh-keygen")
-	writeFile(t, fake, "#!/bin/sh\necho \"unknown option -- Y\" >&2\nexit 255\n")
-	if err := os.Chmod(fake, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	old := sshKeygenSystemPaths
-	sshKeygenSystemPaths = []string{fake}
-	t.Cleanup(func() { sshKeygenSystemPaths = old })
-
-	dir := t.TempDir()
-	writeFile(t, filepath.Join(dir, "SHA256SUMS"), "# styrman-harness v9.9.9\n")
-	writeFile(t, filepath.Join(dir, "SHA256SUMS.sig"), "not really a signature\n")
-	keygen, err := sshKeygen()
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = verifyRelease(keygen, dir, "v9.9.9", AssetName(runtime.GOOS, runtime.GOARCH), []byte("x"))
-	if err == nil {
-		t.Fatal("a verifier that cannot verify must be an error")
-	}
-	if !strings.Contains(err.Error(), "unknown option -- Y") {
-		t.Errorf("err = %v, want it to carry ssh-keygen's own message", err)
-	}
-	if !strings.Contains(err.Error(), "does not verify") {
-		t.Errorf("err = %v, want the verdict kept", err)
-	}
-}
-
 // TestUpdateFromReleaseSweepStaysInHome runs the update's own sweep of
 // leftover download directories from a home whose path holds a glob
 // metacharacter: the leftover in this home goes, the sibling home's stays
@@ -706,7 +453,7 @@ func TestVerifierMessageCarriesWhatTheToolSaid(t *testing.T) {
 // TestSweepStaleDirsStaysInParent, this one proves the update calls it).
 func TestUpdateFromReleaseSweepStaysInHome(t *testing.T) {
 	r := newRelease(t, "v9.9.9")
-	r.env(t, true, true)
+	r.env(t, true)
 	root := t.TempDir()
 	home := filepath.Join(root, "u[1]")
 	own := filepath.Join(home, ".config", "sh-agent", "release-old")

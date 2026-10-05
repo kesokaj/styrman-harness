@@ -11,13 +11,13 @@ flowchart LR
     subgraph checkoutLane["Your harness checkout"]
         edit["Edit context/, skills/, agents/, commands/, rules/"]
         ship["gofmt, vet, test -race<br/>commit and push main"]
-        preflight["/preflight vX.Y.Z<br/>SSH-signed tag, signed binaries and zip"]
+        preflight["/preflight vX.Y.Z<br/>tag, binaries and zip, no key"]
         retroHarness["/retro --harness<br/>applies the proposals queued on this machine"]
         readReports["Read reports/HOST/RUN/<br/>by hand: not built yet"]
     end
     subgraph githubLane["GitHub, private"]
         harnessRepo[("styrman-harness<br/>main: what checkout places follow<br/>tags: release markers")]
-        releases[("Releases<br/>platform binaries + release zip + signed SHA256SUMS")]
+        releases[("Releases<br/>platform binaries + release zip + SHA256SUMS")]
         feedbackRepo[("styrman-harness-feedback<br/>reports/HOST/RUN/")]
     end
     subgraph placeLane["Each place"]
@@ -35,11 +35,11 @@ flowchart LR
     ship -- "git push" --> harnessRepo
     ship --> preflight
     preflight -- "tag marks a version" --> harnessRepo
-    preflight -- "signed binaries and zip" --> releases
+    preflight -- "binaries, zip and SHA256SUMS" --> releases
     harnessRepo -- "clone once, update pulls" --> checkoutPlace
-    releases -- "update downloads and verifies" --> binaryPlace
+    releases -- "update downloads and checks" --> binaryPlace
     harnessRepo -. "zip, downloaded by hand; update --from-zip repeats it" .-> zipPlace
-    releases -. "release zip + signed SHA256SUMS, by hand; verified" .-> zipPlace
+    releases -. "release zip + SHA256SUMS, by hand; checked" .-> zipPlace
     checkoutPlace --> installer
     binaryPlace --> installer
     zipPlace -.-> installer
@@ -67,7 +67,7 @@ Teal is **update**, indigo **install**, amber **report back**, plum **release**,
 - **Install:** clone `styrman-harness` with your own SSH key or `gh` login and run `go run ./cmd/sh-agent install`, or download a release's `sh-agent` binary with that credential and run `sh-agent install`, which installs the harness built into it (§ Install without cloning). Either way installed files go into `~/.claude` and `~/.gemini/config`, no repository is created, and the next session reads them. A machine that can reach neither downloads the repository zip by hand instead (§ Install from a zip (no SSH, no gh)).
 - **Update:** edit and push `main` in your checkout. At each place, when you decide, `sh-agent update` moves it forward — what that means for a checkout place, a binary-only place and a zip place is `.agents/docs/specs/sh-agent/delivery.md` § The model. Nothing pushes to a machine.
 - **Report back:** sessions log corrections and retros under `~/.config/sh-agent/`. Before each report, read what was added since the last one. `sh-agent report` sends a redacted copy and a metrics record to `styrman-harness-feedback` through a throwaway clone holding only this machine's own reports, removed after the push — no machine keeps a copy of any other's. Back at the harness, `/retro --harness` applies the proposals queued on that machine; other places' reports are read by hand.
-- **Release:** `/preflight vX.Y.Z` in your own turn gates, pushes an SSH-signed tag on `main`, and publishes that tag's binaries and a zip of its tree with checksums signed by the same key; what each kind of place does with it is `.agents/docs/specs/sh-agent/delivery.md` § The model.
+- **Release:** `/preflight vX.Y.Z` in your own turn gates, pushes an annotated tag on `main`, and publishes that tag's binaries and a zip of its tree with their `SHA256SUMS` — no key, so any machine where you are logged in to GitHub can cut one; what each kind of place does with it is `.agents/docs/specs/sh-agent/delivery.md` § The model.
 - **Dream** (olive, on each place): once per machine, `sh-agent dream --install-timer` installs a user timer (systemd on Linux, launchd on macOS). Nightly it runs `sh-agent dream --all`: every indexed project that changed sends its memory, new trail, feedback and both CLIs' transcripts, redacted, to a CLI with no tools. The proposals and draft skills land in `~/.config/sh-agent/proposals/dream/`; `/retro` applies them, and `sh-agent report` carries the harness-target ones back. `--remove-timer` or `uninstall` removes it (R3's exception, `.agents/docs/specs/sh-agent/dream.md`).
 
 ## Install
@@ -91,23 +91,18 @@ A machine that only USES the harness needs no checkout: a release binary carries
 # gh, the shortest path — ONE chained command, so a failed check stops the move. V is the
 # version you expect, from a source OUTSIDE the download: the operator who cut it, or a checkout's
 # changelog — not the Releases page, which is the same server the assets come from. Two lines tie
-# the download to it — the SIGNED checksum file must name V, and the binary must be V — which is
-# what `sh-agent update` does with the tag it asked for (update also refuses a tag that is not
-# newer than what it has, which no first install can mirror). The guarantee is "the version you
-# named, or nothing" — never "the newest". Without those lines a genuinely signed OLDER release
-# passes every other check. Everything is verified in a scratch directory and only the binary moves to
-# ~/.local/bin. --clobber because a leftover file from an earlier attempt makes the download
-# refuse. The signer line is the one compiled into every sh-agent from v2.4.0 and printed in
-# .agents/docs/deploy/remote.md § Releases: take it from a checkout or a binary you already
-# trust, never from the release page. On macOS replace `sha256sum -c -` with `shasum -a 256 -c -`.
-# v2.4.0, the bridge of the 2026-10-05 key rotation (ADR-052), carries a second signature by the
-# current key: for V=v2.4.0 add --pattern 'SHA256SUMS.current.sig' and verify -s SHA256SUMS.current.sig.
+# the download to it — the checksum file must name V, and the binary must be V — which is what
+# `sh-agent update` does with the tag it asked for (update also refuses a tag that is not newer
+# than what it has, which no first install can mirror). The guarantee is "the version you named,
+# or nothing" — never "the newest". The checksums are not signed (ADR-053): they prove the
+# download is whole; who made the release rests on your GitHub credential and HTTPS. Everything
+# is checked in a scratch directory and only the binary moves to ~/.local/bin. --clobber because
+# a leftover file from an earlier attempt makes the download refuse. On macOS replace
+# `sha256sum -c -` with `shasum -a 256 -c -`.
 V=vX.Y.Z \
 && D=$(mktemp -d) && cd "$D" \
 && gh release download "$V" --repo kesokaj/styrman-harness --clobber \
-     --pattern 'sh-agent-linux-amd64' --pattern 'SHA256SUMS' --pattern 'SHA256SUMS.sig' --dir "$D" \
-&& printf '%s\n' 'ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJmUbDQuzqRfH5KH1pY8dLF7xeSpNcYduSsioRa7tNYZ' > allowed_signers \
-&& ssh-keygen -Y verify -f allowed_signers -I ostling.simon@gmail.com -n sh-agent-release -s SHA256SUMS.sig < SHA256SUMS \
+     --pattern 'sh-agent-linux-amd64' --pattern 'SHA256SUMS' --dir "$D" \
 && grep -qxF "# styrman-harness $V" SHA256SUMS \
 && grep -v '^#' SHA256SUMS | sha256sum -c - --ignore-missing \
 && chmod +x sh-agent-linux-amd64 \
@@ -132,17 +127,14 @@ GOPRIVATE='github.com/kesokaj/*' \
 ```
 
 ```bash
-# or the Releases page in a browser: download the binary, SHA256SUMS and SHA256SUMS.sig to
+# or the Releases page in a browser: download the binary and SHA256SUMS to
 # ~/Downloads, then the same checks in a scratch directory so nothing else in ~/Downloads is
 # touched — ONE chain, shown for a Mac (on Linux: `sha256sum -c -`, and no xattr step). The
 # `ls` stops the chain before anything moves when a file is missing; the `xattr` line lifts the
-# browser quarantine, which would otherwise stop the binary from running at all. For V=v2.4.0, the
-# bridge release, download SHA256SUMS.current.sig as well and verify -s that file (ADR-052):
+# browser quarantine, which would otherwise stop the binary from running at all:
 V=vX.Y.Z \
-&& ls ~/Downloads/sh-agent-darwin-arm64 ~/Downloads/SHA256SUMS ~/Downloads/SHA256SUMS.sig >/dev/null \
-&& D=$(mktemp -d) && mv ~/Downloads/sh-agent-darwin-arm64 ~/Downloads/SHA256SUMS ~/Downloads/SHA256SUMS.sig "$D" && cd "$D" \
-&& printf '%s\n' 'ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJmUbDQuzqRfH5KH1pY8dLF7xeSpNcYduSsioRa7tNYZ' > allowed_signers \
-&& ssh-keygen -Y verify -f allowed_signers -I ostling.simon@gmail.com -n sh-agent-release -s SHA256SUMS.sig < SHA256SUMS \
+&& ls ~/Downloads/sh-agent-darwin-arm64 ~/Downloads/SHA256SUMS >/dev/null \
+&& D=$(mktemp -d) && mv ~/Downloads/sh-agent-darwin-arm64 ~/Downloads/SHA256SUMS "$D" && cd "$D" \
 && grep -qxF "# styrman-harness $V" SHA256SUMS \
 && grep -v '^#' SHA256SUMS | shasum -a 256 -c - --ignore-missing \
 && chmod +x sh-agent-darwin-arm64 && { xattr -d com.apple.quarantine sh-agent-darwin-arm64 2>/dev/null || true; } \
@@ -160,23 +152,23 @@ sh-agent status      # "source embedded vX.Y.Z" and "drift none"
 
 `sh-agent version` comes first on purpose. Moving a verified binary into place is not the same as installing it: if any earlier `PATH` entry holds another `sh-agent`, that one runs instead, installs whatever source *it* resolves, and reports `drift none` about it — a machine installed a stale tree this way and every command said it had succeeded (BUG-078). `install` and `status` now name such a binary (`warning: … comes before … on PATH` and a `shadowed` line), but the one-word check above is the fastest confirmation. It tells stale from fresh, never genuine from forged — it is printed by the very binary in question; authenticity is the signature and checksum on the file, before the move. When it names the wrong version: first `hash -r` (bash) or `rehash` (zsh) and run it again — a shell caches where it last found `sh-agent`, and `update` replaces `~/.local/bin/sh-agent` and nothing else, so a shell that once resolved the name to another copy keeps running that copy whatever PATH says (`type sh-agent` shows the cached path; `update` now says so when it ran from such a copy, but only when the update ran against your real home, never a `--home` elsewhere). Still wrong after that: `which -a sh-agent` lists every candidate in order; point the earlier one at this binary (`ln -sfn`) or remove it — a link to the same file is not a shadow and silences the warning; when that earlier file is not yours, the note says it is not yours to relink and to remove it with the rights that own it, or leave it and run the installed one by its path.
 
-Make sure `~/.local/bin` is on your `PATH`. The assets are `sh-agent-linux-amd64`, `sh-agent-darwin-arm64` and `sh-agent-linux-arm64`, beside `SHA256SUMS` and `SHA256SUMS.sig`.
+Make sure `~/.local/bin` is on your `PATH`. The assets are `sh-agent-linux-amd64`, `sh-agent-darwin-arm64` and `sh-agent-linux-arm64`, beside `SHA256SUMS` (v2.4.0 also carries a `SHA256SUMS.sig`, for v2.3.2 binaries only; ADR-053).
 
 On macOS, a binary downloaded **in a browser** is quarantined and will not run until the attribute is removed; the browser chain above does that (`xattr -d com.apple.quarantine`) before it runs `version`. One fetched by `gh` or `go install` is not quarantined.
 
-To move such a place forward, run `sh-agent update` there: it asks GitHub for the newest release, refuses anything that is not a canonical `vX.Y.Z` tag (no leading zeros) newer than what is installed — an older or equal release prints "the newest release X is not newer than this binary Y; nothing installed" — verifies `SHA256SUMS.sig` against the key compiled into the binary and each binary against its checksum, and only then replaces itself and reinstalls. It needs `gh` on `PATH` (`gh auth login` once) and `ssh-keygen`, which every machine with OpenSSH has. `sh-agent update --check` only reports, exiting 2 when a newer release exists. `sh-agent adopt` needs a checkout and says so.
+To move such a place forward, run `sh-agent update` there: it asks GitHub for the newest release, refuses anything that is not a canonical `vX.Y.Z` tag (no leading zeros) newer than what is installed — an older or equal release prints "the newest release X is not newer than this binary Y; nothing installed" — checks the binary against the release's `SHA256SUMS`, and only then replaces itself and reinstalls. It needs `gh` on `PATH` (`gh auth login` once). `sh-agent update --check` only reports, exiting 2 when a newer release exists. `sh-agent adopt` needs a checkout and says so.
 
 ## Install from a zip (no SSH, no gh)
 
-A machine that can neither hold your SSH key nor run `gh` — a corporate workstation, say — still reaches the harness: download a release's `styrman-harness-vX.Y.Z.zip`, `SHA256SUMS` and `SHA256SUMS.sig` from the Releases page into one folder, together with its `sh-agent` binary (§ Install without cloning covers verifying the binary), and run the command below. A zip of `main` ("Code → Download ZIP") works too, but it is unsigned:
+A machine that can neither hold your SSH key nor run `gh` — a corporate workstation, say — still reaches the harness: download a release's `styrman-harness-vX.Y.Z.zip` and `SHA256SUMS` from the Releases page into one folder, together with its `sh-agent` binary (§ Install without cloning covers verifying the binary), and run the command below. A zip of `main` ("Code → Download ZIP") works too, but no release lists it, so nothing checks it:
 
 ```bash
-sh-agent update --from-zip ~/Downloads/styrman-harness-vX.Y.Z.zip   # SHA256SUMS and SHA256SUMS.sig beside it: verified
+sh-agent update --from-zip ~/Downloads/styrman-harness-vX.Y.Z.zip   # SHA256SUMS beside it: checked
 sh-agent update --from-zip ~/Downloads/styrman-harness-main.zip   # a main zip: nothing to verify, installed marked UNVERIFIED
 sh-agent status      # "installed … from zip sha256:<hex> (verified vX.Y.Z)" or "(unverified)"; reports presence, not content — the zip is not kept
 ```
 
-`--from-zip` unpacks the zip into a temporary directory (under `~/.config/sh-agent/`, or beside the zip before that directory exists), installs that tree and the running binary, and deletes the directory (`--dry-run` unpacks and removes the same directory and writes nothing into the home); the zip's own folder must be writable, since the checksum verification writes its signers file there for a moment. The binary is copied into `~/.local/bin` the way every install copies it, but nothing in the zip replaces it and nothing is fetched. `--dry-run` does the same unpack-and-plan without writing a file, a manifest, or a binary, and still removes the temporary directory. With the release's `SHA256SUMS` and `SHA256SUMS.sig` beside it, the zip is verified before anything is written: the signature against the signer built into the binary, then the zip's own checksum line, which needs the release's own file name. The first line then says `VERIFIED against the signed SHA256SUMS of release vX.Y.Z`, and any failure refuses the zip. Without the pair — a `main` zip, or a release zip downloaded alone — the zip is installed and the first line says `UNVERIFIED`: the zip place is the fallback for a machine that cannot take the normal way in, so it accepts the zip you give it, and trust rests on your own download (ADR-041). `update --dry-run` on the other two kinds of place reports what an update would do and changes nothing. Moving a zip place forward means repeating the download and `--from-zip`; a zip whose harness needs a newer binary means downloading that binary by hand too.
+`--from-zip` unpacks the zip into a temporary directory (under `~/.config/sh-agent/`, or beside the zip before that directory exists), installs that tree and the running binary, and deletes the directory (`--dry-run` unpacks and removes the same directory and writes nothing into the home); The binary is copied into `~/.local/bin` the way every install copies it, but nothing in the zip replaces it and nothing is fetched. `--dry-run` does the same unpack-and-plan without writing a file, a manifest, or a binary, and still removes the temporary directory. With the release's `SHA256SUMS` beside it, the zip is checked before anything is written against its own checksum line, which needs the release's own file name. The first line then says `VERIFIED against the SHA256SUMS of release vX.Y.Z`, and any failure refuses the zip. Without it — a `main` zip, or a release zip downloaded alone — the zip is installed and the first line says `UNVERIFIED`: the zip place is the fallback for a machine that cannot take the normal way in, so it accepts the zip you give it, and trust rests on your own download (ADR-041). `update --dry-run` on the other two kinds of place reports what an update would do and changes nothing. Moving a zip place forward means repeating the download and `--from-zip`; a zip whose harness needs a newer binary means downloading that binary by hand too.
 
 ## Daily commands
 
@@ -185,7 +177,7 @@ sh-agent status      # "installed … from zip sha256:<hex> (verified vX.Y.Z)" o
 | `sh-agent status` | Shows what is installed, from which commit, the running binary's build (with a warning when it is older than the checkout), a note when `~/.claude/settings.json` is missing or sets `attribution.commit` to anything but `""` (install writes the key when it is absent), a `dream` line (last run, projects, proposals, timer installed or not; it appends `; legacy timer files under <home>: sh-agent dream --remove-timer --dry-run --home '<home>' prints the cleanup steps` when v2.0.0 or earlier left bare-named unit files in a home whose own unit name is suffixed), and every file that drifted. A destination that is a symlink, or lies under a symlinked directory, is reported as `foreign`, never as drift. Exit 1 on drift. |
 | `sh-agent diff` | Unified diff of every drifted file (installed vs repo); renders its temporary copies under `~/.config/sh-agent/`, removed after, never the system temp dir. |
 | `sh-agent install` (or `sync`) | From its own git checkout, rebuilds the binary with `go build`, then deploys the repo; from a release binary deploys the harness built into it and copies the running binary (nothing to build from); from a plain copy (no `.git`) deploys the running binary as is (`--vendor antigravity\|claude\|all`). Idempotent; removes files a previous install wrote that the repo no longer has. `--dry-run` prints what would change without changing anything. Every run prints one line per file it changes — `add` (not there before), `update` (other bytes, or a previous file it could not read), `mode` (permission corrected, bytes unchanged, and also the runtime directory `~/.config/sh-agent`, tightened to 0700 by every install when it is yours and not a symlink (either case gets a `note:` instead)), `remove` (no longer in the source) and `keep` (a managed path holds a file sh-agent did not write and it is left alone; a destination that is a symlink, or any path under a symlinked directory, prints `keep    ~/<path> (a symlink; sh-agent never writes through a link)`, is counted under `kept`, is never read through, chmodded, replaced or removed, and never enters the manifest; `diff` and the resync loop skip it) — and counts the unchanged; when a write fails midway the manifest is saved once as every old entry still on disk plus the files written so far, so `uninstall` still removes everything sh-agent wrote; `--dry-run` prints the same lines and writes nothing. |
-| `sh-agent update` | At a checkout: `git fetch`; refuses a checkout with uncommitted changes, because it deploys the working tree rather than the fetched commit (BUG-046), and does so before `--check` and `--dry-run` return, so those print the same refusal and exit 1 on a dirty checkout (a clean one exits 2 when behind, 0 when current); if behind, `pull --ff-only`, rebuild, and reinstall. At a release-binary install: downloads the newest release, refuses a tag that is not `vX.Y.Z` or is not newer, verifies the signed `SHA256SUMS` and the binary's own checksum, replaces `~/.local/bin/sh-agent` and reinstalls. Either way `--check` only reports (exit 2 when behind or when a newer release exists). It also removes the full feedback clone older versions kept at `~/.config/sh-agent/feedback`, when that clone is clean and fully pushed. A zip place runs `update --from-zip <file>` instead (§ Install from a zip); `update --dry-run` reports what an update would do and changes nothing. |
+| `sh-agent update` | At a checkout: `git fetch`; refuses a checkout with uncommitted changes, because it deploys the working tree rather than the fetched commit (BUG-046), and does so before `--check` and `--dry-run` return, so those print the same refusal and exit 1 on a dirty checkout (a clean one exits 2 when behind, 0 when current); if behind, `pull --ff-only`, rebuild, and reinstall. At a release-binary install: downloads the newest release, refuses a tag that is not `vX.Y.Z` or is not newer, checks the binary against the release's `SHA256SUMS`, replaces `~/.local/bin/sh-agent` and reinstalls. Either way `--check` only reports (exit 2 when behind or when a newer release exists). It also removes the full feedback clone older versions kept at `~/.config/sh-agent/feedback`, when that clone is clean and fully pushed. A zip place runs `update --from-zip <file>` instead (§ Install from a zip); `update --dry-run` reports what an update would do and changes nothing. |
 | `sh-agent uninstall` | Removes exactly the files it installed (from its manifest) and nothing else (a symlinked path is kept and prints the same `keep` line as install), plus the dream timer when one is installed (R4), even with no manifest left; it says `removed the dream timer` only when it removed one, and names legacy bare-named unit files it leaves alone, as `--remove-timer` does. `--dry-run` prints what would be removed, the timer included, without removing anything or calling `systemctl`/`launchctl`. A unit file that belongs to the other operating system (a home copied between a Mac and a Linux box) is named and stays, in a dry run too; `dream --remove-timer` says the same, with and without `--dry-run`. |
 | `sh-agent dream --install-timer` / `--remove-timer` | Installs or removes the nightly `sh-agent dream --all` job: a systemd user timer (Linux) or a launchd agent (macOS), running with the absolute entries of the PATH of the shell that installed it (a `claude` or `agy` reachable only through a relative entry is not found at 03:00). `--dry-run` writes nothing and calls no manager. An installed unit that differs from what would be written is kept and named; run `--remove-timer` first. The unit's name is per home (the real home keeps `sh-agent-dream` / `com.styrman.sh-agent-dream`; any other `--home` gets a suffix of eight hex digits of the path's SHA-256) and its command carries `--home "<home>"`; a place updating from v2.0.0 runs `sh-agent dream --remove-timer` then `--install-timer` once, because the differing unit is never overwritten. `--remove-timer` prints `dream timer removed`, or `no dream timer found for <home> on this system` when it removed nothing (exit 0 both ways). A unit file that v2.0.0 or earlier wrote under the bare name in a home whose own unit name is now suffixed is never removed or stopped by the binary (a stop by name ends whichever unit the service manager loaded): `--remove-timer` (also with `--dry-run`) prints the paths, the check (`systemctl --user show -p FragmentPath sh-agent-dream.timer`, or `launchctl print gui/<uid>/com.styrman.sh-agent-dream`) and the steps (rest: `.agents/docs/specs/sh-agent/dream.md`). |
 | `sh-agent list` | Prints the skill and agent inventory. |
@@ -210,7 +202,7 @@ vim context/dev-setup.md && sh-agent install && git add context/dev-setup.md && 
 sh-agent update      # fetches, refuses a dirty checkout, pulls, rebuilds, reinstalls
 ```
 
-`sh-agent` is the single channel the harness reaches a machine through (R8): a checkout kept current with `update`, a release binary with the harness built into it, installed with `sh-agent install` and moved forward by `sh-agent update`, which downloads the newest release and verifies its signed checksums (§ Install without cloning), or a zip place, moved forward by repeating the download and `sh-agent update --from-zip <file>` (§ Install from a zip (no SSH, no gh)). A plain copy of the repository with no `.git` still installs — the running binary as is, and `update` refuses it, so unpack a newer copy to move forward — but it is the fallback for a machine that can reach none of the three, not a way in. No project vendors a copy.
+`sh-agent` is the single channel the harness reaches a machine through (R8): a checkout kept current with `update`, a release binary with the harness built into it, installed with `sh-agent install` and moved forward by `sh-agent update`, which downloads the newest release and checks it against its `SHA256SUMS` (§ Install without cloning), or a zip place, moved forward by repeating the download and `sh-agent update --from-zip <file>` (§ Install from a zip (no SSH, no gh)). A plain copy of the repository with no `.git` still installs — the running binary as is, and `update` refuses it, so unpack a newer copy to move forward — but it is the fallback for a machine that can reach none of the three, not a way in. No project vendors a copy.
 
 And back: `sh-agent report --dry-run` lists every file and every redaction it would make — what was caught, never what was missed, so before every report, not just the first, read what was added under `~/.config/sh-agent/` since the last one — then `sh-agent report`, so each machine's corrections and retro proposals reach the feedback repository where the harness is improved from them.
 
@@ -295,4 +287,4 @@ gofmt -l cmd internal && go vet ./... && go test -race -timeout 30m ./...   # go
 go run ./cmd/sh-agent install --home .agents/scratch/home   # never test against your real $HOME; scratch lives in the repo, never /tmp
 ```
 
-See `AGENTS.md` for the repo rules and `.agents/docs/plans/2026-09-03-rebuild.md` for the rebuild checklist. To cut a release, see `.agents/docs/deploy/remote.md` § Releases — signed `vX.Y.Z` tags via `/preflight`. What a tag delivers, and to which place: `.agents/docs/specs/sh-agent/delivery.md` § The model. How the harness reaches each machine and reports back: `.agents/docs/deploy/remote.md` § The four places.
+See `AGENTS.md` for the repo rules and `.agents/docs/plans/2026-09-03-rebuild.md` for the rebuild checklist. To cut a release, see `.agents/docs/deploy/remote.md` § Releases — `vX.Y.Z` tags via `/preflight`, no key. What a tag delivers, and to which place: `.agents/docs/specs/sh-agent/delivery.md` § The model. How the harness reaches each machine and reports back: `.agents/docs/deploy/remote.md` § The four places.

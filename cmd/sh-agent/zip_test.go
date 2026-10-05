@@ -614,39 +614,21 @@ func TestUpdateFromZipInstallRefusalSweepsNothing(t *testing.T) {
 	}
 }
 
-// A zip with signed checksums beside it that do not verify — signed by a key
-// that is not the release signer — is refused, and the home stays as it was.
-func TestUpdateFromZipForeignSignatureRefused(t *testing.T) {
-	keygen := "/usr/bin/ssh-keygen"
-	if _, err := os.Stat(keygen); err != nil {
-		t.Skip("no /usr/bin/ssh-keygen")
-	}
+// A zip whose SHA256SUMS beside it lists another hash for it is refused, and
+// the home stays as it was.
+func TestUpdateFromZipWrongChecksumRefused(t *testing.T) {
 	isolate(t)
 	zp := markedZip(t)
 	dir := filepath.Dir(zp)
-	data, err := os.ReadFile(zp)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sum := sha256.Sum256(data)
-	sums := "# styrman-harness v9.9.9\n" + hex.EncodeToString(sum[:]) + "  " + filepath.Base(zp) + "\n"
+	sums := "# styrman-harness v9.9.9\n" + strings.Repeat("0", 64) + "  " + filepath.Base(zp) + "\n"
 	if err := os.WriteFile(filepath.Join(dir, "SHA256SUMS"), []byte(sums), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	key := filepath.Join(t.TempDir(), "key")
-	for _, args := range [][]string{
-		{"-q", "-t", "ed25519", "-N", "", "-C", "not-the-signer", "-f", key},
-		{"-Y", "sign", "-q", "-f", key, "-n", "sh-agent-release", filepath.Join(dir, "SHA256SUMS")},
-	} {
-		if out, err := exec.Command(keygen, args...).CombinedOutput(); err != nil {
-			t.Fatalf("ssh-keygen %v: %v\n%s", args, err, out)
-		}
-	}
 	home := t.TempDir()
 	var out bytes.Buffer
-	err = run([]string{"update", "--from-zip", zp, "--home", home}, &out)
-	if err == nil || !strings.Contains(err.Error(), "does not verify") {
-		t.Fatalf("err = %v, want the signature refusal\n%s", err, out.String())
+	err := run([]string{"update", "--from-zip", zp, "--home", home}, &out)
+	if err == nil || !strings.Contains(err.Error(), "checksum mismatch") {
+		t.Fatalf("err = %v, want the checksum refusal\n%s", err, out.String())
 	}
 	if strings.Contains(strings.ToLower(err.Error()), "unverified") {
 		t.Errorf("a failed-check refusal suggests installing unverified (ADR-039): %v", err)
@@ -669,48 +651,35 @@ func TestUpdateFromZipUnsignedSaysUnverified(t *testing.T) {
 	}
 }
 
-// Half the signed pair beside a zip (only SHA256SUMS, or only its .sig) is no
-// pair: the zip installs, marked UNVERIFIED (R9, ADR-041).
-func TestUpdateFromZipHalfPairSaysUnverified(t *testing.T) {
+// A signature alone beside a zip, the shape of a pre-ADR-053 release folder
+// missing its SHA256SUMS, is not a checksum file: the zip installs, marked
+// UNVERIFIED (R9, ADR-041, ADR-053).
+func TestUpdateFromZipSignatureAloneSaysUnverified(t *testing.T) {
 	isolate(t)
-	for _, name := range []string{"SHA256SUMS", "SHA256SUMS.sig"} {
-		t.Run(name, func(t *testing.T) {
-			zp := markedZip(t)
-			beside := filepath.Join(filepath.Dir(zp), name)
-			if err := os.WriteFile(beside, []byte("# styrman-harness v1.2.3\n"), 0o644); err != nil {
-				t.Fatal(err)
-			}
-			other := "SHA256SUMS.sig"
-			if name == other {
-				other = "SHA256SUMS"
-			}
-			if _, err := os.Stat(filepath.Join(filepath.Dir(zp), other)); !errors.Is(err, fs.ErrNotExist) {
-				t.Fatalf("setup: %s must be absent (stat err = %v)", other, err)
-			}
-			home := t.TempDir()
-			var out bytes.Buffer
-			if err := run([]string{"update", "--from-zip", zp, "--home", home}, &out); err != nil {
-				t.Fatalf("a zip with only %s beside it was refused: %v\n%s", name, err, out.String())
-			}
-			if !strings.Contains(out.String(), "UNVERIFIED") || strings.Contains(out.String(), "VERIFIED against") {
-				t.Errorf("a half pair is not marked UNVERIFIED:\n%s", out.String())
-			}
-			st, found, err := harness.LoadState(home)
-			if err != nil || !found || !strings.HasSuffix(st.Repo, ";unverified") {
-				t.Errorf("manifest repo = %q (found=%v, err=%v), want the ;unverified verdict", st.Repo, found, err)
-			}
-		})
+	zp := markedZip(t)
+	if err := os.WriteFile(filepath.Join(filepath.Dir(zp), "SHA256SUMS.sig"), []byte("not a signature\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	var out bytes.Buffer
+	if err := run([]string{"update", "--from-zip", zp, "--home", home}, &out); err != nil {
+		t.Fatalf("a zip with only a signature beside it was refused: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "UNVERIFIED") || strings.Contains(out.String(), "VERIFIED against") {
+		t.Errorf("not marked UNVERIFIED:\n%s", out.String())
+	}
+	st, found, err := harness.LoadState(home)
+	if err != nil || !found || !strings.HasSuffix(st.Repo, ";unverified") {
+		t.Errorf("manifest repo = %q (found=%v, err=%v), want the ;unverified verdict", st.Repo, found, err)
 	}
 }
 
-// A release zip with its signed SHA256SUMS beside it installs and says
-// VERIFIED; the same zip with one byte changed is refused, home untouched.
+// A release zip with its SHA256SUMS beside it installs and says VERIFIED; the
+// same zip with one byte changed is refused, home untouched. PATH holds no
+// ssh-keygen: nothing in the check needs one (ADR-053).
 func TestUpdateFromZipVerifiedAndTampered(t *testing.T) {
-	keygen := "/usr/bin/ssh-keygen"
-	if _, err := os.Stat(keygen); err != nil {
-		t.Skip("no /usr/bin/ssh-keygen")
-	}
 	isolate(t)
+	t.Setenv("PATH", t.TempDir())
 	src := markedZip(t)
 	dir := t.TempDir()
 	zp := filepath.Join(dir, "styrman-harness-v1.2.3.zip")
@@ -725,28 +694,12 @@ func TestUpdateFromZipVerifiedAndTampered(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "SHA256SUMS"), []byte("# styrman-harness v1.2.3\n"+hex.EncodeToString(sum[:])+"  styrman-harness-v1.2.3.zip\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	key := filepath.Join(t.TempDir(), "key")
-	for _, args := range [][]string{
-		{"-q", "-t", "ed25519", "-N", "", "-C", "test@signer", "-f", key},
-		{"-Y", "sign", "-q", "-f", key, "-n", harness.ReleaseNamespace, filepath.Join(dir, "SHA256SUMS")},
-	} {
-		if out, err := exec.Command(keygen, args...).CombinedOutput(); err != nil {
-			t.Fatalf("ssh-keygen %v: %v\n%s", args, err, out)
-		}
-	}
-	pub, err := os.ReadFile(key + ".pub")
-	if err != nil {
-		t.Fatal(err)
-	}
-	f := strings.Fields(string(pub))
-	defer harness.SwapReleaseSigner("test@signer " + f[0] + " " + f[1])()
-
 	var out bytes.Buffer
 	vhome := t.TempDir()
 	if err := run([]string{"update", "--from-zip", zp, "--home", vhome}, &out); err != nil {
 		t.Fatalf("verified zip: %v\n%s", err, out.String())
 	}
-	if !strings.Contains(out.String(), "VERIFIED against the signed SHA256SUMS of release v1.2.3") {
+	if !strings.Contains(out.String(), "VERIFIED against the SHA256SUMS of release v1.2.3") {
 		t.Errorf("a verified zip does not say so:\n%s", out.String())
 	}
 	// The verdict outlives the output: status reads it from the manifest. It

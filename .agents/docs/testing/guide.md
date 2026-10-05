@@ -158,7 +158,10 @@ it affects.
 A sandbox home that must be logged in is built under `.agents/scratch/` (gitignored, never
 embedded: `go:embed` covers only the five source directories); any credential file copied into
 it from the real home is `chmod 600`, lives only for the run, and is deleted by name right
-after (security review 2026-09-21). Prefer the real-home smoke checks of § 5 when the change
+after (security review 2026-09-21). The kit preamble's exit check proves it: a run counts only
+when its output holds `kit: no credentials left in KIT_HOME`, which it prints after finding no
+credential file by name and no token or private key inside any file in the sandbox home — a CLI
+can write one where the kit never copied it (BUG-160). Prefer the real-home smoke checks of § 5 when the change
 needs no separate home.
 
 A change that must hold on each kind of machine (R10: Claude Code only, Antigravity only, both)

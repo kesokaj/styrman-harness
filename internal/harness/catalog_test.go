@@ -1540,6 +1540,83 @@ func TestRefreshCatalogScript(t *testing.T) {
 	}, "")
 }
 
+// TestKitPreambleRefusesLeftoverCredentials: a kit that ends with a
+// credential still in its sandbox home fails, by file name and by a token or
+// private key written inside any file; one that cleaned up says so (BUG-160).
+func TestKitPreambleRefusesLeftoverCredentials(t *testing.T) {
+	if testing.Short() {
+		t.Skip("runs bash and git")
+	}
+	for _, tool := range []string{"bash", "git"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			t.Skipf("no %s on this machine", tool)
+		}
+	}
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	preamble := filepath.Join(root, ".agents", "docs", "testing", "kit-preamble.sh")
+	tmp := t.TempDir()
+	if out, err := exec.Command("git", "-C", tmp, "rev-parse", "--git-dir").CombinedOutput(); err == nil {
+		t.Skipf("the test's temporary directory is inside a git checkout (%s): the preamble refuses that by design", strings.TrimSpace(string(out)))
+	}
+	clone, home, kitHome := filepath.Join(tmp, "clone"), filepath.Join(tmp, "home"), filepath.Join(tmp, "kit-home")
+	for _, d := range []string{clone, home, kitHome} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if out, err := exec.Command("git", "-C", clone, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v\n%s", err, out)
+	}
+	run := func(then string) (int, string) {
+		cmd := exec.Command("bash", "-c", ". \"$1\"; "+then, "kit", preamble)
+		cmd.Env = fixtureEnv("HOME="+home, "KIT_CLONE="+clone, "KIT_HOME="+kitHome, "KIT_BIN=/bin/true")
+		out, err := cmd.CombinedOutput()
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
+			return ee.ExitCode(), string(out)
+		}
+		if err != nil {
+			t.Fatalf("running the preamble: %v\n%s", err, out)
+		}
+		return 0, string(out)
+	}
+	if code, out := run(":"); code != 0 || !strings.Contains(out, "kit: no credentials left in KIT_HOME") {
+		t.Errorf("a clean sandbox home: want exit 0 and the no-credentials line, got exit %d\n%s", code, out)
+	}
+	// The token below is a shape, assembled so this file holds no literal one.
+	token := "gh" + "o_" + strings.Repeat("A", 36)
+	for name, then := range map[string]string{
+		"an SSH key copied in":          `mkdir -p "$KIT_HOME/.ssh" && : > "$KIT_HOME/.ssh/id_ed25519"`,
+		"gcloud credentials":            `mkdir -p "$KIT_HOME/.config/gcloud" && : > "$KIT_HOME/.config/gcloud/credentials.db"`,
+		"an Antigravity token":          `mkdir -p "$KIT_HOME/.gemini/antigravity-cli" && : > "$KIT_HOME/.gemini/antigravity-cli/antigravity-oauth-token"`,
+		"a token in a terminal log":     `mkdir -p "$KIT_HOME/.gemini/brain" && printf 'declare -x GH_TOKEN=%s\n' "` + token + `" > "$KIT_HOME/.gemini/brain/term1.env"`,
+		"a private key in a stray file": `printf -- '-----BEGIN OPENSSH PRIVATE KEY-----\nx\n' > "$KIT_HOME/notes.txt"`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			code, out := run(then)
+			if code != 1 || !strings.Contains(out, "credentials left in KIT_HOME") {
+				t.Errorf("want exit 1 and the FAIL line, got exit %d\n%s", code, out)
+			}
+			if strings.Contains(out, token) {
+				t.Errorf("the FAIL output prints the matching text; it must print paths only:\n%s", out)
+			}
+			if err := os.RemoveAll(kitHome); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.MkdirAll(kitHome, 0o755); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+	// A public key is not a credential.
+	if code, out := run(`mkdir -p "$KIT_HOME/.ssh" && : > "$KIT_HOME/.ssh/id_ed25519.pub"`); code != 0 {
+		t.Errorf("a public key alone: want exit 0, got %d\n%s", code, out)
+	}
+}
+
 // TestKitPreambleAssertsCommit runs the run kits' preamble, which until now
 // had only the static pipe check: KIT_ASSERT_COMMIT is a commit SHA in the
 // clone's history and nothing else. A ref name is in every clone's history,

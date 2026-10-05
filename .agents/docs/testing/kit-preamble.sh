@@ -18,11 +18,13 @@
 # Effects: asserts the fixture, refuses a clone that sits inside another git
 # checkout (BUG-106), lists ~/.config/sh-agent before the run and traps EXIT to
 # list it after (BUG-107, BUG-123), and puts a wrapper first on PATH that pins
-# `--home "$KIT_HOME"` on every sh-agent call the agent makes (BUG-107).
+# `--home "$KIT_HOME"` on every sh-agent call the agent makes (BUG-107). At exit
+# it also fails the run when any credential is still in KIT_HOME (BUG-160): a
+# kit deletes what it copied before it ends, and this check proves it did.
 # The exit check is that EXIT trap and nothing else: a kit never sets an EXIT
 # trap of its own after sourcing this file and never ends in `exec <cli>`,
-# and a run counts only when its output holds "kit: real config unchanged"
-# (or the FAIL line).
+# and a run counts only when its output holds "kit: real config unchanged" and
+# "kit: no credentials left in KIT_HOME" (or a FAIL line).
 set -euo pipefail
 : "${KIT_CLONE:?KIT_CLONE is required}"
 : "${KIT_HOME:?KIT_HOME is required}"
@@ -87,16 +89,42 @@ kit_fingerprint() {
 }
 echo "kit: real $kit_real_config before the run:"; kit_list_real_config
 kit_before=$(kit_fingerprint)
+# Credentials left in the sandbox home (BUG-160): by NAME, the kinds a kit
+# copies or a CLI logs in to (an SSH private key, Claude's credentials, gcloud's,
+# Antigravity's and gh's tokens); and by CONTENT, a token or private key a CLI
+# wrote somewhere else — Antigravity dumped GH_TOKEN into a terminal log. Paths
+# only, never the matching text. The kit's own wrapper directory is skipped.
+kit_credential_leftovers() {
+  [ -d "$KIT_HOME" ] || return 0
+  { find "$KIT_HOME" -path "$KIT_HOME/bin" -prune -o -type f \( \
+      -name 'id_rsa' -o -name 'id_ecdsa' -o -name 'id_ed25519' -o -name 'id_dsa' -o \
+      -name '.credentials.json' -o -name 'application_default_credentials.json' -o \
+      -name 'credentials.db' -o -name 'access_tokens.db' -o -name '*oauth-token*' -o \
+      -name 'hosts.yml' \) -print 2>/dev/null || true
+    grep -rlIE --exclude-dir=bin -e 'gh[opsur]_[A-Za-z0-9]{30,}' -e 'github_pat_[A-Za-z0-9_]{30,}' \
+      -e '-----BEGIN [A-Z ]*PRIVATE KEY-----' -e 'sk-ant-[A-Za-z0-9_-]{20,}' -e '"refresh_token"' \
+      "$KIT_HOME" 2>/dev/null || true; } | LC_ALL=C sort -u
+}
 kit_on_exit() {
-  local rc=$?
+  local rc=$? failed=0 left
   echo "kit: real $kit_real_config after the run:"; kit_list_real_config
   if [ "$kit_before" != "$(kit_fingerprint)" ]; then
     echo "kit: FAIL the real ~/.config/sh-agent changed during the run (BUG-107, BUG-123); the run does not count" >&2
-    exit 1
+    failed=1
+  else
+    # Said in so many words: a run whose output holds neither this line nor
+    # the FAIL line above did not reach the check.
+    echo "kit: real config unchanged"
   fi
-  # Said in so many words: a run whose output holds neither this line nor
-  # the FAIL line above did not reach the check.
-  echo "kit: real config unchanged"
+  left=$(kit_credential_leftovers)
+  if [ -n "$left" ]; then
+    echo "kit: FAIL credentials left in KIT_HOME (BUG-160); delete them and re-check before the run counts:" >&2
+    printf '%s\n' "$left" | sed 's/^/  /' >&2
+    failed=1
+  else
+    echo "kit: no credentials left in KIT_HOME"
+  fi
+  [ "$failed" = 0 ] || exit 1
   exit "$rc"
 }
 trap kit_on_exit EXIT

@@ -100,11 +100,13 @@ A machine that only USES the harness needs no checkout: a release binary carries
 # refuse. The signer line is the one compiled into every sh-agent and printed in
 # .agents/docs/deploy/remote.md § Releases: take it from a checkout or a binary you already
 # trust, never from the release page. On macOS replace `sha256sum -c -` with `shasum -a 256 -c -`.
+# v2.4.0, the bridge of the 2026-10-05 key rotation, is signed by the retired key (ADR-052,
+# remote.md § Releases): for V=v2.4.0 use that key's line; every later release uses the line below.
 V=vX.Y.Z \
 && D=$(mktemp -d) && cd "$D" \
 && gh release download "$V" --repo kesokaj/styrman-harness --clobber \
      --pattern 'sh-agent-linux-amd64' --pattern 'SHA256SUMS' --pattern 'SHA256SUMS.sig' --dir "$D" \
-&& printf '%s\n' 'ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR' > allowed_signers \
+&& printf '%s\n' 'ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJmUbDQuzqRfH5KH1pY8dLF7xeSpNcYduSsioRa7tNYZ' > allowed_signers \
 && ssh-keygen -Y verify -f allowed_signers -I ostling.simon@gmail.com -n sh-agent-release -s SHA256SUMS.sig < SHA256SUMS \
 && grep -qxF "# styrman-harness $V" SHA256SUMS \
 && grep -v '^#' SHA256SUMS | sha256sum -c - --ignore-missing \
@@ -138,7 +140,7 @@ GOPRIVATE='github.com/kesokaj/*' \
 V=vX.Y.Z \
 && ls ~/Downloads/sh-agent-darwin-arm64 ~/Downloads/SHA256SUMS ~/Downloads/SHA256SUMS.sig >/dev/null \
 && D=$(mktemp -d) && mv ~/Downloads/sh-agent-darwin-arm64 ~/Downloads/SHA256SUMS ~/Downloads/SHA256SUMS.sig "$D" && cd "$D" \
-&& printf '%s\n' 'ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR' > allowed_signers \
+&& printf '%s\n' 'ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJmUbDQuzqRfH5KH1pY8dLF7xeSpNcYduSsioRa7tNYZ' > allowed_signers \
 && ssh-keygen -Y verify -f allowed_signers -I ostling.simon@gmail.com -n sh-agent-release -s SHA256SUMS.sig < SHA256SUMS \
 && grep -qxF "# styrman-harness $V" SHA256SUMS \
 && grep -v '^#' SHA256SUMS | shasum -a 256 -c - --ignore-missing \

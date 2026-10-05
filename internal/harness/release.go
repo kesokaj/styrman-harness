@@ -43,7 +43,11 @@ const ReleaseNamespace = "sh-agent-release"
 // the signature; sshKeygen prefers a system path for exactly that reason, but
 // a machine whose system directories or PATH an attacker owns can defeat any
 // check this binary makes (security review 2026-09-17).
-var releaseSigner = "ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR"
+//
+// Rotated 2026-10-05 (ADR-052): the previous key's private half was exposed,
+// so v2.4.0 is the bridge — its checksums signed by the previous key, which
+// every v2.3.2 binary trusts, and this line in its binary.
+var releaseSigner = "ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJmUbDQuzqRfH5KH1pY8dLF7xeSpNcYduSsioRa7tNYZ"
 
 // sumsVersionMarker is the line `/preflight` writes at the top of
 // SHA256SUMS, naming the release those hashes belong to. It makes the VERSION

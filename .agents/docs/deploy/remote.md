@@ -29,7 +29,7 @@ V=vX.Y.Z && ASSET=sh-agent-linux-amd64 \
 && D=$(mktemp -d) && cd "$D" \
 && gh release download "$V" --repo kesokaj/styrman-harness --clobber \
      --pattern "$ASSET" --pattern 'SHA256SUMS' --pattern 'SHA256SUMS.sig' --dir "$D" \
-&& printf '%s\n' 'ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR' > allowed_signers \
+&& printf '%s\n' 'ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJmUbDQuzqRfH5KH1pY8dLF7xeSpNcYduSsioRa7tNYZ' > allowed_signers \
 && ssh-keygen -Y verify -f allowed_signers -I ostling.simon@gmail.com -n sh-agent-release -s SHA256SUMS.sig < SHA256SUMS \
 && grep -qxF "# styrman-harness $V" SHA256SUMS \
 && grep -v '^#' SHA256SUMS | sha256sum -c - --ignore-missing \
@@ -97,13 +97,13 @@ A release is an SSH-signed annotated `vX.Y.Z` tag on `main`, and the binaries pu
 
 The signer — the allowed_signers line `verify-tag` checks against:
 ```
-ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR
+ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJmUbDQuzqRfH5KH1pY8dLF7xeSpNcYduSsioRa7tNYZ
 ```
-Fingerprint `SHA256:5HpYQJjpG+yE1xXBTOIZPsTkbkgkVnV8z0eG8hBawyU`; the key is `~/.ssh/id_ed25519` on the Linux box. The Mac cannot cut a release until it holds this key or the line above lists the Mac's own.
+Fingerprint `SHA256:BwBzPnfXKuKrWP6p10IZgcDG8uwSRXJOFv0Izl+79yQ`. The private key lives in the operator's SSH agent, never at a default key path: a password manager's agent, a hardware key, or `ssh-add` of a passphrase-protected file such as `~/.ssh/styrman-release_ed25519`. Any machine whose agent holds it can cut a release; none other can. It is never `~/.ssh/id_ed25519`, which machine setup creates and overwrites (the previous key was lost from the Linux box that way on 2026-10-05) and which is a login key, not a release key. Never paste the private key anywhere, a chat included: that exposed the previous one (ADR-052). v2.4.0 is the bridge release of the 2026-10-05 key rotation (ADR-052): its `SHA256SUMS.sig` is signed by the retired key, `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR`, so verify v2.4.0 against that key and every later release against the line here.
 
 Procedure — what `/preflight` runs at its Step 6 here (the skill's Step 6.3 follows a project's Release section), each command its own call, its exit status read before the next; `<gated head>` is the head SHA of the gate report's `Range reviewed:` line, the one external input — the tag itself takes no target, so no placeholder can sit on both sides of a check:
 ```bash
-test "$(ssh-keygen -y -f ~/.ssh/id_ed25519 | ssh-keygen -lf - | cut -d' ' -f2)" = SHA256:5HpYQJjpG+yE1xXBTOIZPsTkbkgkVnV8z0eG8hBawyU   # exit 0: the signing key is here, derived from the PRIVATE key — else stop: this machine cannot sign
+ssh-add -L | cut -d' ' -f1,2 | grep -qxF 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJmUbDQuzqRfH5KH1pY8dLF7xeSpNcYduSsioRa7tNYZ'   # exit 0: the release key is in this machine's SSH agent — else stop: this machine cannot sign (unlock the password manager, plug in the key, or ssh-add it)
 # gate passed and the release commit made (preflight Step 6.3): HEAD is that commit; <gated head> is the head SHA of the gate report's `Range reviewed:` line
 test -z "$(git status --porcelain --untracked-files=all)"                                              # exit 0: clean tree — the bare form inherits status.showUntrackedFiles (BUG-049)
 # BEFORE the tag, never after the push: `go:embed` reads the WORKING TREE, so a stray file under the
@@ -113,13 +113,13 @@ test -z "$(git status --porcelain --ignored --untracked-files=all -- context ski
 go test -count=1 -run TestEmbedHoldsOnlyTrackedFiles ./...                                             # exit 0: the embedded set is exactly what git tracks
 test "$(git rev-parse HEAD^)" = "$(git rev-parse <gated head>)"                                        # exit 0: the release commit sits on the gated head
 git diff --quiet <gated head> HEAD -- ':(top)' ':(top,exclude).agents/docs'                            # exit 0: records only — ':(top)' because a bare '.' is relative to the cwd and misses a change in a sibling directory (measured)
-git -c gpg.format=ssh -c user.signingkey="$HOME/.ssh/id_ed25519.pub" tag -s vX.Y.Z -m "styrman-harness vX.Y.Z"   # no target argument: tags HEAD
+git -c gpg.format=ssh -c user.signingkey='key::ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJmUbDQuzqRfH5KH1pY8dLF7xeSpNcYduSsioRa7tNYZ' tag -s vX.Y.Z -m "styrman-harness vX.Y.Z"   # no target argument: tags HEAD
 # check the tag before any push — every line carries its verdict in its exit status:
 test "$(git rev-parse vX.Y.Z^{commit})" = "$(git rev-parse HEAD)"                                      # exit 0: the tag is on the release commit
 git merge-base --is-ancestor vX.Y.Z^{commit} main                                                       # exit 0: on main
 test "$(git cat-file -t vX.Y.Z)" = tag                                                                  # exit 0: annotated ("commit" means lightweight)
 test "$(git cat-file tag vX.Y.Z | grep -E '^-----BEGIN' | tail -1)" = '-----BEGIN SSH SIGNATURE-----'   # exit 0: SSH-signed (the bare pipeline exits 0 either way)
-printf '%s\n' 'ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR' > .agents/scratch/allowed_signers
+printf '%s\n' 'ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJmUbDQuzqRfH5KH1pY8dLF7xeSpNcYduSsioRa7tNYZ' > .agents/scratch/allowed_signers
 git -c gpg.ssh.allowedSignersFile=.agents/scratch/allowed_signers verify-tag vX.Y.Z                     # exit 0: Good "git" signature for ostling.simon@gmail.com
 rm -f .agents/scratch/allowed_signers                                                                   # written for the check above only
 git push origin main
@@ -153,8 +153,10 @@ printf '# styrman-harness %s\n' vX.Y.Z > SHA256SUMS
 sha256sum sh-agent-linux-amd64 sh-agent-darwin-arm64 sh-agent-linux-arm64 styrman-harness-vX.Y.Z.zip >> SHA256SUMS
 sha256sum -c SHA256SUMS                                                    # exit 0: the file describes these files
 # 3. signed with the same key as the tag, in the namespace the binary verifies
-ssh-keygen -Y sign -f ~/.ssh/id_ed25519 -n sh-agent-release SHA256SUMS
-printf '%s\n' 'ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR' > allowed_signers
+printf '%s\n' 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJmUbDQuzqRfH5KH1pY8dLF7xeSpNcYduSsioRa7tNYZ' > release-signer.pub                     # the PUBLIC half: ssh-keygen takes the private one from the agent
+ssh-keygen -Y sign -f release-signer.pub -n sh-agent-release SHA256SUMS
+rm -f release-signer.pub
+printf '%s\n' 'ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJmUbDQuzqRfH5KH1pY8dLF7xeSpNcYduSsioRa7tNYZ' > allowed_signers
 ssh-keygen -Y verify -f allowed_signers -I ostling.simon@gmail.com -n sh-agent-release -s SHA256SUMS.sig < SHA256SUMS   # exit 0: what the places will check, checked here first
 rm -f allowed_signers                                                      # it exists only for the check above: the line the PLACES verify against is compiled into the binary, and a signer file left on disk is the artifact release.go refuses to trust (security review 2026-09-17)
 # 3b. BEFORE anything is published: this host's own built binary verifies the release zip,

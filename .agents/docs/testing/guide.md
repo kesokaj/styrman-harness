@@ -195,8 +195,9 @@ Run them from a fresh clone of the demo service, never from inside a harness che
 canary word is written in this repo's README and AGENTS.md, so a session started here could
 answer it from the project context without the global context having loaded. On Antigravity
 the answer counts only with the store check beside it (`strings` the newest
-`~/.gemini/antigravity-cli/conversations/*.db`: one `<RULE[...AGENTS.md]>` block, the canary
-line inside it, no `<truncated` line). A headless Antigravity check that needs tools uses the
+`~/.gemini/antigravity-cli/conversations/*.db`: one `<RULE[...AGENTS.md]>` block with the canary
+line inside it, plus one `<RULE[...]>` block per `rules/*.md` file the harness ships (today
+`critical-thinking.md`), and no `<truncated` line). A headless Antigravity check that needs tools uses the
 real settings' `permissions.allow` entries; `--dangerously-skip-permissions` only inside a
 throwaway clone, and never as the standing way.
 

@@ -187,6 +187,7 @@ rm -f release-signer.pub
 printf '%s\n' 'ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJmUbDQuzqRfH5KH1pY8dLF7xeSpNcYduSsioRa7tNYZ' > allowed_signers
 ssh-keygen -Y verify -f allowed_signers -I ostling.simon@gmail.com -n sh-agent-release -s SHA256SUMS.current.sig < SHA256SUMS   # exit 0: the operator's current key vouches for these files
 RETIRED=<path of the retired private key file>                    # it exists only for this block
+test "$(ssh-keygen -lf "$RETIRED" | cut -d' ' -f2)" = SHA256:5HpYQJjpG+yE1xXBTOIZPsTkbkgkVnV8z0eG8hBawyU   # exit 0: RETIRED is set, exists, and is the retired key — nothing else is loaded, or deleted below
 ssh-add -t 900 "$RETIRED"
 ssh-add -L | cut -d' ' -f1,2 | grep -qxF 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR'   # exit 0: the retired key is in the agent
 printf '%s\n' 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR' > retired-signer.pub
@@ -195,7 +196,8 @@ printf '%s\n' 'ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0
 ssh-keygen -Y verify -f allowed_signers -I ostling.simon@gmail.com -n sh-agent-release -s SHA256SUMS.sig < SHA256SUMS   # exit 0: what a v2.3.2 place checks
 rm -f allowed_signers
 ssh-add -d retired-signer.pub && rm -f retired-signer.pub && rm -f "$RETIRED" && test ! -e "$RETIRED"   # exit 0: the retired key is out of the agent and off the disk
-! ssh-add -L | grep -qF 'AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F'   # exit 0: and stays out
+ssh-add -L > ../agent-keys.txt && ! grep -qF 'AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F' ../agent-keys.txt   # exit 0: the agent answers (the release key is still in it) and the retired key is not
+rm -f ../agent-keys.txt
 # 3b (bridge). a v2.3.2 binary built from its own tag accepts the bridge signature; the v2.4.0 binary
 # refuses it and accepts the current one — so no built binary still trusts the retired key
 mkdir -p ../v232src && git -C "$(git rev-parse --show-toplevel)" archive v2.3.2 | tar -x -C ../v232src   # -C: from a subdirectory, a bare git archive packs only that subdirectory

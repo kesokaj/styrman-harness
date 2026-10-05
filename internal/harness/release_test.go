@@ -482,7 +482,7 @@ func TestEveryDocumentedReleaseKeyIsKnown(t *testing.T) {
 		t.Fatalf("releaseSigner is not an ssh-ed25519 line: %s", releaseSigner)
 	}
 	// Any OpenSSH public key type, a hardware sk- key included.
-	keyRE := regexp.MustCompile(`(?:sk-)?(?:ssh|ecdsa)-[a-z0-9-]+(?:@openssh\.com)? (AAAA[0-9A-Za-z+/=]+)`)
+	keyRE := regexp.MustCompile(`(?:sk-)?(?:ssh|ecdsa)-[a-z0-9-]+(?:@openssh\.com)?[ \t]+(AAAA[0-9A-Za-z+/=]+)`)
 	const bridgeStart, bridgeEnd = "**The bridge, v2.4.0 only", "\n```\n\n"
 	for _, rel := range []string{
 		filepath.Join("..", "..", ".agents", "docs", "deploy", "remote.md"),

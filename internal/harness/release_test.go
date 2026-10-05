@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -463,6 +464,41 @@ func TestReleaseSignerMatchesTheDeployGuide(t *testing.T) {
 	for _, line := range documented {
 		if line != releaseSigner {
 			t.Errorf("remote.md carries\n  %s\nbut the binary verifies releases against\n  %s", line, releaseSigner)
+		}
+	}
+}
+
+// retiredReleaseKey signed every release up to v2.4.0's checksums; it was
+// exposed on 2026-10-05 and rotated out (ADR-052). The docs still print it for
+// the v2.4.0 bridge, and nowhere else may a key other than the signer's appear.
+const retiredReleaseKey = "AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR"
+
+// Every copy of a key in the release procedure and the install instructions —
+// printf lines, the agent check, the signing key, the bridge — is the signer's
+// key or the retired one; a half-done rotation leaves a third.
+func TestEveryDocumentedReleaseKeyIsKnown(t *testing.T) {
+	_, signerKey, ok := strings.Cut(releaseSigner, " ssh-ed25519 ")
+	if !ok {
+		t.Fatalf("releaseSigner is not an ssh-ed25519 line: %s", releaseSigner)
+	}
+	keyRE := regexp.MustCompile(`ssh-ed25519 (AAAA[0-9A-Za-z+/=]+)`)
+	for _, rel := range []string{
+		filepath.Join("..", "..", ".agents", "docs", "deploy", "remote.md"),
+		filepath.Join("..", "..", "README.md"),
+	} {
+		data, err := os.ReadFile(rel)
+		if err != nil {
+			t.Fatal(err)
+		}
+		found := 0
+		for _, m := range keyRE.FindAllStringSubmatch(string(data), -1) {
+			found++
+			if m[1] != signerKey && m[1] != retiredReleaseKey {
+				t.Errorf("%s names key %s, which is neither the signer's nor the retired one", rel, m[1])
+			}
+		}
+		if found == 0 {
+			t.Errorf("%s names no ssh-ed25519 key", rel)
 		}
 	}
 }

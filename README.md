@@ -97,11 +97,11 @@ A machine that only USES the harness needs no checkout: a release binary carries
 # named, or nothing" — never "the newest". Without those lines a genuinely signed OLDER release
 # passes every other check. Everything is verified in a scratch directory and only the binary moves to
 # ~/.local/bin. --clobber because a leftover file from an earlier attempt makes the download
-# refuse. The signer line is the one compiled into every sh-agent and printed in
+# refuse. The signer line is the one compiled into every sh-agent from v2.4.0 and printed in
 # .agents/docs/deploy/remote.md § Releases: take it from a checkout or a binary you already
 # trust, never from the release page. On macOS replace `sha256sum -c -` with `shasum -a 256 -c -`.
-# v2.4.0, the bridge of the 2026-10-05 key rotation, is signed by the retired key (ADR-052,
-# remote.md § Releases): for V=v2.4.0 use that key's line; every later release uses the line below.
+# v2.4.0, the bridge of the 2026-10-05 key rotation (ADR-052), carries a second signature by the
+# current key: for V=v2.4.0 add --pattern 'SHA256SUMS.current.sig' and verify -s SHA256SUMS.current.sig.
 V=vX.Y.Z \
 && D=$(mktemp -d) && cd "$D" \
 && gh release download "$V" --repo kesokaj/styrman-harness --clobber \
@@ -136,7 +136,8 @@ GOPRIVATE='github.com/kesokaj/*' \
 # ~/Downloads, then the same checks in a scratch directory so nothing else in ~/Downloads is
 # touched — ONE chain, shown for a Mac (on Linux: `sha256sum -c -`, and no xattr step). The
 # `ls` stops the chain before anything moves when a file is missing; the `xattr` line lifts the
-# browser quarantine, which would otherwise stop the binary from running at all:
+# browser quarantine, which would otherwise stop the binary from running at all. For V=v2.4.0, the
+# bridge release, download SHA256SUMS.current.sig as well and verify -s that file (ADR-052):
 V=vX.Y.Z \
 && ls ~/Downloads/sh-agent-darwin-arm64 ~/Downloads/SHA256SUMS ~/Downloads/SHA256SUMS.sig >/dev/null \
 && D=$(mktemp -d) && mv ~/Downloads/sh-agent-darwin-arm64 ~/Downloads/SHA256SUMS ~/Downloads/SHA256SUMS.sig "$D" && cd "$D" \

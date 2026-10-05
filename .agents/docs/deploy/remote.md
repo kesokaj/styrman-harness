@@ -25,6 +25,7 @@ On a machine that installs from a RELEASE BINARY instead, the download is verifi
 # the download (you cut it, or read it on a machine you already trust); ASSET is sh-agent-linux-amd64,
 # sh-agent-darwin-arm64 or sh-agent-linux-arm64; the signer line is § Releases' allowed_signers line,
 # taken from this file in a checkout, never from the release page. macOS: shasum -a 256 -c -
+# V=v2.4.0 is the bridge (ADR-052): add --pattern 'SHA256SUMS.current.sig' and verify -s SHA256SUMS.current.sig.
 V=vX.Y.Z && ASSET=sh-agent-linux-amd64 \
 && D=$(mktemp -d) && cd "$D" \
 && gh release download "$V" --repo kesokaj/styrman-harness --clobber \
@@ -99,7 +100,7 @@ The signer — the allowed_signers line `verify-tag` checks against:
 ```
 ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJmUbDQuzqRfH5KH1pY8dLF7xeSpNcYduSsioRa7tNYZ
 ```
-Fingerprint `SHA256:BwBzPnfXKuKrWP6p10IZgcDG8uwSRXJOFv0Izl+79yQ`. The private key lives in the operator's SSH agent, never at a default key path: a password manager's agent, a hardware key, or `ssh-add` of a passphrase-protected file such as `~/.ssh/styrman-release_ed25519`. Any machine whose agent holds it can cut a release; none other can. It is never `~/.ssh/id_ed25519`, which machine setup creates and overwrites (the previous key was lost from the Linux box that way on 2026-10-05) and which is a login key, not a release key. Never paste the private key anywhere, a chat included: that exposed the previous one (ADR-052). v2.4.0 is the bridge release of the 2026-10-05 key rotation (ADR-052): its `SHA256SUMS.sig` is signed by the retired key, `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR`, so verify v2.4.0 against that key and every later release against the line here.
+Fingerprint `SHA256:BwBzPnfXKuKrWP6p10IZgcDG8uwSRXJOFv0Izl+79yQ`. The private key lives in the operator's SSH agent, never at a default key path: a password manager's agent, a hardware key, or `ssh-add` of a passphrase-protected file such as `~/.ssh/styrman-release_ed25519`. Any machine whose agent holds it can cut a release; none other can. While it is loaded, any process that reaches the agent can sign with it, so load it only for the release window, with a lifetime (`ssh-add -t 900 <file>`, or the password manager's per-use approval), and never forward that agent to another host. It is never `~/.ssh/id_ed25519`, which machine setup creates and overwrites (the previous key was lost from the Linux box that way on 2026-10-05) and which is a login key, not a release key. Never paste the private key anywhere, a chat included: that exposed the previous one (ADR-052). v2.4.0 is the bridge release of the 2026-10-05 key rotation (ADR-052): its `SHA256SUMS.sig` is signed by the retired key, `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR`, so verify v2.4.0 against that key and every later release against the line here.
 
 Procedure — what `/preflight` runs at its Step 6 here (the skill's Step 6.3 follows a project's Release section), each command its own call, its exit status read before the next; `<gated head>` is the head SHA of the gate report's `Range reviewed:` line, the one external input — the tag itself takes no target, so no placeholder can sit on both sides of a check:
 ```bash
@@ -176,6 +177,34 @@ done
 gh release view vX.Y.Z --repo kesokaj/styrman-harness --json assets --jq '.assets[].name'   # all six
 cd -
 ```
+
+**The bridge, v2.4.0 only (ADR-052, ADR-052a).** Every binary up to v2.3.2 trusts only the retired key, so v2.4.0 carries two signatures over the same `SHA256SUMS`: `SHA256SUMS.sig` by the retired key, for those binaries, and `SHA256SUMS.current.sig` by the current key, for every human check and for proof that the release is the operator's (the retired key alone proves nothing now). For v2.4.0, steps 3 and 3b above are replaced by the block below, run in the same directory, and step 4's upload list gains `SHA256SUMS.current.sig`; everything else runs as written, the tag included (signed by the current key). The retired key signs nothing after v2.4.0, and this block is then history.
+```bash
+# 3 (bridge). the current key first, kept under its own name; then the retired key, for this one signature only
+printf '%s\n' 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJmUbDQuzqRfH5KH1pY8dLF7xeSpNcYduSsioRa7tNYZ' > release-signer.pub
+ssh-keygen -Y sign -f release-signer.pub -n sh-agent-release SHA256SUMS && mv SHA256SUMS.sig SHA256SUMS.current.sig
+rm -f release-signer.pub
+printf '%s\n' 'ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJmUbDQuzqRfH5KH1pY8dLF7xeSpNcYduSsioRa7tNYZ' > allowed_signers
+ssh-keygen -Y verify -f allowed_signers -I ostling.simon@gmail.com -n sh-agent-release -s SHA256SUMS.current.sig < SHA256SUMS   # exit 0: the operator's current key vouches for these files
+ssh-add -L | cut -d' ' -f1,2 | grep -qxF 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR'   # exit 0: the retired key is in the agent
+printf '%s\n' 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR' > retired-signer.pub
+ssh-keygen -Y sign -f retired-signer.pub -n sh-agent-release SHA256SUMS
+printf '%s\n' 'ostling.simon@gmail.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBkx0BICH1xG18f0a0F/02Vw0OvBTfSOVNXkPkO62NCR' > allowed_signers
+ssh-keygen -Y verify -f allowed_signers -I ostling.simon@gmail.com -n sh-agent-release -s SHA256SUMS.sig < SHA256SUMS   # exit 0: what a v2.3.2 place checks
+rm -f allowed_signers
+ssh-add -d retired-signer.pub && rm -f retired-signer.pub   # the retired key leaves the agent; delete its private file too
+# 3b (bridge). a v2.3.2 binary built from its own tag accepts the bridge signature; the v2.4.0 binary
+# refuses it and accepts the current one — so no built binary still trusts the retired key
+mkdir -p ../v232src && git archive v2.3.2 | tar -x -C ../v232src
+(cd ../v232src && CGO_ENABLED=0 GOTOOLCHAIN=local go build -trimpath -ldflags "-X main.version=v2.3.2" -o ../sh-agent-v2.3.2 ./cmd/sh-agent)
+mkdir -p ../zipcheck && ../sh-agent-v2.3.2 update --from-zip styrman-harness-v2.4.0.zip --home ../zipcheck --dry-run > ../zipcheck.out   # into a file, never a pipe (BUG-086)
+grep -q "VERIFIED against the signed SHA256SUMS of release v2.4.0" ../zipcheck.out   # exit 0: a v2.3.2 place accepts the bridge
+! "./sh-agent-$(go env GOOS)-$(go env GOARCH)" update --from-zip styrman-harness-v2.4.0.zip --home ../zipcheck --dry-run > ../zipcheck-new.out 2>&1   # exit 0: the v2.4.0 binary refuses the retired key
+mkdir -p ../zipcur && cp styrman-harness-v2.4.0.zip SHA256SUMS ../zipcur/ && cp SHA256SUMS.current.sig ../zipcur/SHA256SUMS.sig
+"./sh-agent-$(go env GOOS)-$(go env GOARCH)" update --from-zip ../zipcur/styrman-harness-v2.4.0.zip --home ../zipcheck --dry-run > ../zipcheck-cur.out
+grep -q "VERIFIED against the signed SHA256SUMS of release v2.4.0" ../zipcheck-cur.out   # exit 0: the v2.4.0 binary trusts the current key
+```
+
 `allowed_signers` is written only to run the check above and removed immediately; the line the PLACES verify against is compiled into the binary (`internal/harness/release.go`), so a file on any machine cannot decide what a genuine release is — which is exactly why this procedure does not leave one lying about. The release notes are built as § Release notes below says. Before this repository is ever made public, read the trail for what it names: `.agents/docs/` carries hostnames (`spgo-mac.roam.internal`, `devbox`), machine paths (`/opt/devbox/deploy/harness`), and a report record's contents, all of which are fine inside a private repository and are internal identifiers outside one. There is no secret in them — that is checked every release — but publication is a separate decision from releasing, and this is the paragraph that says so (security review 2026-09-18).
 
 Publishing a release changes NOTHING about the repository's visibility: `styrman-harness` stays private, the release page is readable only by accounts that can already read the repository, and every asset download needs that credential — which is what README § Install without cloning depends on. `gh repo view kesokaj/styrman-harness --json visibility` after the upload is the check; only a deliberate change in the repository's settings makes anything public.
@@ -202,7 +231,7 @@ Download: see README § Install without cloning. Existing binary-only places: `s
 ```
 
 An entry's `## Type` decides its group: `feature` → New features; `task` or `refactor` that changes behaviour → Improvements and optimisation; `bugfix` → Fixes, with its BUG id; rules, skills, docs and context → Other updates. An empty group is left out. The same text goes into the release's own `changes/` entry.
-A tag that fails any check: `git tag -d vX.Y.Z`, fix, re-gate. A pushed tag is never moved or deleted; a bad release gets the next PATCH. `git` is never run under `sudo`. Rehearsed 2026-09-16 in `.agents/scratch/tagcheck/`: the operator's key passes; a lightweight tag reads `commit`, an unsigned annotated tag has no armor line and fails `verify-tag` with "no signature found", a foreign key fails with "No principal matched". The stricter forms above (`test` assertions, tag-on-HEAD, parent-is-gated-head, records-only diff, ancestor, the private-key-derived fingerprint) were rehearsed the same day in the same scratch repo: passing on a records-only release commit tagged at HEAD, failing on a tag made on the earlier commit, on a release commit carrying a source change, on a dirty tree, and on the unsigned tag.
+A tag that fails any check: `git tag -d vX.Y.Z`, fix, re-gate. A pushed tag is never moved or deleted; a bad release gets the next PATCH. `git` is never run under `sudo`. Rehearsed 2026-09-16 in `.agents/scratch/tagcheck/`, with the key then read from a file (the agent form above replaced it, ADR-052): the operator's key passes; a lightweight tag reads `commit`, an unsigned annotated tag has no armor line and fails `verify-tag` with "no signature found", a foreign key fails with "No principal matched". The stricter forms above (`test` assertions, tag-on-HEAD, parent-is-gated-head, records-only diff, ancestor, the private-key-derived fingerprint) were rehearsed the same day in the same scratch repo: passing on a records-only release commit tagged at HEAD, failing on a tag made on the earlier commit, on a release commit carrying a source change, on a dirty tree, and on the unsigned tag.
 
 Version: MINOR for anything an installed place gains (a new or changed skill, agent, command, rule, context rule or installer behaviour), PATCH for a fix to released behaviour only, MAJOR for what an existing deployment must react to (a moved install path, a dropped vendor, a `state.json` or manifest shape change, a new required flag) — the context's Git rule. First tag `v1.0.0`, base ref for its gate 4aa19be. The gate's verification row: the `AGENTS.md` Setup commands, `go run ./cmd/sh-agent install --home .agents/scratch/home` with `status` reporting no drift, and `sh-agent list` — 34 skills and 8 agents at v2.0.0; a release that changes them says so in its changelog entry. There is no deploy step after the push: each place moves forward with `sh-agent update` when the operator runs it (`specs/sh-agent/delivery.md` § The model). The handoff after a release names the live tag.
 
@@ -217,7 +246,7 @@ Standing by-hand procedures, never pending items (those live in the newest hando
 - On the Mac after a push from the Linux box: `sh-agent update`, `sh-agent status`, then the three smoke checks on each CLI (`.agents/docs/testing/2026-09-03-verify-real-home.md`; the Mac procedure is `2026-09-04-verify-mac-real-home.md`).
 - After any change to `context/`, `skills/`, or `agents/` is pushed: `sh-agent update` at each of the four places, when the operator decides to. Nothing else needs refreshing.
 - At a place that has been in use: read the originals under `~/.config/sh-agent/` (the dry run shows what is caught, never what is missed), `sh-agent report --dry-run`, then `sh-agent report` (`local.md` § Report back). Every place reports the same way, the work Mac included (plan D12).
-- On a new machine, `ssh-keygen -y -f ~/.ssh/id_ed25519 | ssh-keygen -lf -` must print the fingerprint in § Releases before that machine cuts a release (derived from the private key: a copied `.pub` alone proves nothing).
+- On a new machine, `ssh-add -l` must list the fingerprint in § Releases before that machine cuts a release: the agent lists only keys whose private half it holds, so a copied `.pub` alone does not pass (ADR-052).
 - Go upgrades on the Mac: `brew upgrade go`. On the Linux box the distribution had nothing newer, so it runs a user-level SDK on PATH ahead of `/usr/bin/go` — the procedure is in `local.md` § Operator steps, and it needs no root.
 
 ## Roll back

@@ -2,7 +2,7 @@
 owner: bugs
 date: 2026-10-05
 id: BUG-160
-status: open
+status: fixed
 area: testing (behavioural run kits, sandbox homes)
 ---
 # BUG-160: live credentials left in scratch homes while the records said they were deleted
@@ -17,13 +17,15 @@ Not reproduced as a command; found by listing the homes. Before the fix, `find .
 The deletion is a per-run step in each throwaway kit script, "deleted by name" as `guide.md:158-162` says, and the list of names was the two kinds the kit author remembered (Claude `.credentials.json`, the Antigravity token). Credential kinds the sandbox gained otherwise (SSH key, gcloud files) were never on the list. Nothing proved the result: `kit-preamble.sh` has no credential handling at all (it fingerprints the real `~/.config/sh-agent` only), so the claim "deleted" was written from the kit's intent, not from a check. A cleanup that deletes by an enumerated list cannot be right about kinds it does not know it copied.
 
 ## Fix
-Main agent deleted those files by name on 2026-10-05; a `find` for the credential names under `.agents/scratch` then returned 0. NOT fixed: the kits. The places to change are `.agents/docs/testing/guide.md` § 4 (lines 158-162 and 167-168, the rule; it names only "any credential file") and `.agents/docs/testing/kit-preamble.sh` (no cleanup or leftover check today; kits must not set their own EXIT trap, so a check belongs in its `kit_on_exit`), plus each run kit built in scratch.
+Main agent deleted those files by name on 2026-10-05; a `find` for the credential names under `.agents/scratch` then returned 0. Mechanism landed in commit ee28fe3: `.agents/docs/testing/kit-preamble.sh` gained `kit_credential_leftovers`, run from `kit_on_exit`. It fails the run (exit 1, "kit: FAIL credentials left in KIT_HOME (BUG-160)", paths only) when KIT_HOME holds a credential by file name (id_rsa, id_ecdsa, id_ed25519, id_dsa, .credentials.json, application_default_credentials.json, credentials.db, access_tokens.db, `*oauth-token*`, hosts.yml) or a token or private key inside any file (`gh[opsur]_` tokens, `github_pat_`, a PEM private key header, `sk-ant-`, "refresh_token"), skipping the kit's own bin/. A run counts only with "kit: no credentials left in KIT_HOME". `testing/guide.md` § 4 names the check. Environment dumps a CLI writes (the addendum's `term1.env`) are covered by the content scan.
+Also done outside the code: GitHub Actions was turned off, and the operator was told the gh token can only be revoked by them, in GitHub's Authorized OAuth Apps.
 
 ## Prevention
 Before a kit copies any credential into a sandbox home, it records every path it copies and deletes exactly those, then proves none is left with a `find` over the home for the credential names (`id_ed25519*`, `.credentials.json`, `application_default_credentials.json`, `credentials.db`, `*oauth-token*`); that `find` is run once against a home that still holds a planted credential (must-fail seen) before its empty result is cited. A record or handoff never says "credentials deleted" without that find's output.
+Mechanism now enforces this: the preamble's exit check (`kit_credential_leftovers`) plus `TestKitPreambleRefusesLeftoverCredentials` in `internal/harness/catalog_test.go` (five leftover kinds fail; a clean home and a lone `.pub` pass; with the check disabled all five cases failed, the mutation run). A kit sourcing the preamble needs no list of its own; cite the line "kit: no credentials left in KIT_HOME" as the proof.
 
 ## Related
-Existing rules not followed: `guide.md:158-162` (deleted by name, security review 2026-09-21); global "silence from your own instrumentation is not evidence" (context Hard rules). Recommended home when the kit fix lands: `kit-preamble.sh` exit check plus a behaviour test beside `TestKitPreambleAssertsCommit`; actionable (a specific find catches it) and generalizable (any sandbox copy of a secret). Same finding: the retired signing key left in a transcript (finding 2, not this record). Status moves to fixed when the kits change.
+Existing rules not followed: `guide.md:158-162` (deleted by name, security review 2026-09-21); global "silence from your own instrumentation is not evidence" (context Hard rules). Recommended home when the kit fix lands: `kit-preamble.sh` exit check plus a behaviour test beside `TestKitPreambleAssertsCommit`; actionable (a specific find catches it) and generalizable (any sandbox copy of a secret). Same finding: the retired signing key left in a transcript (finding 2, not this record). Status moved to fixed 2026-10-05 with commit ee28fe3; INDEX row graduated to the preamble check and its test.
 
 ## Addendum (main, 2026-10-05)
 

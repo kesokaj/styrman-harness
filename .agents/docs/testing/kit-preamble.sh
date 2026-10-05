@@ -29,6 +29,8 @@ set -euo pipefail
 : "${KIT_CLONE:?KIT_CLONE is required}"
 : "${KIT_HOME:?KIT_HOME is required}"
 case "$KIT_HOME" in "$HOME"|"$HOME/") echo "kit: KIT_HOME is the real home; refusing" >&2; exit 2;; esac
+# Absolute: the exit check runs after the kit has changed directory.
+case "$KIT_HOME" in /*) ;; *) echo "kit: KIT_HOME must be an absolute path, got '$KIT_HOME'" >&2; exit 2;; esac
 [ -d "$KIT_CLONE/.git" ] || { echo "kit: $KIT_CLONE is not a git clone" >&2; exit 2; }
 # The clone's parent is no checkout: an ancestor AGENTS.md would load (BUG-106).
 if git -C "$(dirname "$KIT_CLONE")" rev-parse --git-dir >/dev/null 2>&1; then
@@ -95,19 +97,26 @@ kit_before=$(kit_fingerprint)
 # CONTENT: a token or private key a CLI wrote anywhere — Antigravity dumped
 # GH_TOKEN into a terminal log — read in binary files too (a conversation
 # database), except executables: the installed sh-agent carries the report
-# redaction patterns as text. Symlinks are followed, KIT_HOME's own included;
-# only the kit's own top-level bin/ is skipped. Paths only, never the text.
+# redaction patterns as text, as does the kit's own bin/sh-agent.real. A link
+# to a file is read through; a link to a directory is reported, never walked
+# (it could lead anywhere on the machine); KIT_HOME itself may be a link.
+# Paths only, never the text.
 kit_cred_names='^(id_rsa|id_ecdsa|id_ed25519|id_dsa|\.credentials\.json|application_default_credentials\.json|credentials\.db|access_tokens\.db|.*oauth-token.*|hosts\.yml|\.netrc|\.git-credentials|.*\.p12|.*\.pfx)$'
 kit_cred_paths='/\.aws/credentials$|/\.docker/config\.json$'
 kit_cred_text='gh[opsur]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|sk-ant-[A-Za-z0-9_-]{20,}|sk-proj-[A-Za-z0-9_-]{20,}|"refresh_token"|ya29\.[A-Za-z0-9_-]{20,}|AIza[A-Za-z0-9_-]{35}|AKIA[A-Z0-9]{16}|glpat-[A-Za-z0-9_-]{20,}'
 kit_credential_leftovers() {
-  [ -e "$KIT_HOME" ] || return 0
+  if [ ! -e "$KIT_HOME" ]; then
+    [ ! -L "$KIT_HOME" ] || printf '%s (a dangling link)\n' "$KIT_HOME"
+    return 0
+  fi
   local f base magic unreadable
-  # What find itself cannot enter is a failure, named once.
-  unreadable=$(find -H "$KIT_HOME" -path "$KIT_HOME/bin" -prune -o -print 2>&1 >/dev/null | head -5)
+  # What find itself cannot enter is a failure. Captured whole, never piped
+  # into a reader that stops early (BUG-155).
+  unreadable=$(find -H "$KIT_HOME" -print 2>&1 >/dev/null) || true
   [ -z "$unreadable" ] || printf '%s (find could not read)\n' "$unreadable"
   while IFS= read -r -d '' f; do
     base=${f##*/}
+    if [ -L "$f" ] && [ -d "$f" ]; then printf '%s (a link to a directory, not walked)\n' "$f"; continue; fi
     if [ ! -r "$f" ]; then printf '%s (unreadable)\n' "$f"; continue; fi
     if [[ "$base" =~ $kit_cred_names ]] || [[ "$f" =~ $kit_cred_paths ]]; then printf '%s\n' "$f"; continue; fi
     [ -f "$f" ] || continue   # a link to a directory, device or fifo is not read
@@ -118,7 +127,7 @@ kit_credential_leftovers() {
       1) ;;
       *) printf '%s (could not be scanned)\n' "$f" ;;
     esac
-  done < <(find -H "$KIT_HOME" -path "$KIT_HOME/bin" -prune -o \( -type f -o -type l \) -print0 2>/dev/null)
+  done < <(find -H "$KIT_HOME" \( -type f -o -type l \) -print0 2>/dev/null)
 }
 kit_on_exit() {
   local rc=$? failed=0 left

@@ -1595,13 +1595,15 @@ func TestKitPreambleRefusesLeftoverCredentials(t *testing.T) {
 		"a token in a terminal log":     `mkdir -p "$KIT_HOME/.gemini/brain" && printf 'declare -x GH_TOKEN=%s\n' "` + token + `" > "$KIT_HOME/.gemini/brain/term1.env"`,
 		"a private key in a stray file": `printf -- '-----BEGIN OPENSSH PRIVATE KEY-----\nx\n' > "$KIT_HOME/notes.txt"`,
 		// The gaps the 2026-10-05 reviews reproduced: each passed the first check.
-		"a symlinked SSH key":      `mkdir -p "$KIT_HOME/.ssh" && : > "$KIT_HOME/real-key" && ln -s ../real-key "$KIT_HOME/.ssh/id_rsa" && mv "$KIT_HOME/real-key" "$KIT_HOME/.ssh/k"`,
-		"a key under a nested bin": `mkdir -p "$KIT_HOME/.local/bin" && printf -- '-----BEGIN RSA PRIVATE KEY-----\n' > "$KIT_HOME/.local/bin/notes"`,
-		"a token in a binary file": `printf 'SQLite\000\001token=%s\000' "` + token + `" > "$KIT_HOME/conv.db"`,
-		"a Google access token":    `printf 'Authorization: Bearer ya29.%s\n' "` + strings.Repeat("b", 40) + `" > "$KIT_HOME/trace.log"`,
-		"a .netrc":                 `: > "$KIT_HOME/.netrc"`,
-		"an unreadable file":       `: > "$KIT_HOME/locked" && chmod 000 "$KIT_HOME/locked"`,
-		"an unreadable directory":  `mkdir -p "$KIT_HOME/sealed" && : > "$KIT_HOME/sealed/id_ed25519" && chmod 000 "$KIT_HOME/sealed"`,
+		"a symlinked SSH key":        `mkdir -p "$KIT_HOME/.ssh" && : > "$KIT_HOME/real-key" && ln -s ../real-key "$KIT_HOME/.ssh/id_rsa" && mv "$KIT_HOME/real-key" "$KIT_HOME/.ssh/k"`,
+		"a key under a nested bin":   `mkdir -p "$KIT_HOME/.local/bin" && printf -- '-----BEGIN RSA PRIVATE KEY-----\n' > "$KIT_HOME/.local/bin/notes"`,
+		"a token in a binary file":   `printf 'SQLite\000\001token=%s\000' "` + token + `" > "$KIT_HOME/conv.db"`,
+		"a Google access token":      `printf 'Authorization: Bearer ya29.%s\n' "` + strings.Repeat("b", 40) + `" > "$KIT_HOME/trace.log"`,
+		"a .netrc":                   `: > "$KIT_HOME/.netrc"`,
+		"an unreadable file":         `: > "$KIT_HOME/locked" && chmod 000 "$KIT_HOME/locked"`,
+		"an unreadable directory":    `mkdir -p "$KIT_HOME/sealed" && : > "$KIT_HOME/sealed/id_ed25519" && chmod 000 "$KIT_HOME/sealed"`,
+		"a symlinked .ssh directory": `mkdir -p "$KIT_HOME/.elsewhere" && : > "$KIT_HOME/.elsewhere/id_ed25519" && ln -s .elsewhere "$KIT_HOME/.ssh" && mv "$KIT_HOME/.elsewhere" "$KIT_HOME/../kit-outside" && ln -sfn ../kit-outside "$KIT_HOME/.ssh"`,
+		"a key in the kit's own bin": `printf -- '-----BEGIN EC PRIVATE KEY-----\n' > "$KIT_HOME/bin/stray"`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			if strings.HasPrefix(name, "an unreadable") && os.Geteuid() == 0 {

@@ -101,7 +101,7 @@ A machine that only USES the harness needs no checkout: a release binary carries
 # `sha256sum -c -` with `shasum -a 256 -c -`.
 V=vX.Y.Z \
 && D=$(mktemp -d) && cd "$D" \
-&& gh release download "$V" --repo kesokaj/styrman-harness --clobber \
+&& gh release download "$V" --repo github.com/kesokaj/styrman-harness --clobber \
      --pattern 'sh-agent-linux-amd64' --pattern 'SHA256SUMS' --dir "$D" \
 && grep -qxF "# styrman-harness $V" SHA256SUMS \
 && grep -v '^#' SHA256SUMS | sha256sum -c - --ignore-missing \

@@ -89,21 +89,36 @@ kit_fingerprint() {
 }
 echo "kit: real $kit_real_config before the run:"; kit_list_real_config
 kit_before=$(kit_fingerprint)
-# Credentials left in the sandbox home (BUG-160): by NAME, the kinds a kit
-# copies or a CLI logs in to (an SSH private key, Claude's credentials, gcloud's,
-# Antigravity's and gh's tokens); and by CONTENT, a token or private key a CLI
-# wrote somewhere else — Antigravity dumped GH_TOKEN into a terminal log. Paths
-# only, never the matching text. The kit's own wrapper directory is skipped.
+# Credentials left in the sandbox home (BUG-160). It FAILS CLOSED: a path it
+# cannot read is reported, never passed over (a guard keeps the data when its
+# own check errors). By NAME: the kinds a kit copies or a CLI logs in to. By
+# CONTENT: a token or private key a CLI wrote anywhere — Antigravity dumped
+# GH_TOKEN into a terminal log — read in binary files too (a conversation
+# database), except executables: the installed sh-agent carries the report
+# redaction patterns as text. Symlinks are followed, KIT_HOME's own included;
+# only the kit's own top-level bin/ is skipped. Paths only, never the text.
+kit_cred_names='^(id_rsa|id_ecdsa|id_ed25519|id_dsa|\.credentials\.json|application_default_credentials\.json|credentials\.db|access_tokens\.db|.*oauth-token.*|hosts\.yml|\.netrc|\.git-credentials|.*\.p12|.*\.pfx)$'
+kit_cred_paths='/\.aws/credentials$|/\.docker/config\.json$'
+kit_cred_text='gh[opsur]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|sk-ant-[A-Za-z0-9_-]{20,}|sk-proj-[A-Za-z0-9_-]{20,}|"refresh_token"|ya29\.[A-Za-z0-9_-]{20,}|AIza[A-Za-z0-9_-]{35}|AKIA[A-Z0-9]{16}|glpat-[A-Za-z0-9_-]{20,}'
 kit_credential_leftovers() {
-  [ -d "$KIT_HOME" ] || return 0
-  { find "$KIT_HOME" -path "$KIT_HOME/bin" -prune -o -type f \( \
-      -name 'id_rsa' -o -name 'id_ecdsa' -o -name 'id_ed25519' -o -name 'id_dsa' -o \
-      -name '.credentials.json' -o -name 'application_default_credentials.json' -o \
-      -name 'credentials.db' -o -name 'access_tokens.db' -o -name '*oauth-token*' -o \
-      -name 'hosts.yml' \) -print 2>/dev/null || true
-    grep -rlIE --exclude-dir=bin -e 'gh[opsur]_[A-Za-z0-9]{30,}' -e 'github_pat_[A-Za-z0-9_]{30,}' \
-      -e '-----BEGIN [A-Z ]*PRIVATE KEY-----' -e 'sk-ant-[A-Za-z0-9_-]{20,}' -e '"refresh_token"' \
-      "$KIT_HOME" 2>/dev/null || true; } | LC_ALL=C sort -u
+  [ -e "$KIT_HOME" ] || return 0
+  local f base magic unreadable
+  # What find itself cannot enter is a failure, named once.
+  unreadable=$(find -H "$KIT_HOME" -path "$KIT_HOME/bin" -prune -o -print 2>&1 >/dev/null | head -5)
+  [ -z "$unreadable" ] || printf '%s (find could not read)\n' "$unreadable"
+  while IFS= read -r -d '' f; do
+    base=${f##*/}
+    if [ ! -r "$f" ]; then printf '%s (unreadable)\n' "$f"; continue; fi
+    if [[ "$base" =~ $kit_cred_names ]] || [[ "$f" =~ $kit_cred_paths ]]; then printf '%s\n' "$f"; continue; fi
+    [ -f "$f" ] || continue   # a link to a directory, device or fifo is not read
+    magic=$(head -c 4 "$f" 2>/dev/null | od -An -tx1 | tr -d ' \n')
+    case "$magic" in 7f454c46|cffaedfe|feedfacf|cafebabe) continue ;; esac   # ELF, Mach-O
+    LC_ALL=C grep -aqE -- "$kit_cred_text" "$f" 2>/dev/null; case $? in
+      0) printf '%s\n' "$f" ;;
+      1) ;;
+      *) printf '%s (could not be scanned)\n' "$f" ;;
+    esac
+  done < <(find -H "$KIT_HOME" -path "$KIT_HOME/bin" -prune -o \( -type f -o -type l \) -print0 2>/dev/null)
 }
 kit_on_exit() {
   local rc=$? failed=0 left

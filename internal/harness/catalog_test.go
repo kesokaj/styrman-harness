@@ -1594,8 +1594,19 @@ func TestKitPreambleRefusesLeftoverCredentials(t *testing.T) {
 		"an Antigravity token":          `mkdir -p "$KIT_HOME/.gemini/antigravity-cli" && : > "$KIT_HOME/.gemini/antigravity-cli/antigravity-oauth-token"`,
 		"a token in a terminal log":     `mkdir -p "$KIT_HOME/.gemini/brain" && printf 'declare -x GH_TOKEN=%s\n' "` + token + `" > "$KIT_HOME/.gemini/brain/term1.env"`,
 		"a private key in a stray file": `printf -- '-----BEGIN OPENSSH PRIVATE KEY-----\nx\n' > "$KIT_HOME/notes.txt"`,
+		// The gaps the 2026-10-05 reviews reproduced: each passed the first check.
+		"a symlinked SSH key":      `mkdir -p "$KIT_HOME/.ssh" && : > "$KIT_HOME/real-key" && ln -s ../real-key "$KIT_HOME/.ssh/id_rsa" && mv "$KIT_HOME/real-key" "$KIT_HOME/.ssh/k"`,
+		"a key under a nested bin": `mkdir -p "$KIT_HOME/.local/bin" && printf -- '-----BEGIN RSA PRIVATE KEY-----\n' > "$KIT_HOME/.local/bin/notes"`,
+		"a token in a binary file": `printf 'SQLite\000\001token=%s\000' "` + token + `" > "$KIT_HOME/conv.db"`,
+		"a Google access token":    `printf 'Authorization: Bearer ya29.%s\n' "` + strings.Repeat("b", 40) + `" > "$KIT_HOME/trace.log"`,
+		"a .netrc":                 `: > "$KIT_HOME/.netrc"`,
+		"an unreadable file":       `: > "$KIT_HOME/locked" && chmod 000 "$KIT_HOME/locked"`,
+		"an unreadable directory":  `mkdir -p "$KIT_HOME/sealed" && : > "$KIT_HOME/sealed/id_ed25519" && chmod 000 "$KIT_HOME/sealed"`,
 	} {
 		t.Run(name, func(t *testing.T) {
+			if strings.HasPrefix(name, "an unreadable") && os.Geteuid() == 0 {
+				t.Skip("root reads through permissions")
+			}
 			code, out := run(then)
 			if code != 1 || !strings.Contains(out, "credentials left in KIT_HOME") {
 				t.Errorf("want exit 1 and the FAIL line, got exit %d\n%s", code, out)
@@ -1603,6 +1614,7 @@ func TestKitPreambleRefusesLeftoverCredentials(t *testing.T) {
 			if strings.Contains(out, token) {
 				t.Errorf("the FAIL output prints the matching text; it must print paths only:\n%s", out)
 			}
+			_ = exec.Command("chmod", "-R", "u+rwx", kitHome).Run()
 			if err := os.RemoveAll(kitHome); err != nil {
 				t.Fatal(err)
 			}
@@ -1611,9 +1623,30 @@ func TestKitPreambleRefusesLeftoverCredentials(t *testing.T) {
 			}
 		})
 	}
-	// A public key is not a credential.
+	// A public key is not a credential, and an executable is not scanned: the
+	// installed sh-agent carries the report redaction patterns as text.
 	if code, out := run(`mkdir -p "$KIT_HOME/.ssh" && : > "$KIT_HOME/.ssh/id_ed25519.pub"`); code != 0 {
 		t.Errorf("a public key alone: want exit 0, got %d\n%s", code, out)
+	}
+	if code, out := run(`mkdir -p "$KIT_HOME/.local/bin" && printf '\177ELF-----BEGIN RSA PRIVATE KEY-----' > "$KIT_HOME/.local/bin/sh-agent"`); code != 0 {
+		t.Errorf("an ELF binary naming the PEM header: want exit 0, got %d\n%s", code, out)
+	}
+	if err := os.RemoveAll(kitHome); err != nil {
+		t.Fatal(err)
+	}
+	// KIT_HOME itself a symlink: find must follow it, as kit_fingerprint does.
+	realHome := filepath.Join(tmp, "real-kit-home")
+	if err := os.MkdirAll(filepath.Join(realHome, ".ssh"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(realHome, ".ssh", "id_ed25519"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(realHome, kitHome); err != nil {
+		t.Skip("no symlinks here")
+	}
+	if code, out := run(":"); code != 1 || !strings.Contains(out, "credentials left in KIT_HOME") {
+		t.Errorf("a symlinked KIT_HOME holding a key: want exit 1 and the FAIL line, got exit %d\n%s", code, out)
 	}
 }
 

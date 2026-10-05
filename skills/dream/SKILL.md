@@ -27,7 +27,7 @@ The first line of the reply is always `store: <store> (<n> memory files; default
 
 ## Step 2: Orientation
 
-Read `MEMORY.md` and every other `*.md` in the store. Then read, for the checks below: the project's `AGENTS.md` and `.agents/rules/`, the global context (`~/.claude/CLAUDE.md` and what it imports; on Antigravity `~/.gemini/config/rules/AGENTS.md`), the skills and agents the project and the harness install, `<docs-root>/bugs/INDEX.md`, `<docs-root>/architecture/DECISIONS.md`, the newest `<docs-root>/handoffs/` file and the three newest `<docs-root>/changes/` entries, and this project's entries in `~/.config/sh-agent/feedback.jsonl`. A file you cannot read is noted, and the checks that needed it resolve to `keep` (Step 3).
+Read `MEMORY.md` and every other `*.md` in the store. Then read, for the checks below: the project's `AGENTS.md` and `.agents/rules/`, the global context (`~/.claude/CLAUDE.md` and what it imports; on Antigravity `~/.gemini/config/rules/AGENTS.md`) and the global rule files (`~/.claude/rules/*.md`, or the other `~/.gemini/config/rules/*.md`), the skills and agents the project and the harness install, `<docs-root>/bugs/INDEX.md`, `<docs-root>/architecture/DECISIONS.md`, the newest `<docs-root>/handoffs/` file and the three newest `<docs-root>/changes/` entries, and this project's entries in `~/.config/sh-agent/feedback.jsonl`. A file you cannot read is noted, and the checks that needed it resolve to `keep` (Step 3).
 
 ## Step 3: One verdict per memory
 
@@ -36,7 +36,7 @@ Every `*.md` in the store except `MEMORY.md` gets exactly one verdict, with a on
 | Verdict | Test | Edit |
 |---|---|---|
 | `keep` | Still true; recorded nowhere the session already loads. | none |
-| `graduated` | Its rule now lives in the global context, the project `AGENTS.md`, `.agents/rules/`, a skill, or a bug record's prevention rule — found by one `grep` over the memory's key words and one `sh-agent search` over them for other wording, each hit read in full. | delete the file and its index line |
+| `graduated` | Its rule now lives in the global context or a global rule file, the project `AGENTS.md`, `.agents/rules/`, a skill, or a bug record's prevention rule — found by one `grep` over the memory's key words and one `sh-agent search` over them for other wording, each hit read in full. | delete the file and its index line |
 | `stale` | A `project` memory whose work the newest handoff or a `changes/` entry shows done; a `reference` whose target is gone. | delete |
 | `broken` | Names a file, function, flag or command that no longer exists (`ls`, `grep`); or carries a relative date ("last week", "next month"). | rewrite to the current name and an absolute date, or delete when nothing current matches |
 | `merge` | Two or more files on one fact. | one file; the newer `modified:` wins a contradiction; `[[links]]` repointed; the survivor keeps the older file's name |

@@ -18,8 +18,8 @@ Project: /home/ostling-simon/projects/styrman-harness · Branch: main · Superse
 
 ## Next Steps (operator)
 
-1. A zip place, or any machine not touched since v2.3.2: replace its binary once with v2.4.1's (README § Install without cloning).
-2. Still open from 2026-10-05: revoke and re-issue the `gh` token; find what re-uploaded dave's old key; delete the 2026-10-05 session transcript.
+1. Done by the operator 2026-10-06: every place is on v2.4.1.
+2. Closed on 2026-10-06 by the operator: the `gh` token is NOT rotated (operator's decision: single-user box, risk accepted; do not raise it again); dave's old key was re-added by the operator by mistake and replaced by `davev2`; the session transcript holding the old private key was deleted, and `~/.claude`, `~/.config` and `~/.gemini` hold no copy.
 
 ## Next Steps (agent)
 

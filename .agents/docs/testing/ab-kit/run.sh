@@ -42,6 +42,21 @@ mkdir -p "$KIT_CLONE" "$KIT_HOME/.claude"
 git -C "$KIT_CLONE" init -q
 [ "$(git -C "$KIT_CLONE" rev-parse --show-toplevel)" = "$KIT_CLONE" ] || { echo "run.sh: $KIT_CLONE is not its own repository" >&2; exit 2; }
 . "$REPO/.agents/docs/testing/kit-preamble.sh"
+# BUG-163: a process the agent started (a server, a watcher) can outlive the run. Any process whose working
+# directory is inside the clone is killed and FAILs the run. Linux /proc only; elsewhere the check says so.
+kit_leftovers() {
+  [ -d /proc/self ] || { echo "run.sh: no /proc here: the leftover-process check did not run" >&2; return 0; }
+  local p pid cwd root found=0
+  root=$(cd "$KIT_CLONE" && pwd -P)   # /proc/<pid>/cwd is the physical path: compare like with like
+  for p in /proc/[0-9]*; do
+    pid=${p#/proc/}; [ "$pid" = "$$" ] && continue
+    cwd=$(readlink "$p/cwd" 2>/dev/null) || continue
+    case "$cwd" in "$root"|"$root"/*) ;; *) continue ;; esac
+    echo "run.sh: FAIL pid $pid outlived the run ($(tr '\0' ' ' < "$p/cmdline" 2>/dev/null | cut -c1-80)) in $cwd; sent SIGTERM (BUG-163)" >&2
+    kill "$pid" 2>/dev/null || true; found=1   # SIGTERM; the run fails either way
+  done
+  return "$found"
+}
 if [ "$arm" != control ]; then
   go run -C "$REPO" ./cmd/sh-agent install --home "$KIT_HOME" --vendor claude > "$RUN/install.log" 2>&1
 fi
@@ -64,5 +79,7 @@ echo $(( $(date +%s) - t0 )) > "$RUN/wall_seconds"
 rm -f "$KIT_HOME/.claude/.credentials.json"
 [ -f "$real_cred" ] && [ ! -L "$real_cred" ] || echo "run.sh: WARNING $real_cred is no longer a regular file" >&2
 [ "$rc" != 124 ] || echo "run.sh: claude timed out after 90m; the run is recorded as timed out, not re-run" >&2
+lo=0; kit_leftovers || lo=1
 echo "run.sh: $arm finished (claude exit $rc) in $(cat "$RUN/wall_seconds")s; clone $KIT_CLONE; transcripts $KIT_HOME/.claude/projects"
+[ "$lo" = 0 ] || exit 1
 exit "$rc"

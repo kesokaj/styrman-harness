@@ -89,6 +89,21 @@ esac
 [ -n "$prompt" ] && [ -n "$check" ] || { echo "run.sh: row $row has no prompt or check" >&2; exit 2; }
 
 . "$REPO/.agents/docs/testing/kit-preamble.sh"
+# BUG-163: a process the agent started (a server, a watcher) can outlive the run. Any process whose working
+# directory is inside the clone is killed and FAILs the run. Linux /proc only; elsewhere the check says so.
+kit_leftovers() {
+  [ -d /proc/self ] || { echo "run.sh: no /proc here: the leftover-process check did not run" >&2; return 0; }
+  local p pid cwd root found=0
+  root=$(cd "$KIT_CLONE" && pwd -P)   # /proc/<pid>/cwd is the physical path: compare like with like
+  for p in /proc/[0-9]*; do
+    pid=${p#/proc/}; [ "$pid" = "$$" ] && continue
+    cwd=$(readlink "$p/cwd" 2>/dev/null) || continue
+    case "$cwd" in "$root"|"$root"/*) ;; *) continue ;; esac
+    echo "run.sh: FAIL pid $pid outlived the run ($(tr '\0' ' ' < "$p/cmdline" 2>/dev/null | cut -c1-80)) in $cwd; sent SIGTERM (BUG-163)" >&2
+    kill "$pid" 2>/dev/null || true; found=1   # SIGTERM; the run fails either way
+  done
+  return "$found"
+}
 go run -C "${INSTALL_FROM:-$REPO}" ./cmd/sh-agent install --home "$KIT_HOME" --vendor agy > "$RUN/install.log" 2>&1
 [ -z "$wide" ] || echo "run.sh: row $row runs with command(*) in its throwaway clone (skill-matrix.md § Procedure): $wide"
 python3 -I - "$KIT_HOME/.gemini/antigravity-cli/settings.json" "$KIT_CLONE" "$wide" <<'PY'
@@ -123,6 +138,7 @@ if [ -n "$agent" ]; then
     verdict="FAIL (no invoke_subagent of $agent in the conversation store)"
   fi
 fi
+kit_leftovers || verdict="FAIL (a process outlived the run, sent SIGTERM: BUG-163)"
 [ "$denied" = 0 ] && [ "$invalid" = 0 ] || verdict="FAIL (auto-denied $denied, invalid allow entries $invalid)"
 echo "run.sh: row $row: $verdict — agy exit $rc in $(( $(date +%s) - t0 ))s; out $RUN/out.txt"
 [ "${verdict%% *}" = PASS ]

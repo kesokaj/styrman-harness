@@ -111,6 +111,21 @@ func authed(h http.HandlerFunc) http.HandlerFunc {
 GO
 gi commit -qam "svc: files, thumbnails, login and admin purge"
 . "$REPO/.agents/docs/testing/kit-preamble.sh"
+# BUG-163: a process the agent started (a server, a watcher) can outlive the run. Any process whose working
+# directory is inside the clone is killed and FAILs the run. Linux /proc only; elsewhere the check says so.
+kit_leftovers() {
+  [ -d /proc/self ] || { echo "run.sh: no /proc here: the leftover-process check did not run" >&2; return 0; }
+  local p pid cwd root found=0
+  root=$(cd "$KIT_CLONE" && pwd -P)   # /proc/<pid>/cwd is the physical path: compare like with like
+  for p in /proc/[0-9]*; do
+    pid=${p#/proc/}; [ "$pid" = "$$" ] && continue
+    cwd=$(readlink "$p/cwd" 2>/dev/null) || continue
+    case "$cwd" in "$root"|"$root"/*) ;; *) continue ;; esac
+    echo "run.sh: FAIL pid $pid outlived the run ($(tr '\0' ' ' < "$p/cmdline" 2>/dev/null | cut -c1-80)) in $cwd; sent SIGTERM (BUG-163)" >&2
+    kill "$pid" 2>/dev/null || true; found=1   # SIGTERM; the run fails either way
+  done
+  return "$found"
+}
 go run -C "$REPO" ./cmd/sh-agent install --home "$KIT_HOME" --vendor claude > "$RUN/install.log" 2>&1
 sed -i "s/^effort: .*/effort: $effort/" "$KIT_HOME/.claude/agents/security.md"
 grep -q "^effort: $effort\$" "$KIT_HOME/.claude/agents/security.md"
@@ -127,6 +142,7 @@ t0=$(date +%s); rc=0
 [ -L "$KIT_HOME/.claude/.credentials.json" ] || echo "run.sh: WARNING the credential link was replaced" >&2
 rm -f "$KIT_HOME/.claude/.credentials.json"
 secs=$(( $(date +%s) - t0 ))
+lo=0; kit_leftovers || lo=1
 art=$(ls "$KIT_CLONE"/.agents/docs/reviews/*security* "$KIT_CLONE"/docs/reviews/*security* 2>/dev/null | head -1 || true)
 [ -n "$art" ] || { echo "run.sh: $label: no security artifact (claude exit $rc, ${secs}s)"; exit 1; }
 found=0
@@ -140,3 +156,4 @@ for f in "injection:command injection|shell injection|sh -c|os/exec|exec.Command
   if grep -qiE -- "$pat" "$art"; then found=$((found+1)); echo "  found $name"; else echo "  MISSED $name"; fi
 done
 echo "run.sh: $label (effort $effort): found $found/6 in ${secs}s, cost \$$(python3 -I -c 'import json,sys;print(round(json.load(open(sys.argv[1])).get("total_cost_usd",0),2))' "$RUN/result.json"); artifact $art"
+[ "$lo" = 0 ]

@@ -45,7 +45,7 @@ Both printed the preamble's two clean lines.
 | agent `changelog` | `dispatch-changelog` | PASS 1/1 (`TypeName` changelog; a new `changes/` entry) |
 | agent `documentation` | `dispatch-documentation` | PASS 1/1 (`TypeName` documentation; `local.md` names PORT) |
 | skill `bug` | `bug` (`command(*)`: the DoD builds and `rm`s a binary) | **PASS** on the final rule text (`bug-fix4`, 740 s): a failing test first, the fix committed (`36aad65`), BUG-001 recorded. Earlier attempts are in the finding below: 0/2 before the fix (one on the pre-change tree), and 0/2 during it. |
-| (not a changed skill: the context's DoD docs path) | `documentation` | FAIL 0/4 — two before the fix (ended its turn waiting), one denied a compound check, and one (`documentation-fix2`, `command(*)`, final rule) polled correctly (113 `list`, 53 `status`, `sleep 10`) until agy's 20-minute print timeout: agy never reported the background `go test -race` complete, though the same tests pass in about 1 s run directly. An agy defect, recorded, not a harness gate: the `documentation` agent itself passed `dispatch-documentation`. |
+| (not a changed skill: the context's DoD docs path) | `documentation` | **PASS** on the final kit and context text (`documentation-rel`, `command(*)`, 1008 s, both clean preamble lines), which clears the earlier failures. Earlier: FAIL 0/4 — two before the fix (ended its turn waiting), one denied a compound check, and one (`documentation-fix2`, `command(*)`, final rule) polled correctly (113 `list`, 53 `status`, `sleep 10`) until agy's 20-minute print timeout: agy never reported the background `go test -race` complete, though the same tests pass in about 1 s run directly. An agy defect, recorded, not a harness gate: the `documentation` agent itself passed `dispatch-documentation`. |
 
 ## Finding: agy's print-mode main agent ends its turn to wait, and never resumes
 
@@ -71,7 +71,7 @@ The earlier attempt: `bug-fix`, run with the first form of the clause, polled (2
 
 ## Result
 
-Every skill and agent the range changed has a passing Antigravity run (`init-project`, `feature`, `review`, `handoff`, `preflight`, `retro`, `operate-gcp`, `bug`; `security`, `bugs`, `changelog`, `documentation`). AGENTS.md § Release's Antigravity condition is met for this range. The `documentation` DoD row fails on an agy defect; that goes to the handoff.
+Every skill and agent the range changed has a passing Antigravity run (`init-project`, `feature`, `review`, `handoff`, `preflight`, `retro`, `operate-gcp`, `bug`; `security`, `bugs`, `changelog`, `documentation`). AGENTS.md § Release's Antigravity condition is met for this range. The `documentation` DoD row, after 0/4 earlier, PASSed on the final text (`documentation-rel`). The earlier `documentation-fix2` timeout (agy never reported a finished background `go test` complete) goes to the handoff as an agy behaviour to watch.
 
 ## Not run
 - Claude Code rows: this session's `ab-kit` and `seed-security` runs exercised Claude Code.

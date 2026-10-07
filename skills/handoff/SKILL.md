@@ -62,7 +62,7 @@ List each relevant artifact with a one-line summary of what it contains and why 
 The handoff records the remainder — it is never a substitute for rows already due:
 
 1. Run `date +%F` and use that date everywhere below, and `date +%F-%H%M` for the handoff's file name (Step 5) — never a date from memory.
-2. If the session changed source files and no `changes/` entry covers those changes, dispatch the `changelog` agent **before** writing the handoff.
+2. If the session changed source files and no `changes/` entry covers those changes, write one **before** the handoff (yourself, in the `changelog` agent definition's format; the agent only when you lack the evidence).
 3. Bring `ROADMAP.md` and `TODO.md` current yourself (Definition of Done step 4): `TODO.md` is empty at every checkpoint, not just at Done — a ticked line is deleted in the commit that ticks it, and between checkpoints it holds only items the active plan will consume; `ROADMAP.md` holds "Now" (the active plan, while one is open) and "Next" (at most three scheduled milestones). Anything the operator must do — other than a standing procedure the deploy guide already records (Step 4's Next Steps rule) — and any deferred idea worth keeping, goes in this handoff's Next Steps, not in those files. The dispatches above record; they do not own those two lines.
 4. Only then write the handoff (Step 4).
 
@@ -181,6 +181,7 @@ After saving, tell the user:
 1. Where the handoff document was saved (absolute path)
 2. How to use it: *"Start a new session and paste: `Read the handoff at <path> and continue the work.`"*
 3. A 1-sentence summary of the handoff content
+4. When its Next Steps queue nothing for the agent, recommend a fresh session (`/clear` on Claude Code, a new conversation on Antigravity) for the next task: a new task in a session that has closed one re-reads that whole context on every turn
 
 ## Cross-References
 
@@ -188,4 +189,4 @@ After saving, tell the user:
 - The `/distill` workflow captures repeated patterns as reusable skills
 - The `dreamer` agent, dispatched by `/retro` and `/distill`, proposes rules, skills and procedures from the memory store and the trail in `.agents/docs/retros/<date>-dreamer.md`; the `dream` skill consolidates the store itself
 - The `feedback-log` skill passively logs corrections to `~/.config/sh-agent/feedback.jsonl`
-- The `changelog` subagent writes `.agents/docs/changes/` entries — reference these, don't duplicate them
+- `.agents/docs/changes/` entries (written by the main agent or the `changelog` subagent) — reference these, don't duplicate them

@@ -1,6 +1,6 @@
 ---
 name: changelog
-description: "Records what happened. Writes append-only changelog entries under changes/ and returns the path it appended. Dispatch once per task after the code is done (one entry may cover a session's related work), passing the stamp from `date +%F-%H%M` and the `git log --stat` of the range in the prompt. Never rewrites history, never writes an ADR (the main agent writes those), and never writes specs, README or testing guides (documentation's), nor ROADMAP, TODO or ADRs (the main agent's)."
+description: "Records what happened. Writes append-only changelog entries under changes/ and returns the path it appended. Dispatch only when the main agent lacks the evidence to write the entry itself, once per task after the code is done (one entry may cover a session's related work), passing the stamp from `date +%F-%H%M` and the `git log --stat` of the range in the prompt. Never rewrites history, never writes an ADR (the main agent writes those), and never writes specs, README or testing guides (documentation's), nor ROADMAP, TODO or ADRs (the main agent's)."
 tools: Read, Grep, Glob, Edit, Write
 model: haiku
 effort: low

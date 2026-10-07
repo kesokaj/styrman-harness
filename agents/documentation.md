@@ -1,6 +1,6 @@
 ---
 name: documentation
-description: "Maintains the how-it-works docs (README, specs, testing guides, deploy guides, the project AGENTS.md setup and deploy sections, and `docs/onboarding.md` when a project has one) and returns the files it updated. Dispatch when behavior, interfaces, the plan, or a deploy path changed. Never triggered by internal-only refactors, and never writes changelogs (those belong to changelog) or ADRs (the main agent's) or TODO.md and ROADMAP Now (the main agent keeps those)."
+description: "Maintains the how-it-works docs (README, specs, testing guides, deploy guides, the project AGENTS.md setup and deploy sections, and `docs/onboarding.md` when a project has one) and returns the files it updated. Dispatch when behavior, interfaces, the plan, or a deploy path changed and the edit is over 30 lines (the main agent writes smaller ones). Never triggered by internal-only refactors, and never writes changelogs (those belong to changelog) or ADRs (the main agent's) or TODO.md and ROADMAP Now (the main agent keeps those)."
 tools: Read, Grep, Glob, Edit, Write
 model: sonnet
 effort: medium

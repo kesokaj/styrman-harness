@@ -602,3 +602,35 @@ Append-only. To reverse a decision, append a new ADR and mark the old one `Super
 **Decision.** `ReleaseRepo` names its host, `github.com/kesokaj/styrman-harness`, in every gh call (`TestUpdateFromReleasePinsTheHost`, must-fail seen with the host removed; the real gh honours it with `GH_HOST=example.invalid`). A binary-only place's wording says what the check is: `CHECKED against the SHA256SUMS of release vX.Y.Z (integrity only)`; the manifest's `verified vX.Y.Z` token is kept, so existing installs read the same. Actions and the token are the operator's: turning Actions off (the harness has no CI by rule) and rotating the token are put to them in the v2.4.0 handoff.
 
 **Consequences.** Trust in a binary-only place's update is: the operator's GitHub account and every credential that can push to or publish on `kesokaj/styrman-harness` (its SSH login keys, the `gh` token, Actions while enabled), and HTTPS to github.com.
+
+## ADR-054: Process scaled to the change: one cold read, one verifier, two review rounds, records by the main agent     (2026-10-07) — Accepted
+
+**Context.** An A/B build of the same CRM booking service, with the same prompt and model, measured three ways:
+
+| Arm | Cost | Wall time |
+|---|---|---|
+| No harness | $0.54 | 2.4 min |
+| Harness loaded | $1.11 | 5.0 min |
+| Harness, full process | $8.46 | 30.8 min |
+
+All three passed the same 25-check acceptance test. In the full-process run, about 80% of the wall time was process:
+- three cold-reader rounds on the plan before any code
+- a verifier for every phase
+- separate documentation and bugs agents, each paying about 20–40k tokens of cold context to write about 100 tokens
+- review rounds, each a fresh agent re-reading everything
+
+The operator's own transcripts showed the same pattern: a release session with 28 agents, and main threads of 220 turns, one resumed at a 560k context. The quality gain over the bare run came mostly from the skills' knowledge (the harness-only arm), not from the gates. Plan: `plans/2026-10-07-lean-process.md`.
+
+**Decision.** The operator approved these rules ("go your recommendations", 2026-10-07):
+- **One cold-reader report.** The plan's cold-reader check is ONE report, never a second (BUG-042's count-not-convergence rule holds). Its items are answered by D-rows or rebuttals, or by the user when only the user can settle them. The check is skipped for a plan with one phase that touches fewer than 5 files.
+- **One verifier per task.** It runs at the Definition of Done. Between phases and after fixes, the main thread runs the tests bare itself.
+- **Two review rounds at most,** the second over the fixes only. On Claude Code the same agent is resumed with `SendMessage`; elsewhere it is a new dispatch carrying only the fix lines. `--code` and `--docs` go to one reviewer dispatch (`<scope>-code-docs`), in `/review` and in `/preflight` alike.
+- **The main thread writes the records.** It writes the `changes/` entry and the bug record itself, and docs edits of up to 30 lines. The `changelog`, `bugs` and `documentation` agents run only above that, or when the main thread lacks the evidence.
+- **A BUG-NNN only for what escaped its change's own gates.** A defect the same uncommitted change's review or tests caught and fixed is recorded in the review's `## Outcome`.
+- **A fresh session after a closed task.** After a handoff that queues nothing, the agent recommends one for the next task.
+
+**Consequences.**
+- **Fewer cold agents and rounds.** A defect a removed round would have caught can now ship; the remaining single review and the security trigger are the guard.
+- **Records lose some independence.** The main thread writes records it has context for, so they are less independent. The independent judgement agents (`reviewer`, `security`, `verifier`) keep their role.
+- **Antigravity is unmeasured.** Its run of the changed skills is owed before the next release (AGENTS.md § Release).
+- **The measurement is one run per arm.** The kit is not committed (BUG-162).

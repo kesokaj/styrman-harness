@@ -8,7 +8,7 @@
 #
 # Built on kit-preamble.sh (BUG-162: the first version skipped it, and harness runs registered their scratch
 # apps in the real global search index). The clone lives under $AB_OUT, default ~/sandbox/ab, outside every
-# checkout (BUG-106); the sandbox home is .agents/scratch/ab-homes/<arm>; the CLI runs with HOME and
+# checkout (BUG-106); the sandbox home is $AB_OUT/homes/<arm>, outside every checkout (a git run from ~ reaches no repository); the CLI runs with HOME and
 # CLAUDE_CONFIG_DIR there, so every sh-agent call the agent makes is pinned to it (BUG-107).
 # The credential is a SYMLINK to the real ~/.claude/.credentials.json, not the guide's copy: a token refresh
 # then lands in the real file instead of leaving the real login with a stale refresh token. It is deleted by
@@ -18,14 +18,17 @@
 # preamble's exit check caught it, 2026-10-07; the source of BUG-160's leftovers). The CLI therefore runs with
 # STYRMAN_CRED_BROKER unset and STYRMAN_SKIP_CRED_PULL=1, the broker's own off switches. The CLI starts from
 # `env -i` with an allowlist (PATH, TERM, LANG, USER, LOGNAME, SHELL, HOME, CLAUDE_CONFIG_DIR, git identity): the
-# operator's GH_TOKEN, the launching session's tokens and the real Go caches never reach the agent (security
-# review 2026-10-07). It is NOT a confinement: same uid, sudo, the real home reachable by path (guide § 4's
+# operator's GH_TOKEN, the launching session's tokens and the real Go caches stay out of the agent's
+# environment (security review 2026-10-07); the broker still answers any process that asks, and ssh reads the
+# real ~/.ssh. It is NOT a confinement: same uid, sudo, the real home reachable by path (guide § 4's
 # accepted design, operator 2026-10-01). `timeout --foreground` lets Ctrl-C reach the agent; a
 # server the agent left running survives a timeout (check `ss -ltnp` after one). No web tools: the harness arms
 # install vendored skills, and the operator's acceptance (guide § Behavioural runs) covers text the harness wrote.
 # A killed run leaves the link: the preamble's exit check then FAILs on it by name; delete it by name.
 # Costs real tokens: about $0.5 (control) to $8 (a -full arm) on Opus.
 set -euo pipefail
+# Inherited GIT_* variables (GIT_DIR, GIT_WORK_TREE, …) would point the fixture's git at another repository.
+for v in $(compgen -e | grep '^GIT_' || true); do unset "$v"; done
 arm=${1:?usage: run.sh control|harness|<name>-full}
 case "$arm" in control|harness|*-full) ;; *) echo "run.sh: unknown arm '$arm'" >&2; exit 2;; esac
 KIT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -33,10 +36,11 @@ REPO=$(cd "$KIT/../../../.." && pwd)
 REAL_HOME=$HOME
 OUT=${AB_OUT:-$REAL_HOME/sandbox/ab}
 RUN=$OUT/runs/$arm
-export KIT_CLONE=$RUN/app KIT_HOME=$REPO/.agents/scratch/ab-homes/$arm
+export KIT_CLONE=$RUN/app KIT_HOME=$OUT/homes/$arm
 for p in "$RUN" "$KIT_HOME"; do [ ! -e "$p" ] || { echo "run.sh: $p exists; move it away to re-run" >&2; exit 2; }; done
 mkdir -p "$KIT_CLONE" "$KIT_HOME/.claude"
 git -C "$KIT_CLONE" init -q
+[ "$(git -C "$KIT_CLONE" rev-parse --show-toplevel)" = "$KIT_CLONE" ] || { echo "run.sh: $KIT_CLONE is not its own repository" >&2; exit 2; }
 . "$REPO/.agents/docs/testing/kit-preamble.sh"
 if [ "$arm" != control ]; then
   go run -C "$REPO" ./cmd/sh-agent install --home "$KIT_HOME" --vendor claude > "$RUN/install.log" 2>&1

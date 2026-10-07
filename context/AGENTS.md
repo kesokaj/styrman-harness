@@ -28,7 +28,7 @@ Once per task over the whole change; the detail of an agent's reply lives in its
 - **Bug** (anything broken): load the `bug` skill.
 - **Unscaffolded project** (no `docs/` root): run Trivial and Task only — no verifier log, no changes entry, no handoff; commit and push close the task; offer `/init-project` once per session.
 - **Search first:** `sh-agent search <words>` ranks files and trail records; `--refs <BUG-NNN|ADR-NNN|path>` before touching an area; grep stays for exact strings, regex, past revisions.
-- An unattended Claude Code run sets a `/goal` naming the check that must pass; a print-mode run (`claude -p`, `agy -p`) ends only after every dispatched agent's artifact is on disk (else: `handoff` § Usage).
+- An unattended Claude Code run sets a `/goal` naming the check that must pass; a print-mode run (`claude -p`, `agy -p`) ends only after every dispatched agent's artifact is on disk — on Antigravity never end the turn to await a subagent or a background command: give a long command a large `WaitMsBeforeAsync`, else poll `manage_subagents`/`manage_task` `list`, `sleep 30` between, until idle (else: `handoff` § Usage).
 
 Every failure that reached a commit, a deploy or the user gets a number (what counts: `bug` skill Step 0): `docs/bugs/BUG-NNN-*.md` with a prevention rule and the `INDEX.md` row, updated when a fix lands. A rule that recurs graduates into a mechanism — a test, a script a skill runs, an agent definition, a `.agents/rules/` file, the project's `AGENTS.md` — and its row moves to the Graduated table.
 

@@ -63,6 +63,7 @@ case "$row" in
     case "$row" in
       retro) wide="the retro skill's text runs compound shell commands (find … \&\& ls … || true)" ;;
       handoff) wide="the handoff skill's text runs an awk program and git pipelines" ;;
+      review) wide="the review skill's text runs its restatement-grep script and git pipelines (one run at 8ffa525 was auto-denied a command the store did not record, BUG-141)" ;;
       bug) wide="the bug skill's Definition of Done builds and removes binaries (go build, rm) and runs compound checks" ;;
       documentation) wide="the Definition of Done runs compound checks (go vet ./... \&\& go test …) and clean-ups (rm)" ;;
       preflight) wide="the preflight skill's text probes for gitleaks with command -v and pipes git output" ;;

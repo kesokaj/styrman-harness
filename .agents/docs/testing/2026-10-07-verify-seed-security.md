@@ -29,8 +29,9 @@ Range reviewed: 6c9eaf9 plus the uncommitted lean-process-3 tree (`testing/seed-
 | high-3 | high | 6/6 | 103 s | $0.46 |
 | high-4 (revised kit) | high | 6/6 | 83 s | $0.48 |
 | high-5 (fixture bound to 127.0.0.1:0) | high | 6/6 | 126 s | $0.48 |
+| high-6 (with `kit_leftovers`) | high | 6/6 | 109 s | $0.54 |
 | max-1 | max | 6/6 | 343 s | $1.16 |
 
 Every run printed `kit: real config unchanged` and `kit: no credentials left in KIT_HOME`.
 
-At `high`, `security` found all six planted flaws in 5 of 5 runs, the same as `max` in 1 of 1, at about 26% of the time and 40% of the cost. This is a sample of five runs on one fixture, not a proof that `high` never misses what `max` would catch.
+At `high`, `security` found all six planted flaws in 6 of 6 runs, the same as `max` in 1 of 1, at about 26% of the time and 40% of the cost. This is a sample of five runs on one fixture, not a proof that `high` never misses what `max` would catch.

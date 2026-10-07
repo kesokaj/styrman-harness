@@ -4,7 +4,7 @@ date: 2026-10-07
 ---
 # Verify — Antigravity release rows for the lean-process range (AGENTS.md § Release)
 
-Range reviewed: v2.4.1..6c9eaf9 plus the uncommitted lean-process-3 tree (the agy-rel kit, the context's print-mode clause, `skills/review` Step 4). Every row installed this working tree; the old-tree comparison rows installed `4793d5a`.
+Range reviewed: v2.4.1..8d00cc5 (rows before 3293e25 ran on the then-uncommitted lean-process-3 tree (the agy-rel kit, the context's print-mode clause, `skills/review` Step 4). Every row installed this working tree; the old-tree comparison rows installed `4793d5a`.
 
 ## Status: PASS
 
@@ -35,7 +35,7 @@ Both printed the preamble's two clean lines.
 |---|---|---|
 | skill `init-project` (templates) | `scaffold` (`command(*)`: the skill's own `for` loop) | PASS, attempt 2 of 2; attempt 1 was auto-denied on that loop, before the exception |
 | skill `feature` | `feature` | PASS 1/1 |
-| skill `review` | `review` | PASS 1/1 |
+| skill `review` | `review` | PASS: 1/1 on the first tree, and again at the release tree (`review-rel`, `8d00cc5`, `command(*)`, 249 s, `TypeName` reviewer 8, both clean preamble lines). In between: `review-rel-1` at 8ffa525 (PASS, but the preamble FAILed because a concurrent real-home smoke changed the real config, and it ended on agy's quota error), and `review-rel-2` (auto-denied a command the store did not record, BUG-141). The kit then gave `review` the same `command(*)` exception as the other rows whose skill text runs shell constructs. |
 | skill `handoff` | `handoff` (`command(*)`: awk program) | PASS 1/1 with the exception; 0/1 without (auto-denied) |
 | skill `preflight` | `preflight` (`command(*)`: `command -v gitleaks`) | PASS 1/1 with the exception; 0/1 without |
 | skill `retro` | `retro` (`command(*)`: compound find/ls) | PASS 1/1 with the exception; 0/1 without |

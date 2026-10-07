@@ -30,3 +30,19 @@ Existing rules not followed: `guide.md:158-162` (deleted by name, security revie
 ## Addendum (main, 2026-10-05)
 
 Security review round 2 (`reviews/2026-10-05-security-v2.4.0-signer-rotation-r2.md`, finding 3) found a further kind: the live `gh` token, exported as `GH_TOKEN`, written by Antigravity into `.agents/scratch/gate-agy/.gemini/antigravity-cli/brain/<id>/.system_generated/terminals/term1.env`. Deleted by name; a scan of `.agents/scratch` for `gh[pousr]_`, `github_pat_` and `BEGIN OPENSSH PRIVATE KEY` then found only repository copies naming the patterns. The kit fix must cover environment dumps a CLI writes, not only files the kit copies; the operator was advised to rotate the token.
+
+## Addendum (main, 2026-10-07): the source of the leftovers
+
+The A/B kit (`testing/ab-kit/run.sh`, plan `2026-10-07-lean-process-2`) ran Claude Code with `HOME` set to a sandbox home under `.agents/scratch/ab-homes/control`. Its exit check (`kit_credential_leftovers`) then failed on four files the kit never copied:
+- `.ssh/id_ed25519`
+- `.config/gcloud/application_default_credentials.json`
+- `.config/gcloud/credentials.db`
+- `.gemini/antigravity-cli/antigravity-oauth-token`
+
+**Cause.** This box's credential broker, `/etc/profile.d/zz-styrman-credentials.sh`, is sourced by every login shell. Its file tier writes those files into `$HOME`, so with `HOME=<sandbox>` they land in the sandbox. This is where the 2026-10-05 SSH key and gcloud leftovers came from.
+
+**Fix.** The kit runs the CLI with `STYRMAN_CRED_BROKER` unset and `STYRMAN_SKIP_CRED_PULL=1`. Those are the broker's own off switches: "no broker by design", and skip the pull. The four files were deleted by name.
+
+**Verified.** A second `control` run printed `kit: no credentials left in KIT_HOME` and `kit: real config unchanged`.
+
+**Prevention.** A kit that overrides `HOME` on a styrman box also turns the broker off for the CLI it runs, best by starting it from `env -i` with an allowlist, so no operator token reaches the agent either (security review 2026-10-07). The preamble's exit check stays the proof.

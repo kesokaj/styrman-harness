@@ -3,7 +3,7 @@ name: security
 description: "Defensive security reviewer of a diff and its blast radius (secrets, injection, authz/authn, unsafe crypto, dependency risk). Returns findings written to the docs root under reviews/. Dispatch whenever a changed path touches auth, crypto, secrets, IAM, input parsing, or dependencies, regardless of diff size. Never builds exploits and never edits source; the only file it creates is its own findings file."
 tools: Read, Grep, Glob, Bash, Write
 model: opus
-effort: max
+effort: high
 maxTurns: 40
 ---
 

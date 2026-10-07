@@ -634,3 +634,21 @@ The operator's own transcripts showed the same pattern: a release session with 2
 - **Records lose some independence.** The main thread writes records it has context for, so they are less independent. The independent judgement agents (`reviewer`, `security`, `verifier`) keep their role.
 - **Antigravity is unmeasured.** Its run of the changed skills is owed before the next release (AGENTS.md § Release).
 - **The measurement is one run per arm.** The kit is not committed (BUG-162).
+
+## ADR-054a: `security` at effort high, the verifier dispatched last, round 2 loads SendMessage     (2026-10-07) — Accepted, amends ADR-054
+
+**Context.** The ADR-054 re-run cost $7.27 and took 29.3 minutes (plan `2026-10-07-lean-process-2` § Why).
+- **Security took 19 of those minutes.** `agents/security.md` ran at `effort: max`, so each step thought for 21–180 s before acting. Its context peaked at about 94k, so reading was not the cost.
+- **A second verifier ran** because the first was dispatched in parallel with the reviews and had to be re-run after their fixes.
+- **Round 2 was a fresh dispatch.** `SendMessage` was available only as a deferred tool, which the rule did not say to load.
+
+**Decision.** The operator's "fix everything … go approved" of 2026-10-07 covers these changes:
+- `security` keeps `model: opus` and moves to `effort: high`, the same as `reviewer`.
+- The one verifier is dispatched last, after the review's fixes (context DoD 1, `feature` Step 6, `bug` Step 5, `preflight` Step 1.1), so its single PASS covers what ships.
+- `review` Step 5 tells the agent to load `SendMessage` with `ToolSearch` before resuming an agent.
+- The A/B kit is rebuilt on `kit-preamble.sh` (`testing/ab-kit/`).
+
+**Consequences.**
+- **Security reasons less per step.** The single security pass and its trigger are unchanged.
+- **Wall time grows by the verifier's own minutes,** because it no longer overlaps the review.
+- **A release gate whose review produces fixes** still needs a verifier log that reaches HEAD (`preflight` Step 2 item 1), so a gate with fixes still verifies twice.

@@ -16,7 +16,7 @@
 //	sh-agent index [--rebuild]       reconcile (or rebuild) the search index and print its counts
 //	sh-agent dream --all|--project DIR [--dry-run]  propose rules and skills from every project's memory, trail, feedback and transcripts
 //	sh-agent dream --install-timer|--remove-timer [--dry-run]  install or remove the nightly timer
-//	sh-agent metrics ingest|export   read every session's shape into the metrics store, or back it up as JSONL
+//	sh-agent metrics ingest|show|export  read every session's shape into the metrics store, summarise it for agent evaluation, or back it up as JSONL
 //	sh-agent memory add|show         write one memory (body on stdin) or print the index of this project's .agents/memory/
 //	sh-agent version
 package main
@@ -65,6 +65,7 @@ Commands:
   dream --install-timer | --remove-timer [--dry-run]  install (systemd user timer on Linux, launchd agent on macOS) or remove the nightly "dream --all", run with the PATH of the installing shell; uninstall removes it too
   dream --all | --project DIR [--dry-run]  the background dreamer: for every indexed project (or one) that changed since its last dream, send its memory, new trail, feedback and both CLIs' transcripts, redacted, to a CLI with no tools, and write the proposals and draft skills it returns under ~/.config/sh-agent/proposals/dream/ (R3's exception; --vendor picks the CLI, default from the manifest)
   metrics ingest [--vendor V] [--source DIR --label KEY=VALUE [--outcome pass|fail]]  read the shape of every Claude Code and Antigravity session (tools, command verbs, tokens, timings; never arguments or prose) into ~/.config/sh-agent/metrics.db, the metrics store; --source reads a sandbox home and stamps its sessions with the label; transcripts come from --source, else --home, else $CLAUDE_CONFIG_DIR, else this home
+  metrics show [--since YYYY-MM-DD] [--project DIR] [--label KEY=VALUE | --all-labels] [--json]  the agent-evaluation summary of the metrics store, a column per CLI: outcome (DoD closure, verifier status, review findings, escaped bugs, corrections, pass^k per label), efficiency (tool calls, turns, tokens, cost, wall and active time, peak context, compactions), process adherence (sh-agent search vs grep, forbidden command shapes, first reads, skills) and reliability (tool error rate, denials, interrupts, retry loops, subagent tool calls); n/a is a metric that CLI cannot produce; sandbox (labelled) sessions are left out unless named
   metrics export FILE     write every row of the metrics store to FILE as JSONL (0600; an existing FILE is refused): its only backup, since the store is the one copy once a transcript expires
   memory show             print this project's memory index, capped at what a session loads, plus a hint when Claude Code's native memory is still on here
   version                 print the build version
@@ -108,7 +109,8 @@ type ctx struct {
 	// per-verb flags; a verb's flags func registers only the ones it reads
 	dryRun, check, force, openRecords, global, rebuild, dreamAll, installTimer, removeTimer bool
 	feedbackRepo, fromZip, kind, refs, memType, memName, memDesc, dreamProject              string
-	metricsSource, metricsLabel, metricsOutcome                                             string
+	metricsSource, metricsLabel, metricsOutcome, metricsSince, metricsProject               string
+	metricsAllLabels, metricsJSON                                                           bool
 	limit                                                                                   int
 	// src is the harness, resolved before run for the verbs that mark source
 	src harness.Source
@@ -159,8 +161,12 @@ var verbs = map[string]verb{
 	}, run: runDream},
 	"metrics": {flags: func(c *ctx) {
 		c.fs.StringVar(&c.metricsSource, "source", "", "metrics ingest: a sandbox home to read instead of this one")
-		c.fs.StringVar(&c.metricsLabel, "label", "", "metrics ingest: KEY=VALUE stamped on every --source session")
+		c.fs.StringVar(&c.metricsLabel, "label", "", "metrics ingest: KEY=VALUE stamped on every --source session; show: only that label")
 		c.fs.StringVar(&c.metricsOutcome, "outcome", "", "metrics ingest: pass or fail, the --source run's acceptance result")
+		c.fs.StringVar(&c.metricsSince, "since", "", "metrics show: start of the window, YYYY-MM-DD (default 30 days ago)")
+		c.fs.StringVar(&c.metricsProject, "project", "", "metrics show: only sessions in this project root")
+		c.fs.BoolVar(&c.metricsAllLabels, "all-labels", false, "metrics show: include labelled (sandbox) sessions")
+		c.fs.BoolVar(&c.metricsJSON, "json", false, "metrics show: print the summary as JSON")
 	}, positional: true, run: runMetrics},
 	"search": {flags: func(c *ctx) {
 		c.fs.IntVar(&c.limit, "limit", 0, "search: hits to print, 1-50 (default 10)")
@@ -406,7 +412,7 @@ func runDream(c *ctx) error {
 func runMetrics(c *ctx) error {
 	args := c.fs.Args()
 	if len(args) == 0 {
-		fmt.Fprintln(c.out, "sh-agent metrics: ingest | export FILE")
+		fmt.Fprintln(c.out, "sh-agent metrics: ingest | show | export FILE")
 		return exitCode(2)
 	}
 	sub, args := args[0], args[1:]
@@ -436,6 +442,30 @@ func runMetrics(c *ctx) error {
 			return exitCode(1)
 		}
 		return nil
+	case "show":
+		if len(args) > 0 {
+			fmt.Fprintf(c.out, "metrics show takes no arguments: %q\n", args)
+			return exitCode(2)
+		}
+		o, err := c.metricsShowOptions()
+		if err != nil {
+			fmt.Fprintln(c.out, "sh-agent metrics show: "+err.Error())
+			return exitCode(2)
+		}
+		s, err := metrics.Open(metrics.Path(c.home))
+		if err != nil {
+			return err
+		}
+		defer s.Close()
+		sum, err := s.Show(o)
+		if err != nil {
+			return err
+		}
+		if c.metricsJSON {
+			return sum.WriteJSON(c.out)
+		}
+		sum.WriteText(c.out)
+		return nil
 	case "export":
 		if len(args) != 1 {
 			fmt.Fprintln(c.out, "sh-agent metrics export FILE")
@@ -452,8 +482,36 @@ func runMetrics(c *ctx) error {
 		fmt.Fprintln(c.out, "metrics: exported to "+args[0])
 		return nil
 	}
-	fmt.Fprintf(c.out, "sh-agent metrics: unknown subcommand %q (ingest, export)\n", sub)
+	fmt.Fprintf(c.out, "sh-agent metrics: unknown subcommand %q (ingest, show, export)\n", sub)
 	return exitCode(2)
+}
+
+// metricsShowOptions reads show's filters; --label and --all-labels exclude
+// each other, and --project is made absolute as the store records roots.
+func (c *ctx) metricsShowOptions() (metrics.ShowOptions, error) {
+	var o metrics.ShowOptions
+	if c.metricsSince != "" {
+		t, err := time.Parse("2006-01-02", c.metricsSince)
+		if err != nil {
+			return o, fmt.Errorf("--since %q: want YYYY-MM-DD", c.metricsSince)
+		}
+		o.Since = t
+	}
+	if c.metricsLabel != "" && c.metricsAllLabels {
+		return o, errors.New("--label and --all-labels exclude each other")
+	}
+	if c.metricsSource != "" || c.metricsOutcome != "" {
+		return o, errors.New("--source and --outcome belong to ingest")
+	}
+	o.Label, o.AllLabels = c.metricsLabel, c.metricsAllLabels
+	if c.metricsProject != "" {
+		abs, err := filepath.Abs(c.metricsProject)
+		if err != nil {
+			return o, err
+		}
+		o.Project = abs
+	}
+	return o, nil
 }
 
 // runSearch serves `search` and `index`; neither needs a harness tree, and a

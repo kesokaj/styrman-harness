@@ -6,16 +6,15 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/kesokaj/styrman-harness/internal/harness"
 	"github.com/kesokaj/styrman-harness/internal/memory"
 	"github.com/kesokaj/styrman-harness/internal/search"
+	"github.com/kesokaj/styrman-harness/internal/trail"
 )
 
 // The kinds, in prompt order. Transcripts are dropped first when the prompt
@@ -70,7 +69,7 @@ func collect(home, vendor string, p search.Project, since time.Time, limit int) 
 	if docs == "" {
 		docs = ".agents/docs"
 	}
-	dates, modified := trailDates(p.Root, docs)
+	dates, modified := trail.Dates(p.Root, docs)
 	for _, dir := range trailDirs {
 		// A symlinked docs root or record directory is never followed: a
 		// repository could commit one pointing anywhere (security review
@@ -198,49 +197,6 @@ func mdFiles(dir string) []string {
 	}
 	sort.Strings(out)
 	return out
-}
-
-// trailDates is, for every tracked file under docs, the time of its newest
-// commit (paths relative to root, slash-separated), and the set of paths git
-// reports as modified or untracked there. Both empty when git is absent or
-// root is no checkout: every file then keeps its mtime.
-func trailDates(root, docs string) (dates map[string]time.Time, modified map[string]bool) {
-	dates, modified = map[string]time.Time{}, map[string]bool{}
-	out, err := exec.Command("git", "-C", root, "log", "--format=%ct", "--name-only", "--no-renames", "--", docs).Output()
-	if err != nil {
-		return dates, modified
-	}
-	var t time.Time
-	for _, line := range strings.Split(string(out), "\n") {
-		if line == "" {
-			continue
-		}
-		if secs, err := strconv.ParseInt(line, 10, 64); err == nil {
-			t = time.Unix(secs, 0)
-			continue
-		}
-		if _, seen := dates[line]; !seen && !t.IsZero() {
-			dates[line] = t
-		}
-	}
-	out, err = exec.Command("git", trailStatusArgs(root, docs)...).Output()
-	if err != nil {
-		return dates, modified
-	}
-	for _, line := range strings.Split(string(out), "\n") {
-		if len(line) > 3 {
-			modified[strings.TrimSpace(line[3:])] = true
-		}
-	}
-	return dates, modified
-}
-
-// trailStatusArgs is the status command the nightly job runs in a project:
-// the global options come first (git rejects them after the verb), it holds
-// no index lock, and it runs no fsmonitor hook the project may have
-// configured (security review rounds 2 and 3, 2026-10-01).
-func trailStatusArgs(root, docs string) []string {
-	return []string{"--no-optional-locks", "-c", "core.fsmonitor=false", "-C", root, "status", "--porcelain", "--untracked-files=all", "--", docs}
 }
 
 func readFile(path string) (string, time.Time) {

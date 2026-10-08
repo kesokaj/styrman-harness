@@ -35,6 +35,18 @@ func TestMetricsVerb(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	out.Reset()
+	if err := run([]string{"metrics", "show", "--json", "--since", "2026-10-01", "--home", home}, &out); err != nil {
+		t.Fatalf("show: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), `"tool_calls_by_tool"`) || !strings.Contains(out.String(), `"Bash": 1`) {
+		t.Fatalf("show --json printed %s", out.String())
+	}
+	out.Reset()
+	if err := run([]string{"metrics", "show", "--since", "2026-10-01", "--home", home}, &out); err != nil || !strings.Contains(out.String(), "B. efficiency") {
+		t.Fatalf("show: %v\n%s", err, out.String())
+	}
+
 	exp := filepath.Join(t.TempDir(), "m.jsonl")
 	out.Reset()
 	if err := run([]string{"metrics", "export", "--home", home, exp}, &out); err != nil {
@@ -60,6 +72,10 @@ func TestMetricsUsageErrorsExit2(t *testing.T) {
 		{"metrics", "ingest", "--source", home, "--label", "a=b", "--outcome", "maybe"},
 		{"metrics", "ingest", "--vendor", "gpt"},
 		{"metrics", "export"},
+		{"metrics", "show", "extra"},
+		{"metrics", "show", "--since", "yesterday"},
+		{"metrics", "show", "--label", "a=b", "--all-labels"},
+		{"metrics", "show", "--outcome", "pass"},
 	} {
 		err := run(append(args, "--home", home), &bytes.Buffer{})
 		var code exitCode

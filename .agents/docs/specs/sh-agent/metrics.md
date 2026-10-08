@@ -131,30 +131,32 @@ A **skill load** is:
 
 ### Output (`show --json`)
 
-Keys are snake_case, like `report.json`. Every metric is split by vendor. A metric one CLI cannot produce is `null` and is named in `notes`, never shown as 0.
+Keys are snake_case, like `report.json`. Every metric is split by vendor (`claude`, `agy`). A metric one CLI cannot produce is `null` and is named in `notes`, never shown as 0. The shape is the Go type `metrics.Summary`:
 
 ```json
 {
-  "window": {"since": "2026-10-01", "until": "2026-10-08"},
-  "sessions": {"claude": 12, "agy": 3},
-  "subagents": {"claude": {"reviewer": 4, "verifier": 2}, "agy": {}},
-  "A": {"dod_closed": {"claude": "3 (ambiguous 1)"}, "verifier": {"PASS": 2, "FAIL": 0},
-        "review_findings": {"high": 1, "medium": 3, "low": 2}, "escaped_bugs": 0,
-        "corrections": 2, "pass_k": {"arm=lean": {"k": 3, "pass_k": 1}}},
-  "B": {"tool_calls": {"claude": 900, "agy": 40},
-        "tool_calls_by_tool": {"claude": {"Bash": 600}, "agy": {"Read": 20}},
-        "tokens": {"claude": {"in": 0, "out": 0, "cache_read": 0, "cache_write": 0}, "agy": null},
-        "cost_usd": {"claude": 12.3, "agy": null}, "wall_min": {}, "active_min": {},
-        "peak_context": {}, "compactions": {}},
-  "C": {"sqlite_verbs": {"claude": 38}, "search_grep_ratio": {"claude": 0.045},
-        "forbidden": {"git add -A": 0, "git add .": 0, "git push --force": 0, "--no-verify": 0, "commit chained to test": 0},
-        "first_reads": {}, "skills": {"claude": {"feature": 2}}},
-  "D": {"tool_error_rate": {}, "denials": {}, "interrupts": {}, "retry_loops": {}, "subagent_tool_calls": {}},
-  "notes": ["agy cost unavailable (CLI exposes none)"]
+  "window": {"since": "2026-09-08", "until": "2026-10-08"},
+  "sessions": {"claude": 16, "agy": 11},
+  "subagents": {"claude": {"reviewer": 9}, "agy": {"explorer": 2}},
+  "A": {"dod_closed": {"claude": {"closed": 3, "ambiguous": 1, "of": 16}},
+        "verifier": {"PASS": 22, "FAIL": 3}, "review_findings": {"high": 8, "medium": 38, "low": 60},
+        "escaped_bugs": 0, "corrections": 0, "pass_k": {"arm=lean": {"k": 3, "passed": 3, "pass_k": 1}}},
+  "B": {"tool_calls": {"claude": 1899}, "tool_calls_by_tool": {"claude": {"Bash": 1300}},
+        "turns": {"claude": 127}, "tokens": {"claude": {"in": 0, "out": 0, "cache_read": 0, "cache_write": 0}},
+        "cost_usd": {"claude": 135.24, "agy": null}, "wall_min": {}, "active_min": {},
+        "peak_context": {}, "compactions": {"claude": 0, "agy": null}},
+  "C": {"sqlite_verbs": {"claude": 42}, "grep_calls": {"claude": 1545}, "search_grep_ratio": {"claude": 0.027},
+        "forbidden": {"git add -A": 4, "git add .": 0, "git push --force": 0, "--no-verify": 0, "commit chained to test": 1},
+        "first_reads": {"plan": 3}, "skills": {"claude": {"golang": 3}}},
+  "D": {"tool_error_rate": {"claude": 0.023}, "denials": {"claude": 10, "agy": null},
+        "interrupts": {"claude": 2, "agy": null}, "retry_loops": {}, "subagent_tool_calls": {"claude": {"reviewer": 391}}},
+  "daily": [{"date": "2026-10-07", "sessions": {}, "tool_calls": {}, "tokens": {}, "cost_usd": {},
+             "sqlite_verbs": {}, "grep_calls": {}, "errors": {}}],
+  "notes": ["agy: cost is not exposed by the CLI (R10 known difference)"]
 }
 ```
 
-The values above illustrate the shape. They are not fixtures.
+The values above illustrate the shape. They are not fixtures. `daily` holds one entry per UTC day of the window, and the report's trend charts read it.
 
 ### Report (`metrics report`)
 
@@ -186,7 +188,7 @@ Every number in the report equals the same key in `show --json` over the same wi
 | A5 | Corrections | `feedback.jsonl` entries in the window whose project is the session's root. |
 | A6 | pass^k | Per label, 1 when all k `--outcome` runs passed. k and the pass count are shown. |
 | B1 | Tokens and cost | Claude: the maximum of each usage field per message id, summed. Cost and duration come from the session's last `cost-state` line. Antigravity: `gen_metadata` usage. |
-| B2 | Time and volume | Wall time = `ended_at - started_at`. Active time is the same, less gaps of 5 min or more between steps. Also turns and tool calls. |
+| B2 | Time and volume | Wall time = `ended_at - started_at` of main sessions. Active time = the sum of gaps under 5 min between a main session's steps. A subagent runs inside its parent's time and is counted in neither. Also turns (typed user turns) and tool calls (main and subagent). |
 | B3 | Context | Peak context = max(input + cache read + cache write) of one message. Also the number of compactions. |
 | B4 | Subagents | Count by type, the tool calls of each, and SendMessage resumes. |
 | C1 | Search vs grep | `sh-agent search\|index` verb segments divided by `grep`/`rg` segments plus Grep tool calls. |
@@ -254,7 +256,7 @@ ingest_state(source TEXT PRIMARY KEY, size INTEGER, mtime INTEGER, offset INTEGE
 | A file shrank or was replaced | Re-read from offset 0, with no duplicate rows |
 | An Antigravity copy or read fails | That conversation is named and counted in F; the others are ingested; exit 1 |
 | An Antigravity token field is absent | Tokens are NULL; `notes` says `agy tokens unavailable for N sessions` |
-| A project root is gone or not git | Session rows are still written; no commit events; a note |
+| A project root is gone or not git | Session rows are still written; no commit events; `ingest` prints `metrics: note: project root gone: <root>` or `no git history: <root>` |
 | Two main sessions overlap in one root | Commits in the overlap are `ambiguous`; A1/A4 are shown as `n (ambiguous m)` and excluded from rates |
 | Still locked after the 10 s busy timeout | The source counts as failed (`database is locked`), exit 1; the next run picks it up |
 | `export FILE` or `report --out FILE` exists | `refusing to overwrite FILE`, exit 1 |

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/kesokaj/styrman-harness/internal/search"
+	"github.com/kesokaj/styrman-harness/internal/trail"
 )
 
 var (
@@ -509,12 +510,12 @@ func TestTrailDateFromGit(t *testing.T) {
 // read holds no index lock, and no fsmonitor hook runs in the project at
 // 03:00 (security review rounds 2 and 3, 2026-10-01).
 func TestTrailStatusArgs(t *testing.T) {
-	got := strings.Join(trailStatusArgs("/r", ".agents/docs"), " ")
+	got := strings.Join(trail.StatusArgs("/r", ".agents/docs"), " ")
 	want := "--no-optional-locks -c core.fsmonitor=false -C /r status --porcelain --untracked-files=all -- .agents/docs"
 	if got != want {
 		t.Errorf("args = %q, want %q", got, want)
 	}
-	cmd := exec.Command("git", trailStatusArgs(t.TempDir(), ".")...)
+	cmd := exec.Command("git", trail.StatusArgs(t.TempDir(), ".")...)
 	if out, err := cmd.CombinedOutput(); err != nil && !strings.Contains(string(out), "not a git repository") {
 		t.Errorf("git rejected the arguments: %v\n%s", err, out)
 	}

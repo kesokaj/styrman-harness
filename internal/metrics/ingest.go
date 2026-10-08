@@ -110,6 +110,16 @@ func Ingest(s *Store, o Options, log io.Writer) (Result, error) {
 	if o.wants("agy") {
 		s.ingestAgy(o, &r, log)
 	}
+	// Events come from the real home's projects and feedback log, also for a
+	// --source run: its sessions' project roots are where git and the trail are.
+	notes, err := s.joinEvents(o.Home)
+	if err != nil {
+		r.Failed = append(r.Failed, "events")
+		fmt.Fprintf(log, "metrics: events: %v\n", err)
+	}
+	for _, n := range notes {
+		fmt.Fprintln(log, "metrics: note: "+n)
+	}
 	after, err := s.counts()
 	if err != nil {
 		return r, err

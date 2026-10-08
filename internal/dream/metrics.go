@@ -1,8 +1,13 @@
 package dream
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
+	"time"
 
 	"github.com/kesokaj/styrman-harness/internal/metrics"
 )
@@ -37,4 +42,43 @@ func (o Options) ingestFirst(logf func(string)) {
 		return
 	}
 	logf(line)
+}
+
+// metricsSummary is the numbers-only summary of root's agent metrics for the
+// window [since, now] and the window of the same length before it, read from
+// a copy of the metrics store (R3's addendum, ADR-055a). No store, or no
+// session of root in either window: "" with no error. A variable so a test
+// can replace it.
+var metricsSummary = func(home, root string, since, now time.Time) (string, error) {
+	path := metrics.Path(home)
+	if _, err := os.Lstat(path); errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	tmp, err := os.MkdirTemp(filepath.Dir(path), "dream-metrics-")
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(tmp)
+	s, err := metrics.Snapshot(path, tmp)
+	if err != nil {
+		return "", err
+	}
+	defer s.Close()
+	cur, err := s.Show(metrics.ShowOptions{Since: since, Now: now, Project: root})
+	if err != nil {
+		return "", err
+	}
+	prev, err := s.Show(metrics.ShowOptions{Since: since.Add(-now.Sub(since)), Now: since, Project: root})
+	if err != nil {
+		return "", err
+	}
+	if cur.Sessions["claude"]+cur.Sessions["agy"]+prev.Sessions["claude"]+prev.Sessions["agy"] == 0 {
+		return "", nil
+	}
+	b, err := json.MarshalIndent(map[string]any{
+		"window":   map[string]string{"since": since.UTC().Format(time.RFC3339), "until": now.UTC().Format(time.RFC3339)},
+		"current":  cur.Numbers(),
+		"previous": prev.Numbers(),
+	}, "", " ")
+	return string(b), err
 }

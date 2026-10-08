@@ -10,6 +10,12 @@ Status: built 2026-09-30 (plan `plans/2026-09-30-parity-memory-dream.md`). R3's 
 
 Before anything else, a real run (not `--dry-run`) runs `sh-agent metrics ingest` over every session of both CLIs, store-wide whatever `--project` names, inside `dream.lock`. It logs the ingest's summary line to `dream.log`. A failure is logged as `metrics ingest failed: …` and changes neither the exit status nor `last_run.error` (plan `2026-10-08-metrics-store` D16; spec `specs/sh-agent/metrics.md`). A dry run prints `[dry-run] would ingest metrics into <path>` and writes nothing.
 
+**The metrics block (R3's addendum, ADR-055a).** Each project's prompt carries a `metrics` input: `metrics.Summary.Numbers()` for the project's window (its watermark to now) and for the window of the same length before it, as JSON.
+- **Numbers only.** Every key is the metrics package's own name (no tool, skill, agent, label or path), and a metric a CLI cannot produce is absent.
+- **Read from a copy.** It is read from a copy of `metrics.db` (`metrics.Snapshot`). A store at another schema is named under "Left out", and no store or no session gives no block.
+- **Context, never news.** It never marks a project changed and is dropped first when the prompt is over the cap.
+- **How the instructions treat it.** A worsened metric is evidence only when the other inputs show its cause.
+
 `sh-agent dream --all`, run nightly by a user timer (`--install-timer`), or by hand with `--all` or `--project <dir>`. It looks at every project in the global search index, `~/.config/sh-agent/search.db` `projects` (read from a copy, never opened live). A project is skipped with a log line when its root is gone, it is not a git checkout, or it lacks its docs root. Otherwise, when anything changed since the project's watermark:
 
 1. **Collect** (`internal/dream/collect.go`), in prompt order:

@@ -90,7 +90,7 @@ metrics: N sessions, M steps, K events added; U lines skipped (unknown shape); F
 **The program:**
 - It is the basename of the first remaining word, and `go run <pkg>` gives the package's last element.
 - It must match `^[A-Za-z_][A-Za-z0-9_.+-]*$`; any other word in command position (a glob, an expansion, a quoted path) yields no verb.
-- A subcommand is kept for `git go gh docker gcloud kubectl npm npx sh-agent terraform` when the next word is name-shaped.
+- A subcommand is kept for `git go gh docker gcloud kubectl npm npx sh-agent terraform` when the next word is name-shaped. After `sh-agent`'s subcommand, one more word is kept when it is one of `ingest show report export add` (`sh-agent metrics show`).
 
 **Flag names:**
 - `--name=v` is kept as `--name`.
@@ -270,6 +270,7 @@ ingest_state(source TEXT PRIMARY KEY, size INTEGER, mtime INTEGER, offset INTEGE
 | A project root is gone or not git | Session rows are still written; no commit events; `ingest` prints `metrics: note: project root gone: <root>` or `no git history: <root>` |
 | Two main sessions overlap in one root | Commits in the overlap are `ambiguous`; A1/A4 are shown as `n (ambiguous m)` and excluded from rates |
 | Still locked after the 10 s busy timeout | The source counts as failed (`database is locked`), exit 1; the next run picks it up |
+| `show`, `report` or `export` on a home with no store (never ingested) | `sh-agent metrics: no metrics store at <path>; run \`sh-agent metrics ingest\` first`, exit 1; nothing is created |
 | `export FILE` or `report --out FILE` exists | `refusing to overwrite FILE`, exit 1 |
 | `--source` without `--label` | Usage error, exit 2 |
 | Ingest fails inside `dream` | A line in `dream.log`; the dream's exit status and `last_run.error` are unchanged |

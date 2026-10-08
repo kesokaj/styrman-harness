@@ -19,7 +19,7 @@ func TestVerb(t *testing.T) {
 		{"FOO=1 BAR=x sudo -n go test -race -count=1 ./...", []string{"go test -race -count"}},
 		{"go run ./cmd/sh-agent search --refs internal/x.go --kind bug", []string{"sh-agent search --refs --kind"}},
 		{"sh-agent search --refs x 2>/dev/null", []string{"sh-agent search --refs"}},
-		{"env -u CLAUDE_CONFIG_DIR sh-agent metrics ingest --home h", []string{"sh-agent metrics --home"}},
+		{"env -u CLAUDE_CONFIG_DIR sh-agent metrics ingest --home h", []string{"sh-agent metrics ingest --home"}},
 		{"echo 'a; b && c' ; ls -la", []string{"echo", "ls -la"}},
 		{"git push --force-with-lease=origin/main", []string{"git push --force-with-lease"}},
 		{"cat > f.md <<'EOF'\nsecret line one\nrm -rf everything\nEOF\ngit diff", []string{"cat", "git diff"}},
@@ -40,6 +40,9 @@ func TestVerb(t *testing.T) {
 		{"case $k in a) git status;; b|c) ls;; esac", []string{"git status", "ls"}},
 		{"# just a comment\ngit log --oneline # trailing", []string{"git log --oneline"}},
 		{"git push -f origin main", []string{"git push -f"}},
+		{"sh-agent metrics show --json --since 2026-10-01", []string{"sh-agent metrics show --json --since"}},
+		{"sh-agent memory add --type user < x", []string{"sh-agent memory add --type"}},
+		{"sh-agent metrics secretword --json", []string{"sh-agent metrics --json"}},
 		{">/dev/null git status; > out.txt ls; 2>err cat f", []string{"git status", "ls", "cat"}},
 		{"", nil},
 	}

@@ -1,5 +1,7 @@
 // Package dream is `sh-agent dream`: the background job that reads every
-// indexed project's memory, trail, feedback and both CLIs' transcripts, asks
+// indexed project's memory, trail, feedback, a numbers-only summary of its
+// metrics and both CLIs' transcripts (after ingesting every session's shape
+// into the metrics store), asks
 // a CLI with no tools what should become a rule, a skill or a memory, and
 // writes the answer as proposals under ~/.config/sh-agent/proposals/dream/
 // (R3's exception, R10, plan 2026-09-30-parity-memory-dream).

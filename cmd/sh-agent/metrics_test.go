@@ -99,3 +99,24 @@ func TestMetricsUsageErrorsExit2(t *testing.T) {
 		t.Errorf("a usage error created the store: %v", err)
 	}
 }
+
+// show, report and export on a home that never ingested say so and exit 1;
+// they never create an empty store whose zeros would read as "no sessions".
+func TestMetricsWithoutStore(t *testing.T) {
+	home := t.TempDir()
+	for _, args := range [][]string{
+		{"metrics", "show"},
+		{"metrics", "report", "--out", filepath.Join(t.TempDir(), "r.html")},
+		{"metrics", "export", filepath.Join(t.TempDir(), "e.jsonl")},
+	} {
+		var out bytes.Buffer
+		err := run(append(args, "--home", home), &out)
+		var code exitCode
+		if !errors.As(err, &code) || code != 1 || !strings.Contains(out.String(), "no metrics store") {
+			t.Errorf("%q: err %v, out %q; want exit 1 naming the missing store", args, err, out.String())
+		}
+	}
+	if _, err := os.Stat(filepath.Join(home, ".config", "sh-agent", "metrics.db")); !os.IsNotExist(err) {
+		t.Errorf("a read verb created the store: %v", err)
+	}
+}

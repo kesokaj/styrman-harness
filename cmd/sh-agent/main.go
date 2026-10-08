@@ -63,7 +63,7 @@ Commands:
   index [--global] [--rebuild]  reconcile the search index, or delete and rebuild it, and print its counts
   memory add --type T --name SLUG --description TEXT  save one memory, its body on stdin, into this project's .agents/memory/ and its MEMORY.md line (T: user, feedback, project or reference); every CLI writes memory this way (R10)
   dream --install-timer | --remove-timer [--dry-run]  install (systemd user timer on Linux, launchd agent on macOS) or remove the nightly "dream --all", run with the PATH of the installing shell; uninstall removes it too
-  dream --all | --project DIR [--dry-run]  the background dreamer: for every indexed project (or one) that changed since its last dream, send its memory, new trail, feedback and both CLIs' transcripts, redacted, to a CLI with no tools, and write the proposals and draft skills it returns under ~/.config/sh-agent/proposals/dream/ (R3's exception; --vendor picks the CLI, default from the manifest)
+  dream --all | --project DIR [--dry-run]  the background dreamer: first ingest every session's shape into the metrics store; then for every indexed project (or one) that changed since its last dream, send its memory, new trail, feedback, a numbers-only summary of its metrics and both CLIs' transcripts, redacted, to a CLI with no tools, and write the proposals and draft skills it returns under ~/.config/sh-agent/proposals/dream/ (R3's exception; --vendor picks the CLI, default from the manifest)
   metrics ingest [--vendor V] [--source DIR --label KEY=VALUE [--outcome pass|fail]]  read the shape of every Claude Code and Antigravity session (tools, command verbs, tokens, timings; never arguments or prose) into ~/.config/sh-agent/metrics.db, the metrics store; --source reads a sandbox home and stamps its sessions with the label; transcripts come from --source, else --home, else $CLAUDE_CONFIG_DIR, else this home
   metrics show [--since YYYY-MM-DD] [--project DIR] [--label KEY=VALUE | --all-labels] [--json]  the agent-evaluation summary of the metrics store, a column per CLI: outcome (DoD closure, verifier status, review findings, escaped bugs, corrections, pass^k per label), efficiency (tool calls, turns, tokens, cost, wall and active time, peak context, compactions), process adherence (sh-agent search vs grep, forbidden command shapes, first reads, skills) and reliability (tool error rate, denials, interrupts, retry loops, subagent tool calls); n/a is a metric that CLI cannot produce; sandbox (labelled) sessions are left out unless named
   metrics report [--since YYYY-MM-DD] [--project DIR] [--label KEY=VALUE | --all-labels] [--out FILE]  write show's summary as one self-contained HTML file with charts (per-day tool calls, tokens, cost, search:grep and errors, one line per CLI; tool calls by tool; subagent tool calls by type; pass^k per sandbox label), inline SVG, no script, light and dark; default ~/.config/sh-agent/reports/<date-time>-metrics.html, 0600, an existing file refused
@@ -454,7 +454,7 @@ func runMetrics(c *ctx) error {
 			fmt.Fprintln(c.out, "sh-agent metrics show: "+err.Error())
 			return exitCode(2)
 		}
-		s, err := metrics.Open(metrics.Path(c.home))
+		s, err := c.existingMetricsStore()
 		if err != nil {
 			return err
 		}
@@ -478,7 +478,7 @@ func runMetrics(c *ctx) error {
 			fmt.Fprintln(c.out, "sh-agent metrics report: "+err.Error())
 			return exitCode(2)
 		}
-		s, err := metrics.Open(metrics.Path(c.home))
+		s, err := c.existingMetricsStore()
 		if err != nil {
 			return err
 		}
@@ -502,7 +502,7 @@ func runMetrics(c *ctx) error {
 			fmt.Fprintln(c.out, "sh-agent metrics export FILE")
 			return exitCode(2)
 		}
-		s, err := metrics.Open(metrics.Path(c.home))
+		s, err := c.existingMetricsStore()
 		if err != nil {
 			return err
 		}
@@ -515,6 +515,18 @@ func runMetrics(c *ctx) error {
 	}
 	fmt.Fprintf(c.out, "sh-agent metrics: unknown subcommand %q (ingest, show, report, export)\n", sub)
 	return exitCode(2)
+}
+
+// existingMetricsStore opens the store for show, report and export, which
+// read it: a home that never ingested has none, and creating an empty one
+// would print zeros that read as "no sessions" (exit 1 instead).
+func (c *ctx) existingMetricsStore() (*metrics.Store, error) {
+	path := metrics.Path(c.home)
+	if _, err := os.Lstat(path); errors.Is(err, os.ErrNotExist) {
+		fmt.Fprintf(c.out, "sh-agent metrics: no metrics store at %s; run `sh-agent metrics ingest` first\n", path)
+		return nil, exitCode(1)
+	}
+	return metrics.Open(path)
 }
 
 // metricsShowOptions reads show's filters; --label and --all-labels exclude

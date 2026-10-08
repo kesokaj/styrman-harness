@@ -3,6 +3,7 @@ package dream
 import (
 	"bytes"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -93,4 +94,77 @@ func TestIngestFailureDoesNotFailDream(t *testing.T) {
 	if log := read(t, filepath.Join(f.home, ".config", "sh-agent", "dream.log")); !strings.Contains(log, "metrics ingest failed: disk on fire") {
 		t.Errorf("dream.log lacks the failure:\n%s", log)
 	}
+}
+
+// The prompt carries the project's metrics as numbers only, for this window
+// and the one before it, read from a copy of the store; nothing names a
+// tool, a skill or a path (R3's addendum, ADR-055a).
+func TestPromptCarriesMetricsNumbersOnly(t *testing.T) {
+	f := newFixture(t)
+	scaffold(t, f)
+	claudeLine(t, f)
+	s, err := metrics.Open(metrics.Path(f.home))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := metrics.Ingest(s, metrics.Options{Home: f.home, HomeGiven: true, Vendor: "claude"}, io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	before, _ := os.ReadDir(filepath.Dir(metrics.Path(f.home)))
+
+	c, err := collect(f.home, "claude", project(f), since, maxPrompt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sec string
+	for _, in := range c.Inputs {
+		if in.Kind == kindMetrics {
+			sec = in.Text
+		}
+	}
+	if !strings.Contains(sec, `"B.tool_calls.claude": 1`) || !strings.Contains(sec, `"previous"`) {
+		t.Fatalf("metrics section:\n%s", sec)
+	}
+	for _, leak := range []string{"Bash", "git status", f.root, "S9"} {
+		if strings.Contains(sec, leak) {
+			t.Errorf("the metrics section names %q", leak)
+		}
+	}
+	if !strings.Contains(c.Prompt, "<<<data metrics:") {
+		t.Error("the prompt has no metrics block")
+	}
+	after, _ := os.ReadDir(filepath.Dir(metrics.Path(f.home)))
+	if len(after) != len(before) {
+		t.Errorf("reading the summary left files beside the store: %v -> %v", names(before), names(after))
+	}
+}
+
+// Over the cap, the metrics block goes before any transcript (ADR-055a), and
+// a metrics block alone never marks a project changed.
+func TestMetricsDroppedFirstAndNeverChanges(t *testing.T) {
+	c := Collected{Inputs: []Input{
+		{Kind: kindMemory, Label: "memory/a.md", Text: "m"},
+		{Kind: kindTranscript, Label: "claude x", Text: strings.Repeat("t", 200), Time: now},
+		{Kind: kindMetrics, Label: "metrics", Text: strings.Repeat("9", 200)},
+	}}
+	if err := c.fit(len(prompt(c)) - 100); err != nil {
+		t.Fatal(err)
+	}
+	for _, in := range c.Inputs {
+		if in.Kind == kindMetrics {
+			t.Fatal("the metrics block survived while a transcript was kept")
+		}
+	}
+	if len(c.Inputs) != 2 {
+		t.Fatalf("inputs %d, want memory and the transcript", len(c.Inputs))
+	}
+}
+
+func names(es []os.DirEntry) []string {
+	var out []string
+	for _, e := range es {
+		out = append(out, e.Name())
+	}
+	return out
 }

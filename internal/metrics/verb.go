@@ -13,6 +13,9 @@ var subcommanded = map[string]bool{
 	"npm": true, "npx": true, "sh-agent": true, "terraform": true,
 }
 
+// shAgentSub are sh-agent's second-level verbs, kept after the subcommand.
+var shAgentSub = map[string]bool{"ingest": true, "show": true, "report": true, "export": true, "add": true}
+
 // goStyle programs take long flags behind a single dash (`go test -race
 // -count=1`) and never glue a value to a flag, so the whole name is kept.
 var goStyle = map[string]bool{"go": true, "gofmt": true, "govulncheck": true, "find": true}
@@ -245,6 +248,12 @@ func verbFrom(words []string) string {
 	}
 	parts := []string{prog}
 	if subcommanded[prog] && len(rest) > 0 && programName.MatchString(rest[0]) {
+		parts = append(parts, rest[0])
+		rest = rest[1:]
+	}
+	// sh-agent's own second-level verbs (`metrics show`, `memory add`) are
+	// identifiers from a fixed list; any other second word stays a positional.
+	if prog == "sh-agent" && len(parts) == 2 && len(rest) > 0 && shAgentSub[rest[0]] {
 		parts = append(parts, rest[0])
 		rest = rest[1:]
 	}

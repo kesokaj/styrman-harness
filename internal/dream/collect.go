@@ -17,18 +17,19 @@ import (
 	"github.com/kesokaj/styrman-harness/internal/trail"
 )
 
-// The kinds, in prompt order. Transcripts are dropped first when the prompt
-// is over the cap, then the trail, then feedback, then skills; memory is
-// always sent whole (D21).
+// The kinds, in prompt order. The metrics summary is dropped first when the
+// prompt is over the cap (ADR-055a), then transcripts, then the trail, then
+// feedback, then skills; memory is always sent whole (D21).
 const (
 	kindMemory     = "memory"
 	kindFeedback   = "feedback"
 	kindTrail      = "trail"
 	kindSkill      = "skill"
 	kindTranscript = "transcript"
+	kindMetrics    = "metrics"
 )
 
-var promptOrder = []string{kindMemory, kindFeedback, kindTrail, kindSkill, kindTranscript}
+var promptOrder = []string{kindMemory, kindFeedback, kindTrail, kindSkill, kindMetrics, kindTranscript}
 
 // transcriptLineMax is the longest transcript line read; a longer one ends
 // that file's read, which is named as left out. A test lowers it.
@@ -47,7 +48,9 @@ func collect(home, vendor string, p search.Project, since time.Time, limit int) 
 			return
 		}
 		c.Inputs = append(c.Inputs, Input{Kind: kind, Label: label, Text: text, Time: t})
-		if kind != kindSkill && t.After(since) {
+		// Skills and the metrics summary are context, never news: neither
+		// makes a project worth dreaming over by itself.
+		if kind != kindSkill && kind != kindMetrics && t.After(since) {
 			c.Changed = true
 		}
 	}
@@ -97,6 +100,15 @@ func collect(home, vendor string, p search.Project, since time.Time, limit int) 
 
 	for _, s := range skills(home, vendor) {
 		add(kindSkill, "skill "+s.name, s.name+": "+s.description, time.Time{})
+	}
+
+	// The project's agent metrics, numbers only, for this window and the one
+	// before it (R3's addendum, ADR-055a). A store that cannot be read is
+	// named as left out; it never fails the project.
+	if sum, err := metricsSummary(home, p.Root, since, time.Now()); err != nil {
+		c.Dropped = append(c.Dropped, "metrics: "+err.Error())
+	} else {
+		add(kindMetrics, "metrics", sum, time.Time{})
 	}
 
 	trs, trErrs := claudeTranscript(home, p.Root, since)
@@ -152,11 +164,12 @@ func scrub(text, home string) string {
 	return text
 }
 
-// fit drops inputs until the prompt is under limit: transcripts oldest
-// first, then trail files oldest first, then feedback, then skills (D21). A
+// fit drops inputs until the prompt is under limit: the metrics summary,
+// then transcripts oldest first, then trail files oldest first, then
+// feedback, then skills (D21, ADR-055a). A
 // project whose memory alone is over the limit fails.
 func (c *Collected) fit(limit int) error {
-	for _, kind := range []string{kindTranscript, kindTrail, kindFeedback, kindSkill} {
+	for _, kind := range []string{kindMetrics, kindTranscript, kindTrail, kindFeedback, kindSkill} {
 		for len(prompt(*c)) > limit {
 			i := oldest(c.Inputs, kind)
 			if i < 0 {

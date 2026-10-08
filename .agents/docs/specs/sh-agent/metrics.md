@@ -40,7 +40,7 @@ sh-agent metrics export [--home H] FILE
 | `--vendor` | `claude`, `agy`, `all` | `all` (not the manifest's) | Which CLI's sessions `ingest` reads. |
 | `--source` | directory | none | A sandbox home: `DIR/.claude/projects` and `DIR/.gemini/antigravity-cli`. Requires `--label`. |
 | `--label` | `KEY=VALUE` | none | On `ingest`: stamped on every session added from `--source`. On `show`/`report`: shows only that label. |
-| `--outcome` | `pass`, `fail` | none | The run's acceptance result, supplied by the kit. Used for pass^k. |
+| `--outcome` | `pass`, `fail` | none | The run's acceptance result, supplied by the kit, used for pass^k. Given after the run (a second ingest of the same `--source` and `--label`), it stamps every session of the label that has no outcome yet, even when no transcript changed; an earlier run keeps the outcome it was stamped with. |
 | `--all-labels` | bool | false | Include labelled (sandbox) sessions. Without it, and without `--label`, they are excluded. |
 | `--since` | date | 30 days ago | Start of the window. |
 | `--project` | directory | all | Only sessions whose `project_root` is this directory. |

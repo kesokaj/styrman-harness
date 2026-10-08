@@ -15,6 +15,7 @@ import (
 
 	"github.com/kesokaj/styrman-harness/internal/harness"
 	"github.com/kesokaj/styrman-harness/internal/memory"
+	"github.com/kesokaj/styrman-harness/internal/metrics"
 	"github.com/kesokaj/styrman-harness/internal/search"
 )
 
@@ -126,6 +127,7 @@ func (o Options) since(st state, root string) time.Time {
 // dryRun prints what a run would collect and run, and writes, locks and
 // advances nothing.
 func (o Options) dryRun(projects []search.Project, st state) error {
+	fmt.Fprintf(o.Out, "[dry-run] would ingest metrics into %s\n", metrics.Path(o.Home))
 	cli := command(o.Vendor)
 	if o.Vendor == harness.VendorAntigravity {
 		cli = append(cli, "(prompt on stdin as one stream-json message; HOME a private copy with no grants)")

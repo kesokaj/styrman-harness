@@ -4,7 +4,11 @@
 #   control      no harness at all
 #   harness      the harness installed from this checkout; the prompt as-is (unscaffolded: the Task path)
 #   <name>-full  the harness, plus prefix-full.md: scaffold and follow the Feature workflow and Definition of Done
-# Then: python3 -I accept.py <clone> <work dir>; python3 -I metrics.py <result.json> <home>/.claude <clone>.
+# After the run it ingests the arm's sessions into the kit's own metrics store, $AB_OUT/.config/sh-agent/metrics.db
+# (never the real home's), labelled arm=<arm> (plan 2026-10-08-metrics-store D24). Then: python3 -I accept.py <clone>
+# <work dir>, and stamp the outcome (pass = 25/25) with the command run.sh prints; read the arms with
+# `sh-agent metrics show --home "$AB_OUT" --all-labels` (or `report`), which gives cost, turns, tokens, peak context,
+# subagents and pass^k per arm.
 #
 # Built on kit-preamble.sh (BUG-162: the first version skipped it, and harness runs registered their scratch
 # apps in the real global search index). The clone lives under $AB_OUT, default ~/sandbox/ab, outside every
@@ -64,5 +68,9 @@ echo $(( $(date +%s) - t0 )) > "$RUN/wall_seconds"
 rm -f "$KIT_HOME/.claude/.credentials.json"
 [ -f "$real_cred" ] && [ ! -L "$real_cred" ] || echo "run.sh: WARNING $real_cred is no longer a regular file" >&2
 [ "$rc" != 124 ] || echo "run.sh: claude timed out after 90m; the run is recorded as timed out, not re-run" >&2
+# The arm's shape into the kit's own store: --home "$OUT" keeps it out of the real home's store, and --source reads
+# only this arm's transcripts (the transcript-root rule, never $CLAUDE_CONFIG_DIR).
+go run -C "$REPO" ./cmd/sh-agent metrics ingest --home "$OUT" --source "$KIT_HOME" --label "arm=$arm" --vendor claude || echo "run.sh: WARNING metrics ingest failed; re-run it by hand" >&2
 echo "run.sh: $arm finished (claude exit $rc) in $(cat "$RUN/wall_seconds")s; clone $KIT_CLONE; transcripts $KIT_HOME/.claude/projects"
+echo "run.sh: after accept.py, stamp the outcome: go run -C '$REPO' ./cmd/sh-agent metrics ingest --home '$OUT' --source '$KIT_HOME' --label 'arm=$arm' --outcome pass|fail"
 exit "$rc"

@@ -8,6 +8,8 @@ Status: built 2026-09-30 (plan `plans/2026-09-30-parity-memory-dream.md`). R3's 
 
 ## What it does
 
+Before anything else, a real run (not `--dry-run`) runs `sh-agent metrics ingest` over every session of both CLIs, store-wide whatever `--project` names, inside `dream.lock`. It logs the ingest's summary line to `dream.log`. A failure is logged as `metrics ingest failed: …` and changes neither the exit status nor `last_run.error` (plan `2026-10-08-metrics-store` D16; spec `specs/sh-agent/metrics.md`). A dry run prints `[dry-run] would ingest metrics into <path>` and writes nothing.
+
 `sh-agent dream --all`, run nightly by a user timer (`--install-timer`), or by hand with `--all` or `--project <dir>`. It looks at every project in the global search index, `~/.config/sh-agent/search.db` `projects` (read from a copy, never opened live). A project is skipped with a log line when its root is gone, it is not a git checkout, or it lacks its docs root. Otherwise, when anything changed since the project's watermark:
 
 1. **Collect** (`internal/dream/collect.go`), in prompt order:

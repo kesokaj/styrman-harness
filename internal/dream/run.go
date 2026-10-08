@@ -84,6 +84,7 @@ func (o Options) realRun() error {
 
 	removeCopies(conf, o.Now())
 	prune(filepath.Join(conf, "dream-failed"), t0)
+	o.ingestFirst(logf)
 	projects, err := o.targets()
 	if err != nil {
 		return fail(err.Error())

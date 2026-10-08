@@ -246,3 +246,33 @@ func TestSourceLabelAndOutcome(t *testing.T) {
 		}
 	}
 }
+
+// The kit ingests a run first and learns its outcome later: a second ingest
+// with --outcome stamps the label's sessions that have none, even though no
+// transcript changed, and leaves an earlier run's outcome alone.
+func TestOutcomeStampedAfterTheRun(t *testing.T) {
+	run1, _ := claudeFixture(t)
+	s := openT(t, filepath.Join(t.TempDir(), "metrics.db"))
+	ingestT(t, s, Options{Source: run1, Label: "arm=x", Outcome: "fail", Vendor: "claude"})
+
+	run2, _ := claudeFixture(t)
+	// a second run of the same arm: other session ids
+	for _, f := range []string{filepath.Join(run2, ".claude", "projects", "-proj", "S1.jsonl"),
+		filepath.Join(run2, ".claude", "projects", "-proj", "S1", "subagents", "agent-A1.jsonl")} {
+		b, _ := os.ReadFile(f)
+		os.WriteFile(f, bytes.ReplaceAll(bytes.ReplaceAll(b, []byte(`"S1"`), []byte(`"R2"`)), []byte(`"A1"`), []byte(`"B2"`)), 0o600)
+	}
+	ingestT(t, s, Options{Source: run2, Label: "arm=x", Vendor: "claude"})
+	ingestT(t, s, Options{Source: run2, Label: "arm=x", Outcome: "pass", Vendor: "claude"})
+	got := map[string]string{}
+	rows, _ := s.db.Query(`SELECT id, COALESCE(outcome, '') FROM sessions WHERE parent_id IS NULL`)
+	for rows.Next() {
+		var id, o string
+		rows.Scan(&id, &o)
+		got[id] = o
+	}
+	rows.Close()
+	if got["S1"] != "fail" || got["R2"] != "pass" {
+		t.Fatalf("outcomes %v, want S1 fail (kept) and R2 pass (stamped late)", got)
+	}
+}

@@ -25,10 +25,17 @@ The kits checked credentials and the real config after a run, never processes. B
 - `kit_leftovers` was added to `testing/ab-kit/run.sh`, `testing/seed-security/run.sh` and `testing/agy-rel/run.sh`. After the CLI exits, any process whose cwd is inside the run's clone is killed and FAILs the run (Linux `/proc`).
 - Validated both ways on a planted `sleep 300` with its cwd in a probe clone: it returned 1 and killed the process; with nothing planted it returned 0.
 
-**Limit, stated:** the check matches a process by its working directory only. A process the agent starts from `/tmp` or `$KIT_HOME`, or one that changes directory, is not caught. Matching the executable path and listeners new since the run started would close that, and is a follow-up (security review v2.5.0 round 2, R2-1, low).
+**Limit closed (2026-10-08, plan `2026-10-08-kit-leftovers-and-hard-seeds`):** the check moved into `kit-preamble.sh`'s exit trap (`kit_process_leftovers`), so every kit gets it. It matches by physical cwd or executable under the clone or `KIT_HOME`, or by `HOME=$KIT_HOME` in the process environment, which catches a server started from `/tmp` too. It skips the trap's own shell, its ancestors and its descendants. Pinned by `TestKitPreambleKillsLeftoverProcesses`, with mutations seen failing. The three kits' pasted copies are removed.
+
+**Still not caught**, stated so no one reads the check as complete (code review 2026-10-08):
+- an orphan that changed directory AND dropped `HOME` (`env -i`)
+- a container started through the Docker socket
+- a process that ignores SIGTERM: it is reported and fails the run, but the 1 s wait does not see it die
+- the kit shell's own descendants, skipped by design, so a kit killed mid-run leaves its CLI tree unflagged
+- an operator's terminal or editor sitting in the clone or `KIT_HOME`, which WOULD be sent SIGTERM; nobody should work inside a kit's clone while it runs
 
 ## Prevention
-A kit that runs an agent checks, after the run, for processes it left behind (cwd inside the clone), kills them, and fails the run. A residual a review names as "survives" gets a check, not a header note.
+A kit that runs an agent checks, after the run, for processes it left behind (cwd or executable under the clone or `KIT_HOME`, or `HOME=$KIT_HOME`), kills them, and fails the run; since 2026-10-08 the preamble's exit trap does it for every kit. A residual a review names as "survives" gets a check, not a header note.
 
 ## Related
 BUG-160 (credentials left in sandbox homes: the same class, "what the run left behind"). Plan `2026-10-07-lean-process-3`. Security reviews `2026-10-07-security-worktree-ab-kit.md` (R2-3) and `2026-10-07-security-worktree-agy-seed-kits.md` (R2 finding 1).

@@ -21,16 +21,35 @@
 # `--home "$KIT_HOME"` on every sh-agent call the agent makes (BUG-107). At exit
 # it also fails the run when any credential is still in KIT_HOME (BUG-160): a
 # kit deletes what it copied before it ends, and this check proves it did.
-# The exit check is that EXIT trap and nothing else: a kit never sets an EXIT
+# The exit check (processes left by the run, the real config, credentials) is that EXIT trap and nothing else: a kit never sets an EXIT
 # trap of its own after sourcing this file and never ends in `exec <cli>`,
-# and a run counts only when its output holds "kit: real config unchanged" and
-# "kit: no credentials left in KIT_HOME" (or a FAIL line).
+# and a run counts only when its output holds "kit: no processes left by the run"
+# (on a machine without /proc, "kit: no /proc here: …", which its log names as a gap),
+# "kit: real config unchanged" and "kit: no credentials left in KIT_HOME" (or a FAIL line).
 set -euo pipefail
 : "${KIT_CLONE:?KIT_CLONE is required}"
 : "${KIT_HOME:?KIT_HOME is required}"
 case "$KIT_HOME" in "$HOME"|"$HOME/") echo "kit: KIT_HOME is the real home; refusing" >&2; exit 2;; esac
 # Absolute: the exit check runs after the kit has changed directory.
 case "$KIT_HOME" in /*) ;; *) echo "kit: KIT_HOME must be an absolute path, got '$KIT_HOME'" >&2; exit 2;; esac
+case "$KIT_CLONE" in /*) ;; *) echo "kit: KIT_CLONE must be an absolute path, got '$KIT_CLONE'" >&2; exit 2;; esac
+# The exit trap sends SIGTERM to processes under these two roots (BUG-163), so they are resolved once, here, and
+# refused when they are /, the real home or a parent of it, or the harness checkout or a parent of it: a
+# KIT_HOME of "$HOME/." or a link to the home passes the literal check above (security review 2026-10-08).
+kit_root_clone=$(cd "$KIT_CLONE" 2>/dev/null && pwd -P) || { echo "kit: $KIT_CLONE does not exist" >&2; exit 2; }
+# Resolved without creating it: a refused root is never made.
+if [ -d "$KIT_HOME" ]; then kit_root_home=$(cd "$KIT_HOME" && pwd -P)
+else kit_root_home=$(cd "$(dirname "$KIT_HOME")" 2>/dev/null && pwd -P)/$(basename "$KIT_HOME") || { echo "kit: the parent of $KIT_HOME does not exist" >&2; exit 2; }; fi
+kit_real_home=$(cd "$HOME" && pwd -P)
+kit_repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd -P)
+for kit_r in "$kit_root_clone" "$kit_root_home"; do
+  case "$kit_real_home/" in "$kit_r"/*) echo "kit: $kit_r is the real home or a parent of it; refusing" >&2; exit 2;; esac
+  case "$kit_repo_root/" in "$kit_r"/*) echo "kit: $kit_r is the harness checkout or a parent of it; refusing" >&2; exit 2;; esac
+  [ "$kit_r" != / ] || { echo "kit: a kit root resolves to /; refusing" >&2; exit 2; }
+done
+mkdir -p "$KIT_HOME"
+kit_home_env=$KIT_HOME   # the HOME the CLI ran with, frozen here: the exit check never re-reads a changeable KIT_HOME
+readonly kit_root_clone kit_root_home kit_home_env
 [ -d "$KIT_CLONE/.git" ] || { echo "kit: $KIT_CLONE is not a git clone" >&2; exit 2; }
 # The clone's parent is no checkout: an ancestor AGENTS.md would load (BUG-106).
 if git -C "$(dirname "$KIT_CLONE")" rev-parse --git-dir >/dev/null 2>&1; then
@@ -129,8 +148,47 @@ kit_credential_leftovers() {
     esac
   done < <(find -H "$KIT_HOME" \( -type f -o -type l \) -print0 2>/dev/null)
 }
+# Processes the run left behind (BUG-163): a server or watcher the agent started outlives the CLI. A process
+# counts when its physical cwd or executable is under the clone or KIT_HOME, or its environment carries
+# HOME=$KIT_HOME (the kits run the CLI with that HOME, so a server it started from /tmp still carries it). Same uid
+# only; this shell, its ancestors and its descendants (the check's own subshells) are never matched. Each match
+# gets SIGTERM and fails the run. Every /proc read tolerates a vanished process. Linux /proc only: elsewhere the
+# check says it did not run, which a log then names as a gap.
+kit_ppid() { awk '/^PPid:/{print $2; exit}' "/proc/$1/status" 2>/dev/null || true; }
+kit_process_leftovers() {
+  if [ ! -d /proc/self ]; then echo "kit: no /proc here: the leftover-process check did not run"; return 0; fi
+  local roots=("$kit_root_clone" "$kit_root_home") r p pid cwd exe hit a me found=0 skip name
+  me=$(id -u); skip=" $$ "; a=$$
+  while [ -n "$a" ] && [ "$a" -gt 1 ]; do a=$(kit_ppid "$a"); skip+="$a "; done
+  for p in /proc/[0-9]*; do
+    pid=${p#/proc/}
+    case "$skip" in *" $pid "*) continue ;; esac
+    [ "$(awk '/^Uid:/{print $2; exit}' "$p/status" 2>/dev/null || true)" = "$me" ] || continue
+    a=$pid; while [ -n "$a" ] && [ "$a" -gt 1 ] && [ "$a" != "$$" ]; do a=$(kit_ppid "$a"); done
+    [ "$a" != "$$" ] || continue                       # a descendant of this shell: the check itself
+    cwd=$(readlink "$p/cwd" 2>/dev/null || true); exe=$(readlink "$p/exe" 2>/dev/null || true); hit=""
+    for r in "${roots[@]}"; do
+      case "$cwd" in "$r"|"$r"/*) hit=cwd ;; esac
+      case "$exe" in "$r"/*) hit=exe ;; esac
+    done
+    # The environment is matched in the file, never copied into a variable (bash -x would print it) and never
+    # piped (a grep -q pipe exits early: BUG-155); an exact NUL-separated entry, so a HOME that merely starts
+    # with KIT_HOME does not match.
+    if [ -z "$hit" ] && grep -qzxF -- "HOME=$kit_home_env" "$p/environ" 2>/dev/null; then hit=home; fi
+    [ -n "$hit" ] || continue
+    [ "$found" = 1 ] || echo "kit: FAIL processes left by the run (BUG-163); each was sent SIGTERM:" >&2
+    # pid, match kind and the executable's name only: argv can carry a token, or escapes that fake a line.
+    name=$(printf '%s' "${exe##*/}" | LC_ALL=C tr -cd '[:alnum:]._+-' | cut -c1-40)
+    printf '  %s (%s) %s\n' "$pid" "$hit" "${name:-?}" >&2
+    kill "$pid" 2>/dev/null || true; found=1
+  done
+  if [ "$found" = 1 ]; then sleep 1; return 1; fi
+  echo "kit: no processes left by the run"
+}
 kit_on_exit() {
   local rc=$? failed=0 left
+  cd / || true   # the check's own subshells must not sit in the clone (plan 2026-10-08 D4)
+  kit_process_leftovers || failed=1
   echo "kit: real $kit_real_config after the run:"; kit_list_real_config
   if [ "$kit_before" != "$(kit_fingerprint)" ]; then
     echo "kit: FAIL the real ~/.config/sh-agent changed during the run (BUG-107, BUG-123); the run does not count" >&2

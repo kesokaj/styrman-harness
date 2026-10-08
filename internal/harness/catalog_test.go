@@ -1851,3 +1851,147 @@ func TestKitPreambleAssertsCommit(t *testing.T) {
 		t.Errorf("an append to a symlinked file in the real config: want exit 1 and the kit's FAIL line, got exit %d\n%s", code, out)
 	}
 }
+
+// TestKitPreambleKillsLeftoverProcesses pins BUG-163's mechanism: the preamble's exit trap finds a process the
+// run left behind (an orphan, as a server the agent started becomes once the CLI exits), sends it SIGTERM and
+// fails the run, by cwd in the clone, by an executable under the clone, or by HOME=$KIT_HOME; a process that
+// carries none of those is left alone and the run passes.
+func TestKitPreambleKillsLeftoverProcesses(t *testing.T) {
+	if testing.Short() {
+		t.Skip("runs bash, git and sleep")
+	}
+	for _, tool := range []string{"bash", "git", "sleep"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			t.Skipf("no %s on this machine", tool)
+		}
+	}
+	if _, err := os.ReadFile("/proc/self/environ"); err != nil {
+		t.Skipf("no readable /proc on this machine (%v): the check reports itself skipped there", err)
+	}
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	preamble := filepath.Join(root, ".agents", "docs", "testing", "kit-preamble.sh")
+	tmp := t.TempDir()
+	if out, err := exec.Command("git", "-C", tmp, "rev-parse", "--git-dir").CombinedOutput(); err == nil {
+		t.Skipf("the test's temporary directory is inside a git checkout (%s): the preamble refuses that by design", strings.TrimSpace(string(out)))
+	}
+	clone, home, kitHome, other := filepath.Join(tmp, "clone"), filepath.Join(tmp, "home"), filepath.Join(tmp, "kit-home"), filepath.Join(tmp, "other")
+	for _, d := range []string{clone, home, kitHome, other} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if out, err := exec.Command("git", "-C", clone, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v\n%s", err, out)
+	}
+	pids := filepath.Join(tmp, "pids")
+	t.Cleanup(func() { // whatever the check did, nothing planted outlives the test
+		b, _ := os.ReadFile(pids)
+		for _, f := range strings.Fields(string(b)) {
+			_ = exec.Command("kill", f).Run()
+		}
+	})
+	// A zombie still has a /proc entry; only a process that is not exiting counts as alive.
+	alive := func(pid string) bool {
+		b, err := os.ReadFile("/proc/" + pid + "/status")
+		return err == nil && !strings.Contains(string(b), "State:\tZ")
+	}
+	run := func(then string) (int, string) {
+		cmd := exec.Command("bash", "-c", ". \"$1\"; "+then, "kit", preamble)
+		cmd.Env = fixtureEnv("HOME="+home, "KIT_CLONE="+clone, "KIT_HOME="+kitHome, "KIT_BIN=/bin/true", "PIDS="+pids, "OTHER="+other)
+		out, err := cmd.CombinedOutput()
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
+			return ee.ExitCode(), string(out)
+		}
+		if err != nil {
+			t.Fatalf("running the preamble: %v\n%s", err, out)
+		}
+		return 0, string(out)
+	}
+	if code, out := run(":"); code != 0 || !strings.Contains(out, "kit: no processes left by the run") {
+		t.Fatalf("a clean run: want exit 0 and the no-processes line, got exit %d\n%s", code, out)
+	}
+	// Each planted process is an orphan (a double fork), its output detached so it cannot hold the test's pipe.
+	plant := func(cmd string) string {
+		return `( ( ` + cmd + ` </dev/null >/dev/null 2>&1 & echo $! > "$PIDS.last"; cat "$PIDS.last" >> "$PIDS" ) )`
+	}
+	lastPID := func() string { b, _ := os.ReadFile(pids + ".last"); return strings.TrimSpace(string(b)) }
+	for name, cmd := range map[string]string{
+		"a server left in the clone":        `cd "$KIT_CLONE" && exec sleep 301`,
+		"an executable under the clone":     `cp "$(command -v sleep)" "$KIT_CLONE/srv" && cd "$OTHER" && exec "$KIT_CLONE/srv" 302`,
+		"a process carrying HOME=$KIT_HOME": `cd "$OTHER" && HOME="$KIT_HOME" exec sleep 303`,
+	} {
+		code, out := run(plant(cmd))
+		pid := lastPID()
+		if pid == "" {
+			t.Fatalf("%s: the fixture planted nothing\n%s", name, out)
+		}
+		if code != 1 || !strings.Contains(out, "kit: FAIL processes left by the run (BUG-163)") || !strings.Contains(out, "  "+pid+" (") {
+			t.Errorf("%s: want exit 1 and a FAIL line naming pid %s, got exit %d\n%s", name, pid, code, out)
+		}
+		if alive(pid) {
+			t.Errorf("%s: pid %s is still running after the check", name, pid)
+		}
+	}
+	// Near misses are not the run's: a HOME that only starts with KIT_HOME, and the kit shell's own child
+	// (a descendant is the check itself or the still-running kit, skipped by design).
+	for name, then := range map[string]string{
+		"a HOME that only starts with KIT_HOME": plant(`cd "$OTHER" && HOME="$KIT_HOME-x" exec sleep 305`),
+		"the kit shell's own child":             `( cd "$KIT_CLONE" && exec sleep 306 </dev/null >/dev/null 2>&1 ) & echo $! > "$PIDS.last"; cat "$PIDS.last" >> "$PIDS"`,
+	} {
+		code, out := run(then)
+		pid := lastPID()
+		if code != 0 || !strings.Contains(out, "kit: no processes left by the run") {
+			t.Errorf("%s: want exit 0 and the no-processes line, got exit %d\n%s", name, code, out)
+		}
+		if pid == "" || !alive(pid) {
+			t.Errorf("%s: pid %q was killed or never started", name, pid)
+		}
+		// Gone before the next case: once its kit shell exits, the child is an orphan in the clone, which
+		// the next run would rightly flag.
+		_ = exec.Command("kill", pid).Run()
+		for i := 0; i < 50 && alive(pid); i++ {
+			time.Sleep(20 * time.Millisecond)
+		}
+	}
+	// Roots the trap would kill under are refused at load: the real home reached through "/.", and /.
+	homeLink := filepath.Join(tmp, "home-link")
+	if err := os.Symlink(home, homeLink); err != nil {
+		t.Fatal(err)
+	}
+	const realHome, checkout, absolute = "is the real home or a parent of it; refusing", "is the harness checkout or a parent of it; refusing", "must be an absolute path"
+	for name, c := range map[string]struct {
+		env  []string
+		want string
+	}{
+		"KIT_HOME is the real home via /.":      {[]string{"KIT_HOME=" + home + "/."}, realHome},
+		"KIT_HOME is a link to the real home":   {[]string{"KIT_HOME=" + homeLink}, realHome},
+		"KIT_HOME is a parent of the real home": {[]string{"KIT_HOME=" + tmp}, realHome},
+		"KIT_HOME is /":                         {[]string{"KIT_HOME=/"}, "a kit root resolves to /; refusing"},
+		"KIT_HOME is the harness checkout":      {[]string{"KIT_HOME=" + root}, checkout},
+		"KIT_HOME is a parent of the checkout":  {[]string{"KIT_HOME=" + filepath.Dir(root)}, checkout},
+		"KIT_CLONE is relative":                 {[]string{"KIT_CLONE=clone"}, absolute},
+	} {
+		env := append([]string{"HOME=" + home, "KIT_CLONE=" + clone, "KIT_HOME=" + kitHome, "KIT_BIN=/bin/true"}, c.env...)
+		cmd := exec.Command("bash", "-c", ". \"$1\"; :", "kit", preamble)
+		cmd.Dir = tmp
+		cmd.Env = fixtureEnv(env...)
+		out, err := cmd.CombinedOutput()
+		var ee *exec.ExitError
+		if !errors.As(err, &ee) || ee.ExitCode() != 2 || !strings.Contains(string(out), c.want) {
+			t.Errorf("%s: want exit 2 and %q, got %v\n%s", name, c.want, err, out)
+		}
+	}
+	// The negative control: a process outside the clone, with the run's real HOME, is not the run's.
+	code, out := run(plant(`cd "$OTHER" && exec sleep 304`))
+	pid := lastPID()
+	if code != 0 || !strings.Contains(out, "kit: no processes left by the run") {
+		t.Errorf("an unrelated process: want exit 0 and the no-processes line, got exit %d\n%s", code, out)
+	}
+	if pid == "" || !alive(pid) {
+		t.Errorf("an unrelated process (pid %q) was killed or never started", pid)
+	}
+}

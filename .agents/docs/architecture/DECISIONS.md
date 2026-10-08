@@ -652,3 +652,22 @@ The operator's own transcripts showed the same pattern: a release session with 2
 - **Security reasons less per step.** The single security pass and its trigger are unchanged.
 - **Wall time grows by the verifier's own minutes,** because it no longer overlaps the review.
 - **A release gate whose review produces fixes** still needs a verifier log that reaches HEAD (`preflight` Step 2 item 1), so a gate with fixes still verifies twice.
+
+## ADR-055: A local metrics store of session shape, both CLIs, fed back through the learning loop     (2026-10-08) — Accepted
+
+**Context.** Nothing in the harness keeps session data today. The operator asked to use the local SQLite for trajectory data and agent and sandbox metrics. Dream reads transcript text and drops it, and Claude Code's transcripts on the Linux box reach back only to 2026-10-05, so whatever is not ingested is lost. The only measurement so far was a one-off A/B script (`testing/ab-kit/metrics.py`). Plan: `plans/2026-10-08-metrics-store.md`.
+
+**Decision.** The operator decided this in their own turns on 2026-10-08 (plan D1, D21–D29):
+- **The store.** `~/.config/sh-agent/metrics.db`, owned by `internal/metrics`, is a SQLite store of record, separate from the search index. It is migrated forward and never rebuilt; `uninstall` keeps it and `report` never sends it. This is R4, edited the same day; R3 and R7 change with it.
+- **Shape only.** It holds tools, normalised command verbs (program, subcommand, flag names), tokens, timings, errors and fixed-marker flags. It also keeps three identifiers: the skill name, the subagent type, and a bare `.` after `git add`. It never holds arguments or prose. The only paths are each session's project root and the transcript files read.
+- **Both CLIs.** Claude Code transcripts (main and subagent) and Antigravity conversation databases are both ingested. Antigravity is read from copies. Its tool names and command lines come from `steps.metadata`, and its `step_payload` (tool output) is never read. A metric one CLI's runtime cannot produce is a named R10 known difference, never a silent 0.
+- **Collection.** `sh-agent metrics ingest`, and the nightly `dream --all` runs it first.
+- **Reading.** `sh-agent metrics show` (tables, `--json`), `sh-agent metrics report` (one self-contained HTML file with inline SVG, no script) and `sh-agent metrics export` (the only backup).
+- **Feedback.** Dream and `/retro` read `metrics show --json` as evidence for proposals. Harness-target proposals leave through `report` as they already do. No new line is drawn on the map; dream's line to `~/.config/sh-agent/` gains the label `metrics.db` in the commit that wires it (AGENTS.md rule 3). A dream that reads the metrics summary needs an R3 addendum, proposed to the operator before that phase.
+
+**Consequences.**
+- **A second importer of the driver.** `internal/metrics` imports `modernc.org/sqlite`, and AGENTS.md's "one package" lines change.
+- **Shared helpers move.** `internal/search` exports `PrepareDBFiles`, `CopyDB`, `KindOf`, `TrailDates` (moved from dream) and `ProtoFields`.
+- **A store with no second copy.** A deleted or corrupted `metrics.db` loses history; `export` is the operator's backup.
+- **Antigravity numbers are weaker.** Its token fields are inferred from field numbers, with no published schema, and it reports no cost. Phase 3 confirms the tokens or records the difference.
+- **A new parser feeding a persistent store** gets a security review at the Definition of Done.

@@ -6,4 +6,6 @@ Last reviewed: 2026-10-01
 
 ## Now
 
+- Metrics store: `.agents/docs/plans/2026-10-08-metrics-store.md`
+
 ## Next

@@ -7,6 +7,7 @@ package search
 import (
 	"database/sql"
 	"encoding/binary"
+	"time"
 )
 
 // PrepareDBFiles refuses a database or companion file that is not a regular
@@ -22,6 +23,10 @@ func IsBusy(err error) bool { return isBusy(err) }
 // OpenCopy copies name (and its -wal, -shm) from dir into tmp and opens the
 // copy read-only; the live file is never opened.
 func OpenCopy(dir, name, tmp string) (*sql.DB, error) { return openCopy(dir, name, tmp) }
+
+// AgyTime reads Antigravity's last_modified_time column, as a time or as its
+// stored text.
+func AgyTime(v any) (time.Time, bool) { return agyTime(v) }
 
 // KindOf classifies a project-relative, slash-separated path against the
 // project's docs root (bug, adr, plan, …, code, doc).

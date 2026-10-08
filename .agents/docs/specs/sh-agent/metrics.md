@@ -111,9 +111,19 @@ Vendor tool names map to one common name. Unknown names are kept as `<vendor>:<n
 |---|---|---|
 | Bash | `Bash` | `run_command` |
 | Read | `Read` | `view_file` |
+| Write | `Write` | `write_to_file` |
+| Edit | `Edit` | `replace_file_content`, `multi_replace_file_content` |
 | Grep | `Grep` | `grep_search` |
+| Glob | `Glob` | `find_by_name` |
+| LS | (none) | `list_dir` |
+| Agent | `Agent` | `invoke_subagent` |
+| SendMessage | `SendMessage` | `send_message` |
 
-The Phase 3 spike completes this table from real conversation databases.
+The Antigravity names come from the spike over the local conversation databases (plan D35). `manage_subagents` and any other name not in this table are kept as `agy:<name>`.
+
+**Where each CLI's shape is read:**
+- Claude Code: the tool name is the `tool_use` block's `name`. A Bash command is its `input.command`. A path is `input.file_path`.
+- Antigravity: the tool name is at `steps.metadata` 4→2 and the arguments JSON at 4→3, which gives `CommandLine` and `AbsolutePath`. The step time is at `metadata` 1→1, in seconds. An error is status 7. A subagent is its own conversation; `conversation_summaries.agent_name` and `parent_conversation_id` give its type and parent. Usage, the model and the context are in `gen_metadata`: 1→4→2/3/5, 1→19 and 1→9→10→1.
 
 A **skill load** is:
 - on Claude Code, a `Skill` call (its `skill` value is stored);
@@ -198,7 +208,8 @@ sessions(id TEXT PRIMARY KEY, vendor TEXT, project_root TEXT, parent_id TEXT, ag
          cost_usd REAL, duration_ms INTEGER)
 steps(session_id TEXT, ext_id TEXT, ts INTEGER, kind TEXT, tool TEXT, skill TEXT, target_kind TEXT,
       is_error INTEGER, denied INTEGER, tok_in INTEGER, tok_out INTEGER, cache_read INTEGER,
-      cache_write INTEGER, cmd_hash TEXT, PRIMARY KEY(session_id, ext_id))
+      cache_write INTEGER, cmd_hash TEXT, context INTEGER,   -- context: migration 2
+      PRIMARY KEY(session_id, ext_id))
 step_verbs(session_id TEXT, ext_id TEXT, n INTEGER, verb TEXT, PRIMARY KEY(session_id, ext_id, n))
 events(session_id TEXT, ts INTEGER, kind TEXT, ref TEXT, value TEXT, PRIMARY KEY(session_id, kind, ref))
 ingest_state(source TEXT PRIMARY KEY, size INTEGER, mtime INTEGER, offset INTEGER)

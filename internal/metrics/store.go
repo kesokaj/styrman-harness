@@ -46,6 +46,9 @@ var migrations = []string{
 	CREATE TABLE events(session_id TEXT, ts INTEGER, kind TEXT, ref TEXT, value TEXT,
 		PRIMARY KEY(session_id, kind, ref));
 	CREATE TABLE ingest_state(source TEXT PRIMARY KEY, size INTEGER, mtime INTEGER, offset INTEGER);`,
+	// 2: the context a model call saw, where the CLI records it (Antigravity's
+	// gen_metadata, plan D3a); Claude's is computed from usage at read time.
+	`ALTER TABLE steps ADD COLUMN context INTEGER;`,
 }
 
 // tables is every table export writes, in dependency order.

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -81,7 +82,7 @@ func (s *Store) meta(t *testing.T, key string) string {
 	return v
 }
 
-// A v1 store with rows opens under a schema list one entry longer and keeps
+// A store with rows opens under a schema list one entry longer and keeps
 // every row: the store is the only copy (D5).
 func TestMigrationKeepsRows(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "metrics.db")
@@ -101,8 +102,8 @@ func TestMigrationKeepsRows(t *testing.T) {
 	if n != 2 {
 		t.Fatalf("rows after migration = %d, want 2", n)
 	}
-	if v := s2.meta(t, "schema"); v != "2" {
-		t.Fatalf("schema after migration = %s, want 2", v)
+	if v, want := s2.meta(t, "schema"), strconv.Itoa(len(saved)+1); v != want {
+		t.Fatalf("schema after migration = %s, want %s", v, want)
 	}
 	if _, err := s2.db.Exec(`UPDATE sessions SET test_v2 = 'x'`); err != nil {
 		t.Fatalf("migration did not run: %v", err)
@@ -177,5 +178,24 @@ func TestExportRoundTripsEveryTable(t *testing.T) {
 	}
 	if err := s.Export(out); err == nil || !strings.Contains(err.Error(), "refusing to overwrite") {
 		t.Fatalf("second export to the same file: %v, want a refusal", err)
+	}
+}
+
+// A store written at schema 1 (before steps.context) upgrades in place and
+// keeps its rows.
+func TestMigrationOneToCurrent(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "metrics.db")
+	saved := migrations
+	t.Cleanup(func() { migrations = saved })
+	migrations = saved[:1]
+	s := openT(t, p)
+	s.db.Exec(`INSERT INTO steps(session_id, ext_id, kind) VALUES ('s', 'e', 'tool')`)
+	s.Close()
+
+	migrations = saved
+	s2 := openT(t, p)
+	var n int
+	if err := s2.db.QueryRow(`SELECT count(*) FROM steps WHERE context IS NULL`).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("after upgrade: n=%d err=%v", n, err)
 	}
 }

@@ -166,7 +166,7 @@ Every number in the report equals the same key in `show --json` over the same wi
 
 ## Data
 
-`~/.config/sh-agent/metrics.db` has mode 0600 in a 0700 directory. A symlinked file or directory is refused. It uses WAL with a 10 s busy timeout. Every time is stored as unix milliseconds, UTC. Writer: `internal/metrics` only.
+`~/.config/sh-agent/metrics.db` has mode 0600 in a 0700 directory. A database or companion file that is a symlink, or any other non-regular file, is refused, as in the search index. The directory itself may be a symlink. It uses WAL with a 10 s busy timeout. Every time is stored as unix milliseconds, UTC. Writer: `internal/metrics` only.
 
 ```sql
 meta(key TEXT PRIMARY KEY, value TEXT)            -- 'schema', 'salt' (32 random hex)
@@ -214,7 +214,7 @@ ingest_state(source TEXT PRIMARY KEY, size INTEGER, mtime INTEGER, offset INTEGE
 
 | Trigger | Observable |
 |---|---|
-| `metrics.db` or its directory is a symlink | `metrics: refusing symlinked <path>`, exit 1 |
+| `metrics.db`, `-wal` or `-shm` is a symlink or another non-regular file | `metrics: <name> is not a regular file; refusing to open or write through it`, exit 1 |
 | The store's schema is newer than the binary's | `metrics.db schema N is newer than this binary (M); update sh-agent`, exit 1, store unchanged (`ingest`, `show`, `report`, `export`) |
 | A transcript line is not JSON or has an unknown shape | Skipped and counted in U, exit 0 |
 | A file shrank or was replaced | Re-read from offset 0, with no duplicate rows |

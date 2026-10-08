@@ -1,7 +1,7 @@
 package search
 
 // The two reads `sh-agent dream` makes with the SQLite driver, kept in this
-// package because it is the one that imports the driver (AGENTS.md; R4's
+// package because it imports the driver (AGENTS.md; R4's
 // dream clause, ADR-047a): the global index's project list, and Antigravity's
 // conversation databases, both read-only.
 

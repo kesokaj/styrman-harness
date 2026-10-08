@@ -2171,6 +2171,32 @@ func TestUninstallAndLinkedDirs(t *testing.T) {
 	}
 }
 
+// TestUninstallKeepsMetricsStore: uninstall removes what its manifest lists
+// and nothing else; the metrics store is the only copy of what expired
+// transcripts held, and stays (R4, ADR-055).
+func TestUninstallKeepsMetricsStore(t *testing.T) {
+	repo := newRepo(t)
+	home := t.TempDir()
+	files, err := Plan(DirSource(repo), nil, VendorAll)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Install(DirSource(repo), home, files, VendorAll, false, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	store := filepath.Join(home, ".config", "sh-agent", "metrics.db")
+	if err := os.WriteFile(store, []byte("rows"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := Uninstall(home, false, &out); err != nil {
+		t.Fatalf("uninstall: %v\n%s", err, out.String())
+	}
+	if b, err := os.ReadFile(store); err != nil || string(b) != "rows" {
+		t.Fatalf("uninstall touched the metrics store: %v", err)
+	}
+}
+
 // TestUninstallSkipsLink: a manifest path that has become the operator's
 // link is kept by uninstall (security review round 2 of IN3: the guard at
 // the one line that answers it had no test).

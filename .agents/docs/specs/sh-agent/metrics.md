@@ -68,17 +68,40 @@ metrics: N sessions, M steps, K events added; U lines skipped (unknown shape); F
 
 ### Normalised verb
 
-`Verb(cmd string) []string` reduces a command line to its shape:
-- It splits on `;`, `&&`, `||`, `|` and newlines. Quoted text is not split.
-- In each segment it drops:
-  - leading `VAR=value` words;
-  - `sudo`, `env`, `command` and `time`;
-  - `go run <pkg>`, keeping the package's last element as the program.
-- It keeps, in order:
-  - the program's basename;
-  - the subcommand, when the program is `git go gh docker gcloud kubectl npm npx sh-agent terraform` and the next word is not a flag;
-  - each flag NAME (`--x=v` becomes `--x`).
-- Positional words and values are never kept. The one exception is a bare `.` after `git add`.
+`Verb(cmd string) []string` reduces a command line to its shape: one string per command in it, `program [subcommand] [flag names…]`.
+
+**What is removed before splitting:**
+- here-document bodies (`<<EOF`, `<<-EOF`, `<<'EOF'`);
+- comments;
+- the insides of quotes, `${…}` and `$((…))`, which stay part of their word and are never split.
+
+**Where it splits:** at `;`, `&&`, `||`, `|`, `&`, newlines, `(`, `$(`, backticks, `{` and `}`. A redirection such as `2>&1` or `&>f` is part of a word, not a separator.
+
+**What is skipped in front of the program:**
+- shell keywords that lead a command (`if then else elif do while until !`);
+- the wrappers `sudo env command time nohup exec`, with their own flags and those flags' values (`env -u NAME`);
+- `VAR=value` words;
+- leading redirections and their targets.
+
+**Segments that yield no verb:**
+- a segment opened by `for`, `case`, `select` or `function`, or closed by `done`, `fi`, `esac` or `in`;
+- a case pattern, i.e. the words before its `)`.
+
+**The program:**
+- It is the basename of the first remaining word, and `go run <pkg>` gives the package's last element.
+- It must match `^[A-Za-z_][A-Za-z0-9_.+-]*$`; any other word in command position (a glob, an expansion, a quoted path) yields no verb.
+- A subcommand is kept for `git go gh docker gcloud kubectl npm npx sh-agent terraform` when the next word is name-shaped.
+
+**Flag names:**
+- `--name=v` is kept as `--name`.
+- For `go gofmt govulncheck find`, `-name=v` is kept as `-name`.
+- A short group of at most three letters is kept whole (`-la`, `-rnw`).
+- Any other short flag keeps its first letter only (`-c1-200`, `-psecret`, `-xzvf` become `-c`, `-p`, `-x`), because a short option can carry its value glued on.
+- A dash followed by a digit (`-20`) is a value and is dropped.
+
+**Never kept:** positional words, except a bare `.` after `git add`.
+
+**Known limit:** a shell construct the tokenizer does not model can still put one identifier-shaped word in command position. That is never more than a single name-shaped word, never a path, a value or prose. Verbs reflect the normaliser of the binary that ingested them; the command itself is never stored, so older rows are not re-normalised.
 
 ### Shared tool vocabulary
 

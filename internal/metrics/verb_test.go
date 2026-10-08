@@ -1,0 +1,86 @@
+package metrics
+
+import (
+	"reflect"
+	"strings"
+	"testing"
+)
+
+func TestVerb(t *testing.T) {
+	cases := []struct {
+		cmd  string
+		want []string
+	}{
+		{"git status", []string{"git status"}},
+		{"git add -A && git commit -m 'fix: x; y'", []string{"git add -A", "git commit -m"}},
+		{"git add .", []string{"git add ."}},
+		{"git add internal/x.go", []string{"git add"}},
+		{"gofmt -l cmd internal | head", []string{"gofmt -l", "head"}},
+		{"FOO=1 BAR=x sudo -n go test -race -count=1 ./...", []string{"go test -race -count"}},
+		{"go run ./cmd/sh-agent search --refs internal/x.go --kind bug", []string{"sh-agent search --refs --kind"}},
+		{"sh-agent search --refs x 2>/dev/null", []string{"sh-agent search --refs"}},
+		{"env -u CLAUDE_CONFIG_DIR sh-agent metrics ingest --home h", []string{"sh-agent metrics --home"}},
+		{"echo 'a; b && c' ; ls -la", []string{"echo", "ls -la"}},
+		{"git push --force-with-lease=origin/main", []string{"git push --force-with-lease"}},
+		{"cat > f.md <<'EOF'\nsecret line one\nrm -rf everything\nEOF\ngit diff", []string{"cat", "git diff"}},
+		{"cat <<-END\n\tbody words\n\tEND", []string{"cat"}},
+		{"grep -rn needle . || rg needle", []string{"grep -rn", "rg"}},
+		{"x=$(git rev-parse HEAD)", []string{"git rev-parse"}},
+		{"python3 -I - <<'EOF'\nimport os\nEOF", []string{"python3 -I"}},
+		{"go test ./... 2>&1 | tail -3; ls &>/dev/null", []string{"go test", "tail", "ls"}},
+		{"sleep 5 & wait", []string{"sleep", "wait"}},
+		{"for f in a b; do git add $f; done", []string{"git add"}},
+		{"if grep -q x f; then echo y; else ls; fi", []string{"grep -q", "echo", "ls"}},
+		{"while read l; do echo $l; done < f", []string{"read", "echo"}},
+		{"! git diff --quiet", []string{"git diff --quiet"}},
+		{"go test -race -count=1 -run TestX ./...", []string{"go test -race -count -run"}},
+		{"grep -rn x . ; ls -la; tar -xzvf a.tgz; head -20 f; cut -c1-200", []string{"grep -rn", "ls -la", "tar -x", "head", "cut -c"}},
+		{"mysql -psecret db", []string{"mysql -p"}},
+		{"echo ${A:-b} $((1+2)) $(git rev-parse HEAD)", []string{"echo", "git rev-parse"}},
+		{"case $k in a) git status;; b|c) ls;; esac", []string{"git status", "ls"}},
+		{"# just a comment\ngit log --oneline # trailing", []string{"git log --oneline"}},
+		{"git push -f origin main", []string{"git push -f"}},
+		{">/dev/null git status; > out.txt ls; 2>err cat f", []string{"git status", "ls", "cat"}},
+		{"", nil},
+	}
+	for _, c := range cases {
+		if got := Verb(c.cmd); !reflect.DeepEqual(got, c.want) {
+			t.Errorf("Verb(%q)\n got %q\nwant %q", c.cmd, got, c.want)
+		}
+	}
+}
+
+// No positional word or value reaches a verb: the canary sits in each place a
+// command carries content.
+func TestVerbDropsContent(t *testing.T) {
+	const c = "SECRETCANARY123"
+	for _, cmd := range []string{
+		"echo " + c,
+		"git commit -m " + c,
+		"git commit -m '" + c + " more'",
+		"curl --header=" + c + " x",
+		"cat <<EOF\n" + c + "\nEOF",
+		"cat <<EOF\nok\n" + c + " ls\nEOF",
+		"go run ./x " + c,
+		"TOKEN=" + c + " ./run.sh",
+		"echo ${X:-" + c + "}",
+		"h=${p#" + c + "}; ls",
+		"n=$((" + c + "+1))",
+		"case $x in *" + c + "*) ls;; " + c + ") echo;; esac",
+		"# " + c + " comment\nls",
+		"ls # " + c,
+		"mysql -p" + c + " db",
+		"cut -c" + c,
+		"tar -x" + c + "f",
+		"cat " + c + ".md | wc -l",
+		"for f in " + c + "; do echo; done",
+		">" + c + " ls",
+		"> " + c + " ls",
+	} {
+		for _, v := range Verb(cmd) {
+			if strings.Contains(v, c) {
+				t.Errorf("Verb(%q) kept the canary: %q", cmd, v)
+			}
+		}
+	}
+}

@@ -1349,6 +1349,36 @@ func TestCollectNeverSendsSearchDB(t *testing.T) {
 	}
 }
 
+// TestCollectNeverSendsMetricsStore: the metrics store holds every
+// session's shape and is never sent (R4, ADR-055); a dry run names it.
+func TestCollectNeverSendsMetricsStore(t *testing.T) {
+	home := t.TempDir()
+	dir := filepath.Join(home, ".config", "sh-agent")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range []string{"feedback.jsonl", "metrics.db", "metrics.db-wal", "metrics.db-shm"} {
+		if err := os.WriteFile(filepath.Join(dir, n), []byte("{}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c, err := Collect(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range c.Files {
+		if strings.HasPrefix(f.Name, "metrics.db") {
+			t.Errorf("report would send %s", f.Name)
+		}
+	}
+	named := strings.Join(c.Skipped, "\n")
+	for _, n := range []string{"metrics.db (the metrics store; never sent)", "metrics.db-wal", "metrics.db-shm"} {
+		if !strings.Contains(named, n) {
+			t.Errorf("skipped list does not name %s:\n%s", n, named)
+		}
+	}
+}
+
 // TestPushErrorScrubsCredentials: a failed push is reported without the
 // credentials a URL rewrite can put into git's message, as the clone failure
 // already is, and only a non-fast-forward is classed as the retryable race

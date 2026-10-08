@@ -428,6 +428,13 @@ func Collect(home string) (Collection, error) {
 			c.Skipped = append(c.Skipped, name+" (the global search index, a cache; never sent)")
 		}
 	}
+	// The metrics store is the shape of every session, a store of record that
+	// stays on the machine (R4, ADR-055): never sent, and named the same way.
+	for _, name := range []string{"metrics.db", "metrics.db-wal", "metrics.db-shm"} {
+		if _, err := os.Lstat(filepath.Join(dir, name)); err == nil {
+			c.Skipped = append(c.Skipped, name+" (the metrics store; never sent)")
+		}
+	}
 	return c, nil
 }
 

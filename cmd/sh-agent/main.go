@@ -11,11 +11,12 @@
 //	sh-agent list                    print the skill and agent inventory
 //	sh-agent render                  print the assembled context file
 //	sh-agent adopt <name|path>       copy a skill from elsewhere into the repo
-//	sh-agent report [--dry-run]      send this machine's learning-loop files and metrics to the feedback repo, keeping nothing
+//	sh-agent report [--dry-run]      send this machine's learning-loop files and its metrics record (report.json) to the feedback repo, keeping nothing
 //	sh-agent search <words>          ranked search of this checkout's files and trail, reconciled against git first
 //	sh-agent index [--rebuild]       reconcile (or rebuild) the search index and print its counts
 //	sh-agent dream --all|--project DIR [--dry-run]  propose rules and skills from every project's memory, trail, feedback and transcripts
 //	sh-agent dream --install-timer|--remove-timer [--dry-run]  install or remove the nightly timer
+//	sh-agent metrics ingest|export   read every session's shape into the metrics store, or back it up as JSONL
 //	sh-agent memory add|show         write one memory (body on stdin) or print the index of this project's .agents/memory/
 //	sh-agent version
 package main
@@ -38,6 +39,7 @@ import (
 	"github.com/kesokaj/styrman-harness/internal/dream"
 	"github.com/kesokaj/styrman-harness/internal/harness"
 	"github.com/kesokaj/styrman-harness/internal/memory"
+	"github.com/kesokaj/styrman-harness/internal/metrics"
 	"github.com/kesokaj/styrman-harness/internal/search"
 )
 
@@ -62,6 +64,8 @@ Commands:
   memory add --type T --name SLUG --description TEXT  save one memory, its body on stdin, into this project's .agents/memory/ and its MEMORY.md line (T: user, feedback, project or reference); every CLI writes memory this way (R10)
   dream --install-timer | --remove-timer [--dry-run]  install (systemd user timer on Linux, launchd agent on macOS) or remove the nightly "dream --all", run with the PATH of the installing shell; uninstall removes it too
   dream --all | --project DIR [--dry-run]  the background dreamer: for every indexed project (or one) that changed since its last dream, send its memory, new trail, feedback and both CLIs' transcripts, redacted, to a CLI with no tools, and write the proposals and draft skills it returns under ~/.config/sh-agent/proposals/dream/ (R3's exception; --vendor picks the CLI, default from the manifest)
+  metrics ingest [--vendor V] [--source DIR --label KEY=VALUE [--outcome pass|fail]]  read the shape of every Claude Code and Antigravity session (tools, command verbs, tokens, timings; never arguments or prose) into ~/.config/sh-agent/metrics.db, the metrics store; --source reads a sandbox home and stamps its sessions with the label; transcripts come from --source, else --home, else $CLAUDE_CONFIG_DIR, else this home
+  metrics export FILE     write every row of the metrics store to FILE as JSONL (0600; an existing FILE is refused): its only backup, since the store is the one copy once a transcript expires
   memory show             print this project's memory index, capped at what a session loads, plus a hint when Claude Code's native memory is still on here
   version                 print the build version
 
@@ -104,6 +108,7 @@ type ctx struct {
 	// per-verb flags; a verb's flags func registers only the ones it reads
 	dryRun, check, force, openRecords, global, rebuild, dreamAll, installTimer, removeTimer bool
 	feedbackRepo, fromZip, kind, refs, memType, memName, memDesc, dreamProject              string
+	metricsSource, metricsLabel, metricsOutcome                                             string
 	limit                                                                                   int
 	// src is the harness, resolved before run for the verbs that mark source
 	src harness.Source
@@ -152,6 +157,11 @@ var verbs = map[string]verb{
 		c.fs.BoolVar(&c.removeTimer, "remove-timer", false, "dream: remove the nightly user timer")
 		c.dryRunFlag()
 	}, run: runDream},
+	"metrics": {flags: func(c *ctx) {
+		c.fs.StringVar(&c.metricsSource, "source", "", "metrics ingest: a sandbox home to read instead of this one")
+		c.fs.StringVar(&c.metricsLabel, "label", "", "metrics ingest: KEY=VALUE stamped on every --source session")
+		c.fs.StringVar(&c.metricsOutcome, "outcome", "", "metrics ingest: pass or fail, the --source run's acceptance result")
+	}, positional: true, run: runMetrics},
 	"search": {flags: func(c *ctx) {
 		c.fs.IntVar(&c.limit, "limit", 0, "search: hits to print, 1-50 (default 10)")
 		c.fs.StringVar(&c.kind, "kind", "", "search: only hits of this kind")
@@ -389,6 +399,61 @@ func runDream(c *ctx) error {
 		return exitCode(ee.Code)
 	}
 	return err
+}
+
+// runMetrics serves `metrics ingest` and `metrics export` (spec
+// .agents/docs/specs/sh-agent/metrics.md).
+func runMetrics(c *ctx) error {
+	args := c.fs.Args()
+	if len(args) == 0 {
+		fmt.Fprintln(c.out, "sh-agent metrics: ingest | export FILE")
+		return exitCode(2)
+	}
+	sub, args := args[0], args[1:]
+	switch sub {
+	case "ingest":
+		if len(args) > 0 {
+			fmt.Fprintf(c.out, "metrics ingest takes no arguments: %q\n", args)
+			return exitCode(2)
+		}
+		o := metrics.Options{Home: c.home, HomeGiven: c.homeFlag != "", Vendor: c.vendorFlag,
+			Source: c.metricsSource, Label: c.metricsLabel, Outcome: c.metricsOutcome}
+		if err := o.Validate(); err != nil {
+			fmt.Fprintln(c.out, "sh-agent metrics ingest: "+err.Error())
+			return exitCode(2)
+		}
+		s, err := metrics.Open(metrics.Path(c.home))
+		if err != nil {
+			return err
+		}
+		defer s.Close()
+		r, err := metrics.Ingest(s, o, c.out)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintln(c.out, r.Line())
+		if len(r.Failed) > 0 {
+			return exitCode(1)
+		}
+		return nil
+	case "export":
+		if len(args) != 1 {
+			fmt.Fprintln(c.out, "sh-agent metrics export FILE")
+			return exitCode(2)
+		}
+		s, err := metrics.Open(metrics.Path(c.home))
+		if err != nil {
+			return err
+		}
+		defer s.Close()
+		if err := s.Export(args[0]); err != nil {
+			return err
+		}
+		fmt.Fprintln(c.out, "metrics: exported to "+args[0])
+		return nil
+	}
+	fmt.Fprintf(c.out, "sh-agent metrics: unknown subcommand %q (ingest, export)\n", sub)
+	return exitCode(2)
 }
 
 // runSearch serves `search` and `index`; neither needs a harness tree, and a

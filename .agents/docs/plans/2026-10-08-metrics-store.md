@@ -84,92 +84,10 @@ Code to reuse (package seams: D8; import direction `dream → metrics → search
 - The Claude walk is NOT reused: `claudeTranscript` (`collect.go:355-433`) filters by one root and skips `subagents/`. `metrics` owns its own all-projects walker (D9).
 
 ## Interfaces
-**Store.** `~/.config/sh-agent/metrics.db` (`--home` relocates it), schema v1:
-```sql
--- every time is INTEGER unix milliseconds, UTC
-meta(key TEXT PRIMARY KEY, value TEXT)            -- 'schema'='1', 'salt'=<32 random hex>
-sessions(id TEXT PRIMARY KEY,                     -- Claude sessionId / agentId; agy conversation id
-         vendor TEXT, project_root TEXT, parent_id TEXT, agent_type TEXT, model TEXT,
-         label TEXT, outcome TEXT,                -- outcome: pass|fail|NULL (sandbox runs, D11)
-         started_at INTEGER, ended_at INTEGER, cost_usd REAL, duration_ms INTEGER)
-steps(session_id TEXT, ext_id TEXT, ts INTEGER,
-      kind TEXT,          -- assistant|tool|user|compaction|interrupt
-      tool TEXT, skill TEXT, target_kind TEXT,
-      is_error INTEGER, denied INTEGER,
-      tok_in INTEGER, tok_out INTEGER, cache_read INTEGER, cache_write INTEGER, cmd_hash TEXT,
-      PRIMARY KEY(session_id, ext_id))
-step_verbs(session_id TEXT, ext_id TEXT, n INTEGER, verb TEXT, PRIMARY KEY(session_id, ext_id, n))
-events(session_id TEXT, ts INTEGER, kind TEXT, ref TEXT, value TEXT,
-       PRIMARY KEY(session_id, kind, ref))
-ingest_state(source TEXT PRIMARY KEY, size INTEGER, mtime INTEGER, offset INTEGER)
-```
-- **Migrations.** `migrations []string` are applied in order inside a transaction. A store whose version is newer than the binary's is refused, untouched, with `metrics.db schema N is newer than this binary (M); update sh-agent`; `show` and `export` refuse the same way. It is never deleted.
-- **Identifiers and idempotence (D10).**
-  - One `steps` row per assistant message (`ext_id` = message id) and one per tool call (`ext_id` = `tool_use.id`).
-  - The tool_result never gets its own row. It sets `is_error`/`denied` on its tool row (an UPSERT by `tool_use_id`).
-  - Streamed lines repeat one message id. The row keeps the max of each usage field over those lines.
-  - A user turn's `ext_id` is the line's `uuid`.
-  - For Antigravity, `ext_id` is `<conversation id>:<step idx>`.
-  - Ordering is by `ts`, then `ext_id`; there is no `seq`. A file that was replaced is re-read from 0, and the PK absorbs the duplicates.
-- **`cmd_hash`.** `hex(sha256(salt || command))[:16]`.
-- **`target_kind`.** `search.KindOf` of a Read/Edit/Write path; the path itself is discarded.
-- **Columns that may hold a path** (D12): `sessions.project_root` and `ingest_state.source` only. No other column ever holds a path, argument or prose.
-- **`events` payloads** (D13):
-  - `commit`: ref = full SHA; value = `''` or `ambiguous`.
-  - `handoff`: ref = trail file basename; value = `''`.
-  - `verifier`: ref = basename; value = `PASS|FAIL|BLOCKED|IN PROGRESS`.
-  - `review`: ref = basename; value = `high=N,medium=N,low=N`.
-  - `bug`: ref = `BUG-NNN`; value = the linked commit SHA.
-  - `correction`: ref = the entry's `ts`; value = `''`.
-- **Detection by fixed marker, never stored as text** (D14):
-  - `denied`: a tool_result whose content starts with one of Claude Code's permission-refusal prefixes, a list kept in `claude.go` and pinned by a fixture.
-  - `interrupt`: a user line starting `[Request interrupted by user`.
-  - `compaction`: a line with `type:"system"` and `subtype:"compact_boundary"`, or Claude's `isCompactSummary`, whichever the Phase 2 fixture shows.
-
-**Normalised verb** (`Verb(cmd string) []string`):
-- The command is split on `;`, `&&`, `||`, `|` and newlines.
-- In each segment, these are dropped: leading `VAR=value` words, `sudo`, `env`, `command`, `time`, and `go run <pkg>` (the package's last element becomes the program).
-- The result is the program (basename), then the subcommand when the program is one of `git go gh docker gcloud kubectl npm npx sh-agent terraform` and the next word is not a flag, then each flag *name* (`--refs`, `-A`; `--x=v` is kept as `--x`).
-- Positional words and values are never kept.
-- `grep`/`rg` count as grep for C1.
-
-**Verbs** (the existing global `--vendor` and `--home` flags are reused, D7):
-- `sh-agent metrics ingest [--home H] [--vendor claude|agy|all] [--source DIR --label KEY=VALUE [--outcome pass|fail]]`
-  - An empty `--vendor` means `all`, not the manifest's vendor: ingest records what happened, whichever CLI the place installed.
-  - Prints `metrics: N sessions, M steps, K events added; U lines skipped (unknown shape); F sources failed` and exits 0.
-  - Exits 1 when any source failed: a transcript file or one Antigravity conversation, each named on stdout. Every other source is still ingested.
-  - Exits 2 on a usage error.
-  - `--source DIR` reads `DIR/.claude/projects` and `DIR/.gemini/antigravity-cli` as a sandbox home, requires `--label`, and stamps both on every session it adds. `--outcome` is the run's acceptance result, which the kit supplies (D11).
-  - Transcript root (D9): `--source DIR` uses DIR. Otherwise `<home>/.claude/projects`. `CLAUDE_CONFIG_DIR` is honoured only when neither `--home` nor `--source` is given.
-- `sh-agent metrics show [--home H] [--since YYYY-MM-DD] [--project DIR] [--label KEY=VALUE | --all-labels] [--json]`
-  - One table per catalogue group, A–D, followed by notes (sessions with no cost, agy sessions with no tokens, ambiguous commits, skipped lines).
-  - Labelled (sandbox) sessions are excluded unless `--label` or `--all-labels` is given.
-  - `--json` keys are named in the spec's `## Output`. The ones the E2E reads are `sessions`, `subagents`, `B.tool_calls`, `B.tool_calls_by_tool` (object tool→count) and `C.sqlite_verbs`.
-- `sh-agent metrics export [--home H] FILE` (D23).
-  - Writes JSONL lines `{"table":"…","row":{…}}`, mode 0600.
-  - Refuses an existing FILE.
-  - Kept because this store is the only copy (D1, D5).
-- The word **"metrics record"** keeps its R8 meaning (`report.json`). The spec, README and R4 call this store "the metrics store" and say it is a different thing (D15).
-
-**Dream** (D16):
-- `realRun` calls `metrics.Ingest` inside `dream.lock`, before `o.targets()`, store-wide whatever `--project` says.
-- `--dry-run` does not ingest. It prints `would ingest metrics into <path>`.
-- An ingest failure goes to `dream.log`, is never counted in `last_run.error`, and never changes the exit status.
-
-**Report and uninstall** (D17):
-- `report`'s collector names `metrics.db`, `metrics.db-wal` and `metrics.db-shm` in `Skipped` ("the metrics store; never sent"), as it does `search.db*` (`internal/harness/report.go:424-430`). A test pins that none of them is sent.
-- `uninstall` leaves `metrics.db`, also pinned by a test.
+The spec holds every shape: `.agents/docs/specs/sh-agent/metrics.md` (verbs, flags, the transcript-root rule, `Verb`, the shared tool vocabulary, `show --json` keys, the report, metric definitions, schema, invariants). The D-rows below record why each shape was chosen.
 
 ## Failure modes
-- `metrics.db` or its directory is a symlink → refused with the path, exit 1, the same as search.
-- A store with a newer schema → refused untouched by `ingest`, `show` and `export`, exit 1.
-- A transcript line is not JSON, or has an unknown shape → skipped and counted in `U`; ingest continues.
-- A file shrank or was replaced (size < offset) → re-read from 0; the PK absorbs duplicates.
-- Antigravity: every conversation is read from a copy. A conversation whose copy or read fails is skipped, named and counted in `F`; the rest are ingested; exit 1.
-- An Antigravity token field is absent → the token columns are NULL, and `show` notes "agy tokens unavailable for N sessions".
-- A project root is gone or is not git → session rows are still written. No commit events; a note in `show`.
-- Two main sessions overlap in time in one project root → commits in the overlap get `value='ambiguous'`. `show` prints A1/A4 as `n (ambiguous m)` and excludes ambiguous commits from the rates.
-- Concurrent ingests (by hand and from dream) → one transaction per source with a 10 s busy timeout. A source still locked after that counts as failed (exit 1, `database is locked`), and the next run picks it up.
+The spec's `## Failure modes` table.
 
 ## Verification
 Tiers (each on Claude Code AND Antigravity, D29): unit (`go test -race`, with fixtures for both vendors); an integration run of the binary against a scratch home holding a copy of real transcripts; one Antigravity session run, then `metrics ingest` + `show` (Phase 3).
@@ -188,8 +106,8 @@ E2E criteria:
 - [x] Spike: Claude `message.usage`, `tool_result.is_error`, `cost-state` and `subagents/*.meta.json` exist; Antigravity `gen_metadata` holds the model name and a usage-shaped message — verify: read-only probe, AI — expect: field list recorded in D2, D3 — evidence: probe 2026-10-08 (cost-state: one line per session end or resume, cumulative; 0 lines while a session runs)
 - [x] Propose the exact R3/R4/R7 text to the operator — verify: operator's approval in their own turn, user — expect: approved text quoted in a D-row — evidence: D21
 - [ ] ADR-055 (`.agents/docs/architecture/DECISIONS.md`) + REQUIREMENTS edit + ROADMAP in one commit — verify: `git show --stat HEAD`, AI — expect: REQUIREMENTS.md, DECISIONS.md and ROADMAP.md in one commit
-- [ ] Spec `.agents/docs/specs/sh-agent/metrics.md` (Interfaces, catalogue, `## Output` JSON keys, failure modes, Claude-only metrics) and the R10 rows in `specs/sh-agent/memory-loop.md` § Known differences — docs: specs/sh-agent/metrics.md, memory-loop.md
-- [ ] Checkpoint — expect: requirements, ADR and spec committed and pushed — evidence: <command, exit>, <date>
+- [x] Spec `.agents/docs/specs/sh-agent/metrics.md` (status: draft until the operator agrees; Phase 1 waits for it) — docs: specs/sh-agent/metrics.md. The R10 rows in `memory-loop.md` § Known differences move to the Phase 3 spike, which produces them.
+- [x] Checkpoint — expect: requirements, ADR and spec committed and pushed — evidence: `go test ./internal/harness` exit 0 (REQUIREMENTS text), commits 4df050f + Phase 0 close, 2026-10-08
 ### Phase 1 — Store
 - [ ] Exports in `internal/search`: `PrepareDBFiles`, `CopyDB`, `KindOf`, `TrailDates` (moved from dream), `ProtoFields` — verify: `go test -race ./internal/search ./internal/dream` — expect: existing tests unchanged and green; a `ProtoFields` table test over a hand-built protobuf
 - [ ] `internal/metrics/store.go`: Open, migrations, salt, refusal of a newer schema — verify: `go test -race ./internal/metrics -run 'Store|Migrat'`, AI — expect: symlink refusal, newer-schema refusal (bytes unchanged) and v1 row survival pass, and fail with the migration loop removed
@@ -203,7 +121,7 @@ E2E criteria:
 - [ ] Operator runs the first real ingest — verify: user, `sh-agent metrics ingest` after install — expect: a summary line with N>0 (handoff Next Steps if not done)
 - [ ] Checkpoint — expect: full test exit 0 — evidence: <command, exit>, <date>
 ### Phase 3 — Antigravity ingester
-- [ ] Spike (agy, read-only, on copies): the tool-name and command-line field numbers in `steps.metadata` for each tool type in the local DBs; how a subagent appears (a `has_subtrajectory` step, `parent_references`, or a separate conversation); whether a compaction or interrupt leaves a step; `steps.status` values for an error and a denial — verify: AI — expect: a D-row per item, with field numbers and a fixture, or a named R10 known difference
+- [ ] Spike (agy, read-only, on copies): the tool-name and command-line field numbers in `steps.metadata` for each tool type in the local DBs; how a subagent appears (a `has_subtrajectory` step, `parent_references`, or a separate conversation); whether a compaction or interrupt leaves a step; `steps.status` values for an error and a denial — verify: AI — expect: a D-row per item, with field numbers and a fixture, or a named R10 known difference, written into `specs/sh-agent/memory-loop.md` § Known differences — docs: memory-loop.md
 - [ ] Shared tool vocabulary `tools.go`: the vendor tool name maps to a common name (`view_file`→Read, `run_command`→Bash, `grep_search`→Grep, …), and unknown names are kept as `agy:<name>`. A skill load is a Skill call (Claude) or a read of `skills/<name>/SKILL.md` (agy; only `<name>` is stored, D22) — verify: `go test -run Tools` — expect: both vendors' fixtures give the same common names
 - [ ] Check the D3 token mapping: sum fields 2, 3 and 5 for one conversation, and compare with `conversation_summaries` or the agy UI — verify: AI + user — expect: a match recorded as a D-row, or a D-row that sets agy tokens to NULL
 - [ ] `agy.go`: `CopyDB`, then read `conversation_summaries`; `steps` type and status per step (type 132: the tool name, and a `run_command` command line normalised by `Verb` in memory, read from `steps.metadata` via `search.ProtoFields`; `step_payload` never read, D28); `gen_metadata` model and tokens per D3 — docs: spec, README (`--vendor agy`) — verify: `go test -run Agy` over a synthetic DB in `testdata/agy/`, with the source directory chmod 0o500 as in `internal/search/dream_test.go:360-377` — expect: rows match; no `-wal`/`-shm` appears beside the source

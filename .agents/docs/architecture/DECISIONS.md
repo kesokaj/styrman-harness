@@ -671,3 +671,11 @@ The operator's own transcripts showed the same pattern: a release session with 2
 - **A store with no second copy.** A deleted or corrupted `metrics.db` loses history; `export` is the operator's backup.
 - **Antigravity numbers are weaker.** Its token fields are inferred from field numbers, with no published schema, and it reports no cost. Phase 3 confirms the tokens or records the difference.
 - **A new parser feeding a persistent store** gets a security review at the Definition of Done.
+
+## ADR-055a: Dream reads a numbers-only metrics summary     (2026-10-08) — Accepted, amends ADR-055
+
+**Context.** ADR-055 sends feedback back through dream and `/retro` proposals. For dream to cite a metric, it has to read the metrics store, and R3 lists exactly what dream reads.
+
+**Decision.** The operator approved this on 2026-10-08. Among the things dream reads, R3 now names "a summary of the metrics store (`sh-agent metrics show --json` for each project's window, numbers only)". The summary goes into the dream prompt through the existing redaction and 256 KB cap. When the prompt is over the cap, the summary is dropped before transcripts are.
+
+**Consequences.** The model provider of the CLI dream runs now receives per-project metric numbers, in addition to the transcript text it already received. No identifiers beyond the three that ADR-055 names are included.

@@ -1,7 +1,7 @@
 ---
 owner: main
 date: 2026-10-08
-status: draft
+status: agreed
 ---
 # Spec — sh-agent: the metrics store   (2026-10-08)
 

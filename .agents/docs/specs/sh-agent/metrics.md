@@ -160,22 +160,33 @@ The values above illustrate the shape. They are not fixtures. `daily` holds one 
 
 ### Report (`metrics report`)
 
-One HTML file, mode 0600:
-- built with `html/template` and SVG drawn in Go;
-- no `<script>` and no URL to any host;
-- light and dark themes through `prefers-color-scheme`;
-- readable at a 400 px width.
+`metrics report` writes one HTML file, mode 0600. An existing file is refused. The default path is `~/.config/sh-agent/reports/<YYYY-MM-DD-HHMM>-metrics.html`.
 
-Its charts:
-- sessions, cost and tokens per day (one line per vendor);
-- tool calls by tool;
-- the search:grep ratio over time;
-- the error and denial rate per week;
-- subagents by type;
-- pass^k by label;
-- the A-group table.
+**How it is built:**
+- `html/template` with SVG drawn in Go;
+- no `<script>`, no URL to any host, no `@import` or `url(`;
+- light and dark through `prefers-color-scheme`.
 
-Every number in the report equals the same key in `show --json` over the same window.
+**Colours.** Colour follows the CLI and never its rank: Claude Code is categorical slot 1, blue (`#2a78d6` light / `#3987e5` dark); Antigravity is slot 2, orange (`#eb6834` / `#d95926`). That pair is the dataviz reference palette's first two slots, validated in both modes. Colours are set by CSS classes, because html/template sanitises a CSS variable in a `style` attribute.
+
+**Hover and identity.** Hover values are SVG `<title>` elements, which browsers show without script. Identity never rests on colour alone: the legend names both CLIs, each line is labelled where it ends, and every chart has its numbers as a table.
+
+**Charts:**
+- tool calls, tokens, cost, the search:grep ratio and tool errors per day, one line per CLI;
+- tool calls by tool (the ten most used);
+- subagent tool calls by type;
+- runs passed of k per sandbox label;
+- the summary table.
+
+**Missing values.** A value a CLI cannot produce is not drawn:
+- no Antigravity cost line;
+- no search:grep point on a day with no grep call.
+
+Tables show those values as `n/a`.
+
+**Consistency.** Every number in the report comes from the same `Summary` as `show --json` over the same window and filters.
+
+**Known limit:** at 400 px the SVG scales down, and tick labels get small (about 6 px) but stay legible. The tables give the same numbers at full size.
 
 ### Metric definitions
 

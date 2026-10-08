@@ -47,6 +47,15 @@ func TestMetricsVerb(t *testing.T) {
 		t.Fatalf("show: %v\n%s", err, out.String())
 	}
 
+	rep := filepath.Join(t.TempDir(), "r.html")
+	out.Reset()
+	if err := run([]string{"metrics", "report", "--since", "2026-10-01", "--out", rep, "--home", home}, &out); err != nil {
+		t.Fatalf("report: %v\n%s", err, out.String())
+	}
+	if b, err := os.ReadFile(rep); err != nil || !bytes.Contains(b, []byte("Tool calls per day")) {
+		t.Fatalf("report file: %v", err)
+	}
+
 	exp := filepath.Join(t.TempDir(), "m.jsonl")
 	out.Reset()
 	if err := run([]string{"metrics", "export", "--home", home, exp}, &out); err != nil {
@@ -76,6 +85,9 @@ func TestMetricsUsageErrorsExit2(t *testing.T) {
 		{"metrics", "show", "--since", "yesterday"},
 		{"metrics", "show", "--label", "a=b", "--all-labels"},
 		{"metrics", "show", "--outcome", "pass"},
+		{"metrics", "show", "--out", "x.html"},
+		{"metrics", "report", "--json"},
+		{"metrics", "report", "extra"},
 	} {
 		err := run(append(args, "--home", home), &bytes.Buffer{})
 		var code exitCode

@@ -139,7 +139,7 @@ E2E criteria:
 - [x] (AGENTS.md driver-importer lines done in Phase 1) testing guide § 3g (new, not § 3e) and the AGENTS.md pointer; sh-agent-matrix rows are written from the § Sandbox tests evidence — docs: AGENTS.md, testing/guide.md
 - [x] Checkpoint — expect: full test exit 0; `sh-agent status` binary line with no warning from a scratch-home install — evidence: `go test -race -timeout 30m ./...` exit 0, gofmt and vet clean, 2026-10-08; the scratch-home `status` check runs in § Sandbox tests (one install for the whole feature)
 ### Phase 6 — Visual report
-- [ ] `report.go` in `internal/metrics`: `sh-agent metrics report [--home H] [--since] [--label|--all-labels] [--out FILE]`. It writes one self-contained HTML file: `html/template`, inline SVG drawn in Go, no script and no external fetch, light and dark through `prefers-color-scheme`. Default path: `~/.config/sh-agent/reports/<YYYY-MM-DD-HHMM>-metrics.html`, mode 0600, printed on stdout. An existing FILE is refused. Charts:
+- [x] `report.go` in `internal/metrics`: `sh-agent metrics report [--home H] [--since] [--label|--all-labels] [--out FILE]`. It writes one self-contained HTML file: `html/template`, inline SVG drawn in Go, no script and no external fetch, light and dark through `prefers-color-scheme`. Default path: `~/.config/sh-agent/reports/<YYYY-MM-DD-HHMM>-metrics.html`, mode 0600, printed on stdout. An existing FILE is refused. Charts:
   - sessions, cost and tokens per day (line)
   - tool calls by tool (bar)
   - search:grep ratio over time (line)
@@ -150,8 +150,8 @@ E2E criteria:
   - docs: README verb table, spec `## Report`
   - verify: `go test -run Report` golden HTML over the fixture store; the output holds no `<script` and no `http`, and every number in it matches `show --json`
   - expect: pass; the golden test fails when a chart's data is altered
-- [ ] Render the E2E store's report and open it in a real browser (styrman-browser): both themes, plus a 400 px width — verify: AI — expect: screenshots in `.agents/scratch/`, no console errors, the charts are labelled
-- [ ] Checkpoint — expect: full test exit 0 — evidence: <command, exit>, <date>
+- [x] Render the E2E store's report and open it in a real browser (styrman-browser): both themes, plus a 400 px width — verify: AI — expect: screenshots in `.agents/scratch/`, no console errors, the charts are labelled — evidence: report from copies of both CLIs' real data in styrman-browser at 1100 px light and dark and at 400 px; screenshots `.agents/scratch/report-{light,dark,400}.png`; no console messages. The first render showed three defects, each fixed under `TestReportDrawsNoMissingValues` (red, then green): legend swatches sanitised to `ZgotmplZ`, Antigravity drawn as 0 cost and as a 0 ratio on days with no grep, and colliding end labels. Small ticks at 400 px are recorded as a known limit; 2026-10-08
+- [x] Checkpoint — expect: full test exit 0 — evidence: `go test -race -timeout 30m ./...` exit 0, gofmt and vet clean, 2026-10-08
 ### Phase 7 — Feedback into the learning loop (D27)
 - [x] Propose the R3 addendum: dream also reads "a summary of the metrics store (`metrics show --json` for the project's window)" — verify: operator's approval in their own turn, user — expect: approved text quoted in a D-row and committed with an ADR-055 amendment row in DECISIONS (append-only: ADR-055a)
 - [ ] Dream's prompt gains a `metrics` section: that project's `show --json` since its watermark, plus the previous window for comparison. Only numbers go in, and the existing redaction and 256 KB cap apply, with metrics dropped before transcripts. The answer schema accepts a proposal whose `evidence` names a metric — docs: spec dream.md, README dream row — verify: `go test ./internal/dream -run Metrics` — expect: the section appears with numbers only; a dry run prints it; a cap test drops it before transcripts

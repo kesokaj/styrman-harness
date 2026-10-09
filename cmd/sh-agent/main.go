@@ -65,8 +65,8 @@ Commands:
   dream --install-timer | --remove-timer [--dry-run]  install (systemd user timer on Linux, launchd agent on macOS) or remove the nightly "dream --all", run with the PATH of the installing shell; uninstall removes it too
   dream --all | --project DIR [--dry-run]  the background dreamer: first ingest every session's shape into the metrics store; then for every indexed project (or one) that changed since its last dream, send its memory, new trail, feedback, a numbers-only summary of its metrics and both CLIs' transcripts, redacted, to a CLI with no tools, and write the proposals and draft skills it returns under ~/.config/sh-agent/proposals/dream/ (R3's exception; --vendor picks the CLI, default from the manifest)
   metrics ingest [--vendor V] [--source DIR --label KEY=VALUE [--outcome pass|fail]]  read the shape of every Claude Code and Antigravity session (tools, command verbs, tokens, timings; never arguments or prose) into ~/.config/sh-agent/metrics.db, the metrics store; --source reads a sandbox home and stamps its sessions with the label; transcripts come from --source, else --home, else $CLAUDE_CONFIG_DIR, else this home
-  metrics show [--since YYYY-MM-DD] [--project DIR] [--label KEY=VALUE | --all-labels] [--json]  the agent-evaluation summary of the metrics store, a column per CLI: outcome (DoD closure, verifier status, review findings, escaped bugs, corrections, pass^k per label), efficiency (tool calls, turns, tokens, cost, wall and active time, peak context, compactions), process adherence (sh-agent search vs grep, forbidden command shapes, first reads, skills) and reliability (tool error rate, denials, interrupts, retry loops, subagent tool calls); n/a is a metric that CLI cannot produce; sandbox (labelled) sessions are left out unless named
-  metrics report [--since YYYY-MM-DD] [--project DIR] [--label KEY=VALUE | --all-labels] [--out FILE]  write show's summary as one self-contained HTML file with charts (per-day tool calls, tokens, cost, search:grep and errors, one line per CLI; tool calls by tool; subagent tool calls by type; pass^k per sandbox label), inline SVG, no script, light and dark; default ~/.config/sh-agent/reports/<date-time>-metrics.html, 0600, an existing file refused
+  metrics show [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--project DIR] [--label KEY=VALUE | --all-labels] [--json]  the agent-evaluation summary of the metrics store, a column per CLI: outcome (DoD closure, verifier status, review findings, escaped bugs, corrections, pass^k per label), efficiency (tool calls, turns, tokens, cost, wall and active time, peak context, compactions), process adherence (sh-agent search vs grep, forbidden command shapes, first reads, skills) and reliability (tool error rate, denials, interrupts, retry loops, subagent tool calls); n/a is a metric that CLI cannot produce; sandbox (labelled) sessions are left out unless named
+  metrics report [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--project DIR] [--label KEY=VALUE | --all-labels] [--out FILE]  write show's summary as one self-contained HTML file with charts (per-day tool calls, tokens, cost, search:grep and errors, one line per CLI; tool calls by tool; subagent tool calls by type; pass^k per sandbox label), inline SVG, no script, light and dark; default ~/.config/sh-agent/reports/<date-time>-metrics.html, 0600, an existing file refused
   metrics export FILE     write every row of the metrics store but its cmd_hash salt to FILE as JSONL (0600; an existing FILE is refused): its only backup, since the store is the one copy once a transcript expires
   memory show             print this project's memory index, capped at what a session loads, plus a hint when Claude Code's native memory is still on here
   version                 print the build version
@@ -111,6 +111,7 @@ type ctx struct {
 	dryRun, check, force, openRecords, global, rebuild, dreamAll, installTimer, removeTimer bool
 	feedbackRepo, fromZip, kind, refs, memType, memName, memDesc, dreamProject              string
 	metricsSource, metricsLabel, metricsOutcome, metricsSince, metricsProject, metricsOut   string
+	metricsUntil                                                                            string
 	metricsAllLabels, metricsJSON                                                           bool
 	limit                                                                                   int
 	// src is the harness, resolved before run for the verbs that mark source
@@ -165,6 +166,7 @@ var verbs = map[string]verb{
 		c.fs.StringVar(&c.metricsLabel, "label", "", "metrics ingest: KEY=VALUE stamped on every --source session; show: only that label")
 		c.fs.StringVar(&c.metricsOutcome, "outcome", "", "metrics ingest: pass or fail, the --source run's acceptance result")
 		c.fs.StringVar(&c.metricsSince, "since", "", "metrics show: start of the window, YYYY-MM-DD (default 30 days ago)")
+		c.fs.StringVar(&c.metricsUntil, "until", "", "metrics show: end of the window, YYYY-MM-DD, exclusive (default now)")
 		c.fs.StringVar(&c.metricsProject, "project", "", "metrics show: only sessions in this project root")
 		c.fs.BoolVar(&c.metricsAllLabels, "all-labels", false, "metrics show: include labelled (sandbox) sessions")
 		c.fs.BoolVar(&c.metricsJSON, "json", false, "metrics show: print the summary as JSON")
@@ -529,7 +531,7 @@ func runMetrics(c *ctx) error {
 // that is not in allowed, or "": a flag a subcommand does not read is a
 // usage error, never ignored.
 func (c *ctx) metricsFlagsOutside(allowed ...string) string {
-	own := map[string]bool{"source": true, "label": true, "outcome": true, "since": true, "project": true, "all-labels": true, "json": true, "out": true}
+	own := map[string]bool{"source": true, "label": true, "outcome": true, "since": true, "until": true, "project": true, "all-labels": true, "json": true, "out": true}
 	ok := map[string]bool{}
 	for _, a := range allowed {
 		ok[a] = true
@@ -565,6 +567,16 @@ func (c *ctx) metricsShowOptions() (metrics.ShowOptions, error) {
 			return o, fmt.Errorf("--since %q: want YYYY-MM-DD", c.metricsSince)
 		}
 		o.Since = t
+	}
+	if c.metricsUntil != "" {
+		t, err := time.Parse("2006-01-02", c.metricsUntil)
+		if err != nil {
+			return o, fmt.Errorf("--until %q: want YYYY-MM-DD", c.metricsUntil)
+		}
+		if !o.Since.IsZero() && !t.After(o.Since) {
+			return o, errors.New("--until must be after --since")
+		}
+		o.Now = t // exclusive: --since A --until B and --since B never overlap
 	}
 	if c.metricsLabel != "" && c.metricsAllLabels {
 		return o, errors.New("--label and --all-labels exclude each other")

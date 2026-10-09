@@ -30,8 +30,8 @@ The verbs reuse the global `--home` and `--vendor` flags.
 
 ```
 sh-agent metrics ingest [--home H] [--vendor claude|agy|all] [--source DIR --label KEY=VALUE [--outcome pass|fail]]
-sh-agent metrics show   [--home H] [--since YYYY-MM-DD] [--project DIR] [--label KEY=VALUE | --all-labels] [--json]
-sh-agent metrics report [--home H] [--since YYYY-MM-DD] [--label KEY=VALUE | --all-labels] [--out FILE]
+sh-agent metrics show   [--home H] [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--project DIR] [--label KEY=VALUE | --all-labels] [--json]
+sh-agent metrics report [--home H] [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--label KEY=VALUE | --all-labels] [--out FILE]
 sh-agent metrics export [--home H] FILE
 ```
 
@@ -43,6 +43,7 @@ sh-agent metrics export [--home H] FILE
 | `--outcome` | `pass`, `fail` | none | The run's acceptance result, supplied by the kit, used for pass^k. Given after the run (a second ingest of the same `--source` and `--label`), it stamps every session of the label that has no outcome yet, even when no transcript changed; an earlier run keeps the outcome it was stamped with. |
 | `--all-labels` | bool | false | Include labelled (sandbox) sessions. Without it, and without `--label`, they are excluded. |
 | `--since` | date | 30 days ago | Start of the window. |
+| `--until` | date | now | End of the window, exclusive (`show`, `report`). `--since A --until B` and `--since B` never overlap; `/retro` reads the window before its own this way. A session is in the window when it overlaps it, and is counted whole. |
 | `--project` | directory | all | Only sessions whose `project_root` is this directory or under it (a session started in a subdirectory is the project's; a sibling that only shares the name's prefix is not). |
 | `--json` | bool | false | Print the `## Output` object instead of tables. |
 | `--out` | file | `~/.config/sh-agent/reports/<YYYY-MM-DD-HHMM>-metrics.html` | Where the report is written. An existing file is refused. |
@@ -212,7 +213,7 @@ Tables show those values as `n/a`.
 | A4 | Escaped bugs | A `bugs/BUG-*.md` whose text contains a hex prefix of 7 or more characters of one of the session's commits. |
 | A5 | Corrections | `feedback.jsonl` entries in the window whose project is the session's root. |
 | A6 | pass^k | Per label, 1 when all k `--outcome` runs passed. k and the pass count are shown. |
-| — | Replayed history | A resumed or forked Claude session copies earlier messages into a new transcript. `show` counts a tool call, a message or a generation once per CLI by its id, under the session that first holds it, so replays add nothing to B, C or D. |
+| — | Replayed history | A resumed or forked Claude session copies earlier messages into a new transcript. `show` counts a tool step, an assistant message or a generation once per CLI by its id, under the first session in the query's window that holds it, so replayed tool calls, tokens, verbs and errors are not counted twice. User turns, interrupts and compactions are not deduplicated, and a replay whose original session lies outside the window still counts once inside it. |
 | B1 | Tokens and cost | Claude: the maximum of each usage field per message id, summed. Cost and duration come from the session's last `cost-state` line. Antigravity: `gen_metadata` usage. |
 | B2 | Time and volume | Wall time = `ended_at - started_at` of main sessions. Active time = the sum of gaps under 5 min between a main session's steps. A subagent runs inside its parent's time and is counted in neither. Also turns (typed user turns) and tool calls (main and subagent). |
 | B3 | Context | Peak context = max(input + cache read + cache write) of one message. Also the number of compactions. |

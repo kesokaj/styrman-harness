@@ -42,6 +42,15 @@ func TestMetricsVerb(t *testing.T) {
 	if !strings.Contains(out.String(), `"tool_calls_by_tool"`) || !strings.Contains(out.String(), `"Bash": 1`) {
 		t.Fatalf("show --json printed %s", out.String())
 	}
+	// --until closes the window: a window that ends before the session has
+	// none of its tool calls (the previous-window read /retro does).
+	out.Reset()
+	if err := run([]string{"metrics", "show", "--json", "--since", "2026-10-01", "--until", "2026-10-05", "--home", home}, &out); err != nil {
+		t.Fatalf("show --until: %v\n%s", err, out.String())
+	}
+	if strings.Contains(out.String(), `"Bash": 1`) || !strings.Contains(out.String(), `"until": "2026-10-05"`) {
+		t.Fatalf("show --until 2026-10-05 still counts the 10-08 session, or names another end:\n%s", out.String())
+	}
 	out.Reset()
 	if err := run([]string{"metrics", "show", "--since", "2026-10-01", "--home", home}, &out); err != nil || !strings.Contains(out.String(), "B. efficiency") {
 		t.Fatalf("show: %v\n%s", err, out.String())
@@ -83,6 +92,9 @@ func TestMetricsUsageErrorsExit2(t *testing.T) {
 		{"metrics", "export"},
 		{"metrics", "show", "extra"},
 		{"metrics", "show", "--since", "yesterday"},
+		{"metrics", "show", "--until", "soon"},
+		{"metrics", "show", "--since", "2026-10-05", "--until", "2026-10-01"},
+		{"metrics", "ingest", "--until", "2026-10-01"},
 		{"metrics", "show", "--label", "a=b", "--all-labels"},
 		{"metrics", "show", "--outcome", "pass"},
 		{"metrics", "show", "--out", filepath.Join(home, "x.html")},

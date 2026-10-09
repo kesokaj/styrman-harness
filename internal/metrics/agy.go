@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/kesokaj/styrman-harness/internal/search"
 )
@@ -59,6 +60,7 @@ func (s *Store) ingestAgy(o Options, r *Result, log io.Writer) {
 		r.Failed = append(r.Failed, what)
 		fmt.Fprintf(log, "metrics: %s: %v\n", what, err)
 	}
+	sweepCopies(filepath.Dir(s.path), time.Now())
 	tmp, err := os.MkdirTemp(filepath.Dir(s.path), "metrics-agy-")
 	if err != nil {
 		fail(src, err)
@@ -224,7 +226,9 @@ func (s *Store) ingestAgyConversation(src string, c agyConv, source, tmp string,
 			ctx = used
 		}
 		w.exec(`INSERT INTO steps(session_id, ext_id, ts, kind, tok_in, tok_out, cache_read, context)
-			VALUES (?, ?, ?, 'generation', ?, ?, ?, ?) ON CONFLICT(session_id, ext_id) DO NOTHING`,
+			VALUES (?, ?, ?, 'generation', ?, ?, ?, ?) ON CONFLICT(session_id, ext_id) DO UPDATE SET
+				ts = excluded.ts, tok_in = excluded.tok_in, tok_out = excluded.tok_out,
+				cache_read = excluded.cache_read, context = excluded.context`,
 			c.id, fmt.Sprintf("%s:gen:%d", c.id, i), ts, f.varint(1, 4, 2), f.varint(1, 4, 3), f.varint(1, 4, 5), ctx)
 		if m := f.text(1, 19); m != "" {
 			w.exec(`UPDATE sessions SET model = COALESCE(model, ?) WHERE id = ?`, m, c.id)
@@ -266,12 +270,34 @@ func (w *writer) agyTool(c agyConv, ext string, ts int64, failed bool, f fields)
 	if tool == "Bash" && args.CommandLine != "" {
 		hash = w.hash(args.CommandLine)
 	}
+	// A conversation is re-read whole when it changes: a step first seen
+	// while running gets its final status and time (review 2026-10-08).
 	w.exec(`INSERT INTO steps(session_id, ext_id, ts, kind, tool, skill, target_kind, is_error, cmd_hash)
-		VALUES (?, ?, ?, 'tool', ?, ?, ?, ?, ?) ON CONFLICT(session_id, ext_id) DO NOTHING`,
+		VALUES (?, ?, ?, 'tool', ?, ?, ?, ?, ?) ON CONFLICT(session_id, ext_id) DO UPDATE SET
+			ts = excluded.ts, tool = excluded.tool, skill = excluded.skill, target_kind = excluded.target_kind,
+			is_error = excluded.is_error, cmd_hash = excluded.cmd_hash`,
 		c.id, ext, ts, tool, skill, kind, boolInt(failed), hash)
 	if tool == "Bash" {
 		for n, v := range Verb(args.CommandLine) {
 			w.exec(`INSERT INTO step_verbs(session_id, ext_id, n, verb) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING`, c.id, ext, n, v)
+		}
+	}
+}
+
+// sweepCopies removes metrics-agy-* directories older than an hour under dir:
+// an ingest killed mid-copy leaves full conversation copies there, and the
+// defer that removes them never ran. A fresh one may be another ingest's.
+func sweepCopies(dir string, now time.Time) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if !e.IsDir() || !strings.HasPrefix(e.Name(), "metrics-agy-") {
+			continue
+		}
+		if info, err := e.Info(); err == nil && now.Sub(info.ModTime()) > time.Hour {
+			os.RemoveAll(filepath.Join(dir, e.Name()))
 		}
 	}
 }

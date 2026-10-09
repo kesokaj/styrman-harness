@@ -94,6 +94,7 @@ sh-agent dream --remove-timer    # stop and remove it (uninstall does too)
 - A project is dreamt over only once `sh-agent search` or `index` has run in it (the global index is the list).
 - On Linux a user timer fires only while your user manager runs (a login, or `loginctl enable-linger`). `Persistent=true` runs a missed night at the next login.
 - The CLI is the manifest's vendor (`all` uses Claude Code); `--vendor agy|claude` overrides it for a run by hand.
+- Every real run first runs `sh-agent metrics ingest`. It reads the shape of both CLIs' sessions into `~/.config/sh-agent/metrics.db` (never sent by `report`; `uninstall` keeps it) and logs its summary line to `dream.log`. Each project's prompt then carries a numbers-only summary of its metrics. The store is the only copy once Claude Code or Antigravity deletes a transcript, so back it up now and then with `sh-agent metrics export <file>`. Look at it with `sh-agent metrics show` or `sh-agent metrics report` (spec `specs/sh-agent/metrics.md`).
 - Output: `~/.config/sh-agent/proposals/dream/` (per project; `harness/` for harness targets, which `report` sends; `drafts/` for draft skills). A failed project's output goes to `dream-failed/`, and the log is `dream.log`. Nothing is applied until `/retro` does it.
 
 ## Configure

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func pbV(n int, v uint64) []byte {
@@ -174,5 +175,50 @@ func TestAgyIngestShape(t *testing.T) {
 	}
 	if entries, _ := filepath.Glob(filepath.Join(dir, "metrics-agy-*")); len(entries) != 0 {
 		t.Errorf("temporary copies left behind: %v", entries)
+	}
+}
+
+// An ingest killed mid-copy leaves metrics-agy-*; the next ingest sweeps
+// copies older than an hour and keeps a fresh one (another ingest's).
+func TestIngestSweepsStaleCopies(t *testing.T) {
+	home, _ := agyFixture(t)
+	dir := t.TempDir()
+	s := openT(t, filepath.Join(dir, "metrics.db"))
+	old, fresh := filepath.Join(dir, "metrics-agy-old"), filepath.Join(dir, "metrics-agy-fresh")
+	for _, d := range []string{old, fresh} {
+		os.MkdirAll(d, 0o700)
+		os.WriteFile(filepath.Join(d, "C1.db"), []byte("copy"), 0o600)
+	}
+	past := time.Now().Add(-2 * time.Hour)
+	os.Chtimes(old, past, past)
+	ingestT(t, s, Options{Home: home, HomeGiven: true, Vendor: "agy"})
+	if _, err := os.Stat(old); !os.IsNotExist(err) {
+		t.Error("a stale copy was kept")
+	}
+	if _, err := os.Stat(fresh); err != nil {
+		t.Error("a fresh copy (another ingest's) was removed")
+	}
+}
+
+// A conversation ingested while a tool step was still running is read again
+// when it changes: the step's later status reaches the store (review
+// 2026-10-08: rows were inserted once and never updated).
+func TestAgyStepUpdatedOnReingest(t *testing.T) {
+	home, _ := agyFixture(t)
+	s := openT(t, filepath.Join(t.TempDir(), "metrics.db"))
+	o := Options{Home: home, HomeGiven: true, Vendor: "agy"}
+	ingestT(t, s, o)
+	src := filepath.Join(home, ".gemini", "antigravity-cli")
+	db, _ := sql.Open("sqlite", filepath.Join(src, "conversations", "C1.db"))
+	db.Exec(`UPDATE steps SET status = 7 WHERE idx = 2`) // the run_command step fails late
+	db.Close()
+	sum, _ := sql.Open("sqlite", filepath.Join(src, "conversation_summaries.db"))
+	sum.Exec(`UPDATE conversation_summaries SET last_modified_time = '2026-10-08 10:06:00+00:00' WHERE conversation_id = 'C1'`)
+	sum.Close()
+	ingestT(t, s, o)
+	var e int
+	s.db.QueryRow(`SELECT is_error FROM steps WHERE ext_id = 'C1:2'`).Scan(&e)
+	if e != 1 {
+		t.Fatalf("is_error = %d after the step failed, want 1", e)
 	}
 }

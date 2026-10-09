@@ -137,7 +137,7 @@ func (s *Store) ensureSalt() error {
 // Close closes the store.
 func (s *Store) Close() error { return s.db.Close() }
 
-// Export writes every row of every table to file as JSONL, one
+// Export writes every row of every table but the salt to file as JSONL, one
 // {"table": …, "row": {…}} per line, mode 0600. An existing file is refused:
 // the export is the store's only backup and is never overwritten by mistake.
 func (s *Store) Export(file string) error {
@@ -159,7 +159,14 @@ func (s *Store) Export(file string) error {
 }
 
 func (s *Store) exportTable(enc *json.Encoder, table string) error {
-	rows, err := s.db.Query(`SELECT * FROM ` + table + ` ORDER BY rowid`)
+	q := `SELECT * FROM ` + table + ` ORDER BY rowid`
+	if table == "meta" {
+		// The salt stays in the store: with it, an export would let anyone
+		// confirm a guessed command against cmd_hash (security review
+		// 2026-10-08).
+		q = `SELECT * FROM meta WHERE key <> 'salt' ORDER BY rowid`
+	}
+	rows, err := s.db.Query(q)
 	if err != nil {
 		return err
 	}

@@ -146,8 +146,13 @@ func (s *Store) Show(o ShowOptions) (*Summary, error) {
 		q += ` AND label IS NULL`
 	}
 	if o.Project != "" {
-		q += ` AND project_root = ?`
-		args = append(args, filepath.Clean(o.Project))
+		// The root or anything under it: a session started in a
+		// subdirectory is the project's. An exact, case-sensitive prefix
+		// comparison: LIKE ignores ASCII case, and a sibling sharing the
+		// prefix never matches because the prefix ends in "/".
+		p := filepath.Clean(o.Project)
+		q += ` AND (project_root = ? OR substr(project_root, 1, length(?)) = ?)`
+		args = append(args, p, p+"/", p+"/")
 	}
 	rows, err := s.db.Query(q+` ORDER BY started_at`, args...)
 	if err != nil {

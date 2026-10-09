@@ -420,6 +420,10 @@ func runMetrics(c *ctx) error {
 	sub, args := args[0], args[1:]
 	switch sub {
 	case "ingest":
+		if bad := c.metricsFlagsOutside("source", "label", "outcome"); bad != "" {
+			fmt.Fprintf(c.out, "sh-agent metrics ingest: --%s belongs to show or report\n", bad)
+			return exitCode(2)
+		}
 		if len(args) > 0 {
 			fmt.Fprintf(c.out, "metrics ingest takes no arguments: %q\n", args)
 			return exitCode(2)
@@ -498,6 +502,10 @@ func runMetrics(c *ctx) error {
 		fmt.Fprintln(c.out, "metrics: report written to "+file)
 		return nil
 	case "export":
+		if bad := c.metricsFlagsOutside(); bad != "" {
+			fmt.Fprintf(c.out, "sh-agent metrics export: --%s does not apply to export\n", bad)
+			return exitCode(2)
+		}
 		if len(args) != 1 {
 			fmt.Fprintln(c.out, "sh-agent metrics export FILE")
 			return exitCode(2)
@@ -515,6 +523,24 @@ func runMetrics(c *ctx) error {
 	}
 	fmt.Fprintf(c.out, "sh-agent metrics: unknown subcommand %q (ingest, show, report, export)\n", sub)
 	return exitCode(2)
+}
+
+// metricsFlagsOutside names the first metrics flag set on the command line
+// that is not in allowed, or "": a flag a subcommand does not read is a
+// usage error, never ignored.
+func (c *ctx) metricsFlagsOutside(allowed ...string) string {
+	own := map[string]bool{"source": true, "label": true, "outcome": true, "since": true, "project": true, "all-labels": true, "json": true, "out": true}
+	ok := map[string]bool{}
+	for _, a := range allowed {
+		ok[a] = true
+	}
+	bad := ""
+	c.fs.Visit(func(f *flag.Flag) {
+		if bad == "" && own[f.Name] && !ok[f.Name] {
+			bad = f.Name
+		}
+	})
+	return bad
 }
 
 // existingMetricsStore opens the store for show, report and export, which

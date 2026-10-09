@@ -331,7 +331,10 @@ func removeCopies(conf string, now time.Time) {
 	}
 	for _, e := range entries {
 		n := e.Name()
-		if !e.IsDir() || !(strings.HasPrefix(n, "dream-agy-") || strings.HasPrefix(n, "dream-projects-")) {
+		// metrics-agy-* (Antigravity conversation copies) and dream-metrics-*
+		// (a copy of the metrics store) hold the same kind of content.
+		if !e.IsDir() || !(strings.HasPrefix(n, "dream-agy-") || strings.HasPrefix(n, "dream-projects-") ||
+			strings.HasPrefix(n, "metrics-agy-") || strings.HasPrefix(n, "dream-metrics-")) {
 			continue
 		}
 		if info, err := e.Info(); err == nil && now.Sub(info.ModTime()) > time.Hour {

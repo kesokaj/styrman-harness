@@ -13,6 +13,24 @@ var subcommanded = map[string]bool{
 	"npm": true, "npx": true, "sh-agent": true, "terraform": true,
 }
 
+// gitGlobalArg are git's global options that take the next word as their
+// value (`git -C dir`, `git -c k=v`); the others are single words.
+var gitGlobalArg = map[string]bool{"-C": true, "-c": true, "--git-dir": true, "--work-tree": true, "--namespace": true, "--exec-path": true, "--config-env": true}
+
+// skipGitGlobals drops git's global options and their values from the front
+// of its arguments, so the subcommand behind them is found (`git -C dir add
+// -A` is `git add -A`).
+func skipGitGlobals(rest []string) []string {
+	for len(rest) > 0 && strings.HasPrefix(rest[0], "-") {
+		name, _, hasValue := strings.Cut(rest[0], "=")
+		rest = rest[1:]
+		if gitGlobalArg[name] && !hasValue && len(rest) > 0 {
+			rest = rest[1:]
+		}
+	}
+	return rest
+}
+
 // shAgentSub are sh-agent's second-level verbs, kept after the subcommand.
 var shAgentSub = map[string]bool{"ingest": true, "show": true, "report": true, "export": true, "add": true}
 
@@ -247,6 +265,9 @@ func verbFrom(words []string) string {
 		return ""
 	}
 	parts := []string{prog}
+	if prog == "git" {
+		rest = skipGitGlobals(rest)
+	}
 	if subcommanded[prog] && len(rest) > 0 && programName.MatchString(rest[0]) {
 		parts = append(parts, rest[0])
 		rest = rest[1:]
@@ -334,8 +355,8 @@ func stripHeredocs(cmd string) string {
 }
 
 // heredocDelims returns the delimiters of the here-documents line opens:
-// `<<WORD`, `<<-WORD`, `<<'WORD'`, `<<"WORD"`; `<<<` is a here-string and
-// opens none.
+// `<<WORD`, `<<-WORD`, `<<'WORD'`, `<<"WORD"`, `<<\WORD`; `<<<` is a
+// here-string and opens none.
 func heredocDelims(line string) []string {
 	var ds []string
 	for {
@@ -351,8 +372,11 @@ func heredocDelims(line string) []string {
 		line = strings.TrimPrefix(line, "-")
 		line = strings.TrimLeft(line, " \t")
 		q := ""
-		if strings.HasPrefix(line, "'") || strings.HasPrefix(line, "\"") {
+		switch {
+		case strings.HasPrefix(line, "'") || strings.HasPrefix(line, "\""):
 			q, line = line[:1], line[1:]
+		case strings.HasPrefix(line, "\\"):
+			line = line[1:] // <<\EOF: a quoted delimiter, the same here-doc
 		}
 		end := strings.IndexFunc(line, func(r rune) bool {
 			return !(r == '_' || r == '-' || r == '.' || r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || r >= '0' && r <= '9')

@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -49,12 +48,20 @@ func (s *Store) joinEvents(home string) (notes []string, err error) {
 		return nil, err
 	}
 	byRoot := map[string][]window{}
+	tops := map[string]string{}
 	for rows.Next() {
 		var id, root string
 		var st, en int64
 		if err := rows.Scan(&id, &root, &st, &en); err != nil {
 			rows.Close()
 			return nil, err
+		}
+		// A session started in a subdirectory joins its project's events.
+		if top, ok := tops[root]; ok {
+			root = top
+		} else {
+			top = trail.Toplevel(root)
+			tops[root], root = top, top
 		}
 		byRoot[root] = append(byRoot[root], window{id, st, en + closeSlack.Milliseconds()})
 	}
@@ -183,14 +190,15 @@ func (s *Store) joinEvents(home string) (notes []string, err error) {
 }
 
 // commitsIn lists root's commits between the earliest window start and the
-// latest window end, newest first, with no index lock and no fsmonitor hook.
+// latest window end, newest first, through trail.Log (no lock, no hook, no
+// signature program).
 func commitsIn(root string, ws []window) ([]stamped, bool) {
 	lo, hi := ws[0].start, ws[0].end
 	for _, w := range ws {
 		lo, hi = min(lo, w.start), max(hi, w.end)
 	}
-	out, err := exec.Command("git", "--no-optional-locks", "-c", "core.fsmonitor=false", "-C", root, "log", "--all",
-		"--since=@"+strconv.FormatInt(lo/1000, 10), "--until=@"+strconv.FormatInt(hi/1000+1, 10), "--format=%H %ct").Output()
+	out, err := trail.Log(root, "--all",
+		"--since=@"+strconv.FormatInt(lo/1000, 10), "--until=@"+strconv.FormatInt(hi/1000+1, 10), "--format=%H %ct")
 	if err != nil {
 		return nil, false
 	}

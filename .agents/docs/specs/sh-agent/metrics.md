@@ -43,7 +43,7 @@ sh-agent metrics export [--home H] FILE
 | `--outcome` | `pass`, `fail` | none | The run's acceptance result, supplied by the kit, used for pass^k. Given after the run (a second ingest of the same `--source` and `--label`), it stamps every session of the label that has no outcome yet, even when no transcript changed; an earlier run keeps the outcome it was stamped with. |
 | `--all-labels` | bool | false | Include labelled (sandbox) sessions. Without it, and without `--label`, they are excluded. |
 | `--since` | date | 30 days ago | Start of the window. |
-| `--project` | directory | all | Only sessions whose `project_root` is this directory. |
+| `--project` | directory | all | Only sessions whose `project_root` is this directory or under it (a session started in a subdirectory is the project's; a sibling that only shares the name's prefix is not). |
 | `--json` | bool | false | Print the `## Output` object instead of tables. |
 | `--out` | file | `~/.config/sh-agent/reports/<YYYY-MM-DD-HHMM>-metrics.html` | Where the report is written. An existing file is refused. |
 
@@ -255,6 +255,9 @@ ingest_state(source TEXT PRIMARY KEY, size INTEGER, mtime INTEGER, offset INTEGE
   - `interrupt`: a user line starting `[Request interrupted by user`.
   - `compaction`: Claude's compact-boundary line.
 - **Antigravity sources.** Antigravity databases are read only from copies. `step_payload` is never read; tool names and command lines come from `steps.metadata`.
+- **Export.** `export` writes every row but the `salt`: with it, an export would let anyone confirm a guessed command against `cmd_hash`.
+- **git in project roots.** Every git call into a session's project root goes through `internal/trail`: `--no-optional-locks -c core.fsmonitor=false -c log.showSignature=false`, `GIT_NO_LAZY_FETCH=1`, and `--no-show-signature` on `log`. Only commands that read objects and files run there (`log`, `ls-tree`, `hash-object --no-filters`, `rev-parse`), never `status`, which runs the repository's clean filters (BUG-164). This closes the program-starting config keys those commands honour (signature programs, clean filters, fsmonitor, a lazy fetch's ssh command); it does not make the repository's config trusted. A partial clone (`extensions.partialClone`) is not read at all, because a git older than 2.44 ignores `GIT_NO_LAZY_FETCH`. Its sessions get no commit or trail events, and its trail files keep their mtimes in the dreamer. A toplevel is accepted only when it is the session's directory or a parent of it, so a repository's `core.worktree` cannot file a session under another project. Sessions are grouped by their git toplevel (`trail.Toplevel`), so a session started in a subdirectory joins its project's events.
+- **Temporary copies.** `metrics-agy-*` (Antigravity conversation copies) and `dream-metrics-*` (a store snapshot) are removed after use. An `ingest` and every `dream` run also sweep any older than an hour, which a killed run left behind.
 - **Migrations.** They run forward only, in one transaction. A store with a newer schema is refused untouched. The binary never deletes the store, and `uninstall` keeps it.
 
 ## Failure modes
@@ -272,7 +275,7 @@ ingest_state(source TEXT PRIMARY KEY, size INTEGER, mtime INTEGER, offset INTEGE
 | Still locked after the 10 s busy timeout | The source counts as failed (`database is locked`), exit 1; the next run picks it up |
 | `show`, `report` or `export` on a home with no store (never ingested) | `sh-agent metrics: no metrics store at <path>; run \`sh-agent metrics ingest\` first`, exit 1; nothing is created |
 | `export FILE` or `report --out FILE` exists | `refusing to overwrite FILE`, exit 1 |
-| `--source` without `--label` | Usage error, exit 2 |
+| `--source` without `--label`, or any metrics flag the subcommand does not read (`ingest --json`, `export --label`, `show --out`) | Usage error naming the flag, exit 2 |
 | Ingest fails inside `dream` | A line in `dream.log`; the dream's exit status and `last_run.error` are unchanged |
 
 ## Non-goals

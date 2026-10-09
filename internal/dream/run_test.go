@@ -574,3 +574,24 @@ func TestRemoveCopiesUsesInjectedClock(t *testing.T) {
 		t.Error("a copy two hours old by the injected clock was kept")
 	}
 }
+
+// The metrics copies (full Antigravity conversations in metrics-agy-*, a
+// copy of the store in dream-metrics-*) are swept like dream's own: a killed
+// run must not leave them for good (security review 2026-10-08).
+func TestRemoveCopiesSweepsMetricsCopies(t *testing.T) {
+	conf := t.TempDir()
+	mt := time.Now().Add(-2 * time.Hour)
+	for _, d := range []string{"metrics-agy-1", "dream-metrics-2", "unrelated-3"} {
+		write(t, filepath.Join(conf, d, "x.db"), "db", mt)
+		os.Chtimes(filepath.Join(conf, d), mt, mt)
+	}
+	removeCopies(conf, time.Now())
+	for _, d := range []string{"metrics-agy-1", "dream-metrics-2"} {
+		if _, err := os.Stat(filepath.Join(conf, d)); !os.IsNotExist(err) {
+			t.Errorf("%s was kept", d)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(conf, "unrelated-3")); err != nil {
+		t.Error("a directory that is not a copy was removed")
+	}
+}

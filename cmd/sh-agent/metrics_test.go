@@ -85,9 +85,16 @@ func TestMetricsUsageErrorsExit2(t *testing.T) {
 		{"metrics", "show", "--since", "yesterday"},
 		{"metrics", "show", "--label", "a=b", "--all-labels"},
 		{"metrics", "show", "--outcome", "pass"},
-		{"metrics", "show", "--out", "x.html"},
+		{"metrics", "show", "--out", filepath.Join(home, "x.html")},
 		{"metrics", "report", "--json"},
 		{"metrics", "report", "extra"},
+		{"metrics", "ingest", "--json"},
+		{"metrics", "ingest", "--since", "2026-10-01"},
+		{"metrics", "ingest", "--project", "."},
+		{"metrics", "ingest", "--all-labels"},
+		{"metrics", "ingest", "--out", filepath.Join(home, "x.html")},
+		{"metrics", "export", "--json", filepath.Join(home, "x.jsonl")},
+		{"metrics", "export", "--label", "a=b", filepath.Join(home, "x.jsonl")},
 	} {
 		err := run(append(args, "--home", home), &bytes.Buffer{})
 		var code exitCode

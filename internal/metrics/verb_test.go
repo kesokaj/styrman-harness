@@ -87,3 +87,24 @@ func TestVerbDropsContent(t *testing.T) {
 		}
 	}
 }
+
+// Git's global options (-C dir, -c k=v, --git-dir=…) come before the
+// subcommand and never hide it; a backslash-quoted here-doc is a here-doc.
+func TestVerbGitGlobalsAndQuotedHeredoc(t *testing.T) {
+	cases := []struct {
+		cmd  string
+		want []string
+	}{
+		{"git -C /p add -A", []string{"git add -A"}},
+		{"git -C /p commit -m x && go test ./...", []string{"git commit -m", "go test"}},
+		{"git -c user.name=x -c core.fsmonitor=false push --force", []string{"git push --force"}},
+		{"git --git-dir=/x --no-pager log --oneline", []string{"git log --oneline"}},
+		{"cat > f <<\\EOF\nghp_abcdefABCDEF0123456789\nEOF\nls", []string{"cat", "ls"}},
+		{"cat <<-\\END\n\tsk_live_token\n\tEND", []string{"cat"}},
+	}
+	for _, c := range cases {
+		if got := Verb(c.cmd); !reflect.DeepEqual(got, c.want) {
+			t.Errorf("Verb(%q)\n got %q\nwant %q", c.cmd, got, c.want)
+		}
+	}
+}

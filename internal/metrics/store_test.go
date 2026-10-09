@@ -199,3 +199,23 @@ func TestMigrationOneToCurrent(t *testing.T) {
 		t.Fatalf("after upgrade: n=%d err=%v", n, err)
 	}
 }
+
+// The export leaves out the cmd_hash salt: with the salt, anyone holding an
+// export could confirm a guessed low-entropy command (security review
+// 2026-10-08). The schema row stays, so an export names its schema.
+func TestExportOmitsSalt(t *testing.T) {
+	dir := t.TempDir()
+	s := openT(t, filepath.Join(dir, "metrics.db"))
+	salt := s.meta(t, "salt")
+	out := filepath.Join(dir, "e.jsonl")
+	if err := s.Export(out); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(out)
+	if bytes.Contains(b, []byte(salt)) {
+		t.Error("the export carries the salt")
+	}
+	if !bytes.Contains(b, []byte(`"schema"`)) {
+		t.Error("the export lost its schema row")
+	}
+}

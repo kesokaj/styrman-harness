@@ -134,3 +134,38 @@ func TestShowOutcomeFromEvents(t *testing.T) {
 		t.Errorf("A = %+v", sum.A)
 	}
 }
+
+// A session started in a subdirectory of the project belongs to it: its
+// commits join (events group by git toplevel) and --project selects it, while
+// a sibling whose name only shares the prefix does not match.
+func TestSubdirectorySessionsBelongToTheProject(t *testing.T) {
+	s, home, sha1 := eventsFixture(t)
+	var root string
+	s.db.QueryRow(`SELECT project_root FROM sessions WHERE id = 'S1'`).Scan(&root)
+	sub := filepath.Join(root, ".agents")
+	s.db.Exec(`UPDATE sessions SET project_root = ? WHERE id = 'S1'`, sub)
+	s.db.Exec(`INSERT INTO sessions(id, vendor, project_root, started_at, ended_at) VALUES ('U', 'claude', ?, 1, 2)`,
+		strings.ToUpper(root)+"/sub") // another directory on a case-sensitive file system
+	sibling := root + "x"
+	os.MkdirAll(sibling, 0o755)
+	s.db.Exec(`INSERT INTO sessions(id, vendor, project_root, started_at, ended_at) VALUES ('X', 'claude', ?, 1, 2)`, sibling)
+	if _, err := s.joinEvents(home); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	s.db.QueryRow(`SELECT count(*) FROM events WHERE session_id = 'S1' AND kind = 'commit' AND ref = ?`, sha1).Scan(&n)
+	if n != 1 {
+		t.Errorf("the subdirectory session's commit did not join")
+	}
+	s.db.QueryRow(`SELECT count(*) FROM events WHERE session_id = 'S1' AND kind = 'handoff'`).Scan(&n)
+	if n != 1 {
+		t.Errorf("the subdirectory session's handoff did not join (the docs root is the toplevel's)")
+	}
+	sum, err := s.Show(ShowOptions{Since: time.Unix(0, 0), Now: time.Date(2026, 10, 9, 0, 0, 0, 0, time.UTC), Project: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sum.Sessions["claude"] != 3 {
+		t.Errorf("--project %s selected %d sessions, want 3 (S1 in a subdirectory, S2, S3; not the sibling)", root, sum.Sessions["claude"])
+	}
+}

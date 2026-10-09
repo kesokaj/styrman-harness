@@ -348,8 +348,8 @@ func TestShowOutsideACheckoutRefuses(t *testing.T) {
 // The store check runs in every indexed project at 03:00: it must hold no
 // index lock and run no fsmonitor hook (v2.0.0 gate, security code slice).
 func TestStoreTrackedArgs(t *testing.T) {
-	got := strings.Join(storeTrackedArgs("/r"), " ")
-	want := "--no-optional-locks -c core.fsmonitor=false -C /r ls-files -- .agents/memory"
+	got := strings.Join(storeTracked("/r").Args[1:], " ")
+	want := "--no-optional-locks -c core.fsmonitor=false -c log.showSignature=false -C /r ls-files -- .agents/memory"
 	if got != want {
 		t.Fatalf("args = %q, want %q", got, want)
 	}
@@ -401,5 +401,30 @@ func TestSymlinkedIndexRefused(t *testing.T) {
 	// into the store as a regular index (what happened before the refusal).
 	if info, err := os.Lstat(filepath.Join(store, "MEMORY.md")); err != nil || info.Mode()&os.ModeSymlink == 0 {
 		t.Error("the index is no longer the link: Add wrote a regular MEMORY.md from the outside file")
+	}
+}
+
+// Add's check-ignore runs no project hook either: `git check-ignore` reads
+// the index and starts core.fsmonitor unless it is turned off (security
+// review of BUG-165's fix, 2026-10-09).
+func TestAddRunsNoProjectHook(t *testing.T) {
+	root := repo(t)
+	marker := filepath.Join(t.TempDir(), "fired")
+	hook := filepath.Join(t.TempDir(), "hook.sh")
+	if err := os.WriteFile(hook, []byte("#!/bin/sh\ntouch \""+marker+"\"\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	git(t, root, "config", "core.fsmonitor", hook)
+	exec.Command("git", "-C", root, "check-ignore", "-q", ".agents/memory/x.md").Run()
+	if _, err := os.Stat(marker); err != nil {
+		t.Skip("control: this git did not run the core.fsmonitor hook for check-ignore")
+	}
+	os.Remove(marker)
+	// Add must reach its check-ignore: a refusal before it would pass vacuously.
+	if _, err := add(root, "x", "x", "x"); err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("Add ran the project's fsmonitor hook")
 	}
 }

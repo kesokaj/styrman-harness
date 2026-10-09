@@ -44,7 +44,11 @@ Preamble exit lines on every run: `no processes left by the run`, `real config u
 - The change under test added source 11 to Step 1 and nothing to Step 2's scope rules, but no control run at the pre-feature commit was made. That the change is uninvolved is **not proven**.
 - The earlier passing runs of this row were on Antigravity (2026-10-07) and on Opus. This kit ran Claude with Sonnet, which is also untested as a cause.
 
-**Open:** a control run of the Claude row at 2c0f215, with the same model.
+**Control run, 2026-10-09.** The same kit was run with `SBX_TAG=control` and the skills installed from a `git archive` of 2c0f215 (no source 11), on the same model. The Claude Code retro again scoped the `-race` proposal to the project (`Scope: project — Target: AGENTS.md`) and queued no harness file: the matrix check failed there too.
+
+The 0 of 2 therefore predates this feature. It comes from Step 2's scope judgement on Sonnet, not from source 11. As expected at that tree, the control's metrics checks (a `sh-agent metrics` call, a retro record that mentions the metrics) fail, because source 11 did not exist yet.
+
+The matrix row's own expectation (a harness proposal) is a question for the skill matrix, not for this feature: **left: operator**.
 
 ## Also exercised
 

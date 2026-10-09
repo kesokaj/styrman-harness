@@ -149,7 +149,7 @@ func TestDatesRunsNoCleanFilter(t *testing.T) {
 // Every git call into a project root carries GIT_NO_LAZY_FETCH=1: a partial
 // clone would otherwise fetch through its own core.sshCommand.
 func TestCommandsNeverLazyFetch(t *testing.T) {
-	cmd := command("/r", "log")
+	cmd := Command("/r", "log")
 	found := false
 	for _, e := range cmd.Env {
 		found = found || e == "GIT_NO_LAZY_FETCH=1"

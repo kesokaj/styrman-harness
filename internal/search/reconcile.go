@@ -10,13 +10,15 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/kesokaj/styrman-harness/internal/harness"
+	"github.com/kesokaj/styrman-harness/internal/trail"
 )
 
 // maxFileBytes is the largest file indexed; larger files, and files with a
@@ -33,11 +35,14 @@ type entry struct {
 	path, oid, state string
 }
 
+// git runs in dir through trail.Command, the hardened builder: the checkout's
+// own config is untrusted (no lock, no fsmonitor, no signature program, no
+// lazy fetch; BUG-164, BUG-165).
 func git(dir string, stdin []byte, args ...string) ([]byte, error) {
-	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	cmd := trail.Command(dir, args...)
 	// Git's messages in its C locale: dropReason matches "not a git
 	// repository", which a translated catalogue would reword.
-	cmd.Env = append(os.Environ(), "LC_ALL=C", "LANGUAGE=")
+	cmd.Env = append(cmd.Env, "LC_ALL=C", "LANGUAGE=")
 	if stdin != nil {
 		cmd.Stdin = bytes.NewReader(stdin)
 	}
@@ -74,12 +79,83 @@ func docsRootOf(root string) string {
 	return ".agents/docs"
 }
 
+// indexStat is what git's index records of a file's stat.
+type indexStat struct{ size, sec, nsec int64 }
+
+// indexStats reads the size and mtime git's index holds for each entry
+// (`ls-files -s --debug`, which refreshes nothing and runs no filter or hook)
+// and the index file's own mtime. On any error it returns nothing, and every
+// tracked file is hashed.
+//
+// The output is read line by line without -z: git quotes a name holding a
+// newline, a tab, a quote or a backslash, so a header line can never carry
+// another entry's lines, and a quoted name is skipped (its file is hashed).
+// With -z a name holding a newline could forge another file's stat lines
+// (security review of BUG-165's fix, finding 2).
+func indexStats(root string) (map[string]indexStat, time.Time) {
+	out, err := git(root, nil, "ls-files", "-s", "--debug")
+	if err != nil {
+		return nil, time.Time{}
+	}
+	idx, err := git(root, nil, "rev-parse", "--git-path", "index")
+	if err != nil {
+		return nil, time.Time{}
+	}
+	ip := strings.TrimSpace(string(idx))
+	if !filepath.IsAbs(ip) {
+		ip = filepath.Join(root, ip)
+	}
+	ifi, err := os.Stat(ip)
+	if err != nil {
+		return nil, time.Time{}
+	}
+	stats := map[string]indexStat{}
+	cur, seen := "", 0
+	var st indexStat
+	flush := func() {
+		if cur != "" && seen == 2 {
+			stats[cur] = st
+		}
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		if !strings.HasPrefix(line, " ") {
+			// A header: "<mode> <oid> <stage>\t<path>".
+			flush()
+			cur, seen, st = "", 0, indexStat{}
+			if _, p, ok := strings.Cut(line, "\t"); ok && !strings.HasPrefix(p, `"`) {
+				cur = p
+			}
+			continue
+		}
+		f := strings.Fields(strings.ReplaceAll(line, "\t", " "))
+		switch {
+		case len(f) >= 2 && f[0] == "mtime:":
+			if sec, nsec, ok := strings.Cut(f[1], ":"); ok {
+				a, e1 := strconv.ParseInt(sec, 10, 64)
+				b, e2 := strconv.ParseInt(nsec, 10, 64)
+				if e1 == nil && e2 == nil {
+					st.sec, st.nsec = a, b
+					seen++
+				}
+			}
+		case len(f) >= 2 && f[0] == "size:":
+			if v, err := strconv.ParseInt(f[1], 10, 64); err == nil {
+				st.size = v
+				seen++
+			}
+		}
+	}
+	flush()
+	return stats, ifi.ModTime()
+}
+
 // noIndexMarker names the file that takes its directory out of the index.
 const noIndexMarker = ".sh-agent-noindex"
 
 // gitView lists the checkout's current files: the index entries of
-// `git ls-files -s`, overridden by what `git status` reports modified or
-// untracked (their blob IDs computed from their bytes), minus deleted paths,
+// `git ls-files -s`, each marked modified when its bytes are not the index's
+// blob, plus the untracked files of `git ls-files --others` (blob IDs
+// computed from their bytes; no `git status`, BUG-165), minus deleted paths,
 // symlinks, submodules, secret-shaped names and every path under a
 // directory that holds a noIndexMarker file. A file's content is read
 // again when its blob is indexed: a file edited and restored between the two
@@ -119,40 +195,42 @@ func gitView(root, prefix string) ([]entry, []string, error) {
 		if len(f) != 3 || f[0] == "120000" || f[0] == "160000" {
 			continue
 		}
-		if _, dup := view[p]; dup { // an unmerged path: status decides below
+		if _, dup := view[p]; dup { // an unmerged path: its bytes decide below
 			continue
 		}
 		view[p] = entry{path: p, oid: f[1], state: "tracked"}
 		order = append(order, p)
 	}
-	// --no-renames: a rename is two records (D and A), never a pair the
-	// parser has to keep in step — a work-tree rename was once read as an
-	// entry with three characters cut off, which pointed outside the
-	// checkout (release gate security review, v1.13.0).
-	out, err = git(root, nil, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--no-renames")
-	if err != nil {
-		return nil, nil, err
-	}
-	recs := strings.Split(string(out), "\x00")
-	for i := 0; i < len(recs); i++ {
-		rec := recs[i]
-		if len(rec) < 4 {
-			continue
+	// No `git status`: it runs the clean filters and the fsmonitor hook the
+	// checkout's own .gitattributes and config name (BUG-165). A tracked
+	// file is compared by its own bytes with the index's blob; untracked
+	// files come from ls-files, which reads ignore rules only. A file the
+	// checkout filters reads as modified and is indexed from its bytes.
+	// A tracked marker deleted from the work tree no longer counts, wherever
+	// it sits: the loop below sees only paths under prefix.
+	for p := range markers {
+		if _, err := fsRoot.Lstat(filepath.FromSlash(p)); err != nil {
+			delete(markers, p)
 		}
-		x, y, p := rec[0], rec[1], rec[3:]
-		if path.Base(p) == noIndexMarker {
-			if _, err := fsRoot.Lstat(filepath.FromSlash(p)); y == 'D' || err != nil {
-				delete(markers, p) // a marker deleted from the work tree no longer counts
-			} else {
-				markers[p] = true
+	}
+	// The index's own stat data spares the hash of a file git would also call
+	// unchanged: same size, same mtime to the nanosecond, and not racily clean
+	// (written within the second the index was). Reading it runs nothing.
+	stats, indexTime := indexStats(root)
+	for _, p := range append([]string(nil), order...) {
+		// A plain stat for the comparison (an os.Root walk per file cost
+		// more than the hash it saves); anything read still goes through
+		// fsRoot, which refuses a path that leaves the checkout.
+		if st, ok := stats[p]; ok {
+			if fi, err := os.Lstat(filepath.Join(root, filepath.FromSlash(p))); err == nil && fi.Mode().IsRegular() &&
+				fi.Size() == st.size && fi.ModTime().Unix() == st.sec && int64(fi.ModTime().Nanosecond()) == st.nsec &&
+				st.sec < indexTime.Unix() {
+				continue // unchanged: the index's blob stands
 			}
 		}
-		if !under(p) {
-			continue
-		}
 		fi, err := fsRoot.Lstat(filepath.FromSlash(p))
-		if y == 'D' || err != nil || !fi.Mode().IsRegular() || fi.Size() > maxFileBytes {
-			delete(view, p)
+		if err != nil || !fi.Mode().IsRegular() || fi.Size() > maxFileBytes {
+			delete(view, p) // deleted, no longer a regular file, or too large
 			continue
 		}
 		// The blob ID comes from the file's own bytes: `git hash-object
@@ -164,14 +242,36 @@ func gitView(root, prefix string) ([]entry, []string, error) {
 			delete(view, p)
 			continue
 		}
-		state := "modified"
-		if x == '?' {
-			state = "untracked"
+		if oid := blobID(data); oid != view[p].oid {
+			view[p] = entry{path: p, oid: oid, state: "modified"}
+		}
+	}
+	out, err = git(root, nil, "ls-files", "-z", "--others", "--exclude-standard")
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, p := range strings.Split(string(out), "\x00") {
+		if p == "" {
+			continue
+		}
+		fi, err := fsRoot.Lstat(filepath.FromSlash(p))
+		if err != nil || !fi.Mode().IsRegular() {
+			continue
+		}
+		if path.Base(p) == noIndexMarker {
+			markers[p] = true // a marker not yet added counts at once
+		}
+		if !under(p) || fi.Size() > maxFileBytes {
+			continue
+		}
+		data, err := readAll(fsRoot, filepath.FromSlash(p))
+		if err != nil {
+			continue
 		}
 		if _, known := view[p]; !known {
 			order = append(order, p)
 		}
-		view[p] = entry{path: p, oid: blobID(data), state: state}
+		view[p] = entry{path: p, oid: blobID(data), state: "untracked"}
 	}
 	// A directory holding a noIndexMarker is data the project carries, not its
 	// own text: nothing below it is indexed. The marker counts in every state

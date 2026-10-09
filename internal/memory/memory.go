@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/kesokaj/styrman-harness/internal/harness"
+	"github.com/kesokaj/styrman-harness/internal/trail"
 )
 
 // The index caps match what Claude Code loads of its own MEMORY.md.
@@ -60,7 +61,7 @@ func IsRefusal(err error) bool {
 // Root is the main worktree's top level for the checkout that holds dir, so
 // every worktree of a repository shares one store (D26).
 func Root(dir string) (string, error) {
-	out, err := exec.Command("git", "-C", dir, "rev-parse", "--path-format=absolute", "--git-common-dir").Output()
+	out, err := trail.Command(dir, "rev-parse", "--path-format=absolute", "--git-common-dir").Output()
 	if err != nil {
 		return "", refuse("not a git checkout: %s", dir)
 	}
@@ -82,7 +83,7 @@ func trusted(root string) (string, error) {
 			return "", refuse("%s is a symlink: the memory store must be the project's own directory", p)
 		}
 	}
-	out, err := exec.Command("git", storeTrackedArgs(root)...).Output()
+	out, err := storeTracked(root).Output()
 	if err != nil {
 		return "", refuse("cannot ask git what it tracks under .agents/memory: %v", err)
 	}
@@ -125,7 +126,9 @@ func Add(dir string, e Entry, body io.Reader, now time.Time) (string, error) {
 		return "", err
 	}
 	rel := ".agents/memory/" + e.Name + ".md"
-	if exec.Command("git", "-C", root, "check-ignore", "-q", rel).Run() != nil {
+	// check-ignore reads the index and would start the project's fsmonitor:
+	// it runs through the hardened builder too (BUG-165).
+	if trail.Command(root, "check-ignore", "-q", rel).Run() != nil {
 		return "", refuse("%s is not ignored by git: run /init-project first", rel)
 	}
 
@@ -298,11 +301,11 @@ func lock(path string) (func(), error) {
 	}
 }
 
-// storeTrackedArgs is the git call that asks what the repository tracks under
-// .agents/memory. The nightly dream runs it in every indexed project, so it holds
-// no index lock and runs no fsmonitor hook the project may have installed
-// (security review of the v2.0.0 gate, 2026-10-01; the dream's status call has
-// the same two guards).
-func storeTrackedArgs(root string) []string {
-	return []string{"--no-optional-locks", "-c", "core.fsmonitor=false", "-C", root, "ls-files", "--", ".agents/memory"}
+// storeTracked is the git call that asks what the repository tracks under
+// .agents/memory. The nightly dream runs it in every indexed project, so it
+// goes through trail.Command: no index lock, no fsmonitor hook, no signature
+// program, no lazy fetch (security review of the v2.0.0 gate, 2026-10-01;
+// BUG-164, BUG-165).
+func storeTracked(root string) *exec.Cmd {
+	return trail.Command(root, "ls-files", "--", ".agents/memory")
 }

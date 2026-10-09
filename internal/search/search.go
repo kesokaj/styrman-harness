@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/kesokaj/styrman-harness/internal/trail"
 )
 
 // Options are the flags of `sh-agent search` and `sh-agent index`.
@@ -133,7 +135,7 @@ func guardProject(root string) error {
 			return fmt.Errorf("search: %s is a symlink; refusing to write through it", filepath.ToSlash(d))
 		}
 	}
-	cmd := exec.Command("git", "-C", root, "check-ignore", "-q", ".agents/scratch/search.db")
+	cmd := trail.Command(root, "check-ignore", "-q", ".agents/scratch/search.db")
 	err := cmd.Run()
 	var ee *exec.ExitError
 	switch {

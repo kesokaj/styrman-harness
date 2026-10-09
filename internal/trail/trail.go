@@ -6,9 +6,9 @@
 // Every git call here runs in a project root taken from the search index or
 // a transcript, so the root's own config and attributes are untrusted. The
 // calls are chosen so none of them starts a program the repository defines:
-// `log` with signatures off, `ls-tree`, `hash-object --no-filters` and
-// `rev-parse` read objects and files only; `status`, which runs clean
-// filters, is never called (BUG-164).
+// `log` with signatures off, `ls-tree`, `hash-object --no-filters`,
+// `rev-parse` and `config --get` read objects, files and config only;
+// `status`, which runs clean filters, is never called (BUG-164).
 package trail
 
 import (
@@ -67,7 +67,7 @@ func changed(root, docs string) (out map[string]bool, ok bool) {
 	if partialClone(root) {
 		return nil, false
 	}
-	tree, err := command(root, "ls-tree", "-r", "-z", "--full-tree", "HEAD", "--", docs).Output()
+	tree, err := Command(root, "ls-tree", "-r", "-z", "--full-tree", "HEAD", "--", docs).Output()
 	if err != nil {
 		return nil, false
 	}
@@ -88,7 +88,7 @@ func changed(root, docs string) (out map[string]bool, ok bool) {
 	if len(paths) == 0 {
 		return out, true
 	}
-	cmd := command(root, "hash-object", "--no-filters", "--stdin-paths")
+	cmd := Command(root, "hash-object", "--no-filters", "--stdin-paths")
 	cmd.Stdin = strings.NewReader(strings.Join(paths, "\n") + "\n")
 	hashed, err := cmd.Output()
 	got := strings.Fields(string(bytes.TrimSpace(hashed)))
@@ -103,14 +103,17 @@ func changed(root, docs string) (out map[string]bool, ok bool) {
 	return out, true
 }
 
-// command is git in root with the hardened global options: no index lock,
+// Command is git in root with the hardened global options: no index lock,
 // no fsmonitor hook (security review rounds 2 and 3, 2026-10-01), no
 // signature check, which makes `git log` start the repository's gpg.program
 // (BUG-164), and GIT_NO_LAZY_FETCH, so a partial clone fails instead of
 // fetching through its own core.sshCommand (security review 2026-10-08,
 // round 2) on a git of 2.44 or later; an older git ignores the variable,
-// which is why a partial clone is not read at all (partialClone).
-func command(root string, args ...string) *exec.Cmd {
+// which is why a partial clone is not read at all (partialClone). Every git
+// call into a project repository (dream, metrics, search, memory) is built
+// here (BUG-165); internal/harness runs git only in the harness's own
+// checkout, which is the operator's.
+func Command(root string, args ...string) *exec.Cmd {
 	full := append([]string{"--no-optional-locks", "-c", "core.fsmonitor=false", "-c", "log.showSignature=false", "-C", root}, args...)
 	cmd := exec.Command("git", full...)
 	cmd.Env = append(os.Environ(), "GIT_NO_LAZY_FETCH=1")
@@ -123,7 +126,7 @@ func Log(root string, args ...string) ([]byte, error) {
 	if partialClone(root) {
 		return nil, errPartialClone
 	}
-	return command(root, append([]string{"log", "--no-show-signature"}, args...)...).Output()
+	return Command(root, append([]string{"log", "--no-show-signature"}, args...)...).Output()
 }
 
 var errPartialClone = errors.New("a partial clone is not read: git could fetch through its own config")
@@ -134,7 +137,7 @@ var errPartialClone = errors.New("a partial clone is not read: git could fetch t
 // core.sshCommand (security review 2026-10-08, round 3). Reading config
 // starts no program.
 func partialClone(root string) bool {
-	out, _ := command(root, "config", "--get", "extensions.partialClone").Output()
+	out, _ := Command(root, "config", "--get", "extensions.partialClone").Output()
 	return strings.TrimSpace(string(out)) != ""
 }
 
@@ -146,7 +149,7 @@ func partialClone(root string) bool {
 // (security review 2026-10-08, round 3).
 func Toplevel(dir string) string {
 	clean := filepath.Clean(dir)
-	out, err := command(dir, "rev-parse", "--show-toplevel").Output()
+	out, err := Command(dir, "rev-parse", "--show-toplevel").Output()
 	top := strings.TrimSpace(string(out))
 	if err != nil || top == "" {
 		return clean

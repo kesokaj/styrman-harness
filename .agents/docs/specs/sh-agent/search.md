@@ -39,11 +39,18 @@ The global file is named "the global search index", never "cross-project index":
 
 ## Freshness: reconcile before every answer
 
+Every git call runs through `internal/trail.Command`: no index lock, no fsmonitor, no signature check, `GIT_NO_LAZY_FETCH=1`. None of them starts a program the checkout's config or `.gitattributes` names; `git status` is never run, because it runs clean filters (BUG-165). Known limit: search does not refuse a partial clone, so on a git older than 2.44 (which ignores `GIT_NO_LAZY_FETCH`) a sparse partial clone could lazy-fetch.
+
 1. `git rev-parse --show-toplevel` from the working directory.
 2. `git ls-files -s -z`: path and blob ID of every index entry.
-3. `git status --porcelain=v1 -z --untracked-files=all --no-renames`: modified and untracked paths (a rename is a deletion and an addition), each ID computed from the file's own bytes as a git blob ID (`git hash-object --stdin-paths` misreads names with a trailing CR or a leading quote); deleted paths leave.
-4. Everything derived from content (chunks, records, references) is stored once per blob ID, so a branch switch re-reads only content the index has never seen. Every query joins through the current path-to-blob view, which is what keeps another branch's content out of an answer.
-5. When nothing changed, no write lock is taken; the reconcile costs about 15 ms here for the project index. `--global` reconciles every registered checkout's trail before answering (one `git ls-files` and `git status` per checkout, limited to its `.agents/docs`), so its cost grows with the number of registered checkouts and is not the 15 ms figure. A blob no view references is deleted after 14 days unseen.
+3. Modified tracked files.
+   - `git ls-files -s --debug` (read line by line, without `-z`, so a name holding a newline cannot forge another entry's lines) gives the size and mtime the index holds for each entry. A name git quotes (non-ASCII under the default `core.quotePath`, or one holding a tab, quote or backslash) is skipped, so its file is hashed on every reconcile: correct, but slower. A file whose size and mtime (to the nanosecond) still match, and which is not racily clean (written in the second the index was), keeps the index's blob ID.
+   - Every other tracked file is read, and its ID is computed from its own bytes as a git blob ID. When that ID differs from the index's, the file is modified. (`git hash-object --stdin-paths` misreads names with a trailing CR or a leading quote, so it is not used.)
+   - A file the checkout runs through a clean filter therefore reads as modified and is indexed from its bytes.
+   - Deleted paths leave.
+4. `git ls-files -z --others --exclude-standard`: untracked files, each ID computed from its bytes. A rename is a deletion and an addition.
+5. Everything derived from content (chunks, records, references) is stored once per blob ID, so a branch switch re-reads only content the index has never seen. Every query joins through the current path-to-blob view, which is what keeps another branch's content out of an answer.
+6. When nothing changed, no write lock is taken; the reconcile costs about 15 ms here for the project index. `--global` reconciles every registered checkout's trail before answering (the same `git ls-files` reads per checkout, limited to its `.agents/docs`), so its cost grows with the number of registered checkouts and is not the 15 ms figure. A blob no view references is deleted after 14 days unseen.
 
 No watcher, no service, no hook (R3, R8).
 

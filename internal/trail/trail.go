@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -64,7 +65,7 @@ func Dates(root, docs string) (dates map[string]time.Time, modified map[string]b
 // answer, and the caller then treats every record as changed.
 func changed(root, docs string) (out map[string]bool, ok bool) {
 	out = map[string]bool{}
-	if partialClone(root) {
+	if PartialClone(root) {
 		return nil, false
 	}
 	tree, err := Command(root, "ls-tree", "-r", "-z", "--full-tree", "HEAD", "--", docs).Output()
@@ -109,7 +110,7 @@ func changed(root, docs string) (out map[string]bool, ok bool) {
 // (BUG-164), and GIT_NO_LAZY_FETCH, so a partial clone fails instead of
 // fetching through its own core.sshCommand (security review 2026-10-08,
 // round 2) on a git of 2.44 or later; an older git ignores the variable,
-// which is why a partial clone is not read at all (partialClone). Every git
+// which is why a partial clone is not read at all (PartialClone). Every git
 // call into a project repository (dream, metrics, search, memory) is built
 // here (BUG-165); internal/harness runs git only in the harness's own
 // checkout, which is the operator's.
@@ -123,7 +124,7 @@ func Command(root string, args ...string) *exec.Cmd {
 // Log runs `git log` in root with the hardened options and
 // --no-show-signature, and returns its stdout.
 func Log(root string, args ...string) ([]byte, error) {
-	if partialClone(root) {
+	if PartialClone(root) {
 		return nil, errPartialClone
 	}
 	return Command(root, append([]string{"log", "--no-show-signature"}, args...)...).Output()
@@ -131,12 +132,12 @@ func Log(root string, args ...string) ([]byte, error) {
 
 var errPartialClone = errors.New("a partial clone is not read: git could fetch through its own config")
 
-// partialClone reports whether root is a partial clone. Such a repository is
+// PartialClone reports whether root is a partial clone. Such a repository is
 // not read at all: a git older than 2.44 ignores GIT_NO_LAZY_FETCH, and a
 // missing object would be fetched through the repository's own
 // core.sshCommand (security review 2026-10-08, round 3). Reading config
 // starts no program.
-func partialClone(root string) bool {
+func PartialClone(root string) bool {
 	out, _ := Command(root, "config", "--get", "extensions.partialClone").Output()
 	return strings.TrimSpace(string(out)) != ""
 }
@@ -162,4 +163,41 @@ func Toplevel(dir string) string {
 		return clean
 	}
 	return top
+}
+
+// LazyFetchSafe reports whether this machine's git honours GIT_NO_LAZY_FETCH
+// (git 2.44 and later). It asks `git version` once, outside any repository,
+// so no repository's config is read.
+func LazyFetchSafe() bool {
+	lazyOnce.Do(func() {
+		cmd := exec.Command("git", "version")
+		cmd.Dir = os.TempDir()
+		out, err := cmd.Output()
+		lazySafe = err == nil && versionAtLeast(string(out), 2, 44)
+	})
+	return lazySafe
+}
+
+var (
+	lazyOnce sync.Once
+	lazySafe bool
+)
+
+// versionAtLeast reads "git version 2.47.3" (or "2.39.5 (Apple Git-154)")
+// and reports whether it is at least major.minor; unreadable is false.
+func versionAtLeast(out string, major, minor int) bool {
+	f := strings.Fields(out)
+	if len(f) < 3 {
+		return false
+	}
+	parts := strings.SplitN(f[2], ".", 3)
+	if len(parts) < 2 {
+		return false
+	}
+	a, e1 := strconv.Atoi(parts[0])
+	b, e2 := strconv.Atoi(parts[1])
+	if e1 != nil || e2 != nil {
+		return false
+	}
+	return a > major || a == major && b >= minor
 }

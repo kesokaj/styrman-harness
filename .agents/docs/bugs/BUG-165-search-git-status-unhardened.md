@@ -39,4 +39,4 @@ BUG-164's fix put the hardened git calls in `internal/trail` and made them the r
 ## Prevention
 As BUG-164: every git call into a project repository goes through `internal/trail.Command` and only reads objects and files (never `status`). A new git command there gets a marker test against a repository whose config or attributes would start a program. `internal/harness` is the exception: it runs git only in the harness's own checkout.
 
-**Known limit:** search does not refuse a partial clone. On a git older than 2.44, which ignores `GIT_NO_LAZY_FETCH`, a sparse partial clone could lazy-fetch (security review, finding 3, low; not reproduced, not a regression).
+**Partial clones (security review finding 3, closed 2026-10-09):** search refuses a partial clone only when this machine's git is older than 2.44 (`trail.LazyFetchSafe`); a newer git honours `GIT_NO_LAZY_FETCH` and searches it. Pinned by `TestGitViewPartialCloneNeedsNewGit` (red before the fix) and `TestVersionAtLeast`.

@@ -194,3 +194,19 @@ func TestToplevelIsAParent(t *testing.T) {
 		t.Errorf("with core.worktree elsewhere, Toplevel(sub) = %q, want the directory itself", got)
 	}
 }
+
+func TestVersionAtLeast(t *testing.T) {
+	for out, want := range map[string]bool{
+		"git version 2.47.3\n":                 true,
+		"git version 2.44.0":                   true,
+		"git version 2.43.7":                   false,
+		"git version 2.39.5 (Apple Git-154)\n": false,
+		"git version 3.0.0":                    true,
+		"nonsense":                             false,
+		"git version x.y":                      false,
+	} {
+		if got := versionAtLeast(out, 2, 44); got != want {
+			t.Errorf("versionAtLeast(%q) = %v, want %v", out, got, want)
+		}
+	}
+}

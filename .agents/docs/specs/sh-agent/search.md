@@ -39,7 +39,7 @@ The global file is named "the global search index", never "cross-project index":
 
 ## Freshness: reconcile before every answer
 
-Every git call runs through `internal/trail.Command`: no index lock, no fsmonitor, no signature check, `GIT_NO_LAZY_FETCH=1`. None of them starts a program the checkout's config or `.gitattributes` names; `git status` is never run, because it runs clean filters (BUG-165). Known limit: search does not refuse a partial clone, so on a git older than 2.44 (which ignores `GIT_NO_LAZY_FETCH`) a sparse partial clone could lazy-fetch.
+Every git call runs through `internal/trail.Command`: no index lock, no fsmonitor, no signature check, `GIT_NO_LAZY_FETCH=1`. None of them starts a program the checkout's config or `.gitattributes` names; `git status` is never run, because it runs clean filters (BUG-165). A partial clone is searched only when this machine's git is 2.44 or later, which honours `GIT_NO_LAZY_FETCH`; with an older git, search refuses it with a message naming the fix (update git), because a missing object would be fetched through the clone's own `core.sshCommand`.
 
 1. `git rev-parse --show-toplevel` from the working directory.
 2. `git ls-files -s -z`: path and blob ID of every index entry.

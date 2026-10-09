@@ -77,3 +77,5 @@ Round 2:
 4. **Low.** `TestAddRunsNoProjectHook` ignored `Add`'s error: **fixed**. The test now asserts that `Add` succeeded.
 
 No round 3: round 2 reported one test low, and it is fixed.
+
+Update, 2026-10-09 (the operator: "try to fix all in the next release"): item 3 is now **fixed**. Search refuses a partial clone only when git is older than 2.44 (`internal/trail` `LazyFetchSafe`, `internal/search/reconcile.go` `gitView`), under `TestGitViewPartialCloneNeedsNewGit` (red before the fix) and `TestVersionAtLeast`. The release gate's security review covers it.

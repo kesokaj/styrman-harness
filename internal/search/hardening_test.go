@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -185,5 +186,29 @@ func TestGitViewRunsNoFsmonitor(t *testing.T) {
 	}
 	if _, err := os.Stat(marker); err == nil {
 		t.Fatal("search ran the checkout's fsmonitor hook")
+	}
+}
+
+// Search refuses a partial clone only when this git is too old (before 2.44)
+// to honour GIT_NO_LAZY_FETCH: such a git could fetch through the clone's own
+// core.sshCommand. A newer git searches it as any checkout.
+func TestGitViewPartialCloneNeedsNewGit(t *testing.T) {
+	root := t.TempDir()
+	for _, args := range [][]string{{"init", "-q"}, {"config", "extensions.partialClone", "origin"}} {
+		if out, err := exec.Command("git", append([]string{"-C", root}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("%v\n%s", err, out)
+		}
+	}
+	os.WriteFile(filepath.Join(root, "a.md"), []byte("a\n"), 0o644)
+	saved := lazyFetchSafe
+	t.Cleanup(func() { lazyFetchSafe = saved })
+
+	lazyFetchSafe = func() bool { return false }
+	if _, _, err := gitView(root, ""); err == nil || !strings.Contains(err.Error(), "partial clone") {
+		t.Fatalf("an old git searched a partial clone: %v", err)
+	}
+	lazyFetchSafe = func() bool { return true }
+	if _, _, err := gitView(root, ""); err != nil {
+		t.Fatalf("a new git refused a partial clone: %v", err)
 	}
 }

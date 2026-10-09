@@ -120,14 +120,14 @@ Standing by-hand procedures on this box, never pending items (those live in the 
 - When `govulncheck ./...` names a toolchain-fixed advisory: get a newer Go, never raise the `go` directive or add a `toolchain` line in `go.mod` (ADR-029 — a pin makes the module unbuildable on a host that cannot fetch a toolchain). Try the system package manager first; when it has nothing newer, as Debian trixie did on 2026-09-16 (`golang-1.24-go 1.24.4-1` and no later package), install a user-level SDK instead, which needs no root:
 
 ```bash
-go install golang.org/dl/go1.27.1@latest     # the wrapper lands in ~/.go/bin
-go1.27.1 download                            # the SDK lands in ~/sdk/go1.27.1
-ln -sfn "$HOME/sdk/go1.27.1/bin/go" "$HOME/.local/bin/go"   # ~/.local/bin is first on PATH here
+go install golang.org/dl/go1.27.2@latest     # the wrapper lands in ~/.go/bin
+~/.go/bin/go1.27.2 download                  # the SDK lands in ~/sdk/go1.27.2
+ln -sfn "$HOME/sdk/go1.27.2/bin/go" "$HOME/.local/bin/go"   # ~/.local/bin is ahead of /usr/local/bin on PATH here
 go install golang.org/x/vuln/cmd/govulncheck@latest         # rebuild it, or it cannot parse the newer sources
 go version && govulncheck ./...
 ```
 
-  Undo by deleting that one symlink; `/usr/bin/go` is untouched and the system package stays where it was. After the switch, run the full gate and `sh-agent install`, so the deployed binary is built by the new toolchain — `go version -m ~/.local/bin/sh-agent` names it.
+  Undo by deleting that one symlink: `/usr/local/bin/go` (a root-owned install at `/usr/local/go`, go1.27.1 on 2026-10-09) and `/usr/bin/go` stay where they were. On 2026-10-09 this box moved to go1.27.2 this way, for GO-2026-6604, -6600 and -6599. After the switch, run the full gate and `sh-agent install`, so the deployed binary is built by the new toolchain — `go version -m ~/.local/bin/sh-agent` names it.
 
 ## Roll back
 

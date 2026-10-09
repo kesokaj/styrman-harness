@@ -79,6 +79,10 @@ func docsRootOf(root string) string {
 	return ".agents/docs"
 }
 
+// lazyFetchSafe reports whether this git honours GIT_NO_LAZY_FETCH; a
+// variable so a test can stand in for an older git.
+var lazyFetchSafe = trail.LazyFetchSafe
+
 // indexStat is what git's index records of a file's stat.
 type indexStat struct{ size, sec, nsec int64 }
 
@@ -168,6 +172,11 @@ func gitView(root, prefix string) ([]entry, []string, error) {
 	// Every read goes through an os.Root: a path that leaves the checkout
 	// through `..` or a symlinked directory is refused by the standard
 	// library, whatever git lists (security check of the v1.13.0 gate fixes).
+	// A git older than 2.44 ignores GIT_NO_LAZY_FETCH, and a partial clone
+	// could then fetch a missing object through its own core.sshCommand.
+	if trail.PartialClone(root) && !lazyFetchSafe() {
+		return nil, nil, fmt.Errorf("search: %s is a partial clone and this git is older than 2.44, which could fetch through the clone's own config; update git, or search a full clone", root)
+	}
 	fsRoot, err := os.OpenRoot(root)
 	if err != nil {
 		return nil, nil, err

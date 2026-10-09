@@ -108,3 +108,95 @@ func TestVerbGitGlobalsAndQuotedHeredoc(t *testing.T) {
 		}
 	}
 }
+
+// Content the normaliser could not parse never reaches a verb: a here-doc
+// delimiter is read literally to its end (<<"$D" ends at a line $D, as in
+// bash), a here-doc with no delimiter word drops the rest, and a
+// token-length flag or name is not kept (security review of v2.6.0, part 1).
+func TestVerbUnparsedHeredocAndLongWords(t *testing.T) {
+	const tok = "ghp_abcdefghijklmnopqrstuvwxyz0123456789ABCD"
+	for _, cmd := range []string{
+		"cat <<\"$D\"\n" + tok + "\nrm -rf x\n$D",
+		"cat <<$END\n" + tok + "\n$END",
+		"curl --" + tok + " x",
+		"npx " + tok,
+		"go run ./" + tok,
+	} {
+		for _, v := range Verb(cmd) {
+			if strings.Contains(v, tok) || strings.Contains(v, "rm") {
+				t.Errorf("Verb(%q) kept %q", cmd, v)
+			}
+		}
+	}
+}
+
+// A quoted delimiter is read whole, to its closing quote: <<'END!' ends only
+// at a line END!, never at END (security review of v2.6.0, part 1, round 2).
+func TestVerbQuotedDelimiterReadWhole(t *testing.T) {
+	cmd := "cat <<'END!'\nEND\nsecretword --flag\nEND!\nls"
+	if got := Verb(cmd); !reflect.DeepEqual(got, []string{"cat", "ls"}) {
+		t.Fatalf("Verb(%q) = %q, want [cat ls]", cmd, got)
+	}
+}
+
+// Only words the normaliser knows are command names are kept: a subcommand
+// from a fixed list per tool, never npx's package, and a long flag only when
+// lowercase letters, digits and dashes (operator, 2026-10-09: allowlists).
+func TestVerbAllowlists(t *testing.T) {
+	cases := []struct {
+		cmd  string
+		want []string
+	}{
+		{"npx AKIAIOSFODNN7EXAMPLE", []string{"npx"}},
+		{"curl --sk_live_abcdefghij x", []string{"curl"}},
+		{"curl --Authorization x", []string{"curl"}},
+		{"gh hunter2pass", []string{"gh"}},
+		{"gh pr view 12 --json title", []string{"gh pr --json"}},
+		{"git sparse-checkout set x", []string{"git sparse-checkout"}},
+		{"git notarealcmd", []string{"git"}},
+		{"go test -race -RACE ./...", []string{"go test -race"}},
+		{"docker compose up -d", []string{"docker compose -d"}},
+		{"sh-agent metrics show --json", []string{"sh-agent metrics show --json"}},
+	}
+	for _, c := range cases {
+		if got := Verb(c.cmd); !reflect.DeepEqual(got, c.want) {
+			t.Errorf("Verb(%q)\n got %q\nwant %q", c.cmd, got, c.want)
+		}
+	}
+}
+
+// Round 4 (operator, 2026-10-09: fix everything). go run keeps its target only
+// when that target is a tool the allowlist knows; an unquoted delimiter is the
+// whole word up to a shell metacharacter, read literally as bash does.
+func TestVerbRound4(t *testing.T) {
+	cases := []struct {
+		cmd  string
+		want []string
+	}{
+		{"go run hunter2pass", []string{"go run"}},
+		{"go run ./AKIAIOSFODNN7EXAMPLE --x", []string{"go run --x"}},
+		{"go run ./cmd/sh-agent search --refs x", []string{"sh-agent search --refs"}},
+		{"cat <<END!\nEND\nsecretword --flag\nEND!\nls", []string{"cat", "ls"}},
+		{"cat <<$END\nsecretword\n$END\nls", []string{"cat", "ls"}},
+		{"cat <<EOF;\nsecretword\nEOF\nls", []string{"cat", "ls"}},
+	}
+	for _, c := range cases {
+		if got := Verb(c.cmd); !reflect.DeepEqual(got, c.want) {
+			t.Errorf("Verb(%q)\n got %q\nwant %q", c.cmd, got, c.want)
+		}
+	}
+}
+
+// A delimiter mixing quoted and unquoted parts (E'ND') is not modelled: the
+// rest of the command is dropped rather than read with a wrong delimiter.
+func TestVerbMixedQuoteDelimiter(t *testing.T) {
+	for _, cmd := range []string{
+		"cat <<E'ND'\nbody1\nE\nleak_mixed x\nEND",
+		"cat <<\"E\"ND\nbody1\nE\nleak_b x\nEND",
+		"cat <<'E'\"N\"D\nbody1\nE\nleak_c x\nEND",
+	} {
+		if got := Verb(cmd); !reflect.DeepEqual(got, []string{"cat"}) {
+			t.Errorf("Verb(%q) = %q, want [cat]", cmd, got)
+		}
+	}
+}

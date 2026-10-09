@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -92,7 +93,7 @@ func (s *Store) ingestClaude(o Options, r *Result, log io.Writer) {
 	}
 	if err != nil {
 		r.Failed = append(r.Failed, root)
-		fmt.Fprintf(log, "metrics: %s: %v\n", root, err)
+		fmt.Fprintln(log, printable(fmt.Sprintf("metrics: %s: %v", root, err)))
 		return
 	}
 	for _, p := range projects {
@@ -105,7 +106,7 @@ func (s *Store) ingestClaude(o Options, r *Result, log io.Writer) {
 		for _, f := range append(files, subs...) {
 			if err := s.ingestClaudeFile(f, o, r); err != nil {
 				r.Failed = append(r.Failed, f)
-				fmt.Fprintf(log, "metrics: %s: %v\n", f, err)
+				fmt.Fprintln(log, printable(fmt.Sprintf("metrics: %s: %v", f, err)))
 			}
 		}
 	}
@@ -139,10 +140,11 @@ func (s *Store) ingestClaudeFile(path string, o Options, r *Result) error {
 	if fi.Size() < offset {
 		offset = 0
 	}
-	f, err := os.Open(path)
+	f, ofi, err := openRegular(path)
 	if err != nil {
 		return err
 	}
+	fi = ofi // sizes and times from the file actually opened
 	defer f.Close()
 	if _, err := f.Seek(offset, io.SeekStart); err != nil {
 		return err
@@ -152,10 +154,10 @@ func (s *Store) ingestClaudeFile(path string, o Options, r *Result) error {
 	agentType := ""
 	if sub {
 		var m subagentMeta
-		if b, err := os.ReadFile(strings.TrimSuffix(path, ".jsonl") + ".meta.json"); err == nil {
+		if b, ok := readSmallRegular(strings.TrimSuffix(path, ".jsonl")+".meta.json", 64<<10); ok {
 			json.Unmarshal(b, &m)
 		}
-		agentType = m.AgentType
+		agentType = identifier(m.AgentType)
 	}
 
 	// The salt is read before Begin: the store has one connection, which the
@@ -171,14 +173,18 @@ func (s *Store) ingestClaudeFile(path string, o Options, r *Result) error {
 	br := bufio.NewReaderSize(f, 1<<20)
 	consumed := offset
 	for {
-		line, err := br.ReadBytes('\n')
+		line, n, tooLong, err := readLine(br)
 		if err == io.EOF {
 			break // a partial last line waits for the next ingest
 		}
 		if err != nil {
 			return err
 		}
-		consumed += int64(len(line))
+		consumed += n
+		if tooLong {
+			r.Skipped++ // never held in memory whole
+			continue
+		}
 		if len(bytes.TrimSpace(line)) == 0 {
 			continue
 		}
@@ -303,7 +309,7 @@ func (w *writer) assistant(sid string, ts int64, m claudeMessage, cwd string) {
 				tok_in = MAX(steps.tok_in, excluded.tok_in), tok_out = MAX(steps.tok_out, excluded.tok_out),
 				cache_read = MAX(steps.cache_read, excluded.cache_read), cache_write = MAX(steps.cache_write, excluded.cache_write)`,
 			sid, "msg:"+m.ID, ts, in, out, cr, cw)
-		if m.Model != "" && !strings.HasPrefix(m.Model, "<") {
+		if m.Model != "" && identifier(m.Model) != "" {
 			w.exec(`UPDATE sessions SET model = COALESCE(model, ?) WHERE id = ?`, m.Model, sid)
 		}
 	}
@@ -319,7 +325,9 @@ func (w *writer) assistant(sid string, ts int64, m claudeMessage, cwd string) {
 		json.Unmarshal(b.Input, &in)
 		var skill, kind, hash any
 		if b.Name == "Skill" && in.Skill != "" {
-			skill = in.Skill
+			if id := identifier(in.Skill); id != "" {
+				skill = id
+			}
 		}
 		if pathTools[b.Name] {
 			p := in.FilePath
@@ -335,7 +343,7 @@ func (w *writer) assistant(sid string, ts int64, m claudeMessage, cwd string) {
 			VALUES (?, ?, ?, 'tool', ?, ?, ?, ?)
 			ON CONFLICT(session_id, ext_id) DO UPDATE SET ts = excluded.ts, kind = 'tool', tool = excluded.tool,
 				skill = excluded.skill, target_kind = excluded.target_kind, cmd_hash = excluded.cmd_hash`,
-			sid, b.ID, ts, b.Name, skill, kind, hash)
+			sid, b.ID, ts, toolName(b.Name), skill, kind, hash)
 		if b.Name == "Bash" {
 			for n, v := range Verb(in.Command) {
 				w.exec(`INSERT INTO step_verbs(session_id, ext_id, n, verb) VALUES (?, ?, ?, ?)
@@ -472,4 +480,81 @@ func boolInt(b bool) int {
 		return 1
 	}
 	return 0
+}
+
+// nameShape is what an identifier taken from a transcript must look like to
+// be stored: a skill, a model, an agent type. Anything else (escape bytes,
+// prose a prompt-injected session put there) is dropped, so it reaches
+// neither the store nor the operator's terminal (security review of v2.6.0,
+// part 1).
+var nameShape = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:@/-]{0,63}$`)
+
+// identifier is s when it is name-shaped, else "".
+func identifier(s string) string {
+	if nameShape.MatchString(s) {
+		return s
+	}
+	return ""
+}
+
+// readSmallRegular reads path when it is a regular file of at most max
+// bytes: a .meta.json under --source could be a FIFO or a link to /dev/zero.
+func readSmallRegular(path string, max int64) ([]byte, bool) {
+	if fi, err := os.Lstat(path); err != nil || !fi.Mode().IsRegular() {
+		return nil, false
+	}
+	f, fi, err := openRegular(path)
+	if err != nil {
+		return nil, false
+	}
+	defer f.Close()
+	if fi.Size() > max {
+		return nil, false
+	}
+	b, err := io.ReadAll(io.LimitReader(f, max))
+	return b, err == nil
+}
+
+// readLine reads one newline-terminated line, holding at most lineMax bytes
+// of it: a longer line is consumed to its newline and reported tooLong, with
+// no bytes. n counts every byte consumed. A line with no newline yet is
+// io.EOF, read again next time.
+func readLine(br *bufio.Reader) (line []byte, n int64, tooLong bool, err error) {
+	var buf []byte
+	for {
+		chunk, err := br.ReadSlice('\n')
+		n += int64(len(chunk))
+		if !tooLong {
+			if len(buf)+len(chunk) > lineMax {
+				tooLong, buf = true, nil
+			} else {
+				buf = append(buf, chunk...)
+			}
+		}
+		switch {
+		case err == nil:
+			return buf, n, tooLong, nil
+		case errors.Is(err, bufio.ErrBufferFull):
+			continue
+		case err == io.EOF && tooLong:
+			// An unterminated tail already over the cap is passed over, not
+			// re-read on every ingest; whatever is appended later starts a
+			// new (malformed, skipped) line.
+			return nil, n, true, nil
+		default:
+			return nil, n, tooLong, err
+		}
+	}
+}
+
+// lineMax is the longest transcript line read; a longer one is skipped and
+// counted. A variable so a test can lower it.
+var lineMax = 16 << 20
+
+// toolName is a tool's name as stored: name-shaped, or "unnamed".
+func toolName(s string) string {
+	if id := identifier(s); id != "" {
+		return id
+	}
+	return "unnamed"
 }

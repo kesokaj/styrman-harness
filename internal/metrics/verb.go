@@ -6,11 +6,32 @@ import (
 	"strings"
 )
 
-// subcommanded are the programs whose first non-flag word is kept as a
-// subcommand (spec § Normalised verb).
-var subcommanded = map[string]bool{
-	"git": true, "go": true, "gh": true, "docker": true, "gcloud": true, "kubectl": true,
-	"npm": true, "npx": true, "sh-agent": true, "terraform": true,
+// subcommands are, per tool, the subcommands kept after the program: an
+// allowlist, because a word in that position can be a short secret
+// (`gh hunter2pass`); an unlisted word is dropped and the verb is the program
+// alone (operator, 2026-10-09). npx is listed with none: its package is never
+// kept.
+var subcommands = map[string]map[string]bool{}
+
+func init() {
+	for prog, words := range map[string]string{
+		"git":       "add am apply archive bisect blame branch bundle cat-file check-ignore checkout cherry-pick clean clone commit config describe diff fetch for-each-ref format-patch fsck gc grep hash-object init log ls-files ls-remote ls-tree merge merge-base mv notes pull push range-diff rebase reflog remote reset restore rev-list rev-parse revert rm shortlog show sparse-checkout stash status submodule switch tag update-index worktree",
+		"go":        "build clean doc env fix fmt generate get install list mod run test tool version vet work",
+		"gh":        "api auth browse gist issue label pr release repo run search secret status workflow",
+		"docker":    "build buildx compose container exec image images inspect login logout logs network ps pull push rm rmi run start stop system tag volume",
+		"gcloud":    "alpha artifacts auth beta builds components compute config container iam logging projects run secrets services sql",
+		"kubectl":   "annotate apply config create delete describe edit exec get label logs patch port-forward rollout scale top",
+		"npm":       "audit ci exec init install ls pack publish run start test uninstall update version",
+		"npx":       "",
+		"terraform": "apply console destroy fmt graph import init output plan providers show state validate workspace",
+		"sh-agent":  "adopt diff dream help index install list memory metrics render report search status sync uninstall update version",
+	} {
+		set := map[string]bool{}
+		for _, w := range strings.Fields(words) {
+			set[w] = true
+		}
+		subcommands[prog] = set
+	}
 }
 
 // gitGlobalArg are git's global options that take the next word as their
@@ -58,9 +79,15 @@ var (
 // position (a glob, an expansion, a quoted path) is content and yields no
 // verb.
 var (
-	programName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_.+-]*$`)
-	longFlag    = regexp.MustCompile(`^--[A-Za-z0-9][A-Za-z0-9_-]*$`)
-	letters     = regexp.MustCompile(`^[A-Za-z]+$`)
+	// Names and flags are capped well below a token's length: a word that
+	// long is content, not a command's name (security review of v2.6.0).
+	programName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_.+-]{0,31}$`)
+	// A long flag is lowercase letters, digits and dashes, at most 24
+	// characters after its dashes: `--sk_live_…` or `--Authorization` is
+	// content (operator, 2026-10-09).
+	longFlag = regexp.MustCompile(`^--[a-z0-9][a-z0-9-]{0,23}$`)
+	goFlag   = regexp.MustCompile(`^[a-z][a-z0-9]{0,23}$`)
+	letters  = regexp.MustCompile(`^[A-Za-z]+$`)
 	// redirection is a word that opens with one (`>f`, `2>>log`, `<in`,
 	// `&>f`); redirectionOnly is one whose target is the next word.
 	redirection     = regexp.MustCompile(`^(?:[0-9]*|&)[<>]`)
@@ -259,7 +286,20 @@ func verbFrom(words []string) string {
 	prog := path.Base(words[0])
 	rest := words[1:]
 	if prog == "go" && len(rest) >= 2 && rest[0] == "run" {
-		prog, rest = path.Base(strings.TrimSuffix(rest[1], "/")), rest[2:]
+		// The target counts as the program only when it is a tool the
+		// allowlist knows (`go run ./cmd/sh-agent`); any other target is
+		// content, and the verb is `go run` (security review of v2.6.0).
+		if target := path.Base(strings.TrimSuffix(rest[1], "/")); subcommands[target] != nil {
+			prog, rest = target, rest[2:]
+		} else {
+			parts := []string{"go", "run"}
+			for _, w := range rest[2:] {
+				if f := flagName("go", w); f != "" {
+					parts = append(parts, f)
+				}
+			}
+			return strings.Join(parts, " ")
+		}
 	}
 	if !programName.MatchString(prog) {
 		return ""
@@ -268,7 +308,7 @@ func verbFrom(words []string) string {
 	if prog == "git" {
 		rest = skipGitGlobals(rest)
 	}
-	if subcommanded[prog] && len(rest) > 0 && programName.MatchString(rest[0]) {
+	if subs, ok := subcommands[prog]; ok && len(rest) > 0 && subs[rest[0]] {
 		parts = append(parts, rest[0])
 		rest = rest[1:]
 	}
@@ -308,8 +348,11 @@ func flagName(prog, w string) string {
 	}
 	name, _, hasValue := strings.Cut(w[1:], "=")
 	switch {
-	case goStyle[prog] && letters.MatchString(name):
-		return "-" + name
+	case goStyle[prog]:
+		if goFlag.MatchString(name) {
+			return "-" + name
+		}
+		return ""
 	case !letters.MatchString(w[1:2]):
 		return "" // -20, -1: a value, not a flag name
 	case !hasValue && len(w) <= 4 && letters.MatchString(w[1:]):
@@ -339,7 +382,14 @@ func stripHeredocs(cmd string) string {
 	for i := 0; i < len(lines); i++ {
 		line := lines[i]
 		out = append(out, line)
-		pending = append(pending, heredocDelims(line)...)
+		ds, unparsed := heredocDelims(line)
+		if unparsed {
+			// A here-doc with no delimiter word (a bare << at the end of a
+			// line) cannot be matched: everything after its line may be its
+			// body, so none of it is read (security review of v2.6.0).
+			break
+		}
+		pending = append(pending, ds...)
 		for len(pending) > 0 {
 			d := pending[0]
 			pending = pending[1:]
@@ -357,12 +407,11 @@ func stripHeredocs(cmd string) string {
 // heredocDelims returns the delimiters of the here-documents line opens:
 // `<<WORD`, `<<-WORD`, `<<'WORD'`, `<<"WORD"`, `<<\WORD`; `<<<` is a
 // here-string and opens none.
-func heredocDelims(line string) []string {
-	var ds []string
+func heredocDelims(line string) (ds []string, unparsed bool) {
 	for {
 		j := strings.Index(line, "<<")
 		if j < 0 {
-			return ds
+			return ds, false
 		}
 		line = line[j+2:]
 		if strings.HasPrefix(line, "<") {
@@ -371,23 +420,42 @@ func heredocDelims(line string) []string {
 		}
 		line = strings.TrimPrefix(line, "-")
 		line = strings.TrimLeft(line, " \t")
-		q := ""
-		switch {
-		case strings.HasPrefix(line, "'") || strings.HasPrefix(line, "\""):
-			q, line = line[:1], line[1:]
-		case strings.HasPrefix(line, "\\"):
+		if strings.HasPrefix(line, "'") || strings.HasPrefix(line, "\"") {
+			// A quoted delimiter is the literal text up to the closing quote:
+			// <<'END!' ends only at a line END! (security review of v2.6.0).
+			q := line[:1]
+			k := strings.Index(line[1:], q)
+			if k <= 0 {
+				return ds, true // no closing quote, or an empty delimiter
+			}
+			ds = append(ds, line[1:1+k])
+			line = line[k+2:]
+			if line != "" && !strings.ContainsRune(" \t;&|<>()`", rune(line[0])) {
+				// "E"ND: more delimiter text after the closing quote, a mix
+				// that is not modelled; nothing after this line is read.
+				return ds, true
+			}
+			continue
+		}
+		if strings.HasPrefix(line, "\\") {
 			line = line[1:] // <<\EOF: a quoted delimiter, the same here-doc
 		}
+		// An unquoted delimiter is the whole word up to a shell
+		// metacharacter, taken literally ($END included), as bash does.
 		end := strings.IndexFunc(line, func(r rune) bool {
-			return !(r == '_' || r == '-' || r == '.' || r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || r >= '0' && r <= '9')
+			return strings.ContainsRune(" \t;&|<>()`'\"", r)
 		})
+		if end > 0 && strings.ContainsRune(`'"`, rune(line[end])) {
+			return ds, true // E'ND': a delimiter mixing quoted and unquoted parts is not modelled
+		}
 		if end < 0 {
 			end = len(line)
 		}
-		if end > 0 {
-			ds = append(ds, line[:end])
+		if end == 0 {
+			return ds, true // no delimiter word at all
 		}
-		line = strings.TrimPrefix(line[end:], q)
+		ds = append(ds, line[:end])
+		line = line[end:]
 	}
 }
 

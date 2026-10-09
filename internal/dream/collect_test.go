@@ -492,7 +492,8 @@ func TestTrailDateFromGit(t *testing.T) {
 		t.Errorf("a trail file committed before the watermark was sent because its mtime is fresh:\n%s", labels(c))
 	}
 	// Modified after its commit: back to the mtime, so it is sent (the
-	// `git status` call must work; a misplaced global option made it fail
+	// raw-blob comparison in trail.Dates must see the edit; BUG-165 replaced
+	// the `git status` read, whose misplaced global option once made it fail
 	// silently — security review round 2, 2026-10-01).
 	write(t, filepath.Join(f.root, rel), "an old bug record, edited today\n", fresh)
 	c, err = collect(f.home, "claude", project(f), since, maxPrompt)

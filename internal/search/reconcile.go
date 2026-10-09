@@ -79,6 +79,10 @@ func docsRootOf(root string) string {
 	return ".agents/docs"
 }
 
+// errUnsafePartialClone is a partial clone on a git that ignores
+// GIT_NO_LAZY_FETCH: the project search refuses it, the global one skips it.
+var errUnsafePartialClone = errors.New("search: a partial clone on a git older than 2.44, which could fetch through the clone's own config")
+
 // lazyFetchSafe reports whether this git honours GIT_NO_LAZY_FETCH; a
 // variable so a test can stand in for an older git.
 var lazyFetchSafe = trail.LazyFetchSafe
@@ -175,7 +179,7 @@ func gitView(root, prefix string) ([]entry, []string, error) {
 	// A git older than 2.44 ignores GIT_NO_LAZY_FETCH, and a partial clone
 	// could then fetch a missing object through its own core.sshCommand.
 	if trail.PartialClone(root) && !lazyFetchSafe() {
-		return nil, nil, fmt.Errorf("search: %s is a partial clone and this git is older than 2.44, which could fetch through the clone's own config; update git, or search a full clone", root)
+		return nil, nil, fmt.Errorf("%w: %s; update git, or search a full clone", errUnsafePartialClone, root)
 	}
 	fsRoot, err := os.OpenRoot(root)
 	if err != nil {

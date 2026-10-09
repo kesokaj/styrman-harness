@@ -88,18 +88,32 @@ metrics: N sessions, M steps, K events added; U lines skipped (unknown shape); F
 - a case pattern, i.e. the words before its `)`.
 
 **The program:**
-- It is the basename of the first remaining word, and `go run <pkg>` gives the package's last element.
+- It is the basename of the first remaining word. For `go run <target>`, see the `go run` rule below.
 - It must match `^[A-Za-z_][A-Za-z0-9_.+-]*$`; any other word in command position (a glob, an expansion, a quoted path) yields no verb.
-- A subcommand is kept for `git go gh docker gcloud kubectl npm npx sh-agent terraform` when the next word is name-shaped. After `sh-agent`'s subcommand, one more word is kept when it is one of `ingest show report export add` (`sh-agent metrics show`).
+- A subcommand is kept only from a fixed allowlist per tool (`subcommands` in `internal/metrics/verb.go`): git, go, gh, docker, gcloud, kubectl, npm, terraform and sh-agent. An unlisted word is dropped and the verb is the program alone, because that position can hold a short secret (`gh hunter2pass`). npx's package is never kept. git's global options (`-C dir`, `-c k=v`) are skipped before the subcommand. After sh-agent's subcommand, one more word is kept when it is one of `ingest show report export add` (operator, 2026-10-09: allowlists).
 
 **Flag names:**
-- `--name=v` is kept as `--name`.
-- For `go gofmt govulncheck find`, `-name=v` is kept as `-name`.
+- A long flag `--name[=v]` is kept as `--name` only when the name is lowercase letters, digits and dashes, at most 24 characters (`--sk_live_…`, `--Authorization` are dropped).
+- For `go gofmt govulncheck find`, `-name[=v]` is kept as `-name` only when the name is lowercase letters and digits, at most 24 characters.
 - A short group of at most three letters is kept whole (`-la`, `-rnw`).
 - Any other short flag keeps its first letter only (`-c1-200`, `-psecret`, `-xzvf` become `-c`, `-p`, `-x`), because a short option can carry its value glued on.
 - A dash followed by a digit (`-20`) is a value and is dropped.
 
 **Never kept:** positional words, except a bare `.` after `git add`.
+
+**Here-documents:**
+- A delimiter is read literally, as bash does. A quoted one runs to its closing quote (`<<'END!'`, `<<"$D"`). An unquoted one is the whole word up to a shell metacharacter (`<<END!`, `<<$END`). The body ends only at a line equal to it.
+- A here-doc with no delimiter word cannot be matched, so nothing after its line is read.
+
+**`go run`:** the target counts as the program only when it is a tool the subcommand allowlist knows (`go run ./cmd/sh-agent search` is `sh-agent search`). Any other target is content, and the verb is `go run` plus its flag names.
+
+A program name longer than 32 characters is content and is dropped.
+
+**Transcript lines:** a line is read in bounded chunks. A line over 16 MB is consumed and counted under "unknown shape", never held in memory whole. An unterminated tail over that size is passed over rather than re-read on every ingest.
+
+**Tool names** follow the identifier rule below; one that fails it is stored as `unnamed`. Everything `metrics ingest` prints (paths, project roots, errors) goes through search's BUG-152 filter: control, format (bidi overrides, zero-width marks), line-separator and paragraph-separator characters become `?`, by Unicode class, because a `--source` sandbox writes those values. `show`'s text output prints a key holding any of them as `?`. Every file ingest reads (a transcript, a trail record, a `.meta.json`) is opened without blocking and checked on the opened file to be a regular file, so a FIFO swapped in after an earlier check neither hangs the ingest nor is read.
+
+**Identifiers:** a skill name, a model or an agent type is stored only when it matches `^[A-Za-z0-9][A-Za-z0-9_.:@/-]{0,63}$`; otherwise it is left empty. So no escape bytes or prose reach the store or the terminal. A subagent's `.meta.json` is read only as a regular file of 64 KB or less.
 
 **Known limit:** a shell construct the tokenizer does not model can still put one identifier-shaped word in command position. That is never more than a single name-shaped word, never a path, a value or prose. Verbs reflect the normaliser of the binary that ingested them; the command itself is never stored, so older rows are not re-normalised.
 
@@ -256,7 +270,7 @@ ingest_state(source TEXT PRIMARY KEY, size INTEGER, mtime INTEGER, offset INTEGE
   - `compaction`: Claude's compact-boundary line.
 - **Antigravity sources.** Antigravity databases are read only from copies. `step_payload` is never read; tool names and command lines come from `steps.metadata`.
 - **Export.** `export` writes every row but the `salt`: with it, an export would let anyone confirm a guessed command against `cmd_hash`.
-- **git in project roots.** Every git call into a session's project root goes through `internal/trail`: `--no-optional-locks -c core.fsmonitor=false -c log.showSignature=false`, `GIT_NO_LAZY_FETCH=1`, and `--no-show-signature` on `log`. Only commands that read objects and files run there (`log`, `ls-tree`, `ls-files`, `hash-object --no-filters`, `rev-parse`, `check-ignore`, `config --get`), never `status`, which runs the repository's clean filters (BUG-164). This closes the program-starting config keys those commands honour (signature programs, clean filters, fsmonitor, a lazy fetch's ssh command); it does not make the repository's config trusted. A partial clone (`extensions.partialClone`) is not read at all, because a git older than 2.44 ignores `GIT_NO_LAZY_FETCH`. Its sessions get no commit or trail events, and its trail files keep their mtimes in the dreamer. A toplevel is accepted only when it is the session's directory or a parent of it, so a repository's `core.worktree` cannot file a session under another project. Sessions are grouped by their git toplevel (`trail.Toplevel`), so a session started in a subdirectory joins its project's events.
+- **git in project roots.** Every git call into a session's project root goes through `internal/trail`: `--no-optional-locks -c core.fsmonitor=false -c log.showSignature=false`, `GIT_NO_LAZY_FETCH=1`, and `--no-show-signature` on `log`. Only commands that read objects and files run there (`log`, `ls-tree`, `ls-files`, `hash-object --no-filters`, `rev-parse`, `check-ignore`, `config --get`), never `status`, which runs the repository's clean filters (BUG-164). This closes the program-starting config keys those commands honour (signature programs, clean filters, fsmonitor, a lazy fetch's ssh command); it does not make the repository's config trusted. A partial clone (`extensions.partialClone` set, or any remote marked `promisor`) is not read at all, because a git older than 2.44 ignores `GIT_NO_LAZY_FETCH`. Its sessions get no commit or trail events, and its trail files keep their mtimes in the dreamer. A toplevel is accepted only when it is the session's directory or a parent of it, so a repository's `core.worktree` cannot file a session under another project. Sessions are grouped by their git toplevel (`trail.Toplevel`), so a session started in a subdirectory joins its project's events.
 - **Temporary copies.** `metrics-agy-*` (Antigravity conversation copies) and `dream-metrics-*` (a store snapshot) are removed after use. An `ingest` and every `dream` run also sweep any older than an hour, which a killed run left behind.
 - **Migrations.** They run forward only, in one transaction. A store with a newer schema is refused untouched. The binary never deletes the store, and `uninstall` keeps it.
 

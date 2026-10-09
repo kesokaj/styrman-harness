@@ -72,6 +72,11 @@ func changed(root, docs string) (out map[string]bool, ok bool) {
 	if err != nil {
 		return nil, false
 	}
+	fsRoot, err := os.OpenRoot(root)
+	if err != nil {
+		return nil, false
+	}
+	defer fsRoot.Close()
 	var paths, blobs []string
 	for _, rec := range strings.Split(string(tree), "\x00") {
 		meta, path, cut := strings.Cut(rec, "\t")
@@ -79,9 +84,12 @@ func changed(root, docs string) (out map[string]bool, ok bool) {
 		if !cut || len(f) != 3 || f[1] != "blob" {
 			continue
 		}
-		info, err := os.Lstat(filepath.Join(root, filepath.FromSlash(path)))
+		// Through an os.Root: a path whose directory became a symlink to the
+		// outside is refused there, so nothing outside the checkout is hashed
+		// (security review of v2.6.0, part 2).
+		info, err := fsRoot.Lstat(filepath.FromSlash(path))
 		if err != nil || !info.Mode().IsRegular() {
-			out[path] = true // removed, or no longer a regular file
+			out[path] = true // removed, outside the checkout, or not a regular file
 			continue
 		}
 		paths, blobs = append(paths, path), append(blobs, f[2])
@@ -132,14 +140,28 @@ func Log(root string, args ...string) ([]byte, error) {
 
 var errPartialClone = errors.New("a partial clone is not read: git could fetch through its own config")
 
-// PartialClone reports whether root is a partial clone. Such a repository is
+// PartialClone reports whether root is a partial clone: extensions.partialClone
+// set, or any remote marked promisor. Such a repository is
 // not read at all: a git older than 2.44 ignores GIT_NO_LAZY_FETCH, and a
 // missing object would be fetched through the repository's own
 // core.sshCommand (security review 2026-10-08, round 3). Reading config
 // starts no program.
 func PartialClone(root string) bool {
 	out, _ := Command(root, "config", "--get", "extensions.partialClone").Output()
-	return strings.TrimSpace(string(out)) != ""
+	if strings.TrimSpace(string(out)) != "" {
+		return true
+	}
+	// A promisor remote lazy-fetches on its own, with no extension set
+	// (release review of v2.6.0). --type=bool normalises true/yes/on/1.
+	// --null: each entry is "key\nvalue\x00", so a remote name holding a space
+	// or a tab cannot shift the value (release review of v2.6.0, round 2).
+	out, _ = Command(root, "config", "--null", "--type=bool", "--get-regexp", `^remote\..*\.promisor$`).Output()
+	for _, entry := range strings.Split(string(out), "\x00") {
+		if _, value, ok := strings.Cut(entry, "\n"); ok && value == "true" {
+			return true
+		}
+	}
+	return false
 }
 
 // Toplevel is the git toplevel of dir, or dir itself (cleaned) when it is no

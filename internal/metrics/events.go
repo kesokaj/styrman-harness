@@ -249,7 +249,7 @@ func trailFiles(root, docs, dir, pattern string) []string {
 // readSmall reads up to 1 MiB of a trail file; only patterns are taken from
 // it, never its text.
 func readSmall(p string) string {
-	f, err := os.Open(p)
+	f, _, err := openRegular(p)
 	if err != nil {
 		return ""
 	}

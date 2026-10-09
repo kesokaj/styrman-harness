@@ -58,7 +58,7 @@ func (s *Store) ingestAgy(o Options, r *Result, log io.Writer) {
 	}
 	fail := func(what string, err error) {
 		r.Failed = append(r.Failed, what)
-		fmt.Fprintf(log, "metrics: %s: %v\n", what, err)
+		fmt.Fprintln(log, printable(fmt.Sprintf("metrics: %s: %v", what, err)))
 	}
 	sweepCopies(filepath.Dir(s.path), time.Now())
 	tmp, err := os.MkdirTemp(filepath.Dir(s.path), "metrics-agy-")
@@ -192,7 +192,7 @@ func (s *Store) ingestAgyConversation(src string, c agyConv, source, tmp string,
 			label = COALESCE(sessions.label, excluded.label),
 			outcome = COALESCE(sessions.outcome, excluded.outcome),
 			ended_at = MAX(COALESCE(sessions.ended_at, 0), COALESCE(excluded.ended_at, 0))`,
-		c.id, c.root, c.parent, c.agent, w.label, w.outcome, c.modified)
+		c.id, c.root, c.parent, identifier(c.agent), w.label, w.outcome, c.modified)
 
 	var replyTimes []int64
 	for _, st := range steps {
@@ -230,7 +230,7 @@ func (s *Store) ingestAgyConversation(src string, c agyConv, source, tmp string,
 				ts = excluded.ts, tok_in = excluded.tok_in, tok_out = excluded.tok_out,
 				cache_read = excluded.cache_read, context = excluded.context`,
 			c.id, fmt.Sprintf("%s:gen:%d", c.id, i), ts, f.varint(1, 4, 2), f.varint(1, 4, 3), f.varint(1, 4, 5), ctx)
-		if m := f.text(1, 19); m != "" {
+		if m := identifier(f.text(1, 19)); m != "" {
 			w.exec(`UPDATE sessions SET model = COALESCE(model, ?) WHERE id = ?`, m, c.id)
 		}
 	}
@@ -254,14 +254,16 @@ func (w *writer) agyTool(c agyConv, ext string, ts int64, failed bool, f fields)
 	name := f.text(4, 2)
 	tool := agyTools[name]
 	if tool == "" && name != "" {
-		tool = "agy:" + name
+		tool = toolName("agy:" + name)
 	}
 	var args agyArgs
 	json.Unmarshal(f.bytes(4, 3), &args)
 	var skill, kind, hash any
 	if args.AbsolutePath != "" {
 		if m := skillPath.FindStringSubmatch(filepath.ToSlash(args.AbsolutePath)); m != nil && tool == "Read" {
-			skill = m[1]
+			if id := identifier(m[1]); id != "" {
+				skill = id
+			}
 		}
 		if tool == "Read" || tool == "Write" || tool == "Edit" {
 			kind = w.targetKind(c.root, args.AbsolutePath)

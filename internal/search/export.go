@@ -28,6 +28,11 @@ func OpenCopy(dir, name, tmp string) (*sql.DB, error) { return openCopy(dir, nam
 // stored text.
 func AgyTime(v any) (time.Time, bool) { return agyTime(v) }
 
+// Printable replaces what a terminal would act on or hide with '?': control,
+// format, line- and paragraph-separator characters, by Unicode class
+// (BUG-152).
+func Printable(s string) string { return printable(s) }
+
 // KindOf classifies a project-relative, slash-separated path against the
 // project's docs root (bug, adr, plan, …, code, doc).
 func KindOf(p, docsRoot string) string { return kindOf("", p, docsRoot) }

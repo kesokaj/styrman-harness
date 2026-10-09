@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/kesokaj/styrman-harness/internal/search"
 )
 
 // Options are one ingest's inputs (spec § Verbs).
@@ -116,7 +118,7 @@ func Ingest(s *Store, o Options, log io.Writer) (Result, error) {
 	if o.Outcome != "" {
 		if _, err := s.db.Exec(`UPDATE sessions SET outcome = ? WHERE label = ? AND outcome IS NULL`, o.Outcome, o.Label); err != nil {
 			r.Failed = append(r.Failed, "outcome")
-			fmt.Fprintf(log, "metrics: outcome: %v\n", err)
+			fmt.Fprintln(log, printable(fmt.Sprintf("metrics: outcome: %v", err)))
 		}
 	}
 	// Events come from the real home's projects and feedback log, also for a
@@ -124,10 +126,10 @@ func Ingest(s *Store, o Options, log io.Writer) (Result, error) {
 	notes, err := s.joinEvents(o.Home)
 	if err != nil {
 		r.Failed = append(r.Failed, "events")
-		fmt.Fprintf(log, "metrics: events: %v\n", err)
+		fmt.Fprintln(log, printable(fmt.Sprintf("metrics: events: %v", err)))
 	}
 	for _, n := range notes {
-		fmt.Fprintln(log, "metrics: note: "+n)
+		fmt.Fprintln(log, printable("metrics: note: "+n))
 	}
 	after, err := s.counts()
 	if err != nil {
@@ -145,4 +147,27 @@ func (s *Store) counts() ([3]int, error) {
 		}
 	}
 	return c, nil
+}
+
+// printable is search's filter (BUG-152: by Unicode class, so control,
+// format, line- and paragraph-separator characters all become '?'): a path
+// or a project root ingest prints comes from transcripts, which a --source
+// sandbox writes.
+func printable(s string) string { return search.Printable(s) }
+
+// openRegular opens p without blocking and checks on the opened file that it
+// is a regular file: the one way ingest opens a transcript, a trail file or a
+// .meta.json, so a FIFO swapped in after any earlier check neither hangs nor
+// is read (security review of v2.6.0, part 1, round 4).
+func openRegular(p string) (*os.File, os.FileInfo, error) {
+	f, err := openNonBlocking(p)
+	if err != nil {
+		return nil, nil, err
+	}
+	fi, err := f.Stat()
+	if err != nil || !fi.Mode().IsRegular() {
+		f.Close()
+		return nil, nil, fmt.Errorf("%s: not a regular file", filepath.Base(p))
+	}
+	return f, fi, nil
 }

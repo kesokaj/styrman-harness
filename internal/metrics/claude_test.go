@@ -2,12 +2,14 @@ package metrics
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 const canary = "SECRETCANARY123"
@@ -282,4 +284,161 @@ func sandboxCopy(t *testing.T) string {
 		os.WriteFile(f, bytes.ReplaceAll(bytes.ReplaceAll(b, []byte(`"S1"`), []byte(`"R2"`)), []byte(`"A1"`), []byte(`"B2"`)), 0o600)
 	}
 	return home
+}
+
+// A skill name or an agent type is stored only when it is name-shaped: a
+// prompt-injected session cannot put escape bytes or prose into the store
+// or onto the operator's terminal (security review of v2.6.0, part 1).
+func TestIdentifiersAreNameShaped(t *testing.T) {
+	home := t.TempDir()
+	dir := filepath.Join(home, ".claude", "projects", "-p")
+	os.MkdirAll(filepath.Join(dir, "S1", "subagents"), 0o755)
+	line := jl(t, obj{"type": "assistant", "sessionId": "S1", "cwd": "/p", "timestamp": "2026-10-08T10:00:00Z",
+		"message": obj{"id": "m1", "model": "x\x1b[31mred", "content": []obj{
+			{"type": "tool_use", "id": "t1", "name": "Skill", "input": obj{"skill": "\x1b[2Jwipe the screen"}},
+			{"type": "tool_use", "id": "t2", "name": "Skill", "input": obj{"skill": "golang"}}}}})
+	os.WriteFile(filepath.Join(dir, "S1.jsonl"), []byte(line), 0o600)
+	sub := jl(t, obj{"type": "assistant", "sessionId": "S1", "agentId": "A1", "cwd": "/p", "timestamp": "2026-10-08T10:00:01Z", "message": obj{"id": "m2"}})
+	os.WriteFile(filepath.Join(dir, "S1", "subagents", "agent-A1.jsonl"), []byte(sub), 0o600)
+	os.WriteFile(filepath.Join(dir, "S1", "subagents", "agent-A1.meta.json"), []byte(`{"agentType":"rev\u001bviewer free text"}`), 0o600)
+	s := openT(t, filepath.Join(t.TempDir(), "metrics.db"))
+	ingestT(t, s, Options{Home: home, HomeGiven: true, Vendor: "claude"})
+	var bad int
+	s.db.QueryRow(`SELECT count(*) FROM steps WHERE skill LIKE '%' || char(27) || '%' OR skill LIKE '% %'`).Scan(&bad)
+	var good int
+	s.db.QueryRow(`SELECT count(*) FROM steps WHERE skill = 'golang'`).Scan(&good)
+	var agent, model sql.NullString
+	s.db.QueryRow(`SELECT agent_type FROM sessions WHERE id = 'A1'`).Scan(&agent)
+	s.db.QueryRow(`SELECT model FROM sessions WHERE id = 'S1'`).Scan(&model)
+	if bad != 0 || good != 1 || agent.Valid || model.Valid {
+		t.Fatalf("bad skills %d, golang %d, agent %v, model %v; want 0, 1, NULL, NULL", bad, good, agent, model)
+	}
+}
+
+// A subagent's .meta.json that is not a regular file is not read: under
+// --source a sandbox could point it at a FIFO or /dev/zero.
+func TestMetaJSONMustBeARegularFile(t *testing.T) {
+	home, _ := claudeFixture(t)
+	meta := filepath.Join(home, ".claude", "projects", "-proj", "S1", "subagents", "agent-A1.meta.json")
+	os.Remove(meta)
+	if err := os.Symlink("/dev/zero", meta); err != nil {
+		t.Skip("no symlinks here")
+	}
+	s := openT(t, filepath.Join(t.TempDir(), "metrics.db"))
+	done := make(chan struct{})
+	go func() { ingestT(t, s, Options{Home: home, HomeGiven: true, Vendor: "claude"}); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(20 * time.Second):
+		t.Fatal("ingest hung on a .meta.json that is not a regular file")
+	}
+}
+
+// A transcript line longer than the cap is skipped and counted, never read
+// into memory whole: a --source sandbox could write one of any size
+// (security review of v2.6.0, part 1, round 2).
+func TestOverlongLineIsSkipped(t *testing.T) {
+	saved := lineMax
+	t.Cleanup(func() { lineMax = saved })
+	lineMax = 1024
+	home := t.TempDir()
+	dir := filepath.Join(home, ".claude", "projects", "-p")
+	os.MkdirAll(dir, 0o755)
+	long := `{"type":"user","sessionId":"S1","message":{"content":"` + strings.Repeat("x", 4096) + `"}}` + "\n"
+	ok := jl(t, obj{"type": "assistant", "sessionId": "S1", "cwd": "/p", "timestamp": "2026-10-08T10:00:00Z",
+		"message": obj{"id": "m1", "content": []obj{{"type": "tool_use", "id": "t1", "name": "Bash", "input": obj{"command": "ls"}}}}})
+	os.WriteFile(filepath.Join(dir, "S1.jsonl"), []byte(long+ok), 0o600)
+	s := openT(t, filepath.Join(t.TempDir(), "metrics.db"))
+	r := ingestT(t, s, Options{Home: home, HomeGiven: true, Vendor: "claude"})
+	var n int
+	s.db.QueryRow(`SELECT count(*) FROM steps WHERE ext_id = 't1'`).Scan(&n)
+	if r.Skipped != 1 || n != 1 {
+		t.Fatalf("skipped %d, tool rows %d; want the long line skipped and the next one read", r.Skipped, n)
+	}
+}
+
+// Tool names pass the same name check as skills: a name holding escape bytes
+// is stored as "unnamed", and the text summary never prints a key that is not
+// name-shaped, whatever an older build stored (security review of v2.6.0,
+// part 1, round 2).
+func TestToolNamesAndTextKeysAreNameShaped(t *testing.T) {
+	home := t.TempDir()
+	dir := filepath.Join(home, ".claude", "projects", "-p")
+	os.MkdirAll(dir, 0o755)
+	line := jl(t, obj{"type": "assistant", "sessionId": "S1", "cwd": "/p", "timestamp": "2026-10-08T10:00:00Z",
+		"message": obj{"id": "m1", "content": []obj{{"type": "tool_use", "id": "t1", "name": "\x1b[2Jwipe", "input": obj{}}}}})
+	os.WriteFile(filepath.Join(dir, "S1.jsonl"), []byte(line), 0o600)
+	s := openT(t, filepath.Join(t.TempDir(), "metrics.db"))
+	ingestT(t, s, Options{Home: home, HomeGiven: true, Vendor: "claude"})
+	var tool string
+	s.db.QueryRow(`SELECT tool FROM steps WHERE ext_id = 't1'`).Scan(&tool)
+	if tool != "unnamed" {
+		t.Fatalf("tool stored as %q, want unnamed", tool)
+	}
+	// A row an older build stored raw.
+	s.db.Exec(`INSERT INTO steps(session_id, ext_id, ts, kind, tool, skill) VALUES ('S1', 'old', 1791367200000, 'tool', ?, ?)`, "\x1b]0;title\x07", "\x1b[31mskill")
+	sum, _ := s.Show(ShowOptions{Since: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC), Now: time.Date(2026, 10, 9, 0, 0, 0, 0, time.UTC)})
+	var text bytes.Buffer
+	sum.WriteText(&text)
+	if bytes.ContainsRune(text.Bytes(), 0x1b) || bytes.ContainsRune(text.Bytes(), 0x07) {
+		t.Fatalf("the text summary printed control bytes:\n%q", text.String())
+	}
+}
+
+// Round 4: what ingest prints never carries a control byte from the data (a
+// sandbox controls cwd and file names under --source); a newline-free tail
+// longer than the cap is passed over, not re-read every time; .meta.json is
+// opened without blocking, so a FIFO swapped in after the check cannot hang.
+func TestIngestPrintsNoControlBytes(t *testing.T) {
+	home := t.TempDir()
+	dir := filepath.Join(home, ".claude", "projects", "-p")
+	os.MkdirAll(dir, 0o755)
+	line := jl(t, obj{"type": "assistant", "sessionId": "S1", "cwd": "/gone\x1b[2J", "timestamp": "2026-10-08T10:00:00Z", "message": obj{"id": "m1"}})
+	os.WriteFile(filepath.Join(dir, "S1.jsonl"), []byte(line), 0o600)
+	os.WriteFile(filepath.Join(dir, "bad\x1b]0;t\x07.jsonl"), []byte("x"), 0o000)
+	s := openT(t, filepath.Join(t.TempDir(), "metrics.db"))
+	var out bytes.Buffer
+	if _, err := Ingest(s, Options{Home: home, HomeGiven: true, Vendor: "claude"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if bytes.ContainsAny(out.Bytes(), "\x1b\x07") {
+		t.Fatalf("ingest printed control bytes:\n%q", out.String())
+	}
+}
+
+func TestOverlongTailIsPassedOver(t *testing.T) {
+	saved := lineMax
+	t.Cleanup(func() { lineMax = saved })
+	lineMax = 1024
+	home := t.TempDir()
+	dir := filepath.Join(home, ".claude", "projects", "-p")
+	os.MkdirAll(dir, 0o755)
+	f := filepath.Join(dir, "S1.jsonl")
+	os.WriteFile(f, []byte(strings.Repeat("x", 4096)), 0o600) // no newline, over the cap
+	s := openT(t, filepath.Join(t.TempDir(), "metrics.db"))
+	ingestT(t, s, Options{Home: home, HomeGiven: true, Vendor: "claude"})
+	var off int64
+	s.db.QueryRow(`SELECT offset FROM ingest_state WHERE source = ?`, f).Scan(&off)
+	if off != 4096 {
+		t.Fatalf("offset after an overlong unterminated tail = %d, want 4096 (passed over)", off)
+	}
+}
+
+// BUG-152's rule: what ingest prints is filtered by Unicode class, not a list
+// of code points: a bidi override or a line separator in a project root
+// never reaches the terminal (release review of v2.6.0, round 4).
+func TestIngestPrintsNoFormatCharacters(t *testing.T) {
+	home := t.TempDir()
+	dir := filepath.Join(home, ".claude", "projects", "-p")
+	os.MkdirAll(dir, 0o755)
+	line := jl(t, obj{"type": "assistant", "sessionId": "S1", "cwd": "/gone\u202eevil\u2028next", "timestamp": "2026-10-08T10:00:00Z", "message": obj{"id": "m1"}})
+	os.WriteFile(filepath.Join(dir, "S1.jsonl"), []byte(line), 0o600)
+	s := openT(t, filepath.Join(t.TempDir(), "metrics.db"))
+	var out bytes.Buffer
+	if _, err := Ingest(s, Options{Home: home, HomeGiven: true, Vendor: "claude"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if strings.ContainsAny(out.String(), "\u202e\u2028") {
+		t.Fatalf("ingest printed a format or separator character:\n%q", out.String())
+	}
 }

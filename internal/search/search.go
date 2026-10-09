@@ -320,6 +320,11 @@ func reconcileGlobal(o Options, out io.Writer) (*store, int, []proj, error) {
 		}
 		docs := ".agents/docs"
 		v, _, err := gitView(r.root, docs+"/") // the global header covers many projects: no left-out list
+		if errors.Is(err, errUnsafePartialClone) {
+			// One checkout this git cannot read safely never stops the rest.
+			fmt.Fprintln(out, printable(fmt.Sprintf("note: skipped %s this time (a partial clone, and this git is older than 2.44)", r.root)))
+			continue
+		}
 		if err != nil {
 			return fail(fmt.Errorf("search: %w", err))
 		}

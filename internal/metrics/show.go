@@ -554,6 +554,19 @@ func (s *Summary) WriteJSON(w io.Writer) error {
 	return enc.Encode(s)
 }
 
+// safeMap is a count map for the terminal: a key holding a character the
+// BUG-152 filter replaces (a row an older build stored raw) prints as "?".
+func safeMap(m map[string]int) map[string]int {
+	out := make(map[string]int, len(m))
+	for k, v := range m {
+		if printable(k) != k {
+			k = "?"
+		}
+		out[k] += v
+	}
+	return out
+}
+
 // WriteText prints the summary as one short table per catalogue group, a
 // column per CLI; "n/a" is a metric the CLI cannot produce.
 func (s *Summary) WriteText(w io.Writer) {
@@ -606,7 +619,7 @@ func (s *Summary) WriteText(w io.Writer) {
 		return fmt.Sprintf("%d (%d) / %d", c.Closed, c.Ambiguous, c.Of)
 	})
 	fmt.Fprintf(w, "  verifier %v; review findings %v; escaped bugs %d; corrections %d\n",
-		s.A.Verifier, s.A.ReviewFindings, s.A.EscapedBugs, s.A.Corrections)
+		safeMap(s.A.Verifier), safeMap(s.A.ReviewFindings), s.A.EscapedBugs, s.A.Corrections)
 	for _, l := range sortedKeys(s.A.PassK) {
 		p := s.A.PassK[l]
 		fmt.Fprintf(w, "  pass^k %s: %d of %d passed, pass^%d = %d\n", l, p.Passed, p.K, p.K, p.PassK)
@@ -634,10 +647,10 @@ func (s *Summary) WriteText(w io.Writer) {
 	row("sh-agent search|index", n(s.C.SQLiteVerbs))
 	row("grep/rg/Grep", n(s.C.GrepCalls))
 	row("search : grep", pf(s.C.SearchGrepRatio, "%.3f"))
-	fmt.Fprintf(w, "  forbidden shapes %v\n  first reads %v\n", s.C.Forbidden, s.C.FirstReads)
+	fmt.Fprintf(w, "  forbidden shapes %v\n  first reads %v\n", safeMap(s.C.Forbidden), safeMap(s.C.FirstReads))
 	for _, v := range vendors {
 		if len(s.C.Skills[v]) > 0 {
-			fmt.Fprintf(w, "  skills (%s) %v\n", v, s.C.Skills[v])
+			fmt.Fprintf(w, "  skills (%s) %v\n", v, safeMap(s.C.Skills[v]))
 		}
 	}
 	head("D. reliability")
@@ -647,7 +660,7 @@ func (s *Summary) WriteText(w io.Writer) {
 	row("retry loops", n(s.D.RetryLoops))
 	for _, v := range vendors {
 		if len(s.D.SubagentToolCalls[v]) > 0 {
-			fmt.Fprintf(w, "  subagent tool calls (%s) %v\n", v, s.D.SubagentToolCalls[v])
+			fmt.Fprintf(w, "  subagent tool calls (%s) %v\n", v, safeMap(s.D.SubagentToolCalls[v]))
 		}
 	}
 	for _, note := range s.Notes {

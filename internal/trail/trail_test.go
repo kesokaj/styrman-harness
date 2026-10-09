@@ -210,3 +210,62 @@ func TestVersionAtLeast(t *testing.T) {
 		}
 	}
 }
+
+// A promisor remote alone makes a repository lazy-fetch, with or without
+// extensions.partialClone (release review of v2.6.0, finding 1).
+func TestPartialCloneSeesPromisorRemote(t *testing.T) {
+	for _, cfg := range [][]string{
+		{"extensions.partialClone", "origin"},
+		{"remote.origin.promisor", "true"},
+		{"remote.other.promisor", "TRUE"},
+		{"remote.a b.promisor", "true"},
+		{"remote.tab\there.promisor", "yes"},
+	} {
+		root := t.TempDir()
+		for _, args := range [][]string{{"init", "-q"}, {"config", cfg[0], cfg[1]}} {
+			if out, err := exec.Command("git", append([]string{"-C", root}, args...)...).CombinedOutput(); err != nil {
+				t.Fatalf("%v\n%s", err, out)
+			}
+		}
+		if !PartialClone(root) {
+			t.Errorf("%s=%s: not seen as a partial clone", cfg[0], cfg[1])
+		}
+	}
+	root := t.TempDir()
+	exec.Command("git", "-C", root, "init", "-q").Run()
+	exec.Command("git", "-C", root, "config", "remote.origin.promisor", "false").Run()
+	if PartialClone(root) {
+		t.Error("remote.origin.promisor=false read as a partial clone")
+	}
+}
+
+// changed reads files only inside the checkout: a tracked record whose
+// directory became a symlink to the outside is changed, never hashed there
+// (security review of v2.6.0, part 2, finding 3).
+func TestChangedStaysInsideTheCheckout(t *testing.T) {
+	root := t.TempDir()
+	git := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", root}, args...)...)
+		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@example.invalid", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.invalid")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	dir := filepath.Join(root, ".agents", "docs", "handoffs")
+	os.MkdirAll(dir, 0o755)
+	os.WriteFile(filepath.Join(dir, "h.md"), []byte("same\n"), 0o644)
+	git("init", "-q")
+	git("add", ".")
+	git("commit", "-q", "-m", "h")
+	outside := t.TempDir()
+	os.WriteFile(filepath.Join(outside, "h.md"), []byte("same\n"), 0o644) // identical bytes outside
+	os.RemoveAll(dir)
+	if err := os.Symlink(outside, dir); err != nil {
+		t.Skip("no symlinks here")
+	}
+	diff, ok := changed(root, ".agents/docs")
+	if !ok || !diff[".agents/docs/handoffs/h.md"] {
+		t.Fatalf("a record behind a symlinked directory read as unchanged (ok=%v): it was hashed outside the checkout", ok)
+	}
+}

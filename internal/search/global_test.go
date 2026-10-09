@@ -2,6 +2,7 @@ package search
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -178,5 +179,26 @@ func TestConfigViewListsProposalsByName(t *testing.T) {
 	got := strings.Join(names, " ")
 	if !strings.Contains(got, "proposals/2026-09-30-retro.md") || strings.Contains(got, "notes.txt") {
 		t.Errorf("proposals should be listed by name, .md only, got %q", got)
+	}
+}
+
+// A registered checkout that became a partial clone, on a git too old to
+// refuse lazy fetches, is skipped for this query with a note; the global
+// search answers from the rest (release review of v2.6.0, finding 2).
+func TestGlobalSkipsUnsafePartialClone(t *testing.T) {
+	home := globalHome(t)
+	a := newRepo(t)
+	writeFile(t, a, ".agents/docs/bugs/BUG-003-tern.md", "---\nid: BUG-003\nstatus: open\n---\n# tern\n")
+	commitAll(t, a, "add")
+	mustSearch(t, Options{Dir: a, Home: home, Words: []string{"tern"}})
+	if out, err := exec.Command("git", "-C", a, "config", "remote.origin.promisor", "true").CombinedOutput(); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	saved := lazyFetchSafe
+	t.Cleanup(func() { lazyFetchSafe = saved })
+	lazyFetchSafe = func() bool { return false }
+	out := mustSearch(t, Options{Dir: t.TempDir(), Home: home, Global: true, Words: []string{"jackalope"}})
+	if !strings.Contains(out, "note: skipped "+a+" this time") || !strings.Contains(out, "feedback.jsonl") {
+		t.Errorf("an unsafe partial clone was not skipped with a note, or the rest went unanswered:\n%s", out)
 	}
 }

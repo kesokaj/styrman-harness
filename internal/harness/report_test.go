@@ -108,6 +108,19 @@ var shapeSecrets = []string{
 	// line, Docker's auth key, and a credentials key.
 	"curl -u admin:FAKEVALUE https://h/", "curl --user admin:FAKEVALUE https://h/", "mysql -u root -pFAKEVALUE db",
 	"sshpass -p FAKEVALUE ssh h", `"auth": "FAKEVALUEFAKEVALUE=="`, "CREDENTIALS=FAKEVALUEFAKEVALUE", "credentials: FAKEVALUE0123456789",
+	// The fix's security review: the command after a quote, a backtick or a
+	// path; the user attached, empty or numeric; smbclient, redis-cli,
+	// htpasswd, docker login; single-quoted, YAML, .npmrc and Kubernetes
+	// auth keys; a credentials value with a slash.
+	`{"text":"sshpass -p FAKEVALUE ssh h"}`, "run `mysql -pFAKEVALUE`", "/usr/bin/mysql -uroot -pFAKEVALUE",
+	"curl -uadmin:FAKEVALUE h", "curl -u :FAKEVALUE h", "curl -u 12345:FAKEVALUE h",
+	"smbclient //h/s -U user%FAKEVALUE", "redis-cli -a FAKEVALUE ping", "htpasswd -b .htpasswd user FAKEVALUE",
+	"docker login -u user -p FAKEVALUE reg", "podman login -u user -p FAKEVALUE reg",
+	`'auth': 'FAKEVALUEFAKEVALUE'`, "auth: FAKEVALUEFAKEVALUE", "_auth=FAKEVALUEFAKEVALUE", ".dockerconfigjson: FAKEVALUEFAKEVALUEFAKE",
+	"credentials: abc/defFAKEVALUE0123456789",
+	// Round 2: a short Docker auth value (`admin:admin` is sixteen base64
+	// characters with its padding), which the first double-quoted form caught.
+	`"auth": "RkFLRVZBTFVF="`, `{"auths":{"r":{"auth":"RkFLRVZBTFVF="}}}`,
 	"https://discordapp.com/api/webhooks/1/FAKEVALUE", "https://x.webhook.office.com/webhookb2/FAKEVALUE",
 	"SG.FAKEVALUEFAKEVALUE.FAKEVALUEFAKEVALUE", "AccountKey=FAKEVALUE", "Cookie: session=FAKEVALUE",
 	"Set-Cookie: sid=FAKEVALUE", "hvs.FAKEVALUEFAKEVALUEFAKE", "hvb.FAKEVALUEFAKEVALUEFAKE",
@@ -159,7 +172,15 @@ func TestReportRedactShapes(t *testing.T) {
 		// The pass family as one kind, and the flag form (security review round 3).
 		"DB_PASS=letmein", "MYSQL_PWD=letmein", "PASSPHRASE: letmein", "run it with --password letmein now",
 		// The bearer rule takes prose too (project review 2026-10-09, security row 8).
-		"the bearer of the token"} {
+		"the bearer of the token",
+		// The command-line rule takes a numeric or named uid:gid, a MySQL
+		// port flag and a `-p` followed by a word (the fix's reviews).
+		"docker run -u 1000:1000 img", "docker run -u node:node img", "mysql -P3306 -h db", "mysql -p prompts for the password",
+		"docker exec -u root:root c sh", "chown -u www-data:www-data", "sudo -u postgres:x",
+		// The strict quoted auth form takes an eight-letter word (the first
+		// version's behaviour, kept so `admin:admin` is caught).
+		`"auth": "required"`,
+		"credentials: application-default"} {
 		if _, recs := redactLines("f", []byte(over+"\n"), false); len(recs) != 1 {
 			t.Errorf("%q: over-redaction is the pinned behaviour, got %+v", over, recs)
 		}
@@ -192,9 +213,15 @@ func TestReportRedactShapes(t *testing.T) {
 		"akia keys start with AKI", "the ghp- prefix", "a glpat_ token", "xoxb tokens", "ya29 tokens carry no dot",
 		"GOCSPX keys", "github_pat tokens", "a dop_v2_ shape", "AGE-SECRET keys", "sk-ant keys", "the AIz prefix",
 		"gldt tokens", "a pypi-AgEIcHlwaS5vcm prefix cut short", "a private key file",
-		// The three kinds of row 9, one near-miss each.
-		"curl -u is the user flag", "docker run -u 1000:1000 img", "mysql -p prompts for the password", "mkdir -p build",
-		`"auth": "basic"`, "credentials: none", "Credentials: see the gcloud-setup skill", "GOOGLE_APPLICATION_CREDENTIALS=/home/me/adc.json",
+		// The three kinds of row 9, a near-miss per alternation.
+		"curl -u is the user flag", "mysql -p", "mkdir -p build", "cp -pr src dst", "redis-cli ping", "sshpass is a wrapper",
+		"docker login prompts for the password", "htpasswd -c file user", "psql -p 5432 -h db",
+		`"auth": "basic"`, "auth: required", "_auth is the npmrc key", ".dockerconfigjson is the secret type",
+		"credentials: none", "Credentials: see the gcloud-setup skill", "GOOGLE_APPLICATION_CREDENTIALS=/home/me/adc.json", "credentials=~/.config/x",
+		// Round 2 of the fix's review: a flag follows whitespace, so `-u`
+		// inside a hyphenated word is not one, and `%` needs a letter-led
+		// user, so `date -u +%FT%TZ` stays.
+		"see run-usage.md:72", "the web-ui:8080 service", "image sh-updater:v1", "date -u +%FT%TZ",
 	} {
 		// "ASIAN" contains the ASIA prefix: accepted over-redaction, pinned
 		// here so a change to it is deliberate.

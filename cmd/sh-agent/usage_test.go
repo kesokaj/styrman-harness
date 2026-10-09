@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/kesokaj/styrman-harness/internal/harness"
 )
 
 // Every usage error exits 2 with its reason on the verb's writer, as README
@@ -100,6 +102,34 @@ func TestMainExitStatus(t *testing.T) {
 			}
 			if !strings.Contains(stderr.String(), tc.stderr) {
 				t.Errorf("sh-agent %s: stderr %q lacks %q", tc.args, stderr.String(), tc.stderr)
+			}
+		})
+	}
+}
+
+// An explicit `--vendor all` reaches the install a rebuild or an update runs,
+// so it overrides a narrower vendor the home's state recorded; the shared
+// pass-through dropped it (review of the 2026-10-09 fixes, round 1).
+func TestInstallPassArgsForwardsAnExplicitVendor(t *testing.T) {
+	home := t.TempDir()
+	if err := harness.SaveState(home, harness.State{Vendor: harness.VendorClaude}); err != nil {
+		t.Fatal(err)
+	}
+	for name, tc := range map[string]struct {
+		vendorFlag string
+		want       string
+	}{
+		"explicit all":   {"all", "--vendor all"},
+		"explicit agy":   {"agy", "--vendor antigravity"},
+		"from the state": {"", "--vendor claude"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			args, err := installPassArgs("", home, tc.vendorFlag)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := strings.Join(args, " "); got != tc.want {
+				t.Errorf("installPassArgs(vendor %q) = %q, want %q", tc.vendorFlag, got, tc.want)
 			}
 		})
 	}

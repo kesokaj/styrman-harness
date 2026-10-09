@@ -759,3 +759,107 @@ func TestCallReturnsAtTheDeadlineDespiteAGrandchild(t *testing.T) {
 		})
 	}
 }
+
+// A helper that outlives a CLI which exited 0 kept the pipes open: Run
+// returned exec.ErrWaitDelay after the grace, so a finished run was reported
+// as failed and its answer thrown away, and the helper was never killed
+// (review of the BUG-169 fix, round 1). The answer is kept, and the group is
+// killed once the CLI is done.
+func TestCallKeepsTheAnswerWhenAHelperOutlivesTheCLI(t *testing.T) {
+	dir := t.TempDir()
+	cli := filepath.Join(dir, "holder")
+	pidfile := filepath.Join(dir, "pid")
+	if err := os.WriteFile(cli, []byte("#!/bin/sh\nsleep 60 &\necho $! > \"$PIDFILE\"\necho answer\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { killPidFile(pidfile) })
+	t0 := time.Now()
+	out, _, err := callWithin([]string{cli}, "", dir, append(os.Environ(), "PIDFILE="+pidfile), 30*time.Second, 2*time.Second)
+	if err != nil || out != "answer\n" {
+		t.Fatalf("call = %q, %v; want the answer and no error after %s", out, err, time.Since(t0))
+	}
+	pid := readPid(t, pidfile)
+	for i := 0; i < 30 && alive(pid); i++ {
+		time.Sleep(100 * time.Millisecond) // a killed process is reaped a moment later
+	}
+	if alive(pid) {
+		t.Errorf("the helper (pid %d) outlived the CLI's exit: the group was not killed", pid)
+	}
+}
+
+// TestHelperCall is not a test: TestCallKillsTheGroupOnInterrupt runs this
+// binary as a subprocess with DREAM_HELPER_DIR set, and interrupts it.
+func TestHelperCall(t *testing.T) {
+	dir := os.Getenv("DREAM_HELPER_DIR")
+	if dir == "" {
+		t.Skip("helper process")
+	}
+	callWithin([]string{filepath.Join(dir, "holder")}, "", dir, append(os.Environ(), "PIDFILE="+filepath.Join(dir, "pid")), time.Minute, time.Second)
+}
+
+// Ctrl-C on a hand-run `sh-agent dream` reached the CLI while it shared
+// sh-agent's process group; in its own group it ran on as an orphan with
+// the operator's credentials (review of the BUG-169 fix, round 1). An
+// interrupt or a termination kills the group, then sh-agent dies as before.
+func TestCallKillsTheGroupOnInterrupt(t *testing.T) {
+	for name, sig := range map[string]os.Signal{"interrupt": os.Interrupt, "hangup": syscall.SIGHUP, "terminate": syscall.SIGTERM} {
+		t.Run(name, func(t *testing.T) { callKilledBy(t, sig) })
+	}
+}
+
+func callKilledBy(t *testing.T, sig os.Signal) {
+	dir := t.TempDir()
+	pidfile := filepath.Join(dir, "pid")
+	if err := os.WriteFile(filepath.Join(dir, "holder"), []byte("#!/bin/sh\nsleep 60 &\necho $! > \"$PIDFILE\"\nsleep 60\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { killPidFile(pidfile) })
+	c := exec.Command(os.Args[0], "-test.run=^TestHelperCall$")
+	c.Env = append(os.Environ(), "DREAM_HELPER_DIR="+dir)
+	if err := c.Start(); err != nil {
+		t.Fatal(err)
+	}
+	var pid int
+	for i := 0; i < 50 && pid == 0; i++ {
+		if b, err := os.ReadFile(pidfile); err == nil {
+			pid, _ = strconv.Atoi(strings.TrimSpace(string(b)))
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if pid == 0 {
+		c.Process.Kill()
+		t.Fatal("the holder never started")
+	}
+	if err := c.Process.Signal(sig); err != nil {
+		t.Fatal(err)
+	}
+	c.Wait() // dies by the signal, as before the group existed
+	for i := 0; i < 30 && alive(pid); i++ {
+		time.Sleep(100 * time.Millisecond)
+	}
+	if alive(pid) {
+		t.Errorf("the helper (pid %d) survived %v: the group was not killed", pid, sig)
+	}
+}
+
+func readPid(t *testing.T, pidfile string) int {
+	b, err := os.ReadFile(pidfile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(b)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return pid
+}
+
+func alive(pid int) bool { return syscall.Kill(pid, 0) == nil }
+
+func killPidFile(pidfile string) {
+	if b, err := os.ReadFile(pidfile); err == nil {
+		if pid, err := strconv.Atoi(strings.TrimSpace(string(b))); err == nil {
+			syscall.Kill(pid, syscall.SIGKILL)
+		}
+	}
+}

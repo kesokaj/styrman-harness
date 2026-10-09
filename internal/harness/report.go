@@ -138,18 +138,33 @@ var keywordNeedles = []struct {
 	{"cookie header", regexp.MustCompile(`(?i)(set-)?cookie["']?\s*:\s*\S|(^|\s)(-b|--cookie)[ =]["']?\S+=\S|document\.cookie\s*=`), nil},
 	{"vault token", regexp.MustCompile(`hv[sbr]\.[A-Za-z0-9_-]{20,}`), nil},
 	// Three kinds the project review of 2026-10-09 named (security row 9,
-	// each approved by the operator): a credential on a command line (a
-	// `user:pass` after -u/--user/--username whose user does not start with
-	// a digit, so `docker run -u 1000:1000` stays; `sshpass -p`; a MySQL
-	// client's `-p<password>`, so `mysql -p` alone and `mkdir -p` stay),
-	// Docker's `"auth":` holding base64, and a `credential(s)` key whose
-	// value is sixteen or more token characters with no `/`, so
-	// `credentials: none`, `Credentials: see gcloud-setup` and
-	// `GOOGLE_APPLICATION_CREDENTIALS=/path` stay. No `\b` in front (the
-	// rule above).
-	{"command-line credential", regexp.MustCompile(`(?i)(^|\s)(?:-u|--user|--username)[ =]["']?[^\s:"'0-9][^\s:"']*:[^\s"']+|(^|\s)sshpass\s+-p\s*\S+|(^|\s)(?:mysql|mariadb|mysqldump|mysqladmin)\S*(?:\s+\S+)*?\s+-p\S+`), nil},
-	{"docker auth", regexp.MustCompile(`"auth"\s*:\s*"[A-Za-z0-9+/=]{8,}"`), nil},
-	{"credentials key", regexp.MustCompile(`(?i)credentials?["']?\s*[:=]\s*["']?[A-Za-z0-9+=_.-]{16,}`), nil},
+	// each approved by the operator), one rule per kind and nothing anchored
+	// in front (a quote, a backtick, a path or a literal `\n` may precede
+	// the command; the fix's security review):
+	// - a credential on a command line: `user:pass` (or smbclient's
+	//   `user%pass`) after -u/--user/--username, the flag after whitespace
+	//   (a flag is never a line's first token, and `-u` inside `run-usage`
+	//   or `web-ui` is not one), the user empty, numeric or attached
+	//   (`-uadmin:x`, `-u :token`) but letter-led before a `%` (so
+	//   `date -u +%FT%TZ` stays), so `docker run -u 1000:1000` and
+	//   `sudo -u postgres:x` go too, pinned; a password flag (`-p<pw>`,
+	//   `-p pw`, `-a pw`) after
+	//   a client that takes one (sshpass, the MySQL clients, redis-cli,
+	//   docker/podman login), so `mysql -P3306` goes too, pinned, while
+	//   `mysql -p` alone, `mkdir -p` and `cp -pr` stay; `htpasswd -b`, whose
+	//   password is positional;
+	// - an auth key holding base64: Docker's `"auth":` in any quoting or
+	//   YAML, `.npmrc`'s `_auth=`, Kubernetes' `.dockerconfigjson:`, from
+	//   sixteen base64 characters so `auth: required` stays, and the strict
+	//   double-quoted JSON form from eight (`admin:admin` is fifteen plus its
+	//   padding; the fix's review, round 2);
+	// - a `credential(s)` key whose value is sixteen or more token characters
+	//   and does not start with `/`, `~` or `.`, so `credentials: none`,
+	//   `Credentials: see gcloud-setup` and
+	//   `GOOGLE_APPLICATION_CREDENTIALS=/path` stay.
+	{"command-line credential", regexp.MustCompile(`(?i)(?:^|\s)(?:-u|--user|--username)[ =]?["']?(?:[A-Za-z0-9_.][^\s:%"']*)?[:%][^\s"']+|(?:sshpass|mysql\S*|mariadb\S*|redis-cli|docker\s+login|podman\s+login)\b[^\n]*?\s-[pa]\s*\S+|htpasswd\s+-[a-z]*b`), nil},
+	{"auth key", regexp.MustCompile(`(?i)"auth"\s*:\s*"[A-Za-z0-9+/=]{8,}"|(?:["']?_?auth["']?|\.?dockerconfigjson["']?)\s*[:=]\s*["']?[A-Za-z0-9+/]{16,}={0,2}`), nil},
+	{"credentials key", regexp.MustCompile(`(?i)credentials?["']?\s*[:=]\s*["']?[A-Za-z0-9+=_-][A-Za-z0-9+/=_.-]{15,}`), nil},
 	// A shape past the rules above is a design question for the operator,
 	// never another batch of instances: the list is a safety net (delivery.md,
 	// BUG-110).

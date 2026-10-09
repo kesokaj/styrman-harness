@@ -1106,8 +1106,10 @@ func shedKeptClone(home string, out io.Writer) {
 	}
 }
 
-// installPassArgs are the flags an update hands to the install it runs: the
-// home it was told to use, and a vendor narrower than "all".
+// installPassArgs are the flags an update or a rebuilding install hands to
+// the install it runs: the home it was told to use, and the vendor when it
+// was given explicitly (an explicit `all` must override the narrower vendor
+// the home's state may record) or is narrower than "all".
 func installPassArgs(homeFlag, home, vendorFlag string) ([]string, error) {
 	var args []string
 	if homeFlag != "" {
@@ -1117,7 +1119,7 @@ func installPassArgs(homeFlag, home, vendorFlag string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	if vendor != harness.VendorAll {
+	if vendorFlag != "" || vendor != harness.VendorAll {
 		args = append(args, "--vendor", vendor)
 	}
 	return args, nil

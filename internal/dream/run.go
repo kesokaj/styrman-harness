@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -208,16 +209,43 @@ func callWithin(argv []string, prompt, work string, env []string, timeout, grace
 	cmd.Stdin = strings.NewReader(stdin)
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
-	// The CLI gets its own process group, killed whole at the deadline, and
-	// Run gives up on the output pipes after grace: a helper the CLI started
-	// (a language or MCP server) kept them open past the kill and held Run,
-	// and so dream.lock, for as long as it lived (BUG-169).
+	// The CLI gets its own process group, killed whole at the deadline, on an
+	// interrupt, and once the CLI itself is done; Wait gives up on the output
+	// pipes after grace. A helper the CLI started (a language or MCP server)
+	// kept them open past the kill and held Run, and so dream.lock, for as
+	// long as it lived (BUG-169); the same helper after a clean exit turned
+	// the run into a failure, and Ctrl-C stopped reaching a CLI outside
+	// sh-agent's own group (the fix's review).
 	cmd.WaitDelay = grace
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
-	err := cmd.Run()
+	killGroup := func() { syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+	cmd.Cancel = func() error { killGroup(); return nil }
+	if err := cmd.Start(); err != nil {
+		return "", "", fmt.Errorf("%s: %v", argv[0], err)
+	}
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT)
+	waited := make(chan struct{})
+	go func() {
+		select {
+		case sig := <-sigs:
+			killGroup()
+			// Then die of the signal, as sh-agent did before the group existed.
+			signal.Reset(sig)
+			syscall.Kill(os.Getpid(), sig.(syscall.Signal))
+		case <-waited:
+		}
+	}()
+	err := cmd.Wait()
+	signal.Stop(sigs) // before waited closes: a signal in between still reaches the goroutine
+	close(waited)
+	killGroup()
 	if ctx.Err() == context.DeadlineExceeded {
 		return out.String(), errb.String(), fmt.Errorf("%s timed out after %s", argv[0], timeout)
+	}
+	if errors.Is(err, exec.ErrWaitDelay) {
+		// The CLI exited 0; only a helper it left behind kept the pipes.
+		err = nil
 	}
 	if err != nil {
 		return out.String(), errb.String(), fmt.Errorf("%s: %v", argv[0], err)

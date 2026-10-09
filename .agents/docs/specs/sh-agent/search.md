@@ -26,7 +26,7 @@ sh-agent index [--global] [--rebuild]
 - **`--kind`** is one of `bug adr plan change handoff review testing retro spec deploy trail code doc feedback proposal` and filters every mode by the kind of the printed path. `trail` is everything under the docs root; `feedback` and `proposal` exist only in the global search index.
 - **`index`** prints `files`, `chunks`, `records`, `refs`, `changed` (by this reconcile), `bytes` (database and WAL) and `ms`. `--rebuild` deletes the database and builds it again.
 
-Exit status: 0 with hits or without; 1 on a refusal or an error; 2 on a usage error (a flag the verb does not define, a stray argument), as every verb since 2026-10-01.
+Exit status: 0 with hits or without; 1 on a refusal or an error; 2 on a usage error (a flag the verb does not define, a stray argument, a `--limit` outside 1..50, an unknown `--kind`, no mode or two modes at once, `--rebuild` given to `search`; the reason on stdout, BUG-168), as every verb since 2026-10-01.
 
 ## Where the indexes live
 

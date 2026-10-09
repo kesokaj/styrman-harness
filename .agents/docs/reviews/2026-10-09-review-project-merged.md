@@ -75,3 +75,52 @@ Observations that are not findings, recorded once:
 - Tests lens: govulncheck (not on PATH; run by the main agent instead, see row 29); the guide's § 3d and § 3g real-data checks; the CLI sandbox starts of § 2 and § 4; cross-package coverage (`-coverpkg`); whether each verb's test asserts the outcome (mapped by grep plus per-function coverage of `run*`); whether the slow tests rebuild the binary; `owned_other.go` (build-tagged, not compiled on linux); self-comparisons and fixtures that already hold the expected output in the cannot-fail scan.
 - Explorer: per-verb call chains below the verb table; the `go doc` export listing; error-wrapping and atomic-write audit of memory, metrics, search and dream beyond a grep; SQLite close discipline; skill description quoting per file; INDEX status against each record's status (inconclusive); undated docs under `.agents/docs` with no inbound link; staticcheck or deadcode tooling.
 - Main agent: nothing was reproduced; the spot-checks named above were greps and `git tag`.
+
+## Round 1
+
+Acted on by the task "go all approved your recommendations" (2026-10-09): fix rows 1–6, 8–20, 22, 29; strike 7, 26, 27; defer 21, 23–25, 28. The fixes are commit `3bffdcf` plus the round-1 corrections in the working tree at the time of round 2 (committed with the records). Round-1 agents over `dbd776d..3bffdcf`: [review-dbd776d-3bffdcf-code-docs](2026-10-09-review-dbd776d-3bffdcf-code-docs.md) (REQUEST CHANGES: three medium, four low), [security-dbd776d-3bffdcf](2026-10-09-security-dbd776d-3bffdcf.md) (FINDINGS: two medium, five low). The verifier runs after round 2, on the frozen tree.
+
+Round-1 findings on the fixes, one line each:
+- reviewer 1 "`installPassArgs` drops an explicit `--vendor all`, so a rebuild or update on a home whose state records `claude` installs claude only" — fixed at `cmd/sh-agent/main.go` `installPassArgs` (forwards the vendor when given explicitly or narrower than all); `TestInstallPassArgsForwardsAnExplicitVendor`, red before. The simplify row 17 claim "the child's behaviour is identical" was wrong when the state's vendor differs; the reviewer caught it.
+- reviewer 2 "`delivery.md:77` lists the `mcpServers` refusal, which v2.6.2 does not have" — fixed: removed from the paragraph (README and AGENTS.md describe the checkout and keep it).
+- reviewer 3 and security 6 "`WaitDelay` turns a clean exit with a lingering helper into a failure after 30 s; the helper is never killed; Ctrl-C no longer reaches the CLI in its own group" — fixed at `internal/dream/run.go` `callWithin`: `Start` then `Wait`, SIGINT and SIGTERM forwarded as a group kill and then re-raised, the group killed after `Wait` on every path, `exec.ErrWaitDelay` treated as success; `TestCallKeepsTheAnswerWhenAHelperOutlivesTheCLI`, `TestCallKillsTheGroupOnInterrupt`, both red before.
+- reviewer low "`skills/harness-audit/SKILL.md:36` bare govulncheck" — fixed. "`search.md:29` does not name the argument errors that exit 2" — fixed. "over-redactions `-u root:root`, `"auth": "required"` unpinned" — the first pinned on the over list (`-u node:node`, `-u 1000:1000`), the second is a near-miss under the sixteen-character rule, pinned benign.
+- security 1 "the command-line needle's `(^|\s)` anchors miss the command after a quote, a backtick, a path or a literal `\n`" — fixed at `report.go:159`: no anchor in front; the four shapes are rows in `shapeSecrets`.
+- security 2 "Docker forms uncovered: `docker login -p`, single-quoted and YAML `auth:`, `.dockerconfigjson`" — fixed: `docker login`/`podman login` in the command-line kind; the `auth key` kind takes `auth`, `_auth` and `.dockerconfigjson` in any quoting from sixteen base64 characters.
+- security 3 "attached, empty and numeric users; redis-cli, smbclient, htpasswd, `.npmrc _auth`" — fixed in the same two kinds (`user%pass`, `-uadmin:x`, `-u :x`, `-u 12345:x`; `redis-cli -a`; `htpasswd -b`; `_auth=`); `docker run -u 1000:1000` and `-u node:node` become pinned over-redactions.
+- security 4 "the credentials value alphabet lacks `/`" — fixed at `report.go:161`: `/` allowed except as the first character (`~` and `.` likewise), so `GOOGLE_APPLICATION_CREDENTIALS=/path` stays benign; a slash-bearing row in `shapeSecrets`.
+- security 5 "the agent lint is a deny-list; `memory` and `initialPrompt` still pass" — left: operator — choice: an allow-list of agent keys (security's recommendation: `name`, `description`, `tools`, `disallowedTools`, `model`, `maxTurns`, `skills`, `effort`, `color`), or two more deny rows; a new refusal either way, so the operator's call. Antigravity is not exposed (`derive.go` writes an allow-list).
+- security 7 "`mysql -P3306 -h db` and `docker run -u node:node img` over-redacted and unpinned" — fixed: both on the over list; mutation: the three needles removed fails 46 assertion lines of `TestReportRedactShapes`.
+
+## Outcome
+
+One line per row of the findings table, the operator's disposition applied:
+- 1 — fixed at `internal/harness/inventory.go:261` (`mcpServers` refused for agents), `TestLintPermissionKeysByKind` two rows red before; AGENTS.md § Rules and README § Customizing say so. The allow-list is left: operator (security round-1 finding 5 above). Not a bug record: the 2026-10-01 gate left this item for a next task by name (`changes/2026-10-01-1433-gate-lows-closed.md`).
+- 2 — fixed at `internal/dream/run.go` `callWithin` (own process group, `Cancel` kills it, `WaitDelay`; round 1 added the signal path, the post-`Wait` kill and `ErrWaitDelay` as success); `TestCallReturnsAtTheDeadlineDespiteAGrandchild` red before (both subtests hung 20 s); `dream.md` § Ask; BUG-169.
+- 3 — fixed at `.agents/docs/specs/sh-agent/delivery.md:77` (v2.6.2, `metrics`, one sentence per release v2.5.0–v2.6.2); pinned by `TestDeliverySpecCurrent` (every verb in the verb table, the newest `changes/*-release-v*.md`), red before on both counts; `deploy/remote.md` § Releases runs it before the tag; BUG-167.
+- 4 — fixed at `cmd/sh-agent/main.go` (`vendor`, `memoryCmd`, three `--from-zip` refusals, `runAdopt`, `runSearch`) and `internal/search/search.go` (`usageError`, `IsUsage`): exit 2 with the reason on the writer; `TestUsageErrorsExit2` seven sites red before; `TestMainExitStatus` reads main's 0, 1 and 2; four tests that pinned the plain error updated (`TestFromZipEmptyValueRefused`, `TestFromZipDashValueRefused`, `TestUpdateFromZipRefusals`, `TestFromZipRefusedOnOtherCommands`, `TestSearchVerb`); `search.md:29`; BUG-168. The seventh site (`--from-zip` on another verb) surfaced when the suite ran bare.
+- 5 — fixed at `skills/review/SKILL.md:116` (the prompts report's hunk 1).
+- 6 — fixed at `skills/init-project/SKILL.md:3` (hunk 2); `TestSkillListingBudget` passes.
+- 7 — rebutted: the cap bounds a hand-back pointer, not the work product, and its reason is in the line itself (`agents/reviewer.md:101`: "the detail is already on disk"); this run's eight hand-backs were usable under it; the operator's word: strike (2026-10-09).
+- 8 — fixed at `internal/harness/report_test.go`: a benign near-miss per needle that had none; "the bearer of the token" pinned on the over list.
+- 9 — fixed at `internal/harness/report.go:159-161`: three kinds (command-line credential, auth key, credentials key), each with rows in `shapeSecrets` and a near-miss; widened by round 1 (above). A fourth kind the main agent noticed and did not add, for the operator: a `PRIVATE_KEY=` assignment (`secretRe`'s key words do not include `private_key`; a PEM body is caught by its header, a bare hex key is not).
+- 10 — fixed: `PRIORITY_TODO.md` deleted in `3bffdcf`.
+- 11 — fixed at `AGENTS.md` § Layout (`internal/trail`, the root `embed.go` and tests, the `.agents/docs/` subdirectories) and `README.md` Layout block (`internal/metrics`, `internal/trail`, `embed.go`).
+- 12 — fixed at `README.md:177` (installed binary), `skills/harness-audit/references/areas.md:36` (SHA256SUMS and assets, no signature), `cmd/sh-agent/main.go` (`runMetrics` comment).
+- 13 — fixed: `TestVersionVerb`, `TestMainExitStatus` with `TestHelperMain` (`cmd/sh-agent/usage_test.go`).
+- 14 — fixed: `search.IsBusy` deleted; `latestRelease`, `loadDocs` and `refusal` unexported. Rebutted for two: `OriginKind` is the type of the exported constants `OriginPath`… and of the exported field `Origin.Kind` (`internal/harness/repo.go:121-135`); `AgyConversation` is the element type of the exported `AgyConversationText`'s result (`internal/search/dream.go:89`), called from `internal/dream/collect.go:122`.
+- 15 — fixed at `internal/trail/trail.go` `DocsRoot` (`TestDocsRoot`), used by `metrics/claude.go`, `metrics/events.go`, `search/reconcile.go` (which keeps its `.agents/docs` default); `dream`'s `docsOf` in `collect.go`.
+- 16 — fixed at `internal/dream/collect.go` (`harness.Split` and `Parse`; `frontField` and `unquote` deleted); `TestSkillsReadsBlockScalarDescription` red before (the description came back as `>`).
+- 17 — fixed at `cmd/sh-agent/main.go` `runInstall` (calls `installPassArgs`); round 1 found the dropped explicit `--vendor all` and fixed `installPassArgs` (above).
+- 18 — fixed at `cmd/sh-agent/main.go` `metricsSummary`.
+- 19 — fixed at `internal/metrics/events.go` `readSmall` (`io.ReadAll(io.LimitReader(f, 1<<20))`).
+- 20 — fixed: `Lint` deleted (`internal/harness/frontmatter.go`), its six test calls use `ParseStrict`, the agreement test in `phase8_test.go` dropped.
+- 21 — left: operator — deferred (the fix adds a refusal for operator-owned input).
+- 22 — fixed at `.agents/docs/testing/guide.md` § 3e and `AGENTS.md` § Testing (the leaf count is per box; 0 tool-argument keys is the invariant). Rebutted "cannot fail": `TestAgyCorpusLeaves` and `TestRecall` are env-gated measurements by design, named as such in the guide (`guide.md:141`).
+- 23 — left: operator — deferred.
+- 24 — left: operator — deferred.
+- 25 — left: operator — deferred (measure in a task of its own).
+- 26 — rebutted: accepted risk, on file as ADR-053 (no key signs anything) and ADR-046 (R9's checkout contract), `.agents/docs/architecture/DECISIONS.md`.
+- 27 — rebutted: no trust boundary, both calls inside the operator's own `~/.config/sh-agent` (`internal/harness/report.go:351-365`).
+- 28 — left: operator — deferred; L2 (the REQUIREMENTS R2 pointer resolves only where a checkout exists) is the one worth a look.
+- 29 — fixed at `AGENTS.md` § Setup commands, `.agents/docs/deploy/local.md:127`, `skills/harness-audit/SKILL.md:36` and `references/areas.md:36` (govulncheck by its full path).

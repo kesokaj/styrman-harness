@@ -113,4 +113,4 @@ The main agent applies every edit: `reviewer` and `security` have no edit tools 
 
 ## Step 6: Report
 
-In chat, at most ten lines: the worst finding first, one verdict per lens, the record's path (or the single artifact's), and what `--fix` changed or rebutted. A review is step 2 of the Definition of Done; its other steps follow as usual.
+In chat, in the global context's reply shape: the explanation line carries one verdict per lens and the record's path (or the single artifact's), the recommendation line says what to do next, and the numbered table lists the findings worst-first with what `--fix` changed or rebutted in its recommendation column. A review is step 2 of the Definition of Done; its other steps follow as usual.

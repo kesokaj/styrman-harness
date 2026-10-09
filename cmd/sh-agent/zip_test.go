@@ -129,8 +129,10 @@ func TestUpdateFromZipRefusals(t *testing.T) {
 		home := t.TempDir()
 		var out bytes.Buffer
 		err := run(append(args, "--home", home), &out)
-		if err == nil || !strings.Contains(err.Error(), "--from-zip") {
-			t.Errorf("%v: err = %v, want a refusal naming --from-zip", args, err)
+		// A usage error: exit 2, the reason on the writer (BUG-168).
+		var code exitCode
+		if !errors.As(err, &code) || code != 2 || !strings.Contains(out.String(), "from-zip") {
+			t.Errorf("%v: err = %v, out = %q, want an exit-2 refusal naming --from-zip", args, err, out.String())
 		}
 		if entries, _ := os.ReadDir(home); len(entries) != 0 {
 			t.Errorf("%v: refused, yet wrote %d entries under the home", args, len(entries))
@@ -286,14 +288,17 @@ func TestFromZipRefusedOnOtherCommands(t *testing.T) {
 		home := t.TempDir()
 		var out bytes.Buffer
 		err := run([]string{cmd, "--from-zip", "x.zip", "--home", home}, &out)
-		if err == nil || !strings.Contains(err.Error(), "--from-zip belongs to update") {
-			t.Errorf("%s --from-zip: err = %v, want the refusal", cmd, err)
+		// A usage error: exit 2, the reason on the writer and nothing else
+		// (the command printed nothing before refusing; BUG-168).
+		var code exitCode
+		if !errors.As(err, &code) || code != 2 {
+			t.Errorf("%s --from-zip: err = %v, want exit 2", cmd, err)
 		}
 		if entries, _ := os.ReadDir(home); len(entries) != 0 {
 			t.Errorf("%s --from-zip wrote %d entries before refusing", cmd, len(entries))
 		}
-		if out.Len() != 0 {
-			t.Errorf("%s --from-zip printed before refusing:\n%s", cmd, out.String())
+		if want := "sh-agent " + cmd + ": --from-zip belongs to update: sh-agent update --from-zip <file>\n"; out.String() != want {
+			t.Errorf("%s --from-zip printed before refusing, or not the refusal:\n%s", cmd, out.String())
 		}
 	}
 }
@@ -305,9 +310,11 @@ func TestFromZipEmptyValueRefused(t *testing.T) {
 	isolate(t)
 	for _, args := range [][]string{{"update", "--from-zip="}, {"update", "--from-zip", ""}} {
 		home := t.TempDir()
-		err := run(append(args, "--home", home), &bytes.Buffer{})
-		if err == nil || !strings.Contains(err.Error(), "--from-zip needs a file") {
-			t.Errorf("%q: err = %v, want the empty-value refusal", args, err)
+		var out bytes.Buffer
+		err := run(append(args, "--home", home), &out)
+		var code exitCode
+		if !errors.As(err, &code) || code != 2 || !strings.Contains(out.String(), "--from-zip needs a file") {
+			t.Errorf("%q: err = %v, out = %q, want the empty-value refusal as exit 2", args, err, out.String())
 		}
 		if entries, _ := os.ReadDir(home); len(entries) != 0 {
 			t.Errorf("%q wrote %d entries", args, len(entries))
@@ -575,9 +582,11 @@ func TestUpdateFromZipRefusedRunSweepsNothing(t *testing.T) {
 func TestFromZipDashValueRefused(t *testing.T) {
 	isolate(t)
 	home := t.TempDir()
-	err := run([]string{"update", "--from-zip", "--dry-run", "--home", home}, &bytes.Buffer{})
-	if err == nil || !strings.Contains(err.Error(), "--from-zip needs a file") {
-		t.Errorf("err = %v, want the file-name refusal", err)
+	var out bytes.Buffer
+	err := run([]string{"update", "--from-zip", "--dry-run", "--home", home}, &out)
+	var code exitCode
+	if !errors.As(err, &code) || code != 2 || !strings.Contains(out.String(), "--from-zip needs a file") {
+		t.Errorf("err = %v, out = %q, want the file-name refusal as exit 2", err, out.String())
 	}
 	if entries, _ := os.ReadDir(home); len(entries) != 0 {
 		t.Errorf("wrote %d entries", len(entries))

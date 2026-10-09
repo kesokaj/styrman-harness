@@ -96,6 +96,7 @@ Procedure — what `/preflight` runs at its Step 6 here (the skill's Step 6.3 fo
 ```bash
 gh auth status                                                                                          # exit 0: this machine can push and publish
 # gate passed and the release commit made (preflight Step 6.3): HEAD is that commit; <gated head> is the head SHA of the gate report's `Range reviewed:` line
+go test -count=1 -run TestDeliverySpecCurrent ./cmd/sh-agent                                           # exit 0: the release entry under changes/ and `specs/sh-agent/delivery.md` § Where things stand both name vX.Y.Z (BUG-167)
 test -z "$(git status --porcelain --untracked-files=all)"                                              # exit 0: clean tree — the bare form inherits status.showUntrackedFiles (BUG-049)
 # BEFORE the tag, never after the push: `go:embed` reads the WORKING TREE, so a stray file under the
 # five embedded directories is compiled into every released binary. The clean-tree test above cannot

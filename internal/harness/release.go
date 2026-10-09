@@ -51,10 +51,10 @@ func AssetName(goos, goarch string) string {
 	return fmt.Sprintf("sh-agent-%s-%s", goos, goarch)
 }
 
-// LatestRelease asks gh for the newest release's tag. gh carries the
+// latestRelease asks gh for the newest release's tag. gh carries the
 // operator's own GitHub credential, which is the point: a release binary has
 // no checkout and no other way in (R8).
-func LatestRelease() (string, error) {
+func latestRelease() (string, error) {
 	out, err := exec.Command("gh", "release", "view", "--repo", ReleaseRepo, "--json", "tagName", "--jq", ".tagName").Output()
 	if err != nil {
 		return "", fmt.Errorf("gh release view failed: %s", firstLineOfError(err))
@@ -77,7 +77,7 @@ func UpdateFromRelease(home, version string, checkOnly bool, installArgs []strin
 	if _, err := exec.LookPath("gh"); err != nil {
 		return errors.New("this install has no checkout; install gh and run gh auth login, or download a newer release by hand (README § Install without cloning)")
 	}
-	tag, err := LatestRelease()
+	tag, err := latestRelease()
 	if err != nil {
 		return err
 	}

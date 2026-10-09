@@ -124,7 +124,7 @@ go install golang.org/dl/go1.27.2@latest     # the wrapper lands in ~/.go/bin
 ~/.go/bin/go1.27.2 download                  # the SDK lands in ~/sdk/go1.27.2
 ln -sfn "$HOME/sdk/go1.27.2/bin/go" "$HOME/.local/bin/go"   # ~/.local/bin is ahead of /usr/local/bin on PATH here
 go install golang.org/x/vuln/cmd/govulncheck@latest         # rebuild it, or it cannot parse the newer sources
-go version && govulncheck ./...
+go version && "$(go env GOPATH)/bin/govulncheck" ./...   # the full path: GOPATH/bin is not on every shell's PATH
 ```
 
   Undo by deleting that one symlink: `/usr/local/bin/go` (a root-owned install at `/usr/local/go`, go1.27.1 on 2026-10-09) and `/usr/bin/go` stay where they were. On 2026-10-09 this box moved to go1.27.2 this way, for GO-2026-6604, -6600 and -6599. After the switch, run the full gate and `sh-agent install`, so the deployed binary is built by the new toolchain — `go version -m ~/.local/bin/sh-agent` names it.

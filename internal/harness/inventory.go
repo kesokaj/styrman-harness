@@ -136,10 +136,10 @@ func LoadInventory(src Source) (Inventory, error) {
 	if inv.Agents, err = LoadAgents(src); err != nil {
 		return inv, err
 	}
-	if inv.Commands, err = LoadDocs(src, "commands", "workflows"); err != nil {
+	if inv.Commands, err = loadDocs(src, "commands", "workflows"); err != nil {
 		return inv, err
 	}
-	if inv.Rules, err = LoadDocs(src, "rules"); err != nil {
+	if inv.Rules, err = loadDocs(src, "rules"); err != nil {
 		return inv, err
 	}
 	return inv, nil
@@ -258,7 +258,7 @@ func LoadAgents(src Source) ([]Agent, error) {
 		if descriptionIsMultiLine(front) {
 			return nil, fmt.Errorf("agent %s: description must be one line", name)
 		}
-		if k := permissionKey(front, "hooks", "permissionMode"); k != "" {
+		if k := permissionKey(front, "hooks", "permissionMode", "mcpServers"); k != "" {
 			return nil, fmt.Errorf("agent %s: %s is never set in a harness agent; the operator's permission mode decides (BUG-143)", name, k)
 		}
 		for _, banned := range []string{"dispatch prompt", "harness binary"} {
@@ -272,9 +272,9 @@ func LoadAgents(src Source) ([]Agent, error) {
 	return agents, nil
 }
 
-// LoadDocs reads every *.md directly under the named source directories.
+// loadDocs reads every *.md directly under the named source directories.
 // Missing directories are fine; the same name in two of them is not.
-func LoadDocs(src Source, dirs ...string) ([]Doc, error) {
+func loadDocs(src Source, dirs ...string) ([]Doc, error) {
 	seen := map[string]string{}
 	var docs []Doc
 	for _, dir := range dirs {

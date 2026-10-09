@@ -109,10 +109,7 @@ func skipReason(p search.Project) string {
 	if _, err := memory.Root(p.Root); err != nil {
 		return "not a git checkout"
 	}
-	docs := p.DocsRoot
-	if docs == "" {
-		docs = ".agents/docs"
-	}
+	docs := docsOf(p)
 	if info, err := os.Stat(filepath.Join(p.Root, docs)); err != nil || !info.IsDir() {
 		return "no " + docs
 	}

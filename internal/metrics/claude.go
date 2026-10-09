@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/kesokaj/styrman-harness/internal/search"
+	"github.com/kesokaj/styrman-harness/internal/trail"
 )
 
 // deniedPrefixes open a tool result Claude Code writes when a permission
@@ -442,13 +443,7 @@ func (w *writer) docsRoot(root string) string {
 	if d, ok := w.project[root]; ok {
 		return d
 	}
-	d := ""
-	for _, c := range []string{".agents/docs", "docs"} {
-		if fi, err := os.Stat(filepath.Join(root, c)); err == nil && fi.IsDir() {
-			d = c
-			break
-		}
-	}
+	d := trail.DocsRoot(root)
 	w.project[root] = d
 	return d
 }

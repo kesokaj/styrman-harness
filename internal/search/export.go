@@ -17,9 +17,6 @@ func PrepareDBFiles(path string) error { return prepareFiles(path) }
 // DSN is the escaped read-write DSN with WAL and the busy timeout.
 func DSN(path string) string { return dsn(path) }
 
-// IsBusy reports a SQLite BUSY or LOCKED error.
-func IsBusy(err error) bool { return isBusy(err) }
-
 // OpenCopy copies name (and its -wal, -shm) from dir into tmp and opens the
 // copy read-only; the live file is never opened.
 func OpenCopy(dir, name, tmp string) (*sql.DB, error) { return openCopy(dir, name, tmp) }

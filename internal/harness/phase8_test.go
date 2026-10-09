@@ -162,9 +162,6 @@ func TestParseStrict(t *testing.T) {
 	if strictErr == nil || !strings.Contains(strictErr.Error(), "#") {
 		t.Fatalf("ParseStrict(bad) err = %v, want the comment refusal", strictErr)
 	}
-	if lintErr := Lint(bad); lintErr == nil || lintErr.Error() != strictErr.Error() {
-		t.Errorf("Lint(bad) = %v, ParseStrict(bad) = %v: the wrapper and the strict parse disagree", lintErr, strictErr)
-	}
 }
 
 // MkdirAllTracked creates only the missing directories and returns them

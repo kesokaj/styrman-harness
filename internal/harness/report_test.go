@@ -104,6 +104,10 @@ var shapeSecrets = []string{
 	// cookie header, Vault tokens, an age key, DigitalOcean tokens, a
 	// JWT with a short payload.
 	"1//0FAKEVALUEFAKEVALUE-FAKEVALUE", "https://discord.com/api/webhooks/1/FAKEVALUE",
+	// Project review 2026-10-09, security row 9: a credential on a command
+	// line, Docker's auth key, and a credentials key.
+	"curl -u admin:FAKEVALUE https://h/", "curl --user admin:FAKEVALUE https://h/", "mysql -u root -pFAKEVALUE db",
+	"sshpass -p FAKEVALUE ssh h", `"auth": "FAKEVALUEFAKEVALUE=="`, "CREDENTIALS=FAKEVALUEFAKEVALUE", "credentials: FAKEVALUE0123456789",
 	"https://discordapp.com/api/webhooks/1/FAKEVALUE", "https://x.webhook.office.com/webhookb2/FAKEVALUE",
 	"SG.FAKEVALUEFAKEVALUE.FAKEVALUEFAKEVALUE", "AccountKey=FAKEVALUE", "Cookie: session=FAKEVALUE",
 	"Set-Cookie: sid=FAKEVALUE", "hvs.FAKEVALUEFAKEVALUEFAKE", "hvb.FAKEVALUEFAKEVALUEFAKE",
@@ -153,7 +157,9 @@ func TestReportRedactShapes(t *testing.T) {
 		// The whole key decides the threshold, not its first word.
 		"TOKEN_PASSWORD=letmein", "api_key_password: letmein", "API_KEY_SECRET: letmein",
 		// The pass family as one kind, and the flag form (security review round 3).
-		"DB_PASS=letmein", "MYSQL_PWD=letmein", "PASSPHRASE: letmein", "run it with --password letmein now"} {
+		"DB_PASS=letmein", "MYSQL_PWD=letmein", "PASSPHRASE: letmein", "run it with --password letmein now",
+		// The bearer rule takes prose too (project review 2026-10-09, security row 8).
+		"the bearer of the token"} {
 		if _, recs := redactLines("f", []byte(over+"\n"), false); len(recs) != 1 {
 			t.Errorf("%q: over-redaction is the pinned behaviour, got %+v", over, recs)
 		}
@@ -178,6 +184,17 @@ func TestReportRedactShapes(t *testing.T) {
 		// it is deliberate: a seven-letter token with no digit, and a
 		// two-letter unquoted word after `secret =`.
 		"token=abcdefg", "secret = my passphrase",
+		// One benign near-miss per needle that had none (project review
+		// 2026-10-09, security row 8): the header rules, the URL rule, and
+		// the vendor prefixes one character off (case, a dash for an
+		// underscore, the trailing mark missing).
+		"token type: bearer", "authorization is required for the admin routes", "redis://host:6379/0 has no password",
+		"akia keys start with AKI", "the ghp- prefix", "a glpat_ token", "xoxb tokens", "ya29 tokens carry no dot",
+		"GOCSPX keys", "github_pat tokens", "a dop_v2_ shape", "AGE-SECRET keys", "sk-ant keys", "the AIz prefix",
+		"gldt tokens", "a pypi-AgEIcHlwaS5vcm prefix cut short", "a private key file",
+		// The three kinds of row 9, one near-miss each.
+		"curl -u is the user flag", "docker run -u 1000:1000 img", "mysql -p prompts for the password", "mkdir -p build",
+		`"auth": "basic"`, "credentials: none", "Credentials: see the gcloud-setup skill", "GOOGLE_APPLICATION_CREDENTIALS=/home/me/adc.json",
 	} {
 		// "ASIAN" contains the ASIA prefix: accepted over-redaction, pinned
 		// here so a change to it is deliberate.

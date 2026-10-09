@@ -78,12 +78,24 @@ func (sc *scope) in() string {
 	return "(" + strings.TrimSuffix(strings.Repeat("?,", len(sc.projects)), ",") + ")"
 }
 
+// usageError is a refusal of the verb's arguments: the CLI prints it on the
+// caller's writer and exits 2, like every other usage error (BUG-168).
+type usageError struct{ msg string }
+
+func (e usageError) Error() string { return e.msg }
+
+// IsUsage reports whether err is a usage error from Search or Index.
+func IsUsage(err error) bool {
+	var u usageError
+	return errors.As(err, &u)
+}
+
 func validate(o *Options, verb string) error {
 	if o.Limit == 0 {
 		o.Limit = defaultLimit
 	}
 	if o.Limit < 1 || o.Limit > maxLimit {
-		return fmt.Errorf("search: --limit must be between 1 and %d; see sh-agent help", maxLimit)
+		return usageError{fmt.Sprintf("search: --limit must be between 1 and %d; see sh-agent help", maxLimit)}
 	}
 	if o.Kind != "" {
 		ok := false
@@ -91,17 +103,17 @@ func validate(o *Options, verb string) error {
 			ok = ok || k == o.Kind
 		}
 		if !ok {
-			return fmt.Errorf("search: --kind must be one of: %s; see sh-agent help", strings.Join(kinds, " "))
+			return usageError{fmt.Sprintf("search: --kind must be one of: %s; see sh-agent help", strings.Join(kinds, " "))}
 		}
 	}
 	if verb == "index" {
 		if len(o.Words) > 0 || o.Refs != "" || o.Open || o.Kind != "" {
-			return errors.New("search: index takes only --global and --rebuild; see sh-agent help")
+			return usageError{"search: index takes only --global and --rebuild; see sh-agent help"}
 		}
 		return nil
 	}
 	if o.Rebuild {
-		return errors.New("search: --rebuild belongs to sh-agent index; see sh-agent help")
+		return usageError{"search: --rebuild belongs to sh-agent index; see sh-agent help"}
 	}
 	modes := 0
 	for _, set := range []bool{len(o.Words) > 0, o.Refs != "", o.Open} {
@@ -111,9 +123,9 @@ func validate(o *Options, verb string) error {
 	}
 	switch {
 	case modes > 1:
-		return errors.New("search: words, --refs and --open exclude each other; see sh-agent help")
+		return usageError{"search: words, --refs and --open exclude each other; see sh-agent help"}
 	case modes == 0:
-		return errors.New("search: give words, --refs <BUG-NNN|ADR-NNN|path> or --open; see sh-agent help")
+		return usageError{"search: give words, --refs <BUG-NNN|ADR-NNN|path> or --open; see sh-agent help"}
 	}
 	return nil
 }

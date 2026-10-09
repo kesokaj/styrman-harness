@@ -85,7 +85,7 @@ func TestLintRejectsUnquotedComment(t *testing.T) {
 		"name: x\ndescription: \"quoted\" # trailing\n",
 	}
 	for _, front := range bad {
-		if err := Lint(front); err == nil {
+		if _, err := ParseStrict(front); err == nil {
 			t.Errorf("Lint accepted %q", front)
 		} else if !strings.Contains(err.Error(), "#") {
 			t.Errorf("error should name the marker: %v", err)
@@ -98,7 +98,7 @@ func TestLintRejectsUnquotedComment(t *testing.T) {
 		"name: x\ntools: [Read, Grep]\ncolor: \"#ff0000\"\n",
 	}
 	for _, front := range good {
-		if err := Lint(front); err != nil {
+		if _, err := ParseStrict(front); err != nil {
 			t.Errorf("Lint rejected %q: %v", front, err)
 		}
 	}
@@ -2375,17 +2375,17 @@ func TestAgentDescriptionRules(t *testing.T) {
 // 2026-09-30, D19).
 func TestLintDescriptionLimit(t *testing.T) {
 	long := strings.Repeat("word ", 206) // 1,029 characters after the trailing space is trimmed
-	if err := Lint("name: x\ndescription: \"" + long + "\"\n"); err == nil {
+	if _, err := ParseStrict("name: x\ndescription: \"" + long + "\"\n"); err == nil {
 		t.Error("a 1,025-character description passed Lint")
 	}
 	block := "name: x\ndescription: |\n"
 	for i := 0; i < 11; i++ {
 		block += "  " + strings.Repeat("word ", 20) + "\n" // 11 × 100 = 1,100 joined
 	}
-	if err := Lint(block); err == nil {
+	if _, err := ParseStrict(block); err == nil {
 		t.Error("a 1,100-character block description passed Lint")
 	}
-	if err := Lint("name: x\ndescription: \"" + strings.Repeat("word ", 204) + "\"\n"); err != nil {
+	if _, err := ParseStrict("name: x\ndescription: \"" + strings.Repeat("word ", 204) + "\"\n"); err != nil {
 		t.Errorf("a 1,020-character description was refused: %v", err)
 	}
 	// A block of exactly 1,023 joined characters passes: the `|` indicator
@@ -2395,7 +2395,7 @@ func TestLintDescriptionLimit(t *testing.T) {
 		block += "  " + strings.Repeat("word ", 20) + "\n"
 	}
 	block += "  " + strings.Repeat("w", 13) + "\n" // 10 × 99 (joined by spaces) + 1 + 13 = 1,004 + 19 → under the limit
-	if err := Lint(block); err != nil {
+	if _, err := ParseStrict(block); err != nil {
 		t.Errorf("a block description under the limit was refused: %v", err)
 	}
 }
@@ -2489,7 +2489,10 @@ func TestLintPermissionKeysByKind(t *testing.T) {
 		_, err := LoadAgents(DirSource(repo))
 		return err
 	}
-	for _, front := range []string{"permissionMode: bypassPermissions\n", "hooks:\n  Stop: []\n"} {
+	// mcpServers: an inline MCP server is a command line Claude Code starts
+	// when the agent is used, outside the permission mode (project review
+	// 2026-10-09, security row 1; left open by the 2026-10-01 gate).
+	for _, front := range []string{"permissionMode: bypassPermissions\n", "hooks:\n  Stop: []\n", "mcpServers:\n  x:\n    command: sh\n", "mcpServers: {x: {command: sh}}\n"} {
 		if err := agent(front); err == nil {
 			t.Errorf("agent with %q loaded", front)
 		}

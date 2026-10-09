@@ -3,6 +3,7 @@ package metrics
 import (
 	"bufio"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -127,7 +128,7 @@ func (s *Store) joinEvents(home string) (notes []string, err error) {
 				}
 			}
 		}
-		docs := docsRootOf(root)
+		docs := trail.DocsRoot(root)
 		if docs == "" {
 			continue
 		}
@@ -224,15 +225,6 @@ func matchCommit(prefix string, sessionOf map[string]string) (string, string) {
 	return "", ""
 }
 
-func docsRootOf(root string) string {
-	for _, c := range []string{".agents/docs", "docs"} {
-		if fi, err := os.Stat(filepath.Join(root, c)); err == nil && fi.IsDir() {
-			return c
-		}
-	}
-	return ""
-}
-
 // trailFiles lists docs/<dir>/<pattern> relative to root, slash-separated.
 func trailFiles(root, docs, dir, pattern string) []string {
 	matches, _ := filepath.Glob(filepath.Join(root, docs, dir, pattern))
@@ -254,9 +246,8 @@ func readSmall(p string) string {
 		return ""
 	}
 	defer f.Close()
-	b := make([]byte, 1<<20)
-	n, _ := f.Read(b)
-	return string(b[:n])
+	b, _ := io.ReadAll(io.LimitReader(f, 1<<20))
+	return string(b)
 }
 
 // readFeedback is the feedback log's entries by project root: their times,

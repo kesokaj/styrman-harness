@@ -112,6 +112,18 @@ func changed(root, docs string) (out map[string]bool, ok bool) {
 	return out, true
 }
 
+// DocsRoot is the project's docs root relative to root: `.agents/docs` when
+// it is a directory, else `docs`, else "" (one resolver, written three times
+// until the project review of 2026-10-09; search adds its own default).
+func DocsRoot(root string) string {
+	for _, d := range []string{".agents/docs", "docs"} {
+		if fi, err := os.Stat(filepath.Join(root, d)); err == nil && fi.IsDir() {
+			return d
+		}
+	}
+	return ""
+}
+
 // Command is git in root with the hardened global options: no index lock,
 // no fsmonitor hook (security review rounds 2 and 3, 2026-10-01), no
 // signature check, which makes `git log` start the repository's gpg.program

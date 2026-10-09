@@ -71,10 +71,8 @@ func checkoutRoot(dir string) (string, error) {
 // docsRootOf is the trail's root: .agents/docs when it exists, else docs,
 // else .agents/docs.
 func docsRootOf(root string) string {
-	for _, d := range []string{".agents/docs", "docs"} {
-		if fi, err := os.Stat(filepath.Join(root, d)); err == nil && fi.IsDir() {
-			return d
-		}
+	if d := trail.DocsRoot(root); d != "" {
+		return d
 	}
 	return ".agents/docs"
 }

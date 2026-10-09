@@ -137,6 +137,19 @@ var keywordNeedles = []struct {
 	// and `-bench . -b 3` are not cookies (audit 2026-09-30, IN1).
 	{"cookie header", regexp.MustCompile(`(?i)(set-)?cookie["']?\s*:\s*\S|(^|\s)(-b|--cookie)[ =]["']?\S+=\S|document\.cookie\s*=`), nil},
 	{"vault token", regexp.MustCompile(`hv[sbr]\.[A-Za-z0-9_-]{20,}`), nil},
+	// Three kinds the project review of 2026-10-09 named (security row 9,
+	// each approved by the operator): a credential on a command line (a
+	// `user:pass` after -u/--user/--username whose user does not start with
+	// a digit, so `docker run -u 1000:1000` stays; `sshpass -p`; a MySQL
+	// client's `-p<password>`, so `mysql -p` alone and `mkdir -p` stay),
+	// Docker's `"auth":` holding base64, and a `credential(s)` key whose
+	// value is sixteen or more token characters with no `/`, so
+	// `credentials: none`, `Credentials: see gcloud-setup` and
+	// `GOOGLE_APPLICATION_CREDENTIALS=/path` stay. No `\b` in front (the
+	// rule above).
+	{"command-line credential", regexp.MustCompile(`(?i)(^|\s)(?:-u|--user|--username)[ =]["']?[^\s:"'0-9][^\s:"']*:[^\s"']+|(^|\s)sshpass\s+-p\s*\S+|(^|\s)(?:mysql|mariadb|mysqldump|mysqladmin)\S*(?:\s+\S+)*?\s+-p\S+`), nil},
+	{"docker auth", regexp.MustCompile(`"auth"\s*:\s*"[A-Za-z0-9+/=]{8,}"`), nil},
+	{"credentials key", regexp.MustCompile(`(?i)credentials?["']?\s*[:=]\s*["']?[A-Za-z0-9+=_.-]{16,}`), nil},
 	// A shape past the rules above is a design question for the operator,
 	// never another batch of instances: the list is a safety net (delivery.md,
 	// BUG-110).

@@ -269,3 +269,35 @@ func TestChangedStaysInsideTheCheckout(t *testing.T) {
 		t.Fatalf("a record behind a symlinked directory read as unchanged (ok=%v): it was hashed outside the checkout", ok)
 	}
 }
+
+// DocsRoot is the one resolver the other packages share (project review
+// 2026-10-09, row 15): `.agents/docs` first, then `docs`, a directory only.
+func TestDocsRoot(t *testing.T) {
+	for name, tc := range map[string]struct {
+		dirs, files []string
+		want        string
+	}{
+		"agents docs":    {[]string{".agents/docs"}, nil, ".agents/docs"},
+		"docs":           {[]string{"docs"}, nil, "docs"},
+		"both":           {[]string{".agents/docs", "docs"}, nil, ".agents/docs"},
+		"none":           {nil, nil, ""},
+		"docs is a file": {nil, []string{"docs"}, ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			for _, d := range tc.dirs {
+				if err := os.MkdirAll(filepath.Join(root, d), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, f := range tc.files {
+				if err := os.WriteFile(filepath.Join(root, f), nil, 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if got := DocsRoot(root); got != tc.want {
+				t.Errorf("DocsRoot = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

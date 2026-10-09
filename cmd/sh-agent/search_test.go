@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -61,8 +62,11 @@ func TestSearchVerb(t *testing.T) {
 		t.Errorf("index output:\n%s", out.String())
 	}
 	out.Reset()
-	if err := run([]string{"search", "--limit", "99", "marmot", "--home", home}, &out); err == nil || !strings.Contains(err.Error(), "--limit") {
-		t.Errorf("--limit 99: %v", err)
+	// A usage error: exit 2, the reason on the writer (BUG-168).
+	err := run([]string{"search", "--limit", "99", "marmot", "--home", home}, &out)
+	var code exitCode
+	if !errors.As(err, &code) || code != 2 || !strings.Contains(out.String(), "--limit") {
+		t.Errorf("--limit 99: err = %v, out = %q, want exit 2 naming --limit", err, out.String())
 	}
 	// The checkout registered itself in the global search index.
 	out.Reset()

@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kesokaj/styrman-harness/internal/harness"
 	"github.com/kesokaj/styrman-harness/internal/search"
 )
 
@@ -543,5 +544,27 @@ func TestFeedbackRedactsEscapedSecret(t *testing.T) {
 	}
 	if !strings.Contains(c.Prompt, "fresh feedback for this project") {
 		t.Error("the clean feedback line was lost")
+	}
+}
+
+// A skill whose description is a block scalar (`description: >`) reached the
+// dreamer as the literal `>` while dream read the key line itself; it reads
+// through the installer's frontmatter parser now (project review 2026-10-09,
+// row 16).
+func TestSkillsReadsBlockScalarDescription(t *testing.T) {
+	home := t.TempDir()
+	dir := filepath.Join(home, ".claude", "skills", "folded")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("---\nname: folded\ndescription: >\n  one line\n  and two\n---\nbody\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := skills(home, harness.VendorClaude)
+	if len(got) != 1 || got[0].name != "folded" {
+		t.Fatalf("skills = %+v, want the one folded skill", got)
+	}
+	if d := got[0].description; strings.Contains(d, ">") || !strings.Contains(d, "one line") || !strings.Contains(d, "and two") {
+		t.Errorf("description = %q, want the folded text", d)
 	}
 }

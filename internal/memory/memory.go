@@ -44,17 +44,17 @@ type Entry struct {
 	Description string // one line
 }
 
-// Refusal is a store the command will not touch, or input it will not take;
+// refusal is a store the command will not touch, or input it will not take;
 // the caller exits 2 with its message.
-type Refusal struct{ Msg string }
+type refusal struct{ msg string }
 
-func (r *Refusal) Error() string { return r.Msg }
+func (r *refusal) Error() string { return r.msg }
 
-func refuse(format string, a ...any) error { return &Refusal{Msg: fmt.Sprintf(format, a...)} }
+func refuse(format string, a ...any) error { return &refusal{msg: fmt.Sprintf(format, a...)} }
 
-// IsRefusal reports whether err is a Refusal.
+// IsRefusal reports whether err is a refusal.
 func IsRefusal(err error) bool {
-	var r *Refusal
+	var r *refusal
 	return errors.As(err, &r)
 }
 

@@ -123,7 +123,16 @@ type ctx struct {
 func (c *ctx) repo() string { return c.src.Dir }
 
 // vendor resolves --vendor against the manifest.
-func (c *ctx) vendor() (string, error) { return resolveVendor(c.vendorFlag, c.home) }
+func (c *ctx) vendor() (string, error) {
+	v, err := resolveVendor(c.vendorFlag, c.home)
+	if err != nil {
+		// A usage error exits 2 with its reason on the caller's writer, like
+		// every other usage error here (BUG-168).
+		fmt.Fprintln(c.out, "sh-agent "+c.cmd+":", err)
+		return "", exitCode(2)
+	}
+	return v, nil
+}
 
 func (c *ctx) dryRunFlag() {
 	c.fs.BoolVar(&c.dryRun, "dry-run", false, "print what would change, change nothing")
@@ -215,7 +224,8 @@ func run(args []string, out io.Writer) error {
 	// FlagSet sees it, so the refusal names the right verb rather than an
 	// undefined flag.
 	if cmd != "update" && hasFlag(rest, "from-zip") {
-		return fmt.Errorf("--from-zip belongs to update: sh-agent update --from-zip <file>")
+		fmt.Fprintln(out, "sh-agent "+cmd+": --from-zip belongs to update: sh-agent update --from-zip <file>")
+		return exitCode(2)
 	}
 
 	c := &ctx{cmd: cmd, out: out, fs: flag.NewFlagSet(cmd, flag.ContinueOnError)}
@@ -271,9 +281,11 @@ func run(args []string, out io.Writer) error {
 		case c.fromZip == "" || strings.HasPrefix(c.fromZip, "-"):
 			// A value that looks like a flag was a flag: `--from-zip --dry-run`
 			// must not read --dry-run as the file and run a real update.
-			return errors.New("--from-zip needs a file: sh-agent update --from-zip <file>")
+			fmt.Fprintln(out, "sh-agent update: --from-zip needs a file: sh-agent update --from-zip <file>")
+			return exitCode(2)
 		case c.check || c.repoFlag != "":
-			return errors.New("--from-zip installs the named zip; --check/--repo do not apply to it")
+			fmt.Fprintln(out, "sh-agent update: --from-zip installs the named zip; --check/--repo do not apply to it")
+			return exitCode(2)
 		}
 		return updateFromZip(c.fromZip, c.home, c.vendorFlag, c.dryRun, out)
 	}
@@ -411,7 +423,24 @@ func runDream(c *ctx) error {
 	return err
 }
 
-// runMetrics serves `metrics ingest` and `metrics export` (spec
+// metricsSummary is what show and report share: the show options (a usage
+// error exits 2 with its reason on the writer), the existing store, opened
+// and closed here, and its summary.
+func (c *ctx) metricsSummary(sub string) (*metrics.Summary, error) {
+	o, err := c.metricsShowOptions()
+	if err != nil {
+		fmt.Fprintln(c.out, "sh-agent metrics "+sub+": "+err.Error())
+		return nil, exitCode(2)
+	}
+	s, err := c.existingMetricsStore()
+	if err != nil {
+		return nil, err
+	}
+	defer s.Close()
+	return s.Show(o)
+}
+
+// runMetrics serves `metrics ingest`, `show`, `report` and `export` (spec
 // .agents/docs/specs/sh-agent/metrics.md).
 func runMetrics(c *ctx) error {
 	args := c.fs.Args()
@@ -455,17 +484,7 @@ func runMetrics(c *ctx) error {
 			fmt.Fprintf(c.out, "metrics show takes no arguments: %q\n", args)
 			return exitCode(2)
 		}
-		o, err := c.metricsShowOptions()
-		if err != nil {
-			fmt.Fprintln(c.out, "sh-agent metrics show: "+err.Error())
-			return exitCode(2)
-		}
-		s, err := c.existingMetricsStore()
-		if err != nil {
-			return err
-		}
-		defer s.Close()
-		sum, err := s.Show(o)
+		sum, err := c.metricsSummary("show")
 		if err != nil {
 			return err
 		}
@@ -479,17 +498,7 @@ func runMetrics(c *ctx) error {
 			fmt.Fprintln(c.out, "sh-agent metrics report [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--project DIR] [--label KEY=VALUE | --all-labels] [--out FILE]")
 			return exitCode(2)
 		}
-		o, err := c.metricsShowOptions()
-		if err != nil {
-			fmt.Fprintln(c.out, "sh-agent metrics report: "+err.Error())
-			return exitCode(2)
-		}
-		s, err := c.existingMetricsStore()
-		if err != nil {
-			return err
-		}
-		defer s.Close()
-		sum, err := s.Show(o)
+		sum, err := c.metricsSummary("report")
 		if err != nil {
 			return err
 		}
@@ -608,9 +617,15 @@ func runSearch(c *ctx) error {
 	o := search.Options{Dir: wd, Home: c.home, Words: c.fs.Args(), Refs: c.refs, Open: c.openRecords,
 		Kind: c.kind, Limit: c.limit, Global: c.global, Rebuild: c.rebuild}
 	if c.cmd == "index" {
-		return search.Index(o, c.out)
+		err = search.Index(o, c.out)
+	} else {
+		err = search.Search(o, c.out)
 	}
-	return search.Search(o, c.out)
+	if search.IsUsage(err) {
+		fmt.Fprintln(c.out, "sh-agent", err)
+		return exitCode(2)
+	}
+	return err
 }
 
 func runInstall(c *ctx) error {
@@ -646,12 +661,9 @@ func runInstall(c *ctx) error {
 	if c.dryRun && rebuild {
 		fmt.Fprintf(c.out, "[dry-run] the binary would be rebuilt from %s\n", repo)
 	} else if rebuild {
-		var pass []string
-		if c.homeFlag != "" {
-			pass = append(pass, "--home", c.home)
-		}
-		if c.vendorFlag != "" {
-			pass = append(pass, "--vendor", vendor)
+		pass, err := installPassArgs(c.homeFlag, c.home, c.vendorFlag)
+		if err != nil {
+			return err
 		}
 		return harness.Reinstall(repo, pass, c.out)
 	}
@@ -754,7 +766,8 @@ func runRender(c *ctx) error {
 
 func runAdopt(c *ctx) error {
 	if c.fs.NArg() != 1 {
-		return errors.New("usage: sh-agent adopt <skill-name-or-path> [--force]")
+		fmt.Fprintln(c.out, "usage: sh-agent adopt <skill-name-or-path> [--force]")
+		return exitCode(2)
 	}
 	repo := c.repo()
 	if repo == "" {
@@ -846,7 +859,8 @@ func memoryCmd(args []string, e memory.Entry, home, vendorFlag string, out io.Wr
 	} else {
 		vendor, verr := resolveVendor(vendorFlag, home)
 		if verr != nil {
-			return verr
+			fmt.Fprintln(out, "sh-agent memory:", verr)
+			return exitCode(2)
 		}
 		text, err = memory.Show(wd, vendor != harness.VendorAntigravity)
 	}

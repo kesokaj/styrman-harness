@@ -68,10 +68,7 @@ func collect(home, vendor string, p search.Project, since time.Time, limit int) 
 		add(kindFeedback, "feedback.jsonl", e.text, e.ts)
 	}
 
-	docs := p.DocsRoot
-	if docs == "" {
-		docs = ".agents/docs"
-	}
+	docs := docsOf(p)
 	dates, modified := trail.Dates(p.Root, docs)
 	for _, dir := range trailDirs {
 		// A symlinked docs root or record directory is never followed: a
@@ -259,6 +256,15 @@ func feedback(home, root string, since time.Time) []entry {
 	return out
 }
 
+// docsOf is the project's docs root as the index recorded it, or the
+// scaffold's default.
+func docsOf(p search.Project) string {
+	if p.DocsRoot != "" {
+		return p.DocsRoot
+	}
+	return ".agents/docs"
+}
+
 type skill struct{ name, description string }
 
 // skills are the installed skills' names and descriptions, from the skill
@@ -275,7 +281,13 @@ func skills(home, vendor string) []skill {
 	var out []skill
 	for _, e := range entries {
 		body, _ := readFile(filepath.Join(dir, e.Name(), "SKILL.md"))
-		name, desc := frontField(body, "name"), frontField(body, "description")
+		// The installer's own reader: a block-scalar description is folded,
+		// where a key-line read returned its `>` (project review 2026-10-09).
+		fm := harness.Frontmatter{}
+		if front, _, err := harness.Split(body); err == nil {
+			fm = harness.Parse(front)
+		}
+		name, desc := fm["name"], fm["description"]
 		if name == "" {
 			name = e.Name()
 		}
@@ -284,33 +296,6 @@ func skills(home, vendor string) []skill {
 		}
 	}
 	return out
-}
-
-// frontField is a single-line frontmatter value, unquoted.
-func frontField(body, key string) string {
-	if !strings.HasPrefix(body, "---\n") {
-		return ""
-	}
-	end := strings.Index(body[4:], "\n---")
-	if end < 0 {
-		return ""
-	}
-	for _, l := range strings.Split(body[4:4+end], "\n") {
-		if v, ok := strings.CutPrefix(l, key+":"); ok {
-			v = strings.TrimSpace(v)
-			if uq, err := unquote(v); err == nil {
-				return uq
-			}
-			return strings.Trim(v, `"'`)
-		}
-	}
-	return ""
-}
-
-func unquote(v string) (string, error) {
-	var s string
-	err := json.Unmarshal([]byte(v), &s)
-	return s, err
 }
 
 type transcript struct {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -709,5 +710,52 @@ func TestRunAgyAuthFailureNamed(t *testing.T) {
 		if log := read(t, filepath.Join(f.home, ".config", "sh-agent", "dream.log")); !strings.Contains(log, "not logged in inside the dream job's private HOME") {
 			t.Errorf("exit %d: dream.log lacks the login hint:\n%s", code, log)
 		}
+	}
+}
+
+// A grandchild of the CLI that kept the output pipes (a language or MCP
+// server it started) held cmd.Run past the deadline with dream.lock held, so
+// every later nightly run said "already running" and exited 0 (project
+// review 2026-10-09, row 2, BUG-169). The CLI runs in its own process group,
+// which the deadline kills whole; a grandchild that left the group is cut
+// loose after the grace period.
+func TestCallReturnsAtTheDeadlineDespiteAGrandchild(t *testing.T) {
+	for name, script := range map[string]string{
+		"in the group":   "#!/bin/sh\nsleep 60 &\nsleep 60\n",
+		"left the group": "#!/bin/sh\nsetsid sleep 60 &\necho $! > \"$PIDFILE\"\nsleep 60\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			if strings.Contains(script, "setsid") {
+				if _, err := exec.LookPath("setsid"); err != nil {
+					t.Skip("no setsid on PATH")
+				}
+			}
+			dir := t.TempDir()
+			cli := filepath.Join(dir, "holder")
+			if err := os.WriteFile(cli, []byte(script), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			pidfile := filepath.Join(dir, "pid")
+			t.Cleanup(func() {
+				if b, err := os.ReadFile(pidfile); err == nil {
+					if pid, err := strconv.Atoi(strings.TrimSpace(string(b))); err == nil {
+						syscall.Kill(pid, syscall.SIGKILL)
+					}
+				}
+			})
+			done := make(chan error, 1)
+			go func() {
+				_, _, err := callWithin([]string{cli}, "", dir, append(os.Environ(), "PIDFILE="+pidfile), time.Second, 2*time.Second)
+				done <- err
+			}()
+			select {
+			case err := <-done:
+				if err == nil || !strings.Contains(err.Error(), "timed out") {
+					t.Fatalf("want a timeout error, got %v", err)
+				}
+			case <-time.After(20 * time.Second):
+				t.Fatal("call did not return: a grandchild holding the pipes keeps Run blocked past the deadline")
+			}
+		})
 	}
 }

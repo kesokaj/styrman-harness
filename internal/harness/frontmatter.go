@@ -213,14 +213,12 @@ func parseEntries(es []entry) Frontmatter {
 // single spaces (plan audit-fix D19).
 const descriptionLimit = 1024
 
-// Lint rejects what this lenient parser would read differently from a
-// strict YAML parser: a plain (unquoted, non-block) scalar starting with "#"
-// or containing "#" after a space or tab, which YAML reads as a comment (the
-// Antigravity CLI then drops the skill, BUG-004), and a description over the
-// Agent Skills limit. Quoting the value fixes the first for every reader.
-// Lint alone is the thin form; ParseStrict lints and parses in one pass.
-func Lint(front string) error { return lintEntries(entries(front)) }
-
+// lintEntries rejects what this lenient parser would read differently from
+// a strict YAML parser: a plain (unquoted, non-block) scalar starting with
+// "#" or containing "#" after a space or tab, which YAML reads as a comment
+// (the Antigravity CLI then drops the skill, BUG-004), and a description
+// over the Agent Skills limit. Quoting the value fixes the first for every
+// reader. ParseStrict is its one caller: it lints and parses in one pass.
 func lintEntries(es []entry) error {
 	for _, e := range es {
 		if e.key == "description" {

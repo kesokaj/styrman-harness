@@ -23,6 +23,7 @@ import (
 
 const (
 	cliTimeout = 10 * time.Minute
+	killGrace  = 30 * time.Second
 	keepFailed = 30 * 24 * time.Hour
 )
 
@@ -184,7 +185,14 @@ func (o Options) realRun() error {
 // environment when set (agy's private HOME); otherwise the child keeps
 // sh-agent's own, so it authenticates as the operator's CLI does.
 func call(argv []string, prompt, work string, env []string) (string, string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), cliTimeout)
+	return callWithin(argv, prompt, work, env, cliTimeout, killGrace)
+}
+
+// callWithin is call with its two bounds explicit: timeout for the CLI, and
+// grace for how long Run may wait, after the kill, on a grandchild that kept
+// the output pipes.
+func callWithin(argv []string, prompt, work string, env []string, timeout, grace time.Duration) (string, string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	stdin := prompt
 	if argv[0] == "agy" {
@@ -200,9 +208,16 @@ func call(argv []string, prompt, work string, env []string) (string, string, err
 	cmd.Stdin = strings.NewReader(stdin)
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
+	// The CLI gets its own process group, killed whole at the deadline, and
+	// Run gives up on the output pipes after grace: a helper the CLI started
+	// (a language or MCP server) kept them open past the kill and held Run,
+	// and so dream.lock, for as long as it lived (BUG-169).
+	cmd.WaitDelay = grace
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 	err := cmd.Run()
 	if ctx.Err() == context.DeadlineExceeded {
-		return out.String(), errb.String(), fmt.Errorf("%s timed out after %s", argv[0], cliTimeout)
+		return out.String(), errb.String(), fmt.Errorf("%s timed out after %s", argv[0], timeout)
 	}
 	if err != nil {
 		return out.String(), errb.String(), fmt.Errorf("%s: %v", argv[0], err)

@@ -1608,8 +1608,13 @@ func TestKitPreambleRefusesLeftoverCredentials(t *testing.T) {
 		"a key in the kit's own bin": `printf -- '-----BEGIN EC PRIVATE KEY-----\n' > "$KIT_HOME/bin/stray"`,
 		// The example-key exception is exact: a real-shaped AWS key fails alone
 		// and beside the example.
-		"an AWS access key":                 `printf 'aws_access_key_id = %s\n' "` + awsKey + `" > "$KIT_HOME/trace.log"`,
-		"an AWS key beside the example key": `printf 'SQLite\000%s\000%s\000' "` + awsExample + `" "` + awsKey + `" > "$KIT_HOME/conv.db"`,
+		"an AWS access key":                  `printf 'aws_access_key_id = %s\n' "` + awsKey + `" > "$KIT_HOME/trace.log"`,
+		"an AWS key beside the example key":  `printf 'SQLite\000%s\000%s\000' "` + awsExample + `" "` + awsKey + `" > "$KIT_HOME/conv.db"`,
+		"a GitHub token holding the example": `printf '%s\n' "gh` + `p_` + awsExample + strings.Repeat("Z", 16) + `" > "$KIT_HOME/trace.log"`,
+		// A shell function named grep must not blind the scan (release review of v2.6.1).
+		"a grep function that finds nothing": `grep() { return 1; }; printf 'aws_access_key_id = %s\n' "` + awsKey + `" > "$KIT_HOME/trace.log"`,
+		// Under xtrace no matched key reaches the log (security review of v2.6.1).
+		"a key found under bash -x": `printf 'aws_access_key_id = %s\n%s\n' "` + awsKey + `" "` + token + `" > "$KIT_HOME/trace.log"; set -x`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			if strings.HasPrefix(name, "an unreadable") && os.Geteuid() == 0 {
@@ -1619,7 +1624,7 @@ func TestKitPreambleRefusesLeftoverCredentials(t *testing.T) {
 			if code != 1 || !strings.Contains(out, "credentials left in KIT_HOME") {
 				t.Errorf("want exit 1 and the FAIL line, got exit %d\n%s", code, out)
 			}
-			if strings.Contains(out, token) {
+			if strings.Contains(out, token) || strings.Contains(out, awsKey) {
 				t.Errorf("the FAIL output prints the matching text; it must print paths only:\n%s", out)
 			}
 			_ = exec.Command("chmod", "-R", "u+rwx", kitHome).Run()
@@ -1643,6 +1648,16 @@ func TestKitPreambleRefusesLeftoverCredentials(t *testing.T) {
 	// that reads a test holding it leaves it in its transcripts and database.
 	if code, out := run(`mkdir -p "$KIT_HOME/.gemini/brain" && printf '{"user_quote":"%s"}\n' "` + awsExample + `" > "$KIT_HOME/.gemini/brain/transcript.jsonl" && printf 'SQLite\000%s\000' "` + awsExample + `" > "$KIT_HOME/conv.db"`); code != 0 || !strings.Contains(out, "kit: no credentials left in KIT_HOME") {
 		t.Errorf("only AWS's example key: want exit 0 and the no-credentials line, got exit %d\n%s", code, out)
+	}
+	if err := os.RemoveAll(kitHome); err != nil {
+		t.Fatal(err)
+	}
+	// One file, so it is also the last one scanned: the scan's own status never
+	// fails the exit check (security review of v2.6.1).
+	// The preamble's own wrapper is removed so the example's file is the only
+	// one, and the scan's status is asked directly.
+	if code, out := run(`printf 'SQLite\000%s\000' "` + awsExample + `" > "$KIT_HOME/conv.db"; rm "$KIT_HOME/bin/sh-agent"; if kit_credential_leftovers >/dev/null; then echo "scan status 0"; fi`); code != 0 || !strings.Contains(out, "scan status 0") || !strings.Contains(out, "kit: no credentials left in KIT_HOME") {
+		t.Errorf("one file holding only AWS's example key: want exit 0 and the no-credentials line, got exit %d\n%s", code, out)
 	}
 	if err := os.RemoveAll(kitHome); err != nil {
 		t.Fatal(err)

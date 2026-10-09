@@ -212,6 +212,7 @@ Tables show those values as `n/a`.
 | A4 | Escaped bugs | A `bugs/BUG-*.md` whose text contains a hex prefix of 7 or more characters of one of the session's commits. |
 | A5 | Corrections | `feedback.jsonl` entries in the window whose project is the session's root. |
 | A6 | pass^k | Per label, 1 when all k `--outcome` runs passed. k and the pass count are shown. |
+| — | Replayed history | A resumed or forked Claude session copies earlier messages into a new transcript. `show` counts a tool call, a message or a generation once per CLI by its id, under the session that first holds it, so replays add nothing to B, C or D. |
 | B1 | Tokens and cost | Claude: the maximum of each usage field per message id, summed. Cost and duration come from the session's last `cost-state` line. Antigravity: `gen_metadata` usage. |
 | B2 | Time and volume | Wall time = `ended_at - started_at` of main sessions. Active time = the sum of gaps under 5 min between a main session's steps. A subagent runs inside its parent's time and is counted in neither. Also turns (typed user turns) and tool calls (main and subagent). |
 | B3 | Context | Peak context = max(input + cache read + cache write) of one message. Also the number of compactions. |

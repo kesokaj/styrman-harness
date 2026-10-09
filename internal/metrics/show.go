@@ -38,6 +38,10 @@ type Summary struct {
 	Notes     []string                  `json:"notes"`
 
 	accs map[string]*acc
+	// seen holds the vendor and id of every tool call and message already
+	// counted: a resumed or forked session replays earlier history into a
+	// new transcript, and the replay is not new work.
+	seen map[string]bool
 }
 
 type Outcome struct {
@@ -312,7 +316,17 @@ func (s *Summary) add(x sess, steps []stp) {
 	var last int64
 	var lastHash string
 	reads := 0
+	if s.seen == nil {
+		s.seen = map[string]bool{}
+	}
 	for _, st := range steps {
+		if st.kind == "tool" || st.kind == "assistant" || st.kind == "generation" {
+			key := v + "\x00" + st.ext
+			if s.seen[key] {
+				continue // replayed history, counted under the session that first had it
+			}
+			s.seen[key] = true
+		}
 		if st.ts > 0 {
 			// main sessions only, as wall time: a subagent runs inside its parent
 			if main && last > 0 && st.ts-last < activeGap.Milliseconds() {

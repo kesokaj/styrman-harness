@@ -137,3 +137,30 @@ func TestShowActiveTimeMainOnly(t *testing.T) {
 		t.Fatalf("wall %.1f active %.1f, want 2 and 2", sum.B.WallMin["agy"], sum.B.ActiveMin["agy"])
 	}
 }
+
+// A resumed or forked Claude session replays earlier history into a new
+// transcript: a tool call or a message seen under one id is counted once,
+// whichever sessions repeat it (release verification of v2.6.0).
+func TestShowCountsReplayedHistoryOnce(t *testing.T) {
+	s := openT(t, filepath.Join(t.TempDir(), "metrics.db"))
+	base := time.Date(2026, 10, 8, 10, 0, 0, 0, time.UTC).UnixMilli()
+	for _, q := range []string{
+		`INSERT INTO sessions(id, vendor, started_at, ended_at) VALUES ('A', 'claude', ?, ?), ('B', 'claude', ?, ?)`,
+	} {
+		if _, err := s.db.Exec(q, base, base+60000, base+120000, base+180000); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, sid := range []string{"A", "B"} { // B replays A's history
+		s.db.Exec(`INSERT INTO steps(session_id, ext_id, ts, kind, tool) VALUES (?, 't1', ?, 'tool', 'Bash')`, sid, base+1000)
+		s.db.Exec(`INSERT INTO steps(session_id, ext_id, ts, kind, tok_in, tok_out) VALUES (?, 'msg:m1', ?, 'assistant', 100, 10)`, sid, base+1000)
+	}
+	s.db.Exec(`INSERT INTO steps(session_id, ext_id, ts, kind, tool) VALUES ('B', 't2', ?, 'tool', 'Read')`, base+130000)
+	sum, err := s.Show(ShowOptions{Since: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC), Now: time.Date(2026, 10, 9, 0, 0, 0, 0, time.UTC)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sum.B.ToolCalls["claude"] != 2 || sum.B.Tokens["claude"].In != 100 {
+		t.Fatalf("tool calls %d, tokens in %d; want 2 and 100 (replayed history counted once)", sum.B.ToolCalls["claude"], sum.B.Tokens["claude"].In)
+	}
+}

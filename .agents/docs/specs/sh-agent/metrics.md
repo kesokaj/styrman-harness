@@ -43,7 +43,7 @@ sh-agent metrics export [--home H] FILE
 | `--outcome` | `pass`, `fail` | none | The run's acceptance result, supplied by the kit, used for pass^k. Given after the run (a second ingest of the same `--source` and `--label`), it stamps every session of the label that has no outcome yet, even when no transcript changed; an earlier run keeps the outcome it was stamped with. |
 | `--all-labels` | bool | false | Include labelled (sandbox) sessions. Without it, and without `--label`, they are excluded. |
 | `--since` | date | 30 days ago | Start of the window. |
-| `--until` | date | now | End of the window, exclusive (`show`, `report`). `--since A --until B` and `--since B` never overlap; `/retro` reads the window before its own this way. A session is in the window when it overlaps it, and is counted whole. |
+| `--until` | date | now | End of the window, exclusive (`show`, `report`). `--since A --until B` and `--since B` never overlap; `/retro` reads the window before its own this way. A session belongs to the window it starts in, `[since, until)`, and is counted whole there, so adjacent windows never share one. |
 | `--project` | directory | all | Only sessions whose `project_root` is this directory or under it (a session started in a subdirectory is the project's; a sibling that only shares the name's prefix is not). |
 | `--json` | bool | false | Print the `## Output` object instead of tables. |
 | `--out` | file | `~/.config/sh-agent/reports/<YYYY-MM-DD-HHMM>-metrics.html` | Where the report is written. An existing file is refused. |

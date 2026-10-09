@@ -140,7 +140,9 @@ func (s *Store) Show(o ShowOptions) (*Summary, error) {
 	}
 	q := `SELECT id, vendor, COALESCE(project_root,''), COALESCE(parent_id,''), COALESCE(agent_type,''),
 		COALESCE(label,''), COALESCE(outcome,''), COALESCE(started_at,0), COALESCE(ended_at,0), cost_usd
-		FROM sessions WHERE COALESCE(ended_at, started_at, 0) >= ? AND COALESCE(started_at, ended_at, 0) <= ?`
+		FROM sessions WHERE COALESCE(started_at, ended_at, 0) >= ? AND COALESCE(started_at, ended_at, 0) < ?`
+	// A session belongs to the window it starts in, [since, until): adjacent
+	// windows never share one (retro compares two of them).
 	args := []any{since.UnixMilli(), now.UnixMilli()}
 	switch {
 	case o.Label != "":

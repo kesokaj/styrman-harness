@@ -164,3 +164,20 @@ func TestShowCountsReplayedHistoryOnce(t *testing.T) {
 		t.Fatalf("tool calls %d, tokens in %d; want 2 and 100 (replayed history counted once)", sum.B.ToolCalls["claude"], sum.B.Tokens["claude"].In)
 	}
 }
+
+// A session belongs to the window it starts in, [since, until): two adjacent
+// windows never count the same session, even one starting at the boundary
+// or running across it (release review of v2.6.0, round 7).
+func TestShowAdjacentWindowsShareNoSession(t *testing.T) {
+	s := openT(t, filepath.Join(t.TempDir(), "metrics.db"))
+	day := func(d, h int) int64 { return time.Date(2026, 10, d, h, 0, 0, 0, time.UTC).UnixMilli() }
+	s.db.Exec(`INSERT INTO sessions(id, vendor, started_at, ended_at) VALUES
+		('across', 'claude', ?, ?), ('boundary', 'claude', ?, ?), ('early', 'claude', ?, ?)`,
+		day(4, 23), day(5, 1), day(5, 0), day(5, 2), day(3, 10), day(3, 11))
+	split := time.Date(2026, 10, 5, 0, 0, 0, 0, time.UTC)
+	before, _ := s.Show(ShowOptions{Since: split.AddDate(0, 0, -3), Now: split})
+	after, _ := s.Show(ShowOptions{Since: split, Now: split.AddDate(0, 0, 3)})
+	if before.Sessions["claude"] != 2 || after.Sessions["claude"] != 1 {
+		t.Fatalf("before %d, after %d; want 2 (early, across) and 1 (boundary)", before.Sessions["claude"], after.Sessions["claude"])
+	}
+}

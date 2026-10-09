@@ -2,7 +2,7 @@
 owner: main
 date: 2026-10-09
 ---
-# Handoff — 2026-10-09 — project-review fixes done, verified; a third review round is the operator's call
+# Handoff — 2026-10-09 — project-review fixes done, verified, accepted at the cap
 
 Session ID: 728a4838-8b3c-4819-a62d-2b01e563a77f
 Project: /home/ostling-simon/projects/styrman-harness
@@ -21,7 +21,7 @@ Branch: main
 
 ## Open / In Progress
 
-- Nothing in progress. The review cap is reached: round 2 landed on the needle round 1 reshaped, its fixes are applied and verified, and no third review round has run (Next Steps 1).
+- Nothing in progress and nothing queued. The review cap was reached (round 2 landed on the needle round 1 reshaped); the operator accepted the round-2 fixes on their tests and the verifier ("go all approved", 2026-10-09), so no third round runs.
 - Requirements edits awaiting approval: none.
 
 ## Key Decisions
@@ -51,7 +51,7 @@ Branch: main
 
 ## Next Steps
 
-1. Operator, at the review cap (recommendation first): (a) accept the round-2 fixes on their tests and the verifier, closing the task; (b) run one more round over `6cec23b` (reviewer and security, the round-2 fixed lines only), adding a `readSmall` 1 MiB fixture test in the same pass; (c) revert the three credential kinds to their round-1 shape.
-2. Operator decisions carried from the review: the agent-key allow-list (security round-1 finding 5: `memory`, `initialPrompt` pass the deny-list; an allow-list refuses a future vendor key by default); a `PRIVATE_KEY=` redaction kind (not covered today); the deferred rows 21, 23, 24, 25, 28 (the R2 pointer on release and zip places, row 28 L2, is the one worth a look).
+1. Nothing is queued for the next session; start a fresh one for the next task. A `readSmall` 1 MiB fixture test is a small follow-up when `internal/metrics` is next touched (the verifier's weak-coverage note).
+2. Operator decisions carried from the review, deferred at the operator's word (2026-10-09): the agent-key allow-list (security round-1 finding 5: `memory`, `initialPrompt` pass the deny-list; an allow-list refuses a future vendor key by default); a `PRIVATE_KEY=` redaction kind (not covered today); the deferred rows 21, 23, 24, 25, 28 (the R2 pointer on release and zip places, row 28 L2, is the one worth a look).
 3. Operator decisions carried from the v2.6.2 handoff: whether `sh-agent dream` stops at the first agy login failure; whether the Mac's checkouts should be dreamt over (`sh-agent search <word>` once in each).
 4. A release carries these fixes to the release and zip places (`/preflight` from the operator's turn); checkout places get them at their next `sh-agent update`.

@@ -1590,6 +1590,10 @@ func TestKitPreambleRefusesLeftoverCredentials(t *testing.T) {
 	token := "gh" + "o_" + strings.Repeat("A", 36)
 	// AWS's published example access key, and a real-shaped one that is not it.
 	awsExample, awsKey := "AKIA"+"IOSFODNN7EXAMPLE", "AKIA"+"Q3EGRK7TNZ2BXW4M"
+	realGrep, err := exec.LookPath("grep")
+	if err != nil {
+		t.Skip("no grep on this machine")
+	}
 	for name, then := range map[string]string{
 		"an SSH key copied in":          `mkdir -p "$KIT_HOME/.ssh" && : > "$KIT_HOME/.ssh/id_ed25519"`,
 		"gcloud credentials":            `mkdir -p "$KIT_HOME/.config/gcloud" && : > "$KIT_HOME/.config/gcloud/credentials.db"`,
@@ -1613,6 +1617,12 @@ func TestKitPreambleRefusesLeftoverCredentials(t *testing.T) {
 		"a GitHub token holding the example": `printf '%s\n' "gh` + `p_` + awsExample + strings.Repeat("Z", 16) + `" > "$KIT_HOME/trace.log"`,
 		// A shell function named grep must not blind the scan (release review of v2.6.1).
 		"a grep function that finds nothing": `grep() { return 1; }; printf 'aws_access_key_id = %s\n' "` + awsKey + `" > "$KIT_HOME/trace.log"`,
+		// grep that cannot read a file for the AWS check (exit 2) fails the run;
+		// it never reads as "no key" (security review of v2.6.1, round 2).
+		"a grep that cannot read for -o": `mkdir -p "$KIT_HOME/../fakebin" && printf '#!/bin/sh\ncase " $* " in *" -aoE "*) exit 2 ;; esac\nexec ` + realGrep + ` "$@"\n' > "$KIT_HOME/../fakebin/grep" && chmod +x "$KIT_HOME/../fakebin/grep" && printf 'aws_access_key_id = %s\n' "` + awsKey + `" > "$KIT_HOME/trace.log" && PATH="$KIT_HOME/../fakebin:$PATH"`,
+		// Shell functions named after the scan's tools never stand in for them.
+		"a find function that lists nothing": `find() { :; }; printf 'aws_access_key_id = %s\n' "` + awsKey + `" > "$KIT_HOME/trace.log"`,
+		"an od function that says ELF":       `od() { echo 7f454c46; }; printf 'aws_access_key_id = %s\n' "` + awsKey + `" > "$KIT_HOME/trace.log"`,
 		// Under xtrace no matched key reaches the log (security review of v2.6.1).
 		"a key found under bash -x": `printf 'aws_access_key_id = %s\n%s\n' "` + awsKey + `" "` + token + `" > "$KIT_HOME/trace.log"; set -x`,
 	} {

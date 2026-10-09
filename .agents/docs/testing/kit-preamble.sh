@@ -135,7 +135,11 @@ kit_credential_leftovers() {
     [ ! -L "$KIT_HOME" ] || printf '%s (a dangling link)\n' "$KIT_HOME"
     return 0
   fi
-  local f base magic unreadable n
+  local f base magic unreadable n rc
+  # The scan's tools are the programs on PATH, never a shell function a kit or
+  # an agent defined after sourcing this file (security review of v2.6.1). The
+  # trap calls this in $( ), so the unset reaches only that subshell.
+  unset -f find head od tr grep 2>/dev/null || true
   # What find itself cannot enter is a failure. Captured whole, never piped
   # into a reader that stops early (BUG-155).
   unreadable=$(find -H "$KIT_HOME" -print 2>&1 >/dev/null) || true
@@ -153,12 +157,13 @@ kit_credential_leftovers() {
       1) ;;
       *) printf '%s (could not be scanned)\n' "$f"; continue ;;
     esac
-    # `command grep`: a shell function named grep never stands in for it. A
-    # matched key never sits in a variable (xtrace would print it) or a
+    # A matched key never sits in a variable (xtrace would print it) or a
     # here-string (a temp file on older bash): the matches are piped into a
     # count of the AWS keys that are not the example, and the count reads all
     # of its input, so no early exit (BUG-157). An empty count fails closed.
-    n=$( { LC_ALL=C command grep -aoE -- "$kit_cred_aws" "$f" 2>/dev/null || true; } | LC_ALL=C command grep -cvxF -- "$kit_cred_example" || true)
+    # A read error (exit 2) adds a line that is not the example, so the file
+    # is reported, never passed as "no key".
+    n=$( { rc=0; LC_ALL=C command grep -aoE -- "$kit_cred_aws" "$f" 2>/dev/null || rc=$?; [ "$rc" -le 1 ] || echo unscannable; } | LC_ALL=C command grep -cvxF -- "$kit_cred_example" || true)
     [ "$n" = 0 ] || printf '%s\n' "$f"
   done < <(find -H "$KIT_HOME" \( -type f -o -type l \) -print0 2>/dev/null)
   return 0

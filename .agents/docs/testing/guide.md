@@ -174,7 +174,7 @@ embedded: `go:embed` covers only the five source directories); any credential fi
 it from the real home is `chmod 600`, lives only for the run, and is deleted by name right
 after (security review 2026-09-21). The kit preamble's exit check proves it: a run counts only
 when its output holds `kit: no credentials left in KIT_HOME` (one of the exit check's three lines, § Behavioural runs), which it prints after finding no
-credential file by name and no token or private key inside any file in the sandbox home, binary files included; it reads through a link to a file, fails on a link to a directory and on a path it cannot read — a CLI
+credential file by name and no token or private key inside any file in the sandbox home, binary files included (AWS's published example key `AKIAIOSFODNN7EXAMPLE` is set aside by exact match, since an agent that reads a test holding it leaves it in its transcripts; any other match in the same file still fails); it reads through a link to a file, fails on a link to a directory and on a path it cannot read — a CLI
 can write one where the kit never copied it (BUG-160). Prefer the real-home smoke checks of § 5 when the change
 needs no separate home.
 

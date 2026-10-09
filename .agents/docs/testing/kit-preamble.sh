@@ -123,12 +123,17 @@ kit_before=$(kit_fingerprint)
 kit_cred_names='^(id_rsa|id_ecdsa|id_ed25519|id_dsa|\.credentials\.json|application_default_credentials\.json|credentials\.db|access_tokens\.db|.*oauth-token.*|hosts\.yml|\.netrc|\.git-credentials|.*\.p12|.*\.pfx)$'
 kit_cred_paths='/\.aws/credentials$|/\.docker/config\.json$'
 kit_cred_text='gh[opsur]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|sk-ant-[A-Za-z0-9_-]{20,}|sk-proj-[A-Za-z0-9_-]{20,}|"refresh_token"|ya29\.[A-Za-z0-9_-]{20,}|AIza[A-Za-z0-9_-]{35}|AKIA[A-Z0-9]{16}|glpat-[A-Za-z0-9_-]{20,}'
+# AWS's published example access key: documentation, not a credential. An agent
+# that reads a test holding it (internal/harness/report_test.go) leaves it in
+# its transcripts. Only this exact match is set aside; any other match in the
+# same file still fails the run.
+kit_cred_example='AKIAIOSFODNN7EXAMPLE'
 kit_credential_leftovers() {
   if [ ! -e "$KIT_HOME" ]; then
     [ ! -L "$KIT_HOME" ] || printf '%s (a dangling link)\n' "$KIT_HOME"
     return 0
   fi
-  local f base magic unreadable
+  local f base magic unreadable hits
   # What find itself cannot enter is a failure. Captured whole, never piped
   # into a reader that stops early (BUG-155).
   unreadable=$(find -H "$KIT_HOME" -print 2>&1 >/dev/null) || true
@@ -141,8 +146,9 @@ kit_credential_leftovers() {
     [ -f "$f" ] || continue   # a link to a directory, device or fifo is not read
     magic=$(head -c 4 "$f" 2>/dev/null | od -An -tx1 | tr -d ' \n')
     case "$magic" in 7f454c46|cffaedfe|feedfacf|cafebabe) continue ;; esac   # ELF, Mach-O
-    LC_ALL=C grep -aqE -- "$kit_cred_text" "$f" 2>/dev/null; case $? in
-      0) printf '%s\n' "$f" ;;
+    # The matches stay in memory and are never printed: paths only.
+    hits=$(LC_ALL=C grep -aoE -- "$kit_cred_text" "$f" 2>/dev/null); case $? in
+      0) LC_ALL=C grep -qvxF -- "$kit_cred_example" <<<"$hits" && printf '%s\n' "$f" ;;
       1) ;;
       *) printf '%s (could not be scanned)\n' "$f" ;;
     esac

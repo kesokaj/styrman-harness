@@ -1588,6 +1588,8 @@ func TestKitPreambleRefusesLeftoverCredentials(t *testing.T) {
 	}
 	// The token below is a shape, assembled so this file holds no literal one.
 	token := "gh" + "o_" + strings.Repeat("A", 36)
+	// AWS's published example access key, and a real-shaped one that is not it.
+	awsExample, awsKey := "AKIA"+"IOSFODNN7EXAMPLE", "AKIA"+"Q3EGRK7TNZ2BXW4M"
 	for name, then := range map[string]string{
 		"an SSH key copied in":          `mkdir -p "$KIT_HOME/.ssh" && : > "$KIT_HOME/.ssh/id_ed25519"`,
 		"gcloud credentials":            `mkdir -p "$KIT_HOME/.config/gcloud" && : > "$KIT_HOME/.config/gcloud/credentials.db"`,
@@ -1604,6 +1606,10 @@ func TestKitPreambleRefusesLeftoverCredentials(t *testing.T) {
 		"an unreadable directory":    `mkdir -p "$KIT_HOME/sealed" && : > "$KIT_HOME/sealed/id_ed25519" && chmod 000 "$KIT_HOME/sealed"`,
 		"a symlinked .ssh directory": `mkdir -p "$KIT_HOME/.elsewhere" && : > "$KIT_HOME/.elsewhere/id_ed25519" && ln -s .elsewhere "$KIT_HOME/.ssh" && mv "$KIT_HOME/.elsewhere" "$KIT_HOME/../kit-outside" && ln -sfn ../kit-outside "$KIT_HOME/.ssh"`,
 		"a key in the kit's own bin": `printf -- '-----BEGIN EC PRIVATE KEY-----\n' > "$KIT_HOME/bin/stray"`,
+		// The example-key exception is exact: a real-shaped AWS key fails alone
+		// and beside the example.
+		"an AWS access key":                 `printf 'aws_access_key_id = %s\n' "` + awsKey + `" > "$KIT_HOME/trace.log"`,
+		"an AWS key beside the example key": `printf 'SQLite\000%s\000%s\000' "` + awsExample + `" "` + awsKey + `" > "$KIT_HOME/conv.db"`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			if strings.HasPrefix(name, "an unreadable") && os.Geteuid() == 0 {
@@ -1632,6 +1638,11 @@ func TestKitPreambleRefusesLeftoverCredentials(t *testing.T) {
 	}
 	if code, out := run(`mkdir -p "$KIT_HOME/.local/bin" && printf '\177ELF-----BEGIN RSA PRIVATE KEY-----' > "$KIT_HOME/.local/bin/sh-agent"`); code != 0 {
 		t.Errorf("an ELF binary naming the PEM header: want exit 0, got %d\n%s", code, out)
+	}
+	// AWS's published example key is documentation, not a credential: an agent
+	// that reads a test holding it leaves it in its transcripts and database.
+	if code, out := run(`mkdir -p "$KIT_HOME/.gemini/brain" && printf '{"user_quote":"%s"}\n' "` + awsExample + `" > "$KIT_HOME/.gemini/brain/transcript.jsonl" && printf 'SQLite\000%s\000' "` + awsExample + `" > "$KIT_HOME/conv.db"`); code != 0 || !strings.Contains(out, "kit: no credentials left in KIT_HOME") {
+		t.Errorf("only AWS's example key: want exit 0 and the no-credentials line, got exit %d\n%s", code, out)
 	}
 	if err := os.RemoveAll(kitHome); err != nil {
 		t.Fatal(err)

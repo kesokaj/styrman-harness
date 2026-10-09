@@ -2,9 +2,9 @@
 owner: main
 date: 2026-10-09
 ---
-# Verification — real-home install at c478d86 and the guide § 5 smoke on both CLIs (v2.6.0 gate)
+# Verification — real-home install at c478d86, then 5d8ab96, and the guide § 5 smoke on both CLIs (v2.6.0 gate)
 
-Range reviewed: v2.5.0..c478d86
+Range reviewed: v2.5.0..5d8ab96
 
 **The install.** The real home on the Linux box was already a checkout place, at 9c87ddb. It was installed twice from this checkout with `go run ./cmd/sh-agent install`:
 - first at 56b4aaa;
@@ -20,7 +20,7 @@ After the second install:
 
 ## Status: PASS
 
-6 of 6 rows passed, each against its own criterion, at c478d86. The checks are the three of `testing/2026-09-03-verify-real-home.md`, run by the scratch `realhome/smoke.sh`, in fresh clones under `~/sandbox/realhome`.
+6 of 6 rows passed, each against its own criterion, at c478d86 and again at 5d8ab96 (below). The checks are the three of `testing/2026-09-03-verify-real-home.md`, run by the scratch `realhome/smoke.sh`, in fresh clones under `~/sandbox/realhome`.
 
 | CLI | check | result | seconds |
 |---|---|---|---|
@@ -37,6 +37,22 @@ After the second install:
 - `<RULE[~/.gemini/config/rules/AGENTS.md]>` and `<RULE[…/critical-thinking.md]>` each appear as often as the demo project's own `AGENTS.md` block: 2 each, one per stored copy of the prompt. So there is one block of each per prompt.
 - GANNET is present.
 - There is no `<truncated` line.
+
+## Run at the release head 5d8ab96
+
+**The reinstall.** `go run ./cmd/sh-agent install` at 5d8ab96 wrote 3 files.
+- `sh-agent status`: installed from commit 5d8ab96 (no "+dirty"), binary `5d8ab969bbf9`, drift none (1789 files match).
+
+| CLI | check | result | seconds |
+|---|---|---|---|
+| Claude Code | context | 1 of 1, denied 0 | 12 |
+| Claude Code | skill | 1 of 1, denied 0 | 36 |
+| Claude Code | agent | 1 of 1, denied 0 | 75 |
+| Antigravity | context ("GANNET", 38, "yes", DoD step 2) | 1 of 1, denied 0 | 99 |
+| Antigravity | skill | 1 of 1, denied 0 | 161 |
+| Antigravity | agent | 1 of 1, denied 0 | 242 |
+
+**The store check** reads a copy of conversation `3eb1407a…`, deleted after. The global `rules/AGENTS.md`, `critical-thinking.md` and project `AGENTS.md` blocks appear 2 each, one per stored prompt copy. GANNET is present, with no `<truncated`.
 
 ## Not examined
 

@@ -679,3 +679,11 @@ The operator's own transcripts showed the same pattern: a release session with 2
 **Decision.** The operator approved this on 2026-10-08. Among the things dream reads, R3 now names "a summary of the metrics store (`sh-agent metrics show --json` for each project's window, numbers only)". The summary goes into the dream prompt through the existing redaction and 256 KB cap. When the prompt is over the cap, the summary is dropped before transcripts are.
 
 **Consequences.** The model provider of the CLI dream runs now receives per-project metric numbers, in addition to the transcript text it already received. No identifiers beyond the three that ADR-055 names are included.
+
+## ADR-055b: R3's metrics summary is named by what it holds     (2026-10-09) — Accepted, amends ADR-055a
+
+**Context.** ADR-055a's R3 text said dream reads "`sh-agent metrics show --json` for each project's window, numbers only". The code sends `metrics.Summary.Numbers()` for the window and the one before it. That holds fixed keys and values only, which is narrower than `show --json`: `show --json` also carries tool, skill, subagent and label names (code review `reviews/2026-10-08-review-2c0f215-166aa39-code-docs.md`, finding 6).
+
+**Decision.** The operator approved this on 2026-10-09 ("go all approved"). R3 now names the summary by its content: "a numbers-only summary of the metrics store (its metric keys and values for each project's window and the window before, never a tool, skill, agent, label or path)".
+
+**Consequences.** The requirement and the code say the same thing. A change that adds a name to the prompt's metrics block is now a visible requirements change.

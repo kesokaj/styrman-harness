@@ -135,10 +135,13 @@ kit_credential_leftovers() {
     [ ! -L "$KIT_HOME" ] || printf '%s (a dangling link)\n' "$KIT_HOME"
     return 0
   fi
-  local f base magic unreadable n rc
-  # The scan's tools are the programs on PATH, never a shell function a kit or
-  # an agent defined after sourcing this file (security review of v2.6.1). The
-  # trap calls this in $( ), so the unset reaches only that subshell.
+  local f base magic unreadable n
+  # The scan's external tools are the programs on PATH, not a shell function
+  # the kit script defined after sourcing this file (security review of
+  # v2.6.1); the trap calls this in $( ), so the unset reaches only that
+  # subshell. The scan otherwise trusts the kit's own shell: a kit that
+  # redefines a builtin (printf, read, [, unset) can still blind it. The agent
+  # under test runs in its own process and defines nothing here.
   unset -f find head od tr grep 2>/dev/null || true
   # What find itself cannot enter is a failure. Captured whole, never piped
   # into a reader that stops early (BUG-155).

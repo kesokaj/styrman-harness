@@ -165,6 +165,32 @@ func TestShowCountsReplayedHistoryOnce(t *testing.T) {
 	}
 }
 
+// Replayed history is deduplicated within one label only: a sandbox
+// transcript that reuses a real session's ids never hides the real session's
+// steps under --all-labels (security review 6118921..c478d86, finding 3).
+func TestShowReplayDedupeStaysWithinALabel(t *testing.T) {
+	s := openT(t, filepath.Join(t.TempDir(), "metrics.db"))
+	base := time.Date(2026, 10, 8, 10, 0, 0, 0, time.UTC).UnixMilli()
+	// The sandbox session starts first, so without the label in the key it
+	// would claim the shared ids and the real session's steps would vanish.
+	if _, err := s.db.Exec(`INSERT INTO sessions(id, vendor, label, started_at, ended_at) VALUES ('sbx', 'claude', 'arm=x', ?, ?)`, base, base+60000); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec(`INSERT INTO sessions(id, vendor, started_at, ended_at) VALUES ('real', 'claude', ?, ?)`, base+120000, base+180000); err != nil {
+		t.Fatal(err)
+	}
+	for _, sid := range []string{"sbx", "real"} {
+		s.db.Exec(`INSERT INTO steps(session_id, ext_id, ts, kind, tool) VALUES (?, 't1', ?, 'tool', 'Bash')`, sid, base+1000)
+	}
+	sum, err := s.Show(ShowOptions{AllLabels: true, Since: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC), Now: time.Date(2026, 10, 9, 0, 0, 0, 0, time.UTC)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sum.B.ToolCalls["claude"] != 2 {
+		t.Fatalf("tool calls %d; want 2 (one per label)", sum.B.ToolCalls["claude"])
+	}
+}
+
 // A session belongs to the window it starts in, [since, until): two adjacent
 // windows never count the same session, even one starting at the boundary
 // or running across it (release review of v2.6.0, round 7).

@@ -117,6 +117,15 @@ func TestMetricsUsageErrorsExit2(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(home, ".config", "sh-agent", "metrics.db")); !os.IsNotExist(err) {
 		t.Errorf("a usage error created the store: %v", err)
 	}
+	// Each verb's own usage line names every flag it takes (security review
+	// 6118921..c478d86: report's omitted --until).
+	for verb, flag := range map[string]string{"report": "--until"} {
+		var out bytes.Buffer
+		run([]string{"metrics", verb, "extra", "--home", home}, &out)
+		if !strings.Contains(out.String(), flag) {
+			t.Errorf("metrics %s usage lacks %s: %q", verb, flag, out.String())
+		}
+	}
 }
 
 // show, report and export on a home that never ingested say so and exit 1;

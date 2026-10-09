@@ -323,7 +323,7 @@ func (s *Summary) add(x sess, steps []stp) {
 	}
 	for _, st := range steps {
 		if st.kind == "tool" || st.kind == "assistant" || st.kind == "generation" {
-			key := v + "\x00" + st.ext
+			key := v + "\x00" + x.label + "\x00" + st.ext // within one label: a sandbox never hides real steps
 			if s.seen[key] {
 				continue // replayed history, counted under the session that first had it
 			}

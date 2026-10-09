@@ -476,7 +476,7 @@ func runMetrics(c *ctx) error {
 		return nil
 	case "report":
 		if len(args) > 0 || c.metricsJSON {
-			fmt.Fprintln(c.out, "sh-agent metrics report [--since YYYY-MM-DD] [--project DIR] [--label KEY=VALUE | --all-labels] [--out FILE]")
+			fmt.Fprintln(c.out, "sh-agent metrics report [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--project DIR] [--label KEY=VALUE | --all-labels] [--out FILE]")
 			return exitCode(2)
 		}
 		o, err := c.metricsShowOptions()

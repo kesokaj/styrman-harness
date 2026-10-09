@@ -15,7 +15,7 @@ On the operator's Mac (v2.6.1, release binary, agy logged in and working), `sh-a
 - On macOS with agy logged in: `sh-agent dream --all`.
 - Operator probes, 2026-10-09:
   1. `ls ~/.gemini/antigravity-cli/`: there is no token file. `security dump-keychain` lists Antigravity and gemini entries.
-  2. agy headless with `HOME` set to a fresh private directory (the dream job's shape): the log said `silent auth failed`, then `triggering interactive OAuth`. agy printed a browser-login URL and waited. After a login completed there, agy wrote an `antigravity-oauth-token` file into that HOME.
+  2. agy headless with `HOME` set to a fresh private directory (the dream job's shape): the log said `silent auth failed`, then `triggering interactive OAuth`. agy printed `Authentication required. Please visit the URL to log in:`, a URL, and `Waiting for authentication (timeout 60s)...`, then waited. After a login completed there, agy wrote an `antigravity-oauth-token` file into that HOME.
   3. The same, with `$HOME/Library/Keychains` linked into the private HOME: `silent auth succeeded`, no token file written, and the tool call was still refused (`soft-denying tool confirmation "RunCommand"`).
 - `TestAgyHomeMacKeychain` (`internal/dream/run_test.go`) was red before the fix with the operator's own error text.
 

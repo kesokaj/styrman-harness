@@ -666,8 +666,10 @@ func TestAgyHomeMacKeychain(t *testing.T) {
 	}
 	t.Setenv("HOME", real)
 
-	// Neither: the error names both places.
+	// Neither: the error names both places. A Keychains path that is a file
+	// is no Keychain folder.
 	os.RemoveAll(filepath.Join(real, "Library"))
+	write(t, keychains, "not a folder", fresh)
 	os.Remove(filepath.Join(real, ".gemini", "antigravity-cli", "antigravity-oauth-token"))
 	if _, _, err := agyHome(conf, "darwin"); err == nil || !strings.Contains(err.Error(), "Keychain") || !strings.Contains(err.Error(), "antigravity-oauth-token") {
 		t.Errorf("darwin with no login at all: err = %v, want both places named", err)

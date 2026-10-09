@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -95,7 +96,7 @@ func (o Options) realRun() error {
 	}
 	var env []string
 	if argv[0] == "agy" {
-		home, cleanup, err := agyHome(conf)
+		home, cleanup, err := agyHome(conf, runtime.GOOS)
 		if err != nil {
 			return fail(err.Error())
 		}
@@ -128,7 +129,11 @@ func (o Options) realRun() error {
 		if err != nil {
 			failed++
 			o.keepFailure(conf, c, t0, stdout, stderr)
-			logf(p.Root + " fail " + err.Error())
+			reason := err.Error()
+			if hint := agyAuthHint(stdout, stderr); hint != "" {
+				reason += ": " + hint
+			}
+			logf(p.Root + " fail " + reason)
 			continue
 		}
 		text, aerr := answer(argv[0], stdout)
@@ -139,6 +144,9 @@ func (o Options) realRun() error {
 			reason := "invalid output"
 			if aerr != nil {
 				reason = aerr.Error()
+			}
+			if hint := agyAuthHint(stdout, stderr); hint != "" {
+				reason += ": " + hint
 			}
 			logf(p.Root + " fail " + reason)
 			continue
@@ -251,12 +259,28 @@ func answer(cli, stdout string) (string, error) {
 // operator's login and a settings file that grants nothing, so a tool call is
 // refused whatever the operator allowed for interactive use (security review
 // 2026-09-30, D28). Its conversations stay in it and go with it. The login
-// is read from $HOME, the real one, never from --home.
-func agyHome(conf string) (string, func(), error) {
+// is read from $HOME, the real one, never from --home. On macOS agy keeps the
+// login in the Keychain and finds it only through $HOME/Library/Keychains, so
+// that folder is linked in and the token file is optional (BUG-166).
+func agyHome(conf, goos string) (string, func(), error) {
 	real := os.Getenv("HOME")
+	if !filepath.IsAbs(real) {
+		return "", nil, fmt.Errorf("HOME is %q, not an absolute path: the dream job reads the Antigravity login from it", real)
+	}
 	src := filepath.Join(real, ".gemini", "antigravity-cli")
-	if _, err := os.Stat(filepath.Join(src, "antigravity-oauth-token")); err != nil {
-		return "", nil, fmt.Errorf("no Antigravity login at %s: run agy once and log in", filepath.Join(src, "antigravity-oauth-token"))
+	token := filepath.Join(src, "antigravity-oauth-token")
+	_, tokenErr := os.Stat(token)
+	keychains := ""
+	if goos == "darwin" {
+		if info, err := os.Stat(filepath.Join(real, "Library", "Keychains")); err == nil && info.IsDir() {
+			keychains = filepath.Join(real, "Library", "Keychains")
+		}
+	}
+	if tokenErr != nil && keychains == "" {
+		if goos == "darwin" {
+			return "", nil, fmt.Errorf("no Antigravity login: neither %s nor a Keychain folder at %s: run agy once and log in", token, filepath.Join(real, "Library", "Keychains"))
+		}
+		return "", nil, fmt.Errorf("no Antigravity login at %s: run agy once and log in", token)
 	}
 	home, err := os.MkdirTemp(conf, "dream-agy-home-")
 	if err != nil {
@@ -269,7 +293,20 @@ func agyHome(conf string) (string, func(), error) {
 		return "", nil, err
 	}
 	for _, name := range []string{"antigravity-oauth-token", "installation_id"} {
-		if err := copyPrivate(filepath.Join(src, name), filepath.Join(dst, name)); err != nil && !(name == "installation_id" && errors.Is(err, os.ErrNotExist)) {
+		optional := name == "installation_id" || keychains != ""
+		if err := copyPrivate(filepath.Join(src, name), filepath.Join(dst, name)); err != nil && !(optional && errors.Is(err, os.ErrNotExist)) {
+			cleanup()
+			return "", nil, err
+		}
+	}
+	if keychains != "" {
+		// A link, never a copy: the Keychain stays where it is, and
+		// os.RemoveAll removes the link without following it.
+		if err := os.MkdirAll(filepath.Join(home, "Library"), 0o700); err != nil {
+			cleanup()
+			return "", nil, err
+		}
+		if err := os.Symlink(keychains, filepath.Join(home, "Library", "Keychains")); err != nil {
 			cleanup()
 			return "", nil, err
 		}
@@ -306,6 +343,24 @@ func copyPrivate(from, to string) error {
 		return err
 	}
 	return out.Close()
+}
+
+// agyAuthHint names the one failure "invalid output" hides: agy found no
+// login in the private HOME and asked for a browser login nobody can give.
+// Only agy's own lines count: a stream-json event (a "{" line) carries model
+// text, which may quote the phrase from a transcript.
+func agyAuthHint(stdout, stderr string) string {
+	found := false
+	for _, line := range strings.Split(stdout+"\n"+stderr, "\n") {
+		if !strings.HasPrefix(strings.TrimSpace(line), "{") && strings.Contains(line, "Authentication required") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return ""
+	}
+	return "agy is not logged in inside the dream job's private HOME (run agy once and log in; on macOS the login Keychain must be unlocked, so the Mac's user must be logged in)"
 }
 
 // withHome is env with HOME replaced.

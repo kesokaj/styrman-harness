@@ -192,6 +192,11 @@ func TestInstallTimerRefusesUnsafePaths(t *testing.T) {
 			t.Errorf("PATH %q: %v", path, err)
 		}
 	}
+	// The refusal names what to do instead (guide § 3c; the verifier of
+	// ee20d00): the shell's PATH is what the unit freezes.
+	if !strings.Contains(ee.Msg, "run it from a shell whose PATH") {
+		t.Errorf("the refusal names no alternative: %s", ee.Msg)
+	}
 	service, _ := renderSystemd("/h/100%/sh-agent", "/h/100%", "/p%n")
 	if !strings.Contains(service, "/h/100%%/sh-agent") || !strings.Contains(service, "PATH=/p%%n") || !strings.Contains(service, `--home "/h/100%%"`) {
 		t.Errorf("a %% was not escaped:\n%s", service)

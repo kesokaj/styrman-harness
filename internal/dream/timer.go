@@ -163,7 +163,7 @@ func InstallTimer(home, path, goos string) error {
 	// 21); such a home or PATH is refused, never escaped by guess. The home
 	// is checked through bin, which holds it.
 	if strings.ContainsAny(bin+path, "\"\\") || strings.ContainsFunc(bin+path, unicode.IsControl) {
-		return &ExitError{2, "sh-agent dream --install-timer: the binary path or PATH holds a quote, a backslash or a control character; the timer's unit cannot carry it safely"}
+		return &ExitError{2, "sh-agent dream --install-timer: the binary path or PATH holds a quote, a backslash or a control character; the timer's unit cannot carry it safely: run it from a shell whose PATH, and for a --home whose path, holds none of them"}
 	}
 	unit, label := UnitFor(home)
 	var files map[string]string

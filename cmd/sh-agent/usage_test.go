@@ -28,6 +28,11 @@ func TestUsageErrorsExit2(t *testing.T) {
 		"adopt without a name":             {[]string{"adopt", "--repo", "../..", "--home", home}, "usage: sh-agent adopt"},
 		"update --from-zip without a file": {[]string{"update", "--from-zip", "--dry-run", "--home", home}, "--from-zip needs a file"},
 		"install --from-zip":               {[]string{"install", "--from-zip", "x.zip", "--home", home}, "--from-zip belongs to update"},
+		// --vendor is every verb's flag, checked once before the verb runs:
+		// status exited 1 and uninstall and report took any word (BUG-171).
+		"status --vendor bogus":              {[]string{"status", "--repo", "../..", "--vendor", "bogus", "--home", home}, "unknown vendor"},
+		"uninstall --dry-run --vendor bogus": {[]string{"uninstall", "--dry-run", "--vendor", "bogus", "--home", home}, "unknown vendor"},
+		"report --dry-run --vendor bogus":    {[]string{"report", "--dry-run", "--vendor", "bogus", "--home", home}, "unknown vendor"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			var out bytes.Buffer

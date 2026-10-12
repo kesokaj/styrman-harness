@@ -235,20 +235,20 @@ func callWithin(argv []string, prompt, work string, env []string, timeout, grace
 	}
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, watched...)
-	waited := make(chan struct{})
+	waited, relayed := make(chan struct{}), make(chan struct{})
 	go func() {
-		select {
-		case sig := <-sigs:
+		relay(sigs, waited, func(sig os.Signal) {
 			killGroup()
 			// Then die of the signal, as sh-agent did before the group existed.
 			signal.Reset(sig)
 			syscall.Kill(os.Getpid(), sig.(syscall.Signal))
-		case <-waited:
-		}
+		})
+		close(relayed)
 	}()
 	err := cmd.Wait()
 	signal.Stop(sigs) // before waited closes: a signal in between still reaches the goroutine
 	close(waited)
+	<-relayed // a signal taken at the end is acted on before the next project starts
 	killGroup()
 	if ctx.Err() == context.DeadlineExceeded {
 		return out.String(), errb.String(), fmt.Errorf("%s timed out after %s", argv[0], timeout)
@@ -261,6 +261,24 @@ func callWithin(argv []string, prompt, work string, env []string, timeout, grace
 		return out.String(), errb.String(), fmt.Errorf("%s: %v", argv[0], err)
 	}
 	return out.String(), errb.String(), nil
+}
+
+// relay hands the first signal to onSignal, or returns when the CLI is done.
+// A signal already queued when the CLI ends is still handed on: select picks
+// at random between ready cases, and the end alone dropped it half the time,
+// so `dream --all` went on to the next project (the release gate's review of
+// v2.6.2..13c5bde).
+func relay(sigs <-chan os.Signal, waited <-chan struct{}, onSignal func(os.Signal)) {
+	select {
+	case sig := <-sigs:
+		onSignal(sig)
+	case <-waited:
+		select {
+		case sig := <-sigs:
+			onSignal(sig)
+		default:
+		}
+	}
 }
 
 // answer is the model's text: Claude Code prints it; Antigravity's

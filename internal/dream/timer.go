@@ -161,8 +161,10 @@ func InstallTimer(home, path, goos string) error {
 	// 2026-09-30), and any other control character is one the unit or the
 	// plist's XML cannot carry as written (project review 2026-10-09, row
 	// 21); such a home or PATH is refused, never escaped by guess. The home
-	// is checked through bin, which holds it.
-	if strings.ContainsAny(bin+path, "\"\\") || strings.ContainsFunc(bin+path, unicode.IsControl) {
+	// is checked as given, not only through bin: Join cleans bin, so a quote
+	// in a component `..` cancels was gone from bin and still in --home
+	// (the release gate's security review of v2.6.2..13c5bde).
+	if raw := bin + home + path; strings.ContainsAny(raw, "\"\\") || strings.ContainsFunc(raw, unicode.IsControl) {
 		return &ExitError{2, "sh-agent dream --install-timer: the binary path or PATH holds a quote, a backslash or a control character; the timer's unit cannot carry it safely: run it from a shell whose PATH, and for a --home whose path, holds none of them"}
 	}
 	unit, label := UnitFor(home)

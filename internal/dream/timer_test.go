@@ -226,6 +226,22 @@ func TestInstallTimerRefusesEveryControlCharacter(t *testing.T) {
 	}
 }
 
+// The home was checked only through the binary's path, which Join cleans:
+// a home whose quote sits in a component that `..` cancels passed the check
+// and reached `--home "…"` raw. main makes the home absolute (and so clean)
+// first, which kept the CLI safe; InstallTimer no longer depends on that
+// (the release gate's security review of v2.6.2..13c5bde, finding 3).
+func TestInstallTimerChecksTheHomeItself(t *testing.T) {
+	fakeManager(t, "systemctl", 0)
+	base := t.TempDir()
+	write(t, filepath.Join(base, ".local", "bin", "sh-agent"), "#!/bin/sh\n", fresh)
+	home := base + string(filepath.Separator) + `"x` + string(filepath.Separator) + ".."
+	var ee *ExitError
+	if err := InstallTimer(home, "/p", "linux"); !errors.As(err, &ee) || ee.Code != 2 {
+		t.Errorf("a home holding a quote that Join cleans away: %v", err)
+	}
+}
+
 // TestInstallTimerKeepsOnlyAbsolutePath: a relative PATH entry (".", "bin",
 // an empty one) would resolve against the unit's working directory at 03:00,
 // not where the operator's shell was; only absolute entries are frozen in.

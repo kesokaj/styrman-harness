@@ -151,6 +151,17 @@ var shapeSecrets = []string{
 	"ARGS=-uadmin:FAKEVALUE", "(-uadmin:FAKEVALUE)", "[-uadmin:FAKEVALUE]", "curl,-uadmin:FAKEVALUE", "x;-uadmin:FAKEVALUE", "x|-uadmin:FAKEVALUE",
 	`exec(["curl", "-u", "admin:FAKEVALUE"])`, `["curl","-u","admin:FAKEVALUE"]`, "curl -u\tadmin:FAKEVALUE h", "curl -u  admin:FAKEVALUE h",
 	`curl --user \"admin:FAKEVALUE\" h`,
+	// The release gate of v2.6.2..13c5bde, each chosen by the operator: the
+	// flag after an escaped line break or tab written out as text, a password
+	// quoted after the colon or `%`, and six more clients' password flags,
+	// one rule per kind.
+	`curl https://x \n-u admin:FAKEVALUE`, `x\t-uadmin:FAKEVALUE`,
+	`curl -u admin:"FAKEVALUE"`, `curl -u "admin":"FAKEVALUE"`, "curl -u admin:'FAKEVALUE'", "curl --user=admin:'FAKEVALUE'", "smbclient -U admin%'FAKEVALUE'",
+	"mongosh -u admin -p FAKEVALUE", "sqlcmd -U sa -P FAKEVALUE", "ldapsearch -x -D cn=admin -w FAKEVALUE",
+	"openssl pkcs12 -in k.p12 -passin pass:FAKEVALUE", "openssl rsa -passout pass:FAKEVALUE", "keytool -list -storepass FAKEVALUE",
+	"keytool -importkeystore -srcstorepass FAKEVALUE", "lftp -u user,FAKEVALUE sftp://h",
+	// Its round 2: OpenSSL's pass: inside quotes.
+	`openssl pkcs12 -passin "pass:FAKEVALUE"`, "openssl rsa -passin 'pass:FAKEVALUE'",
 }
 
 func TestReportRedactShapes(t *testing.T) {
@@ -182,6 +193,11 @@ func TestReportRedactShapes(t *testing.T) {
 		// an attached user:password (the gate's finding 2 put the backtick
 		// in front of the flag): review records quoting near-misses go.
 		"see `-ui:8080` above",
+		// The release gate's rules take these harmless lines too (its round 2):
+		// a mongo container's port flag, sqlcmd's packet size, a JSON key
+		// named -u, keytool's flag named in prose, and a later -a on a line
+		// that names mongo.
+		"docker run --name mongo -p 27017:27017 -d mongo", "sqlcmd -S srv -a 4096", `{"-u":"value"}`, "the -storepass flag", "mongo is down; ls -a /tmp",
 		// The pass family as one kind, and the flag form (security review round 3).
 		"DB_PASS=letmein", "MYSQL_PWD=letmein", "PASSPHRASE: letmein", "run it with --password letmein now",
 		// The bearer rule takes prose too (project review 2026-10-09, security row 8).
@@ -241,6 +257,10 @@ func TestReportRedactShapes(t *testing.T) {
 		// Its round 2: each new boundary and separator with no user:password.
 		"ARGS=-u root", "(-u) is short", "[-u name]", "a,-u,b", "x;-u root", "x|-u root", `["curl","-u","admin"]`, "-u\tis the user flag",
 		"X-User-Id:12345", "--user-agent:Mozilla",
+		// The release gate's additions: an escaped break with no
+		// user:password after it, and each new client without a password.
+		`a literal \n-u is the user flag`, "mongosh --host h", "sqlcmd -S server -d db", "ldapsearch -W -H ldap://h",
+		"openssl pkcs12 -passin env:PW", "openssl rsa -passin file:pw.txt", "keytool -storepass:env PW", "lftp -u user sftp://h",
 	} {
 		// "ASIAN" contains the ASIA prefix: accepted over-redaction, pinned
 		// here so a change to it is deliberate.

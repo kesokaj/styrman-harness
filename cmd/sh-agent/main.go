@@ -267,6 +267,16 @@ func run(args []string, out io.Writer) error {
 		c.home = abs
 	}
 
+	// --vendor is every verb's flag, so a bad value is a usage error before
+	// any verb does anything: update checked it after the fetch and the pull
+	// and exited 1, under --dry-run not at all, status exited 1, and
+	// uninstall and report took any word (BUG-171).
+	if c.vendorFlag != "" {
+		if _, err := c.vendor(); err != nil {
+			return err
+		}
+	}
+
 	fromZipSet := false
 	c.fs.Visit(func(f *flag.Flag) { fromZipSet = fromZipSet || f.Name == "from-zip" })
 	// The parsed FlagSet decides, never a scan of the raw arguments: `--home --`

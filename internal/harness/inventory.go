@@ -226,8 +226,10 @@ func LoadSkills(src Source) ([]Skill, error) {
 // ships an agent file byte for byte, so a key it honours outside this list
 // (hooks, permissionMode, mcpServers, memory, initialPrompt, and whatever a
 // vendor adds next) would act on every place unreviewed: an allow-list
-// refuses the next one by default (ADR-056).
-var agentKeys = []string{"name", "description", "tools", "disallowedTools", "model", "maxTurns", "skills", "effort", "color"}
+// refuses the next one by default (ADR-056). disallowedTools is not on it:
+// the Antigravity agent DeriveAgy writes drops it, so the restriction would
+// hold on one CLI only (ADR-056a).
+var agentKeys = []string{"name", "description", "tools", "model", "maxTurns", "skills", "effort", "color"}
 
 // LoadAgents reads every agents/*.md in Claude Code's subagent format.
 func LoadAgents(src Source) ([]Agent, error) {

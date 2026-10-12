@@ -927,3 +927,24 @@ func killPidFile(pidfile string) {
 		}
 	}
 }
+
+// A signal that reached the channel just before the CLI ended was dropped
+// half the time: select picks at random between two ready cases, and on the
+// end case `dream --all` went on to the next project (the release gate's
+// review of v2.6.2..13c5bde). Run often enough that a coin flip cannot pass.
+func TestRelayKeepsASignalQueuedAtTheEnd(t *testing.T) {
+	for i := 0; i < 200; i++ {
+		sigs := make(chan os.Signal, 1)
+		sigs <- syscall.SIGTERM
+		waited := make(chan struct{})
+		close(waited)
+		got := false
+		relay(sigs, waited, func(os.Signal) { got = true })
+		if !got {
+			t.Fatalf("run %d: a signal queued when the CLI ended was dropped", i)
+		}
+	}
+	waited := make(chan struct{})
+	close(waited)
+	relay(make(chan os.Signal, 1), waited, func(os.Signal) { t.Error("no signal came, yet one was handled") })
+}

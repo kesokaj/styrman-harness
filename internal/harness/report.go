@@ -148,8 +148,11 @@ var keywordNeedles = []struct {
 	//   argv-array `", "` or an escaped quote before the value: the rule is
 	//   the kind, after two rounds that added a character each (the gate
 	//   reviews of v2.6.2..66f3412 and its fixes; the operator's choice,
-	//   2026-10-12), so a shape it misses is a known limit, not a patch; the
-	//   user empty, numeric or attached
+	//   2026-10-12), so a shape it misses is a known limit, not a patch (the
+	//   release gate then took three more by the operator's choice: an
+	//   escaped `\n`, `\r` or `\t` written out before the flag, which the
+	//   AGENTS.md needle rule names, and a quote around the user or the
+	//   password); the user empty, numeric or attached
 	//   (`-uadmin:x`, `-u :token`) but letter-led before a `%` (so
 	//   `date -u +%FT%TZ` stays), so `docker run -u 1000:1000` and
 	//   `sudo -u postgres:x` go too, pinned; a password flag (`-p<pw>`,
@@ -157,7 +160,12 @@ var keywordNeedles = []struct {
 	//   a client that takes one (sshpass, the MySQL clients, redis-cli,
 	//   docker/podman login), so `mysql -P3306` goes too, pinned, while
 	//   `mysql -p` alone, `mkdir -p` and `cp -pr` stay; `htpasswd -b`, whose
-	//   password is positional;
+	//   password is positional; and, by the operator's choice at the release
+	//   gate of v2.6.2..13c5bde, mongosh's and sqlcmd's `-p`/`-P`, an LDAP
+	//   tool's lower-case `-w` (`-W` prompts), OpenSSL's `pass:`, quoted or not, after
+	//   `-passin`/`-passout`/`-password` (`env:` and `file:` stay), keytool's
+	//   `-storepass`/`-keypass` with a value (`:env` stays) and lftp's
+	//   `-u user,password` (`net use … /user:` is a known limit);
 	// - an auth key holding base64: Docker's `"auth":` in any quoting or
 	//   YAML, `.npmrc`'s `_auth=`, Kubernetes' `.dockerconfigjson:`, from
 	//   sixteen base64 characters so `auth: required` stays, and the strict
@@ -167,7 +175,7 @@ var keywordNeedles = []struct {
 	//   and does not start with `/`, `~` or `.`, so `credentials: none`,
 	//   `Credentials: see gcloud-setup` and
 	//   `GOOGLE_APPLICATION_CREDENTIALS=/path` stay.
-	{"command-line credential", regexp.MustCompile(`(?i)(?:^|[^A-Za-z0-9_-])(?:-u|--user|--username)(?:\s+|=|["']\s*,\s*["'])?\\?["']?(?:[A-Za-z0-9_.][^\s:%"']*)?[:%][^\s"']+|(?:sshpass|mysql\S*|mariadb\S*|redis-cli|docker\s+login|podman\s+login)\b[^\n]*?\s-[pa]\s*\S+|htpasswd\s+-[a-z]*b`), nil},
+	{"command-line credential", regexp.MustCompile(`(?i)(?:^|[^A-Za-z0-9_-]|\\[nrt])(?:-u|--user|--username)(?:\s+|=|["']\s*,\s*["'])?\\?["']?(?:[A-Za-z0-9_.][^\s:%"']*)?["']?[:%]["']?[^\s"']+|(?:sshpass|mysql\S*|mariadb\S*|redis-cli|docker\s+login|podman\s+login|mongo(?:sh)?|sqlcmd)\b[^\n]*?\s-[pa]\s*\S+|htpasswd\s+-[a-z]*b|ldap\w+\b[^\n]*?\s(?-i:-w)\s*\S+|-pass(?:in|out|word)?\s+["']?pass:\S+|-(?:src|dest)?(?:store|key)pass\s+\S+|lftp\b[^\n]*?\s-u\s*[^\s,]+,\S+`), nil},
 	{"auth key", regexp.MustCompile(`(?i)"auth"\s*:\s*"[A-Za-z0-9+/=]{8,}"|(?:["']?_?auth["']?|\.?dockerconfigjson["']?)\s*[:=]\s*["']?[A-Za-z0-9+/]{16,}={0,2}`), nil},
 	{"credentials key", regexp.MustCompile(`(?i)credentials?["']?\s*[:=]\s*["']?[A-Za-z0-9+=_-][A-Za-z0-9+/=_.-]{15,}`), nil},
 	// A shape past the rules above is a design question for the operator,

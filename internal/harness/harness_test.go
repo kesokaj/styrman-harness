@@ -2497,12 +2497,16 @@ func TestLintPermissionKeysByKind(t *testing.T) {
 	// security round 1, finding 5), and a vendor's next key would too
 	// (ADR-056).
 	for _, front := range []string{"permissionMode: bypassPermissions\n", "hooks:\n  Stop: []\n", "mcpServers:\n  x:\n    command: sh\n", "mcpServers: {x: {command: sh}}\n",
-		"memory: project\n", "initialPrompt: run the tests\n", "\"memory\": user\n", "isolation: worktree\n", "futureKey: x\n"} {
+		"memory: project\n", "initialPrompt: run the tests\n", "\"memory\": user\n", "isolation: worktree\n", "futureKey: x\n",
+		// Antigravity's derived agent drops it, so an agent relying on it
+		// would be unrestricted there (the release gate's security review,
+		// round 2; ADR-056a).
+		"disallowedTools: Write\n"} {
 		if err := agent(front); err == nil {
 			t.Errorf("agent with %q loaded", front)
 		}
 	}
-	for _, front := range []string{"model: sonnet\n", "maxTurns: 10\n", "skills: [golang]\n", "effort: high\n", "color: blue\n", "disallowedTools: Write\n"} {
+	for _, front := range []string{"model: sonnet\n", "maxTurns: 10\n", "skills: [golang]\n", "effort: high\n", "color: blue\n"} {
 		if err := agent(front); err != nil {
 			t.Errorf("agent with %q refused: %v", front, err)
 		}

@@ -773,6 +773,84 @@ func gitFixture(t *testing.T) (repo, marker string) {
 	return repo, marker
 }
 
+// advanceOrigin pushes one commit to the fixture's origin from another
+// clone, so the fixture's work tree is one commit behind.
+func advanceOrigin(t *testing.T, repo string) {
+	t.Helper()
+	other := t.TempDir()
+	base := filepath.Dir(repo)
+	run := func(dir string, args ...string) {
+		t.Helper()
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = dir
+		cmd.Env = append(gitCleanEnv(), "GIT_CONFIG_GLOBAL="+filepath.Join(base, "gitconfig"), "GIT_CONFIG_NOSYSTEM=1")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("%v: %v\n%s", args, err, out)
+		}
+	}
+	run(other, "git", "clone", "--quiet", filepath.Join(base, "origin.git"), filepath.Join(other, "c"))
+	c := filepath.Join(other, "c")
+	run(c, "git", "config", "user.email", "fixture@example.invalid")
+	run(c, "git", "config", "user.name", "fixture")
+	if err := os.WriteFile(filepath.Join(c, "context", "AGENTS.md"), []byte("# upstream moved\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run(c, "git", "commit", "--quiet", "-am", "upstream")
+	run(c, "git", "push", "--quiet", "origin", "HEAD:refs/heads/main")
+}
+
+// `update --vendor bogus` checked the vendor only after it had fetched and
+// pulled the checkout, exiting 1; on --from-zip it exited 1 and under
+// --dry-run not at all (the release gate's review of v2.6.2..13c5bde,
+// BUG-171). A bad vendor is a usage error: exit 2 before update does
+// anything, on every path.
+func TestUpdateRefusesABadVendorFirst(t *testing.T) {
+	repo, marker := gitFixture(t)
+	// run() resolves --repo as a harness checkout, which needs skills/.
+	if err := os.MkdirAll(filepath.Join(repo, "skills", "x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, "skills", "x", "SKILL.md"), []byte("---\nname: x\ndescription: d\n---\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"add", "-A"}, {"commit", "--quiet", "-m", "skills"}, {"push", "--quiet", "origin", "HEAD:refs/heads/main"}} {
+		cmd := exec.Command("git", append([]string{"-C", repo}, args...)...)
+		cmd.Env = append(gitCleanEnv(), "GIT_CONFIG_GLOBAL="+filepath.Join(filepath.Dir(repo), "gitconfig"), "GIT_CONFIG_NOSYSTEM=1")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	advanceOrigin(t, repo)
+	head := func() string {
+		out, err := exec.Command("git", "-C", repo, "rev-parse", "HEAD").Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	before := head()
+	for name, args := range map[string][]string{
+		"checkout": {"update", "--repo", repo, "--vendor", "bogus"},
+		"dry run":  {"update", "--dry-run", "--repo", repo, "--vendor", "bogus"},
+		"zip":      {"update", "--from-zip", filepath.Join(t.TempDir(), "x.zip"), "--vendor", "bogus"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var out bytes.Buffer
+			err := run(append(args, "--home", t.TempDir()), &out)
+			var code exitCode
+			if !errors.As(err, &code) || code != 2 || !strings.Contains(out.String(), "unknown vendor") {
+				t.Errorf("err = %v, want exit 2 naming the vendor\n%s", err, out.String())
+			}
+		})
+	}
+	if got := head(); got != before {
+		t.Errorf("the checkout moved from %s to %s before the vendor was checked", before, got)
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Error("an install ran")
+	}
+}
+
 // TestUpdateKeptCloneCleanupOnlyWhenUpdating: `update` removes the feedback
 // clone older versions kept in this home (D9), but `--check` reports and
 // changes NOTHING — the cleanup sat above its returns, so the read-only mode
@@ -851,29 +929,7 @@ func TestUpdateNeverInstallsDirtyTree(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	behind := func(t *testing.T, repo string) {
-		t.Helper()
-		other := t.TempDir()
-		base := filepath.Dir(repo)
-		run := func(dir string, args ...string) {
-			t.Helper()
-			cmd := exec.Command(args[0], args[1:]...)
-			cmd.Dir = dir
-			cmd.Env = append(gitCleanEnv(), "GIT_CONFIG_GLOBAL="+filepath.Join(base, "gitconfig"), "GIT_CONFIG_NOSYSTEM=1")
-			if out, err := cmd.CombinedOutput(); err != nil {
-				t.Fatalf("%v: %v\n%s", args, err, out)
-			}
-		}
-		run(other, "git", "clone", "--quiet", filepath.Join(base, "origin.git"), filepath.Join(other, "c"))
-		c := filepath.Join(other, "c")
-		run(c, "git", "config", "user.email", "fixture@example.invalid")
-		run(c, "git", "config", "user.name", "fixture")
-		if err := os.WriteFile(filepath.Join(c, "context", "AGENTS.md"), []byte("# upstream moved\n"), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		run(c, "git", "commit", "--quiet", "-am", "upstream")
-		run(c, "git", "push", "--quiet", "origin", "HEAD:refs/heads/main")
-	}
+	behind := advanceOrigin
 
 	t.Run("clean and up to date installs", func(t *testing.T) {
 		repo, marker := gitFixture(t)

@@ -706,3 +706,11 @@ The operator's own transcripts showed the same pattern: a release session with 2
 **Decision.** The operator approved the exact text on 2026-10-12. The list moves to `skills/init-project/SKILL.md`, the skill that writes the stub, which is installed at every place. R2 keeps the rule (a stub only where native reading is unavailable) and names the skill as the list's one home. The context says "the init-project skill lists them".
 
 **Consequences.** The pointer resolves on both CLIs at every kind of place. A change to the Claude Code versions or setups is now one line in the skill, not a requirements edit. The rule itself still changes only through REQUIREMENTS.md.
+
+## ADR-056a: `disallowedTools` leaves the agent allow-list     (2026-10-12) — Accepted, amends ADR-056
+
+**Context.** ADR-056's list came from a security review's round 1 and included `disallowedTools`. The v2.7.0 gate's security review (round 2) found that `DeriveAgy` writes only `model` and `tools` into the Antigravity agent, so a harness agent that restricted itself with `disallowedTools` would run unrestricted on Antigravity. No harness agent sets it.
+
+**Decision.** The operator chose to drop it on 2026-10-12. `agentKeys` names eight keys: `name`, `description`, `tools`, `model`, `maxTurns`, `skills`, `effort`, `color`. `disallowedTools` is refused like any unlisted key.
+
+**Consequences.** An agent restricts itself with `tools:`, which both CLIs honour. A key comes back on the list only with a derivation that carries it to Antigravity, or a reason it needs none.

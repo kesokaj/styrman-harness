@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/kesokaj/styrman-harness/internal/harness"
 )
@@ -157,9 +158,12 @@ func InstallTimer(home, path, goos string) error {
 	path = absolutePath(path)
 	// A quote, a backslash or a line break would end the unit's quoted value
 	// and let the rest of the path become unit text (security review
-	// 2026-09-30); such a home or PATH is refused, never escaped by guess.
-	if strings.ContainsAny(bin+path, "\"\\\n\r") {
-		return &ExitError{2, "sh-agent dream --install-timer: the binary path or PATH holds a quote, a backslash or a line break; the timer's unit cannot carry it safely"}
+	// 2026-09-30), and any other control character is one the unit or the
+	// plist's XML cannot carry as written (project review 2026-10-09, row
+	// 21); such a home or PATH is refused, never escaped by guess. The home
+	// is checked through bin, which holds it.
+	if strings.ContainsAny(bin+path, "\"\\") || strings.ContainsFunc(bin+path, unicode.IsControl) {
+		return &ExitError{2, "sh-agent dream --install-timer: the binary path or PATH holds a quote, a backslash or a control character; the timer's unit cannot carry it safely"}
 	}
 	unit, label := UnitFor(home)
 	var files map[string]string

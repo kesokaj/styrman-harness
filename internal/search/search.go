@@ -106,14 +106,10 @@ func validate(o *Options, verb string) error {
 			return usageError{fmt.Sprintf("search: --kind must be one of: %s; see sh-agent help", strings.Join(kinds, " "))}
 		}
 	}
+	// index takes no words and none of search's modes, and search no
+	// --rebuild: the verb table refuses them before they reach here.
 	if verb == "index" {
-		if len(o.Words) > 0 || o.Refs != "" || o.Open || o.Kind != "" {
-			return usageError{"search: index takes only --global and --rebuild; see sh-agent help"}
-		}
 		return nil
-	}
-	if o.Rebuild {
-		return usageError{"search: --rebuild belongs to sh-agent index; see sh-agent help"}
 	}
 	modes := 0
 	for _, set := range []bool{len(o.Words) > 0, o.Refs != "", o.Open} {

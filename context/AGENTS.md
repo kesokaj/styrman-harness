@@ -61,4 +61,4 @@ Backup and versioning only: no CI, no hooks, ever. Commit and push to the curren
 
 ## Project layout
 
-Root: `AGENTS.md` alone — no `CLAUDE.md`, no `GEMINI.md`; a one-line `@AGENTS.md` stub in `CLAUDE.md` only where Claude Code cannot read `AGENTS.md` (the harness's REQUIREMENTS R2 lists them); then `REQUIREMENTS.md`, `TODO.md`, `ROADMAP.md`, `README.md`; the trail is `docs/`, scaffolded by `/init-project`. Every `docs/` artifact starts with frontmatter `owner:` and `date:`; `changes/` and `DECISIONS.md` are append-only; `handoffs/` and `changes/` files are named `$(date +%F-%H%M)-<slug>.md`; comments say why, not what.
+Root: `AGENTS.md` alone — no `CLAUDE.md`, no `GEMINI.md`; a one-line `@AGENTS.md` stub in `CLAUDE.md` only where Claude Code cannot read `AGENTS.md` (the init-project skill lists them); then `REQUIREMENTS.md`, `TODO.md`, `ROADMAP.md`, `README.md`; the trail is `docs/`, scaffolded by `/init-project`. Every `docs/` artifact starts with frontmatter `owner:` and `date:`; `changes/` and `DECISIONS.md` are append-only; `handoffs/` and `changes/` files are named `$(date +%F-%H%M)-<slug>.md`; comments say why, not what.

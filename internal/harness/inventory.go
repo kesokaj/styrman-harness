@@ -222,6 +222,13 @@ func LoadSkills(src Source) ([]Skill, error) {
 	return skills, nil
 }
 
+// agentKeys is every frontmatter key a harness agent may set. Claude Code
+// ships an agent file byte for byte, so a key it honours outside this list
+// (hooks, permissionMode, mcpServers, memory, initialPrompt, and whatever a
+// vendor adds next) would act on every place unreviewed: an allow-list
+// refuses the next one by default (ADR-056).
+var agentKeys = []string{"name", "description", "tools", "disallowedTools", "model", "maxTurns", "skills", "effort", "color"}
+
 // LoadAgents reads every agents/*.md in Claude Code's subagent format.
 func LoadAgents(src Source) ([]Agent, error) {
 	paths, err := fs.Glob(src.FS, "agents/*.md")
@@ -258,8 +265,8 @@ func LoadAgents(src Source) ([]Agent, error) {
 		if descriptionIsMultiLine(front) {
 			return nil, fmt.Errorf("agent %s: description must be one line", name)
 		}
-		if k := permissionKey(front, "hooks", "permissionMode", "mcpServers"); k != "" {
-			return nil, fmt.Errorf("agent %s: %s is never set in a harness agent; the operator's permission mode decides (BUG-143)", name, k)
+		if k := unlistedKey(front, agentKeys); k != "" {
+			return nil, fmt.Errorf("agent %s: %s is not a key a harness agent sets (%s); a new one is added to agentKeys by hand, and a key that grants a permission never is (ADR-056, BUG-143)", name, k, strings.Join(agentKeys, ", "))
 		}
 		for _, banned := range []string{"dispatch prompt", "harness binary"} {
 			if strings.Contains(strings.ToLower(fm["description"]), banned) {

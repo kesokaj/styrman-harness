@@ -142,6 +142,15 @@ var shapeSecrets = []string{
 	"https://hooks.slack.com:443/services/T0/B0/FAKEVALUE", "https://hooks.slack.com./services/FAKEVALUE",
 	"https://hooks.slack-gov.com/services/FAKEVALUE", "https://hooks.slack.com%2Fservices%2FFAKEVALUE",
 	"https://FAKEVALUEFAKEVALUE:@host/r",
+	// The gate security review of v2.6.2..66f3412, finding 2: the flag after
+	// a quote or a backtick, not only after whitespace.
+	`curl "-uadmin:FAKEVALUE" h`, "curl '-uadmin:FAKEVALUE' h", "run `-uadmin:FAKEVALUE` there", `{"text":"-uadmin:FAKEVALUE"}`,
+	// Its round 2, the rule made a class (the operator's choice, 2026-10-12):
+	// the flag after any character that is not a letter, digit, `_` or `-`,
+	// and any whitespace, `=` or argv-array separator before the value.
+	"ARGS=-uadmin:FAKEVALUE", "(-uadmin:FAKEVALUE)", "[-uadmin:FAKEVALUE]", "curl,-uadmin:FAKEVALUE", "x;-uadmin:FAKEVALUE", "x|-uadmin:FAKEVALUE",
+	`exec(["curl", "-u", "admin:FAKEVALUE"])`, `["curl","-u","admin:FAKEVALUE"]`, "curl -u\tadmin:FAKEVALUE h", "curl -u  admin:FAKEVALUE h",
+	`curl --user \"admin:FAKEVALUE\" h`,
 }
 
 func TestReportRedactShapes(t *testing.T) {
@@ -169,6 +178,10 @@ func TestReportRedactShapes(t *testing.T) {
 		`DB_PASSWORD="correct horse battery staple"`, "password: letmein", `api_key: "AbCdEf"`, "password=correct", "passwords: rotate them yearly",
 		// The whole key decides the threshold, not its first word.
 		"TOKEN_PASSWORD=letmein", "api_key_password: letmein", "API_KEY_SECRET: letmein",
+		// A backticked token that starts with -u and holds a colon reads as
+		// an attached user:password (the gate's finding 2 put the backtick
+		// in front of the flag): review records quoting near-misses go.
+		"see `-ui:8080` above",
 		// The pass family as one kind, and the flag form (security review round 3).
 		"DB_PASS=letmein", "MYSQL_PWD=letmein", "PASSPHRASE: letmein", "run it with --password letmein now",
 		// The bearer rule takes prose too (project review 2026-10-09, security row 8).
@@ -222,6 +235,12 @@ func TestReportRedactShapes(t *testing.T) {
 		// inside a hyphenated word is not one, and `%` needs a letter-led
 		// user, so `date -u +%FT%TZ` stays.
 		"see run-usage.md:72", "the web-ui:8080 service", "image sh-updater:v1", "date -u +%FT%TZ",
+		// The gate's finding 2: a quote, a backtick or a key's colon before
+		// the flag, with no user:password after it.
+		`the "-u" flag sets the user`, "`-u` or `--user`", `{"flag":"-u"}`, "opts:-u root",
+		// Its round 2: each new boundary and separator with no user:password.
+		"ARGS=-u root", "(-u) is short", "[-u name]", "a,-u,b", "x;-u root", "x|-u root", `["curl","-u","admin"]`, "-u\tis the user flag",
+		"X-User-Id:12345", "--user-agent:Mozilla",
 	} {
 		// "ASIAN" contains the ASIA prefix: accepted over-redaction, pinned
 		// here so a change to it is deliberate.
@@ -238,6 +257,24 @@ func TestReportRedactShapes(t *testing.T) {
 // key beside another hit, and a needle behind a JSON escape, which only the
 // decoded text shows) — plus a key that named its own secret in report.json
 // (finding 2).
+// TestReportRedactFlagAtValueStart: a JSON value that starts with the
+// credential flag. The raw line shows a quote before it; the decoded line,
+// which fmt prints as `key:value`, a colon, and only the decoded line shows a
+// quoted password behind a JSON escape (the gate security review of
+// v2.6.2..66f3412, finding 2).
+func TestReportRedactFlagAtValueStart(t *testing.T) {
+	for _, line := range []string{`{"text":"-uadmin:FAKEVALUE"}`, `{"text":"-u \"admin:FAKEVALUE\""}`, `{"text":"--user=\"admin:FAKEVALUE\""}`,
+		`{"cmd":"curl -u\tadmin:FAKEVALUE"}`, `{"cmd":"ARGS=-uadmin:FAKEVALUE"}`, `{"cmd":"(-uadmin:FAKEVALUE)"}`} {
+		out, recs := redactLines("f", []byte(line+"\n"), true)
+		if len(recs) != 1 || strings.Contains(string(out), "FAKEVALUE") {
+			t.Errorf("%s: out=%q recs=%+v", line, out, recs)
+		}
+		if got := RedactJSONL(line + "\n"); strings.Contains(got, "FAKEVALUE") {
+			t.Errorf("RedactJSONL kept %s: %q", line, got)
+		}
+	}
+}
+
 func TestReportRedactStructuralGaps(t *testing.T) {
 	cases := []struct {
 		name, in string

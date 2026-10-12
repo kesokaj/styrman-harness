@@ -169,3 +169,21 @@ func TestSubdirectorySessionsBelongToTheProject(t *testing.T) {
 		t.Errorf("--project %s selected %d sessions, want 3 (S1 in a subdirectory, S2, S3; not the sibling)", root, sum.Sessions["claude"])
 	}
 }
+
+// readSmall stops at 1 MiB: a trail file grown past it (a pasted log) is read
+// only that far, so a pattern beyond the cap is never seen (the verifier's
+// coverage note of 2026-10-09: the cap had no fixture).
+func TestReadSmallStopsAtOneMiB(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "big.md")
+	body := strings.Repeat("a", 1<<20) + "PAST THE CAP"
+	if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got := readSmall(p)
+	if len(got) != 1<<20 || strings.Contains(got, "PAST THE CAP") {
+		t.Errorf("readSmall read %d bytes (want %d), past the cap: %v", len(got), 1<<20, strings.Contains(got, "PAST THE CAP"))
+	}
+	if readSmall(filepath.Join(t.TempDir(), "missing.md")) != "" {
+		t.Error("a missing file reads as text")
+	}
+}

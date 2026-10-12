@@ -142,9 +142,14 @@ var keywordNeedles = []struct {
 	// in front (a quote, a backtick, a path or a literal `\n` may precede
 	// the command; the fix's security review):
 	// - a credential on a command line: `user:pass` (or smbclient's
-	//   `user%pass`) after -u/--user/--username, the flag after whitespace
-	//   (a flag is never a line's first token, and `-u` inside `run-usage`
-	//   or `web-ui` is not one), the user empty, numeric or attached
+	//   `user%pass`) after -u/--user/--username, the flag after any
+	//   character but a letter, a digit, `_` or `-` (so `-u` inside
+	//   `run-usage` or `web-ui` is not one), and whitespace, `=`, an
+	//   argv-array `", "` or an escaped quote before the value: the rule is
+	//   the kind, after two rounds that added a character each (the gate
+	//   reviews of v2.6.2..66f3412 and its fixes; the operator's choice,
+	//   2026-10-12), so a shape it misses is a known limit, not a patch; the
+	//   user empty, numeric or attached
 	//   (`-uadmin:x`, `-u :token`) but letter-led before a `%` (so
 	//   `date -u +%FT%TZ` stays), so `docker run -u 1000:1000` and
 	//   `sudo -u postgres:x` go too, pinned; a password flag (`-p<pw>`,
@@ -162,7 +167,7 @@ var keywordNeedles = []struct {
 	//   and does not start with `/`, `~` or `.`, so `credentials: none`,
 	//   `Credentials: see gcloud-setup` and
 	//   `GOOGLE_APPLICATION_CREDENTIALS=/path` stay.
-	{"command-line credential", regexp.MustCompile(`(?i)(?:^|\s)(?:-u|--user|--username)[ =]?["']?(?:[A-Za-z0-9_.][^\s:%"']*)?[:%][^\s"']+|(?:sshpass|mysql\S*|mariadb\S*|redis-cli|docker\s+login|podman\s+login)\b[^\n]*?\s-[pa]\s*\S+|htpasswd\s+-[a-z]*b`), nil},
+	{"command-line credential", regexp.MustCompile(`(?i)(?:^|[^A-Za-z0-9_-])(?:-u|--user|--username)(?:\s+|=|["']\s*,\s*["'])?\\?["']?(?:[A-Za-z0-9_.][^\s:%"']*)?[:%][^\s"']+|(?:sshpass|mysql\S*|mariadb\S*|redis-cli|docker\s+login|podman\s+login)\b[^\n]*?\s-[pa]\s*\S+|htpasswd\s+-[a-z]*b`), nil},
 	{"auth key", regexp.MustCompile(`(?i)"auth"\s*:\s*"[A-Za-z0-9+/=]{8,}"|(?:["']?_?auth["']?|\.?dockerconfigjson["']?)\s*[:=]\s*["']?[A-Za-z0-9+/]{16,}={0,2}`), nil},
 	{"credentials key", regexp.MustCompile(`(?i)credentials?["']?\s*[:=]\s*["']?[A-Za-z0-9+=_-][A-Za-z0-9+/=_.-]{15,}`), nil},
 	// A shape past the rules above is a design question for the operator,

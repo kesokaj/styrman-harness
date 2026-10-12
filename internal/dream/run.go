@@ -223,8 +223,18 @@ func callWithin(argv []string, prompt, work string, env []string, timeout, grace
 	if err := cmd.Start(); err != nil {
 		return "", "", fmt.Errorf("%s: %v", argv[0], err)
 	}
+	// A hangup or interrupt the parent ignored (nohup, a background job) stays
+	// ignored: Notify would take it over, kill the group on it, and the
+	// re-raise after Reset would find it ignored again, so the project failed
+	// and sh-agent ran on. Go keeps only these two of an inherited ignore.
+	watched := []os.Signal{syscall.SIGTERM, syscall.SIGQUIT}
+	for _, s := range []os.Signal{os.Interrupt, syscall.SIGHUP} {
+		if !signal.Ignored(s) {
+			watched = append(watched, s)
+		}
+	}
 	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT)
+	signal.Notify(sigs, watched...)
 	waited := make(chan struct{})
 	go func() {
 		select {

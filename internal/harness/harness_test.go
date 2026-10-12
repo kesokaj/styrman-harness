@@ -2492,9 +2492,19 @@ func TestLintPermissionKeysByKind(t *testing.T) {
 	// mcpServers: an inline MCP server is a command line Claude Code starts
 	// when the agent is used, outside the permission mode (project review
 	// 2026-10-09, security row 1; left open by the 2026-10-01 gate).
-	for _, front := range []string{"permissionMode: bypassPermissions\n", "hooks:\n  Stop: []\n", "mcpServers:\n  x:\n    command: sh\n", "mcpServers: {x: {command: sh}}\n"} {
+	// An agent key outside the allow-list is refused, whatever it does:
+	// `memory` and `initialPrompt` passed the deny-list (the project review's
+	// security round 1, finding 5), and a vendor's next key would too
+	// (ADR-056).
+	for _, front := range []string{"permissionMode: bypassPermissions\n", "hooks:\n  Stop: []\n", "mcpServers:\n  x:\n    command: sh\n", "mcpServers: {x: {command: sh}}\n",
+		"memory: project\n", "initialPrompt: run the tests\n", "\"memory\": user\n", "isolation: worktree\n", "futureKey: x\n"} {
 		if err := agent(front); err == nil {
 			t.Errorf("agent with %q loaded", front)
+		}
+	}
+	for _, front := range []string{"model: sonnet\n", "maxTurns: 10\n", "skills: [golang]\n", "effort: high\n", "color: blue\n", "disallowedTools: Write\n"} {
+		if err := agent(front); err != nil {
+			t.Errorf("agent with %q refused: %v", front, err)
 		}
 	}
 	repo := newRepo(t)
@@ -2601,11 +2611,15 @@ func TestSplitFenceIsOneLine(t *testing.T) {
 // whatever else the file gets right.
 func TestLintSeesEveryKeyAYAMLReaderSees(t *testing.T) {
 	const hidden = "allowed-tools: Bash(*)"
+	// An agent sets only the keys of its allow-list (ADR-056), so its
+	// keep-loading shapes use them; none of them holds a map.
+	other := [3]string{"license", "compatibility", "metadata"}
 	kinds := map[string]struct {
-		keys []string // the kind's own required lines
-		load func(front string) error
+		keys  []string  // the kind's own required lines
+		extra [3]string // a key the kind loads with a value, a list and a map ("" for none)
+		load  func(front string) error
 	}{
-		"skill": {[]string{"name: x", "description: d"}, func(front string) error {
+		"skill": {[]string{"name: x", "description: d"}, other, func(front string) error {
 			repo := newRepo(t)
 			dir := filepath.Join(repo, "skills", "x")
 			os.MkdirAll(dir, 0o755)
@@ -2613,20 +2627,20 @@ func TestLintSeesEveryKeyAYAMLReaderSees(t *testing.T) {
 			_, err := LoadSkills(DirSource(repo))
 			return err
 		}},
-		"agent": {[]string{"name: x", "description: d", "tools: Read"}, func(front string) error {
+		"agent": {[]string{"name: x", "description: d", "tools: Read"}, [3]string{"color", "skills", ""}, func(front string) error {
 			repo := newRepo(t)
 			os.WriteFile(filepath.Join(repo, "agents", "x.md"), []byte("---\n"+front+"---\nbody\n"), 0o644)
 			_, err := LoadAgents(DirSource(repo))
 			return err
 		}},
-		"command": {[]string{"description: d"}, func(front string) error {
+		"command": {[]string{"description: d"}, other, func(front string) error {
 			repo := newRepo(t)
 			os.MkdirAll(filepath.Join(repo, "commands"), 0o755)
 			os.WriteFile(filepath.Join(repo, "commands", "x.md"), []byte("---\n"+front+"---\nbody\n"), 0o644)
 			_, err := LoadInventory(DirSource(repo))
 			return err
 		}},
-		"rule": {[]string{"description: d"}, func(front string) error {
+		"rule": {[]string{"description: d"}, other, func(front string) error {
 			repo := newRepo(t)
 			os.MkdirAll(filepath.Join(repo, "rules"), 0o755)
 			os.WriteFile(filepath.Join(repo, "rules", "x.md"), []byte("---\n"+front+"---\nbody\n"), 0o644)
@@ -2669,16 +2683,20 @@ func TestLintSeesEveryKeyAYAMLReaderSees(t *testing.T) {
 			}
 		}
 		// What must keep loading: a nested map, a list, a CRLF file.
+		value, list, nested := k.extra[0], k.extra[1], k.extra[2]
 		for name, front := range map[string]string{
-			"a nested map":     plain + "metadata:\n  version: \"1.0\"\n",
-			"an indented list": plain + "compatibility:\n  - claude\n",
-			"a CRLF file":      strings.ReplaceAll(plain, "\n", "\r\n") + "license: MIT\r\n",
+			"a nested map":     plain + nested + ":\n  version: \"1.0\"\n",
+			"an indented list": plain + list + ":\n  - claude\n",
+			"a CRLF file":      strings.ReplaceAll(plain, "\n", "\r\n") + value + ": MIT\r\n",
 			"a comment first":  "# a comment\n" + plain,
 			// A tab inside a value, and a line that is only a tab, are not
 			// tab indentation.
-			"a tab inside a value": plain + "license: MIT\tor Apache\n",
-			"a tab-only line":      plain + "\t\n" + "license: MIT\n",
+			"a tab inside a value": plain + value + ": MIT\tor Apache\n",
+			"a tab-only line":      plain + "\t\n" + value + ": MIT\n",
 		} {
+			if nested == "" && name == "a nested map" {
+				continue
+			}
 			if err := k.load(front); err != nil {
 				t.Errorf("%s with %s refused: %v", kind, name, err)
 			}

@@ -18,7 +18,7 @@ area: .agents/docs/specs/sh-agent/delivery.md (§ Where things stand, the delive
 The release procedure (`deploy/remote.md` § Releases, run by `/preflight` Step 6) writes the release entry under `changes/` and the release notes, and never names this paragraph; nothing in the tree compared the paragraph with what the tree itself records (the newest release entry, the verb table). A claim with one home and no pin drifts at the first release that forgets it.
 
 ## Fix
-- The paragraph: v2.6.2, `metrics (specs/sh-agent/metrics.md)` in the verb list, `mcpServers` in the refused keys, and one sentence each for v2.6.2, v2.6.1, v2.6.0 and v2.5.0 in the paragraph's own style.
+- The paragraph: v2.6.2, `metrics (specs/sh-agent/metrics.md)` in the verb list, and one sentence each for v2.6.2, v2.6.1, v2.6.0 and v2.5.0 in the paragraph's own style. The first version (`3bffdcf`) also put `mcpServers` in the refused keys; `6cec23b` took it out, because v2.6.2 does not refuse it and the paragraph names only what a tag shipped (the fix's review, round 1).
 - The pin: `TestDeliverySpecCurrent` reads the paragraph, requires every verb in `cmd/sh-agent`'s verb table to be named, and requires "newest tag vX.Y.Z" to match the highest `changes/*-release-vX.Y.Z.md` entry.
 - The procedure: `deploy/remote.md` § Releases runs that test right after the release commit, before the tag, so a release commit that writes its entry without the paragraph cannot be tagged.
 

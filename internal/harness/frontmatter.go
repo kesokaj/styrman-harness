@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -177,6 +178,16 @@ func permissionKey(front string, refused ...string) string {
 			if k == r {
 				return k
 			}
+		}
+	}
+	return ""
+}
+
+// unlistedKey is the first key of front that allowed does not name.
+func unlistedKey(front string, allowed []string) string {
+	for _, k := range Keys(front) {
+		if !slices.Contains(allowed, k) {
+			return k
 		}
 	}
 	return ""

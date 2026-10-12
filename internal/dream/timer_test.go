@@ -198,6 +198,29 @@ func TestInstallTimerRefusesUnsafePaths(t *testing.T) {
 	}
 }
 
+// TestInstallTimerRefusesEveryControlCharacter: the refusal named a quote, a
+// backslash and two line breaks; any other control character reached the
+// unit or the plist too (a plist's XML cannot carry most of them), in the
+// home as well as in PATH (project review 2026-10-09, row 21). One case per
+// character, in each place.
+func TestInstallTimerRefusesEveryControlCharacter(t *testing.T) {
+	fakeManager(t, "systemctl", 0)
+	var ee *ExitError
+	for name, c := range map[string]string{"quote": `"`, "backslash": `\`, "newline": "\n", "carriage return": "\r",
+		"tab": "\t", "start of heading": "\x01", "escape": "\x1b", "delete": "\x7f", "next line (U+0085)": "\u0085"} {
+		home := timerHome(t)
+		if err := InstallTimer(home, "/p"+c+"q", "linux"); !errors.As(err, &ee) || ee.Code != 2 || TimerInstalled(home) {
+			t.Errorf("PATH with a %s: %v", name, err)
+		}
+		// The home is in the binary's path and in --home.
+		home = filepath.Join(t.TempDir(), "h"+c+"o")
+		write(t, filepath.Join(home, ".local", "bin", "sh-agent"), "#!/bin/sh\n", fresh)
+		if err := InstallTimer(home, "/p", "linux"); !errors.As(err, &ee) || ee.Code != 2 || TimerInstalled(home) {
+			t.Errorf("home with a %s: %v", name, err)
+		}
+	}
+}
+
 // TestInstallTimerKeepsOnlyAbsolutePath: a relative PATH entry (".", "bin",
 // an empty one) would resolve against the unit's working directory at 03:00,
 // not where the operator's shell was; only absolute entries are frozen in.

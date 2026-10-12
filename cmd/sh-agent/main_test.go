@@ -1822,6 +1822,12 @@ func TestVerbRefusesAnotherVerbsFlag(t *testing.T) {
 		{"version", "--dry-run"},
 		{"index", "--kind", "bug"},
 		{"status", "--rebuild"},
+		// The CLI refuses these before search.validate sees them, so its
+		// index and --rebuild refusals were removed as unreachable (project
+		// review 2026-10-09, row 23).
+		{"index", "--refs", "BUG-001"},
+		{"index", "--open"},
+		{"search", "--rebuild", "x"},
 	} {
 		home := t.TempDir()
 		var out bytes.Buffer
@@ -1833,6 +1839,12 @@ func TestVerbRefusesAnotherVerbsFlag(t *testing.T) {
 		if !strings.Contains(out.String(), "flag provided but not defined") {
 			t.Errorf("%q: the refusal should name the flag on the writer, got:\n%s", args, out.String())
 		}
+	}
+	// index takes no words either.
+	var words bytes.Buffer
+	var code exitCode
+	if err := run([]string{"index", "some", "words", "--repo", repo, "--home", t.TempDir()}, &words); !errors.As(err, &code) || code != 2 {
+		t.Errorf("index with words: err = %v, want exit 2\n%s", err, words.String())
 	}
 	// The verb's own flags still parse, in any order around positionals.
 	home := t.TempDir()

@@ -687,3 +687,22 @@ The operator's own transcripts showed the same pattern: a release session with 2
 **Decision.** The operator approved this on 2026-10-09 ("go all approved"). R3 now names the summary by its content: "a numbers-only summary of the metrics store (its metric keys and values for each project's window and the window before, never a tool, skill, agent, label or path)".
 
 **Consequences.** The requirement and the code say the same thing. A change that adds a name to the prompt's metrics block is now a visible requirements change.
+
+## ADR-056: A harness agent's frontmatter is an allow-list     (2026-10-12) — Accepted
+
+**Context.** Claude Code ships an agent file byte for byte into `~/.claude/agents/` on every place (`plan.go`), and it honours every key in the file. The agent lint refused named keys only: `hooks`, `permissionMode` and, since `3bffdcf`, `mcpServers`. The security review of those fixes (round 1, finding 5) showed `memory` and `initialPrompt` passing, and Claude Code's documented key table grows release by release (`plans/2026-09-30-research-audit-fix-formats.md`: eighteen keys on 2026-09-30). A deny-list is one key short every time a vendor adds one. Antigravity is not exposed: `derive.go` writes only `model` and `tools`.
+
+**Decision.** The operator chose the allow-list on 2026-10-12 (deferred from the project review of 2026-10-09). `agentKeys` in `internal/harness/inventory.go` names every key a harness agent may set: `name`, `description`, `tools`, `disallowedTools`, `model`, `maxTurns`, `skills`, `effort`, `color`, the security review's list. `LoadAgents` refuses any other top-level key, so install fails. Skills, commands and rules keep their named refusals (`allowed-tools`, `hooks`): their key sets are open by the Agent Skills standard (`license`, `metadata`, `compatibility`).
+
+**Consequences.**
+- A new vendor key fails the install until a commit adds it to `agentKeys`. That commit is reviewed like any code change, and a key that grants a permission (hooks, a permission mode, an MCP server, a memory scope, a first prompt) is never added.
+- `isolation` (BUG-005), `background`, `memory`, `initialPrompt` and `omitClaudeMd` are refused today. None is used by an agent in `agents/`.
+- Adding an agent stays a file drop. Adding a frontmatter KEY becomes a code change, which AGENTS.md § Rules already treats as a design question.
+
+## ADR-057: The init-project skill is the one home of the stub list     (2026-10-12) — Accepted, amends ADR-048
+
+**Context.** ADR-048 made REQUIREMENTS R2 the one home of the list of Claude Code setups that need the one-line `@AGENTS.md` stub, and the context pointed at it ("the harness's REQUIREMENTS R2 lists them"). REQUIREMENTS.md reaches a checkout or a zip place only: a release binary embeds the context, agents, skills, commands and rules (`embed.go`), so at a release-binary place the pointer resolved to nothing (project review 2026-10-09, row 28 L2).
+
+**Decision.** The operator approved the exact text on 2026-10-12. The list moves to `skills/init-project/SKILL.md`, the skill that writes the stub, which is installed at every place. R2 keeps the rule (a stub only where native reading is unavailable) and names the skill as the list's one home. The context says "the init-project skill lists them".
+
+**Consequences.** The pointer resolves on both CLIs at every kind of place. A change to the Claude Code versions or setups is now one line in the skill, not a requirements edit. The rule itself still changes only through REQUIREMENTS.md.

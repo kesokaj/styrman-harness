@@ -27,8 +27,8 @@ const (
 )
 
 // DeriveAgy renders the Antigravity `agent.md` flavour of a Claude Code agent.
-// Claude-only keys (effort, maxTurns, isolation, permissionMode) are dropped:
-// the vendor documents no equivalent, and the dispatcher names the budget in
+// Claude-only keys (effort, maxTurns, and the rest of LoadAgents' allow-list
+// that Antigravity lacks) are dropped: the vendor documents no equivalent, and the dispatcher names the budget in
 // the dispatch text. `skills:` is dropped too, on evidence rather than
 // assumption: on 2026-10-01 a probe agent carrying the vendor's documented
 // `skills: ["skills/<name>"]` key and a control agent without it both named

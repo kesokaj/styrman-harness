@@ -842,6 +842,70 @@ func callKilledBy(t *testing.T, sig os.Signal) {
 	}
 }
 
+// `nohup sh-agent dream --all &` ignores the hangup, and a background job
+// of a non-interactive shell the interrupt. Notify took the ignored signal
+// over, killed the group on it, and the re-raise after Reset found it
+// ignored again: the project in flight failed and sh-agent ran on (the gate
+// security review of v2.6.2..66f3412, finding 1). An ignored signal now
+// leaves the CLI alone.
+func TestCallLeavesTheGroupOnAnIgnoredSignal(t *testing.T) {
+	for name, s := range map[string]struct {
+		trap string
+		sig  os.Signal
+	}{"hangup": {"HUP", syscall.SIGHUP}, "interrupt": {"INT", os.Interrupt}} {
+		t.Run(name, func(t *testing.T) { callIgnoring(t, s.trap, s.sig) })
+	}
+}
+
+func callIgnoring(t *testing.T, trap string, sig os.Signal) {
+	dir := t.TempDir()
+	pidfile := filepath.Join(dir, "pid")
+	if err := os.WriteFile(filepath.Join(dir, "holder"), []byte("#!/bin/sh\nsleep 60 &\necho $! > \"$PIDFILE\"\nsleep 60\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// The shell's trap sets the ignore and exec keeps it, as nohup does.
+	c := exec.Command("sh", "-c", "trap '' "+trap+"; exec \"$0\" -test.run='^TestHelperCall$'", os.Args[0])
+	c.Env = append(os.Environ(), "DREAM_HELPER_DIR="+dir)
+	if err := c.Start(); err != nil {
+		t.Fatal(err)
+	}
+	exited := make(chan struct{})
+	go func() { c.Wait(); close(exited) }()
+	var pid int
+	t.Cleanup(func() {
+		c.Process.Kill()
+		<-exited
+		if pid != 0 {
+			if pgid, err := syscall.Getpgid(pid); err == nil {
+				syscall.Kill(-pgid, syscall.SIGKILL) // the holder's group outlives the helper's kill
+			}
+		}
+	})
+	for i := 0; i < 50 && pid == 0; i++ {
+		if b, err := os.ReadFile(pidfile); err == nil {
+			pid, _ = strconv.Atoi(strings.TrimSpace(string(b)))
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if pid == 0 {
+		t.Fatal("the holder never started")
+	}
+	if err := c.Process.Signal(sig); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 20 && alive(pid); i++ {
+		time.Sleep(100 * time.Millisecond) // a group killed by the signal is gone well inside this
+	}
+	if !alive(pid) {
+		t.Errorf("the ignored %v killed the CLI's group (helper pid %d)", sig, pid)
+	}
+	select {
+	case <-exited:
+		t.Errorf("sh-agent exited on the ignored %v", sig)
+	default:
+	}
+}
+
 func readPid(t *testing.T, pidfile string) int {
 	b, err := os.ReadFile(pidfile)
 	if err != nil {
